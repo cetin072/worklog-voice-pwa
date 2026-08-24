@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="업무를 음성으로 기록하고 Notion 업무 통합 기록에 저장">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <title>업무기록</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <p class="eyebrow">업무 통합 기록</p>
+        <h1>🎙 업무기록</h1>
+      </div>
+      <span id="health" class="badge">준비됨</span>
+    </header>
+
+    <section class="card voice-card">
+      <button id="mic" class="mic" type="button">
+        <span class="micIcon">🎙</span>
+        <span id="micText">말하기</span>
+      </button>
+      <p id="hint">버튼을 누르고 업무를 말하세요.</p>
+    </section>
+
+    <section class="card">
+      <label class="label" for="text">음성 인식 결과</label>
+      <textarea id="text" rows="5" placeholder="예: 태장 홈페이지 도메인 연결 완료했고 tejang.siot.kr로 접속 확인했음."></textarea>
+
+      <div class="grid">
+        <label><span>기관</span>
+          <select id="institution">
+            <option value="태장">태장</option>
+            <option value="미래여성가족진흥원">미래여성가족진흥원</option>
+            <option value="기타" selected>기타</option>
+          </select>
+        </label>
+
+        <label><span>상태</span>
+          <select id="status">
+            <option value="완료">완료</option>
+            <option value="진행중" selected>진행중</option>
+            <option value="대기">대기</option>
+            <option value="확인필요">확인필요</option>
+          </select>
+        </label>
+
+        <label><span>유형</span>
+          <select id="type">
+            <option value="완료업무">완료업무</option>
+            <option value="할 일">할 일</option>
+            <option value="회의·통화">회의·통화</option>
+            <option value="지출·세무">지출·세무</option>
+            <option value="지시·위임">지시·위임</option>
+            <option value="아이디어">아이디어</option>
+            <option value="문제·확인">문제·확인</option>
+            <option value="기타" selected>기타</option>
+          </select>
+        </label>
+      </div>
+
+      <details>
+        <summary>추가 정보</summary>
+        <div class="detailsGrid">
+          <label><span>금액</span><input id="amount" type="number" inputmode="numeric" min="0"></label>
+          <label><span>담당자</span><input id="assignee" type="text"></label>
+          <label><span>기한</span><input id="dueDate" type="date"></label>
+          <label class="wide"><span>후속조치</span><input id="followUp" type="text"></label>
+        </div>
+      </details>
+
+      <button id="save" class="save" type="button">Notion에 저장</button>
+      <button id="clear" class="clear" type="button">입력 지우기</button>
+      <p id="result" class="result" aria-live="polite"></p>
+    </section>
+
+    <footer>1차 버전 · AI API 없음 · 원문 우선 저장</footer>
+  </main>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
