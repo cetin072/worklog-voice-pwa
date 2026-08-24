@@ -17,13 +17,67 @@ let recognitionActive = false;
 let keepListening = false;
 let restartTimer = null;
 let persistentText = "";
+let sessionBaseText = "";
+let sessionFinalText = "";
 let wakeLock = null;
 let wakeLockPending = false;
 let stopWaiters = [];
+let successAudioContext = null;
 
 function result(msg="", kind=""){
   els.result.textContent = msg;
   els.result.className = `result ${kind}`.trim();
+}
+
+function normalizeTranscript(text){
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function mergeWithOverlap(base, addition){
+  const left=normalizeTranscript(base);
+  const right=normalizeTranscript(addition);
+  if(!left) return right;
+  if(!right) return left;
+  if(left === right) return left;
+  if(right.startsWith(`${left} `)) return right;
+  if(left.endsWith(` ${right}`) || left === right) return left;
+
+  const leftWords=left.split(" ");
+  const rightWords=right.split(" ");
+  const maxOverlap=Math.min(leftWords.length, rightWords.length, 80);
+
+  for(let size=maxOverlap;size>=1;size--){
+    const leftTail=leftWords.slice(-size).join(" ");
+    const rightHead=rightWords.slice(0,size).join(" ");
+    if(leftTail !== rightHead) continue;
+
+    if(size >= 2 || leftWords.length <= 2 || right.startsWith(`${leftTail} `)){
+      return [...leftWords, ...rightWords.slice(size)].join(" ").trim();
+    }
+  }
+
+  return `${left} ${right}`.trim();
+}
+
+function collapseRecognitionResults(results){
+  let finalText="";
+  let interimText="";
+
+  for(let i=0;i<results.length;i++){
+    const transcript=normalizeTranscript(results[i]?.[0]?.transcript);
+    if(!transcript) continue;
+
+    if(results[i].isFinal){
+      finalText=mergeWithOverlap(finalText, transcript);
+    }else{
+      interimText=mergeWithOverlap(interimText, transcript);
+    }
+  }
+
+  return {
+    finalText,
+    displayText:mergeWithOverlap(finalText, interimText)
+  };
 }
 
 function isLikelyTaejang(text){
@@ -110,7 +164,7 @@ function restoreDraft(){
     els.assignee.value=typeof draft.assignee === "string" ? draft.assignee : "";
     els.dueDate.value=typeof draft.dueDate === "string" ? draft.dueDate : "";
     els.followUp.value=typeof draft.followUp === "string" ? draft.followUp : "";
-    persistentText=els.text.value.trim();
+    persistentText=normalizeTranscript(els.text.value);
 
     if(persistentText){
       result("작성 중이던 기록을 복구했습니다.");
@@ -118,6 +172,36 @@ function restoreDraft(){
   }catch{
     clearDraft();
   }
+}
+
+function primeSuccessAudio(){
+  const AudioContextClass=window.AudioContext || window.webkitAudioContext;
+  if(!AudioContextClass) return;
+  try{
+    if(!successAudioContext) successAudioContext=new AudioContextClass();
+    if(successAudioContext.state === "suspended") successAudioContext.resume().catch(()=>{});
+  }catch{}
+}
+
+function playSuccessFeedback(){
+  try{ navigator.vibrate?.(120); }catch{}
+
+  const context=successAudioContext;
+  if(!context || context.state === "closed") return;
+  try{
+    const now=context.currentTime;
+    const oscillator=context.createOscillator();
+    const gain=context.createGain();
+    oscillator.type="sine";
+    oscillator.frequency.setValueAtTime(880, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.05, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.14);
+  }catch{}
 }
 
 async function acquireWakeLock(){
@@ -182,6 +266,18 @@ function waitForRecognitionEnd(){
   });
 }
 
+function commitCurrentSession(){
+  persistentText=mergeWithOverlap(sessionBaseText, sessionFinalText);
+  sessionBaseText=persistentText;
+  sessionFinalText="";
+
+  if(persistentText){
+    els.text.value=persistentText;
+    infer(persistentText);
+    saveDraft();
+  }
+}
+
 async function stopListening({finalHint=true}={}){
   keepListening=false;
   cancelRestart();
@@ -192,6 +288,7 @@ async function stopListening({finalHint=true}={}){
     if(recognitionActive) recognition?.stop();
   }catch{}
   await waitForEnd;
+  commitCurrentSession();
   setStoppedUI();
   if(finalHint) els.hint.textContent="인식 결과를 확인하고 저장하세요.";
 }
@@ -204,6 +301,8 @@ function startRecognition(){
   }
 
   cancelRestart();
+  sessionBaseText=normalizeTranscript(persistentText || els.text.value);
+  sessionFinalText="";
   acquireWakeLock();
   try{
     recognition.start();
@@ -238,21 +337,11 @@ if(SpeechRecognition){
   };
 
   recognition.onresult=(event)=>{
-    let finalChunk="";
-    let interim="";
+    const collapsed=collapseRecognitionResults(event.results);
+    sessionFinalText=collapsed.finalText;
 
-    for(let i=event.resultIndex;i<event.results.length;i++){
-      const t=event.results[i][0].transcript.trim();
-      if(!t) continue;
-      if(event.results[i].isFinal) finalChunk += `${t} `;
-      else interim += `${t} `;
-    }
-
-    if(finalChunk.trim()){
-      persistentText = [persistentText, finalChunk.trim()].filter(Boolean).join(" ").trim();
-    }
-
-    const displayText=[persistentText, interim.trim()].filter(Boolean).join(" ").trim();
+    const currentSessionText=collapsed.displayText;
+    const displayText=mergeWithOverlap(sessionBaseText, currentSessionText);
     if(displayText){
       els.text.value=displayText;
       infer(displayText);
@@ -261,8 +350,6 @@ if(SpeechRecognition){
   };
 
   recognition.onerror=(event)=>{
-    recognitionActive=false;
-
     if(event.error === "no-speech"){
       els.hint.textContent="계속 듣는 중입니다. 편하게 이어서 말씀하세요.";
       return;
@@ -278,6 +365,7 @@ if(SpeechRecognition){
     ]);
 
     if(fatalErrors.has(event.error)){
+      recognitionActive=false;
       keepListening=false;
       cancelRestart();
       releaseWakeLock();
@@ -287,6 +375,7 @@ if(SpeechRecognition){
     }
 
     if(event.error === "network"){
+      recognitionActive=false;
       keepListening=false;
       cancelRestart();
       releaseWakeLock();
@@ -297,6 +386,7 @@ if(SpeechRecognition){
 
   recognition.onend=()=>{
     recognitionActive=false;
+    commitCurrentSession();
     resolveStopWaiters();
     if(keepListening){
       els.hint.textContent="계속 듣는 중입니다. 잠시 쉬었다가 말씀하셔도 됩니다.";
@@ -313,7 +403,7 @@ if(SpeechRecognition){
       return;
     }
 
-    persistentText=els.text.value.trim();
+    persistentText=normalizeTranscript(els.text.value);
     keepListening=true;
     setListeningUI();
     startRecognition();
@@ -331,7 +421,7 @@ if(SpeechRecognition){
 }
 
 els.text.addEventListener("input",()=>{
-  if(!keepListening) persistentText=els.text.value.trim();
+  if(!keepListening) persistentText=normalizeTranscript(els.text.value);
   if(els.text.value.trim()) infer(els.text.value);
   saveDraft();
 });
@@ -344,6 +434,8 @@ els.text.addEventListener("input",()=>{
 els.clear.onclick=async()=>{
   if(keepListening || recognitionActive) await stopListening({finalHint:false});
   persistentText="";
+  sessionBaseText="";
+  sessionFinalText="";
   els.text.value=""; els.amount.value=""; els.assignee.value="";
   els.dueDate.value=""; els.followUp.value="";
   els.institution.value="기타"; els.status.value="진행중"; els.type.value="기타";
@@ -353,13 +445,15 @@ els.clear.onclick=async()=>{
 };
 
 els.save.onclick=async()=>{
+  primeSuccessAudio();
+
   if(keepListening || recognitionActive){
     els.save.disabled=true;
     els.save.textContent="마지막 음성 확인 중…";
     await stopListening();
   }
 
-  const transcript=els.text.value.trim();
+  const transcript=normalizeTranscript(els.text.value);
   if(!transcript){
     els.save.disabled=false;
     els.save.textContent="Notion에 저장";
@@ -403,9 +497,11 @@ els.save.onclick=async()=>{
     if(!res.ok) throw new Error(data.error || "저장에 실패했습니다.");
 
     result("✓ Notion에 저장 완료","success");
-    try{ navigator.vibrate?.([60,40,60]); }catch{}
+    playSuccessFeedback();
     els.save.textContent="✓ 저장 완료";
     persistentText="";
+    sessionBaseText="";
+    sessionFinalText="";
     els.text.value=""; els.amount.value=""; els.assignee.value="";
     els.dueDate.value=""; els.followUp.value="";
     els.institution.value="기타"; els.status.value="진행중"; els.type.value="기타";
