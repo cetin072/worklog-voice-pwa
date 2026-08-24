@@ -1,0 +1,6 @@
+node_modules/
+.netlify/
+.env
+.env.*
+access-key.txt
+deploy-log.txt
