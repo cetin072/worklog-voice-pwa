@@ -9,7 +9,10 @@ const els = {
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
-let listening = false;
+let recognitionActive = false;
+let keepListening = false;
+let restartTimer = null;
+let persistentText = "";
 
 function result(msg="", kind=""){
   els.result.textContent = msg;
@@ -45,55 +48,170 @@ function getAccessKey(){
   return key;
 }
 
-function stopUI(){
-  listening=false;
+function setListeningUI(){
+  els.mic.classList.add("listening");
+  els.micText.textContent="중지하기";
+  els.hint.textContent="천천히 말씀하세요. 잠시 말이 없어도 계속 기다립니다.";
+}
+
+function setStoppedUI(){
+  recognitionActive=false;
   els.mic.classList.remove("listening");
   els.micText.textContent="말하기";
-  els.hint.textContent="인식 결과를 확인하고 저장하세요.";
+  els.hint.textContent="버튼을 누르면 다시 누를 때까지 계속 듣습니다.";
+}
+
+function cancelRestart(){
+  if(restartTimer){
+    clearTimeout(restartTimer);
+    restartTimer=null;
+  }
+}
+
+function startRecognition(){
+  if(!recognition || !keepListening || recognitionActive) return;
+  if(document.visibilityState !== "visible"){
+    els.hint.textContent="앱으로 돌아오면 계속 듣습니다.";
+    return;
+  }
+
+  cancelRestart();
+  try{
+    recognition.start();
+  }catch(error){
+    if(error?.name === "InvalidStateError") return;
+    keepListening=false;
+    setStoppedUI();
+    result("음성인식을 다시 시작하지 못했습니다. 말하기 버튼을 다시 눌러주세요.", "error");
+  }
+}
+
+function scheduleRestart(){
+  if(!keepListening || restartTimer) return;
+  restartTimer=setTimeout(()=>{
+    restartTimer=null;
+    startRecognition();
+  }, 450);
 }
 
 if(SpeechRecognition){
   recognition = new SpeechRecognition();
   recognition.lang="ko-KR";
   recognition.interimResults=true;
-  recognition.continuous=false;
+  recognition.continuous=true;
 
   recognition.onstart=()=>{
-    listening=true;
-    els.mic.classList.add("listening");
-    els.micText.textContent="듣는 중";
-    els.hint.textContent="말씀하세요.";
+    recognitionActive=true;
+    setListeningUI();
     result();
   };
 
   recognition.onresult=(event)=>{
-    let finalText="", interim="";
+    let finalChunk="";
+    let interim="";
+
     for(let i=event.resultIndex;i<event.results.length;i++){
-      const t=event.results[i][0].transcript;
-      if(event.results[i].isFinal) finalText+=t; else interim+=t;
+      const t=event.results[i][0].transcript.trim();
+      if(!t) continue;
+      if(event.results[i].isFinal) finalChunk += `${t} `;
+      else interim += `${t} `;
     }
-    const t=(finalText||interim).trim();
-    if(t){ els.text.value=t; infer(t); }
+
+    if(finalChunk.trim()){
+      persistentText = [persistentText, finalChunk.trim()].filter(Boolean).join(" ").trim();
+    }
+
+    const displayText=[persistentText, interim.trim()].filter(Boolean).join(" ").trim();
+    if(displayText){
+      els.text.value=displayText;
+      infer(displayText);
+    }
   };
 
   recognition.onerror=(event)=>{
-    stopUI();
-    result(`음성인식 오류: ${event.error}. 키보드의 마이크 입력을 사용해도 됩니다.`, "error");
+    recognitionActive=false;
+
+    if(event.error === "no-speech"){
+      els.hint.textContent="계속 듣는 중입니다. 편하게 이어서 말씀하세요.";
+      return;
+    }
+
+    if(event.error === "aborted" && !keepListening) return;
+
+    const fatalErrors = new Set([
+      "not-allowed",
+      "service-not-allowed",
+      "audio-capture",
+      "language-not-supported"
+    ]);
+
+    if(fatalErrors.has(event.error)){
+      keepListening=false;
+      cancelRestart();
+      setStoppedUI();
+      result(`음성인식 오류: ${event.error}. 마이크 권한을 확인해주세요.`, "error");
+      return;
+    }
+
+    if(event.error === "network"){
+      keepListening=false;
+      cancelRestart();
+      setStoppedUI();
+      result("음성인식 네트워크 오류가 발생했습니다. 말하기 버튼을 다시 눌러주세요.", "error");
+    }
   };
-  recognition.onend=stopUI;
+
+  recognition.onend=()=>{
+    recognitionActive=false;
+    if(keepListening){
+      els.hint.textContent="계속 듣는 중입니다. 잠시 쉬었다가 말씀하셔도 됩니다.";
+      scheduleRestart();
+    }else{
+      setStoppedUI();
+    }
+  };
 
   els.mic.onclick=()=>{
-    try{ listening ? recognition.stop() : recognition.start(); }
-    catch{ result("다시 한 번 말하기 버튼을 눌러주세요.","error"); }
+    if(keepListening){
+      keepListening=false;
+      cancelRestart();
+      try{
+        if(recognitionActive) recognition.stop();
+      }catch{}
+      setStoppedUI();
+      els.hint.textContent="인식 결과를 확인하고 저장하세요.";
+      return;
+    }
+
+    persistentText=els.text.value.trim();
+    keepListening=true;
+    setListeningUI();
+    startRecognition();
   };
+
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState === "visible" && keepListening && !recognitionActive){
+      scheduleRestart();
+    }
+  });
 }else{
   els.hint.textContent="브라우저 직접 음성인식이 없어 키보드 음성입력을 사용합니다.";
   els.mic.onclick=()=>els.text.focus();
 }
 
-els.text.addEventListener("input",()=>{ if(els.text.value.trim()) infer(els.text.value); });
+els.text.addEventListener("input",()=>{
+  if(!keepListening) persistentText=els.text.value.trim();
+  if(els.text.value.trim()) infer(els.text.value);
+});
 
 els.clear.onclick=()=>{
+  keepListening=false;
+  cancelRestart();
+  try{
+    if(recognitionActive) recognition?.stop();
+  }catch{}
+  persistentText="";
+  setStoppedUI();
   els.text.value=""; els.amount.value=""; els.assignee.value="";
   els.dueDate.value=""; els.followUp.value="";
   els.institution.value="기타"; els.status.value="진행중"; els.type.value="기타";
@@ -103,6 +221,15 @@ els.clear.onclick=()=>{
 els.save.onclick=async()=>{
   const transcript=els.text.value.trim();
   if(!transcript){ result("먼저 업무 내용을 말하거나 입력하세요.","error"); return; }
+
+  if(keepListening){
+    keepListening=false;
+    cancelRestart();
+    try{
+      if(recognitionActive) recognition?.stop();
+    }catch{}
+    setStoppedUI();
+  }
 
   const key=getAccessKey();
   if(!key){ result("개인 접근키가 필요합니다.","error"); return; }
@@ -135,6 +262,7 @@ els.save.onclick=async()=>{
     if(!res.ok) throw new Error(data.error || "저장에 실패했습니다.");
 
     result("✓ Notion에 저장 완료","success");
+    persistentText="";
     els.text.value=""; els.amount.value=""; els.assignee.value="";
     els.dueDate.value=""; els.followUp.value="";
     els.institution.value="기타"; els.status.value="진행중"; els.type.value="기타";
