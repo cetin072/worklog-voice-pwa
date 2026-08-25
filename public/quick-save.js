@@ -2,7 +2,6 @@
   const mic = document.getElementById("mic");
   const save = document.getElementById("save");
   const clear = document.getElementById("clear");
-  const importCall = document.getElementById("importCall");
   const result = document.getElementById("result");
   const hint = document.getElementById("hint");
   const text = document.getElementById("text");
@@ -70,9 +69,9 @@
 
     const done = /(완료|마무리|처리했|보냈|전달했|확인했|송금했|끝냈|했음|하였음|했다|됐음|되었음)/.test(s);
     const future = /(내일|해야|예정|필요|확인해야|요청해야|추후|다음\s*주|다음주)/.test(s);
-    const inferredStatus = done ? "완료" : future ? "대기" : fallback.status;
+    const inferredStatus = done ? "완료" : future ? "대기" : "진행중";
 
-    let inferredType = fallback.type;
+    let inferredType = "기타";
     if (/(송금|지출|세금|원천징수|비용|결제)/.test(s)) inferredType = "지출·세무";
     else if (/(회의|미팅|통화|전화)/.test(s)) inferredType = "회의·통화";
     else if (/(요청|지시|위임)/.test(s)) inferredType = "지시·위임";
@@ -171,10 +170,7 @@
     saving = true;
     mic.disabled = true;
     clear.disabled = true;
-    if (importCall) importCall.disabled = true;
     if (typeof window.primeSuccessAudio === "function") window.primeSuccessAudio();
-
-    const importedCall = document.body.dataset.importSource === "call";
 
     try {
       if (mic.classList.contains("listening") && typeof window.stopListening === "function") {
@@ -185,9 +181,7 @@
       }
 
       const transcript = normalize(text.value);
-      const items = importedCall
-        ? (transcript ? [transcript] : [])
-        : splitWorkItems(transcript);
+      const items = splitWorkItems(transcript);
 
       if (items.length <= 1 || hasManualExtras()) {
         await baseSaveClick.call(save);
@@ -199,13 +193,10 @@
       }
 
       if (result.classList.contains("success")) {
-        hint.textContent = importedCall
-          ? "통화기록 1건을 저장했습니다."
-          : items.length > 1
-            ? `${items.length}개 업무로 나눠 저장했습니다. 말하기를 누르면 새 기록을 시작합니다.`
-            : "저장 완료. 말하기를 누르면 새 기록을 시작합니다.";
+        hint.textContent = items.length > 1
+          ? `${items.length}개 업무로 나눠 저장했습니다. 말하기를 누르면 새 기록을 시작합니다.`
+          : "저장 완료. 말하기를 누르면 새 기록을 시작합니다.";
         try { navigator.vibrate?.([220, 100, 220]); } catch {}
-        if (importedCall) delete document.body.dataset.importSource;
       }
     } catch (error) {
       result.textContent = error.message || "저장에 실패했습니다.";
@@ -214,7 +205,6 @@
       save.disabled = false;
       mic.disabled = false;
       clear.disabled = false;
-      if (importCall) importCall.disabled = false;
       if (!result.classList.contains("success")) save.textContent = "Notion에 저장";
       else setTimeout(() => { save.textContent = "Notion에 저장"; }, 1400);
       saving = false;
