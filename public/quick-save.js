@@ -2,6 +2,7 @@
   const mic = document.getElementById("mic");
   const save = document.getElementById("save");
   const clear = document.getElementById("clear");
+  const importCall = document.getElementById("importCall");
   const result = document.getElementById("result");
   const hint = document.getElementById("hint");
   const text = document.getElementById("text");
@@ -170,7 +171,10 @@
     saving = true;
     mic.disabled = true;
     clear.disabled = true;
+    if (importCall) importCall.disabled = true;
     if (typeof window.primeSuccessAudio === "function") window.primeSuccessAudio();
+
+    const importedCall = document.body.dataset.importSource === "call";
 
     try {
       if (mic.classList.contains("listening") && typeof window.stopListening === "function") {
@@ -181,7 +185,9 @@
       }
 
       const transcript = normalize(text.value);
-      const items = splitWorkItems(transcript);
+      const items = importedCall
+        ? (transcript ? [transcript] : [])
+        : splitWorkItems(transcript);
 
       if (items.length <= 1 || hasManualExtras()) {
         await baseSaveClick.call(save);
@@ -193,10 +199,13 @@
       }
 
       if (result.classList.contains("success")) {
-        hint.textContent = items.length > 1
-          ? `${items.length}개 업무로 나눠 저장했습니다. 말하기를 누르면 새 기록을 시작합니다.`
-          : "저장 완료. 말하기를 누르면 새 기록을 시작합니다.";
+        hint.textContent = importedCall
+          ? "통화기록 1건을 저장했습니다."
+          : items.length > 1
+            ? `${items.length}개 업무로 나눠 저장했습니다. 말하기를 누르면 새 기록을 시작합니다.`
+            : "저장 완료. 말하기를 누르면 새 기록을 시작합니다.";
         try { navigator.vibrate?.([220, 100, 220]); } catch {}
+        if (importedCall) delete document.body.dataset.importSource;
       }
     } catch (error) {
       result.textContent = error.message || "저장에 실패했습니다.";
@@ -205,6 +214,7 @@
       save.disabled = false;
       mic.disabled = false;
       clear.disabled = false;
+      if (importCall) importCall.disabled = false;
       if (!result.classList.contains("success")) save.textContent = "Notion에 저장";
       else setTimeout(() => { save.textContent = "Notion에 저장"; }, 1400);
       saving = false;
