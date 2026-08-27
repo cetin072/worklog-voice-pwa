@@ -7,7 +7,6 @@
     top:$("briefingTop"),
     today:$("briefingToday"),
     upcoming:$("briefingUpcoming"),
-    refresh:$("briefingRefresh"),
     quick:$("briefingQuickUpdate"),
     error:$("briefingError")
   };
@@ -108,13 +107,9 @@
   function setBusy(kind=""){
     loading=Boolean(kind);
     els.card.classList.toggle("loading",loading);
-    if(els.refresh){
-      els.refresh.disabled=loading;
-      els.refresh.textContent=kind==="refresh" ? "불러오는 중" : "새로고침";
-    }
     if(els.quick){
       els.quick.disabled=loading;
-      els.quick.textContent=kind==="quick" ? "업데이트 중…" : "빠른 업데이트";
+      els.quick.textContent=kind==="quick" ? "정리 중…" : "브리핑 다시 정리";
     }
   }
 
@@ -246,7 +241,7 @@
     if(loading) return;
     const headers=authHeaders({ask:true});
     if(!Object.keys(headers).length){
-      els.error.textContent="빠른 업데이트를 하려면 Notion 연결 또는 개인 접근키가 필요합니다.";
+      els.error.textContent="브리핑을 다시 정리하려면 Notion 연결 또는 개인 접근키가 필요합니다.";
       els.card.classList.add("has-error");
       return;
     }
@@ -263,18 +258,17 @@
       if(res.status===401 && window.WorklogAuth?.mode?.()!=="personal"){
         localStorage.removeItem("worklogAccessKey");
       }
-      if(!res.ok) throw new Error(data.error || "빠른 브리핑 업데이트에 실패했습니다.");
+      if(!res.ok) throw new Error(data.error || "브리핑 다시 정리에 실패했습니다.");
       render(data);
       lastLoadedAt=Date.now();
     }catch(error){
-      els.error.textContent=error?.message || "빠른 브리핑 업데이트에 실패했습니다.";
+      els.error.textContent=error?.message || "브리핑 다시 정리에 실패했습니다.";
       els.card.classList.add("has-error");
     }finally{
       setBusy();
     }
   }
 
-  els.refresh?.addEventListener("click",()=>refreshBriefing({promptIfMissing:true}));
   els.quick?.addEventListener("click",quickUpdateBriefing);
   els.top?.addEventListener("click",event=>{
     const button=event.target.closest?.(".briefing-complete");
