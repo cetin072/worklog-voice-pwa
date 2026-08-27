@@ -13,16 +13,21 @@
 
   if(!els.card) return;
 
+  const UNDO_KEY="worklogBriefingUndoStates";
   let loading=false;
   let lastLoadedAt=0;
+  let undoTimer=null;
 
-  function getAccessKey({promptIfMissing=true}={}){
+  function authHeaders({prompt=true}={}){
+    if(window.WorklogAuth?.getHeaders){
+      return window.WorklogAuth.getHeaders({promptOwner:prompt});
+    }
     let key=localStorage.getItem("worklogAccessKey") || "";
-    if(!key && promptIfMissing){
+    if(!key && prompt){
       key=(prompt("개인 접근키를 한 번 입력하세요.") || "").trim();
       if(key) localStorage.setItem("worklogAccessKey",key);
     }
-    return key;
+    return key ? {"x-worklog-key":key} : {};
   }
 
   function escapeHtml(value){
@@ -48,10 +53,41 @@
     }catch{ return value; }
   }
 
+  function loadUndoStates(){
+    try{
+      const raw=JSON.parse(localStorage.getItem(UNDO_KEY) || "{}");
+      const cutoff=Date.now()-48*60*60*1000;
+      const cleaned={};
+      Object.entries(raw).forEach(([pageId,value])=>{
+        if(value?.status && Number(value?.ts || 0)>=cutoff) cleaned[pageId]=value;
+      });
+      localStorage.setItem(UNDO_KEY,JSON.stringify(cleaned));
+      return cleaned;
+    }catch{ return {}; }
+  }
+
+  function saveUndoState(pageId,status,title){
+    const states=loadUndoStates();
+    states[pageId]={status,title,ts:Date.now()};
+    localStorage.setItem(UNDO_KEY,JSON.stringify(states));
+  }
+
+  function removeUndoState(pageId){
+    const states=loadUndoStates();
+    delete states[pageId];
+    localStorage.setItem(UNDO_KEY,JSON.stringify(states));
+  }
+
   function priorityHtml(item){
     const institution=item.institution ? `<span class="briefing-tag">${escapeHtml(institutionLabel(item.institution))}</span>` : "";
     const note=item.note ? `<small>${escapeHtml(item.note)}</small>` : "";
-    return `<li><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note}</div></div></li>`;
+    const pageId=String(item.pageId || "");
+    const isDone=item.status==="완료";
+    const canUndo=isDone && Boolean(loadUndoStates()[pageId]?.status);
+    const action=pageId
+      ? `<button class="briefing-complete${isDone ? " is-done" : ""}" type="button" data-page-id="${escapeHtml(pageId)}" data-title="${escapeHtml(item.title)}" data-action="${isDone ? "undo" : "complete"}"${isDone && !canUndo ? " disabled" : ""}>${isDone ? "✓ 완료" : "완료"}</button>`
+      : "";
+    return `<li class="${isDone ? "briefing-done" : ""}"><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note}</div></div>${action}</li>`;
   }
 
   function scheduleHtml(item){
@@ -75,6 +111,20 @@
       els.refresh.disabled=active;
       els.refresh.textContent=active ? "불러오는 중" : "새로고침";
     }
+  }
+
+  function showUndoNotice(pageId,title){
+    let bar=document.getElementById("briefingUndoBar");
+    if(!bar){
+      bar=document.createElement("div");
+      bar.id="briefingUndoBar";
+      bar.className="briefing-undo-bar";
+      document.body.appendChild(bar);
+    }
+    bar.innerHTML=`<span>${escapeHtml(title)} 완료 처리</span><button type="button" data-undo-page="${escapeHtml(pageId)}">실행 취소</button>`;
+    bar.classList.add("show");
+    clearTimeout(undoTimer);
+    undoTimer=setTimeout(()=>bar.classList.remove("show"),8000);
   }
 
   function render(data){
@@ -107,11 +157,60 @@
     }
   }
 
+  async function updateTaskStatus(pageId,status){
+    const headers=authHeaders({prompt:true});
+    if(!Object.keys(headers).length) throw new Error("Notion 연결 또는 개인 접근키가 필요합니다.");
+    const res=await fetch("/api/briefing",{
+      method:"POST",
+      headers:{...headers,"content-type":"application/json"},
+      body:JSON.stringify({pageId,status}),
+      cache:"no-store"
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || "업무 상태를 변경하지 못했습니다.");
+    return data;
+  }
+
+  async function completeTask(button){
+    const pageId=button.dataset.pageId || "";
+    const title=button.dataset.title || "업무";
+    if(!pageId || button.disabled) return;
+    button.disabled=true;
+    button.textContent="처리 중";
+    try{
+      const data=await updateTaskStatus(pageId,"완료");
+      if(data.previousStatus && data.previousStatus!=="완료") saveUndoState(pageId,data.previousStatus,title);
+      await refreshBriefing({promptIfMissing:false});
+      showUndoNotice(pageId,title);
+    }catch(error){
+      els.error.textContent=error?.message || "완료 처리에 실패했습니다.";
+      els.card.classList.add("has-error");
+      button.disabled=false;
+      button.textContent="완료";
+    }
+  }
+
+  async function undoTask(pageId,{confirmFirst=false}={}){
+    const state=loadUndoStates()[pageId];
+    if(!state?.status) return;
+    if(confirmFirst && !confirm(`‘${state.title || "업무"}’ 완료 처리를 취소할까요?`)) return;
+    try{
+      await updateTaskStatus(pageId,state.status);
+      removeUndoState(pageId);
+      const bar=document.getElementById("briefingUndoBar");
+      bar?.classList.remove("show");
+      await refreshBriefing({promptIfMissing:false});
+    }catch(error){
+      els.error.textContent=error?.message || "완료 취소에 실패했습니다.";
+      els.card.classList.add("has-error");
+    }
+  }
+
   async function refreshBriefing({promptIfMissing=true}={}){
     if(loading) return;
-    const key=getAccessKey({promptIfMissing});
-    if(!key){
-      els.error.textContent="브리핑을 보려면 개인 접근키가 필요합니다.";
+    const headers=authHeaders({prompt:promptIfMissing});
+    if(!Object.keys(headers).length){
+      els.error.textContent="브리핑을 보려면 Notion 연결 또는 개인 접근키가 필요합니다.";
       els.card.classList.add("has-error");
       return;
     }
@@ -120,13 +219,12 @@
     try{
       const res=await fetch("/api/briefing",{
         method:"GET",
-        headers:{"x-worklog-key":key},
+        headers,
         cache:"no-store"
       });
       const data=await res.json().catch(()=>({}));
-      if(res.status===401){
+      if(res.status===401 && window.WorklogAuth?.mode?.()!=="personal"){
         localStorage.removeItem("worklogAccessKey");
-        throw new Error("개인 접근키가 맞지 않습니다. 새로고침을 눌러 다시 입력하세요.");
       }
       if(!res.ok) throw new Error(data.error || "브리핑을 불러오지 못했습니다.");
       render(data);
@@ -140,6 +238,16 @@
   }
 
   els.refresh?.addEventListener("click",()=>refreshBriefing({promptIfMissing:true}));
+  els.top?.addEventListener("click",event=>{
+    const button=event.target.closest?.(".briefing-complete");
+    if(!button) return;
+    if(button.dataset.action==="undo") undoTask(button.dataset.pageId || "",{confirmFirst:true});
+    else completeTask(button);
+  });
+  document.addEventListener("click",event=>{
+    const button=event.target.closest?.("[data-undo-page]");
+    if(button) undoTask(button.dataset.undoPage || "");
+  });
 
   document.addEventListener("visibilitychange",()=>{
     if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>30*60*1000){
