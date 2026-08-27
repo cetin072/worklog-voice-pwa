@@ -61,7 +61,7 @@
 
     <section class="card">
       <label class="label" for="text">음성 인식 결과</label>
-      <textarea id="text" rows="5" placeholder="예: 태장 홈페이지 확인 완료. 다음 업무 계좌 개설 서류 확인해야 함. 다음 건 주차권 등록해야 함."></textarea>
+      <textarea id="text" rows="5" placeholder="예: 홈페이지 확인 완료. 다음 업무 계좌 개설 서류 확인해야 함. 다음 건 주차권 등록해야 함."></textarea>
 
       <div class="grid">
         <label><span>기관</span>
@@ -106,9 +106,16 @@
       </details>
     </section>
 
-    <footer>v1.2.0 · 녹음 우선 · 오늘 브리핑 · AI API 없음</footer>
+    <section class="card">
+      <p class="eyebrow">지인용</p>
+      <strong>내 Notion으로 따로 쓰고 싶다면</strong>
+      <p style="margin:.5rem 0 0"><a href="/setup.html">내 Notion으로 시작하기 →</a></p>
+    </section>
+
+    <footer>v1.3.0 · 녹음 우선 · 개인 Notion 테스트 · AI API 없음</footer>
   </main>
 
+  <script src="/auth.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/quick-save.js" defer></script>
   <script src="/briefing.js" defer></script>
