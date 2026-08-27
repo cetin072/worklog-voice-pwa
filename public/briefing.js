@@ -8,8 +8,7 @@
     today:$("briefingToday"),
     upcoming:$("briefingUpcoming"),
     refresh:$("briefingRefresh"),
-    error:$("briefingError"),
-    result:$("result")
+    error:$("briefingError")
   };
 
   if(!els.card) return;
@@ -40,26 +39,33 @@
     return value || "미지정";
   }
 
-  function formatDate(day){
-    if(!day) return "";
-    const [y,m,d]=day.split("-");
-    return `${Number(m)}/${Number(d)}`;
+  function formatGeneratedAt(value){
+    if(!value) return "";
+    try{
+      return new Intl.DateTimeFormat("ko-KR",{
+        timeZone:"Asia/Seoul",month:"numeric",day:"numeric",hour:"numeric",minute:"2-digit"
+      }).format(new Date(value));
+    }catch{ return value; }
   }
 
-  function itemHtml(item,{showDate=false}={}){
-    const due=showDate && item.dueDate ? `<span class="briefing-date">${escapeHtml(formatDate(item.dueDate))}</span>` : "";
-    const institution=`<span class="briefing-tag">${escapeHtml(institutionLabel(item.institution))}</span>`;
-    const reason=item.reason ? `<small>${escapeHtml(item.reason)}</small>` : "";
-    return `<li>${due}<div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${reason}</div></div></li>`;
+  function priorityHtml(item){
+    const institution=item.institution ? `<span class="briefing-tag">${escapeHtml(institutionLabel(item.institution))}</span>` : "";
+    const note=item.note ? `<small>${escapeHtml(item.note)}</small>` : "";
+    return `<li><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note}</div></div></li>`;
   }
 
-  function renderList(target,items,emptyText,options={}){
+  function scheduleHtml(item){
+    const when=item.when ? `<span class="briefing-date">${escapeHtml(item.when)}</span>` : "";
+    return `<li>${when}<div><strong>${escapeHtml(item.title)}</strong></div></li>`;
+  }
+
+  function renderList(target,items,emptyText,renderer){
     if(!target) return;
     if(!items?.length){
       target.innerHTML=`<li class="briefing-empty">${escapeHtml(emptyText)}</li>`;
       return;
     }
-    target.innerHTML=items.map(item=>itemHtml(item,options)).join("");
+    target.innerHTML=items.map(renderer).join("");
   }
 
   function setLoading(active){
@@ -72,21 +78,33 @@
   }
 
   function render(data){
-    const counts=data.counts || {};
-    els.title.textContent=data.top?.length ? "오늘 먼저 할 일" : "오늘 우선 업무 없음";
+    if(!data.ready){
+      els.title.textContent="첫 브리핑 준비 중";
+      els.meta.textContent=data.message || "오전 8시 또는 오후 12시 30분 브리핑 후 표시됩니다.";
+      renderList(els.top,[],"아직 확정된 브리핑이 없습니다.",priorityHtml);
+      renderList(els.today,[],"아직 확정된 일정이 없습니다.",scheduleHtml);
+      renderList(els.upcoming,[],"아직 확정된 일정이 없습니다.",scheduleHtml);
+      els.error.textContent="";
+      els.card.classList.remove("has-error");
+      return;
+    }
 
-    const meta=[];
-    if(Number.isFinite(counts.totalOpen)) meta.push(`미완료 ${counts.totalOpen}건`);
-    if(counts.overdue) meta.push(`기한 지남 ${counts.overdue}건`);
-    if(counts.today) meta.push(`오늘 일정 ${counts.today}건`);
-    if(counts.checking) meta.push(`확인 필요 ${counts.checking}건`);
-    els.meta.textContent=meta.join(" · ") || "Notion 최신 업무 기준";
+    const briefing=data.briefing || {};
+    els.title.textContent=briefing.period ? `${briefing.period} 브리핑` : "오늘 브리핑";
+    const generated=formatGeneratedAt(briefing.generatedAt);
+    els.meta.textContent=[generated,briefing.meta].filter(Boolean).join(" · ") || "예약 업무가 확정한 최신 브리핑";
 
-    renderList(els.top,data.top,"지금 우선 처리할 미완료 업무가 없습니다.");
-    renderList(els.today,data.todayItems,"오늘 기한으로 잡힌 일정이 없습니다.",{showDate:true});
-    renderList(els.upcoming,data.upcoming,"14일 안에 잡힌 일정이 없습니다.",{showDate:true});
-    els.error.textContent="";
-    els.card.classList.remove("has-error");
+    renderList(els.top,briefing.top,"오늘 우선 업무가 없습니다.",priorityHtml);
+    renderList(els.today,briefing.today,"오늘 확정 일정이 없습니다.",scheduleHtml);
+    renderList(els.upcoming,briefing.upcoming,"다가오는 일정이 없습니다.",scheduleHtml);
+
+    if(Array.isArray(briefing.checking) && briefing.checking.length){
+      els.error.textContent=`확인 필요: ${briefing.checking.join(" · ")}`;
+      els.card.classList.add("has-error");
+    }else{
+      els.error.textContent="";
+      els.card.classList.remove("has-error");
+    }
   }
 
   async function refreshBriefing({promptIfMissing=true}={}){
@@ -123,17 +141,8 @@
 
   els.refresh?.addEventListener("click",()=>refreshBriefing({promptIfMissing:true}));
 
-  if(els.result){
-    const observer=new MutationObserver(()=>{
-      if(els.result.textContent.includes("Notion에 저장 완료")){
-        setTimeout(()=>refreshBriefing({promptIfMissing:false}),500);
-      }
-    });
-    observer.observe(els.result,{childList:true,characterData:true,subtree:true});
-  }
-
   document.addEventListener("visibilitychange",()=>{
-    if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>5*60*1000){
+    if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>30*60*1000){
       refreshBriefing({promptIfMissing:false});
     }
   });
