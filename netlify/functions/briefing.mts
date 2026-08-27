@@ -67,6 +67,40 @@ function sanitizeSnapshot(raw:any){
   };
 }
 
+function parseLineSnapshot(rawText:string){
+  if(!rawText.startsWith("BRIEFING_V1")) return null;
+
+  const parsed:any={generatedAt:"",period:"",meta:"",top:[],today:[],upcoming:[],checking:[]};
+  for(const rawLine of rawText.split(/\r?\n/).slice(1)){
+    const line=rawLine.trim();
+    if(!line) continue;
+
+    if(line.startsWith("generatedAt=")) parsed.generatedAt=line.slice("generatedAt=".length).trim();
+    else if(line.startsWith("period=")) parsed.period=line.slice("period=".length).trim();
+    else if(line.startsWith("meta=")) parsed.meta=line.slice("meta=".length).trim();
+    else if(line.startsWith("TOP|")){
+      const [,title="",note="",institution=""]=line.split("|");
+      if(title.trim()) parsed.top.push({title:title.trim(),note:note.trim(),institution:institution.trim()});
+    }else if(line.startsWith("TODAY|")){
+      const [,title="",when=""]=line.split("|");
+      if(title.trim()) parsed.today.push({title:title.trim(),when:when.trim()});
+    }else if(line.startsWith("UPCOMING|")){
+      const [,title="",when=""]=line.split("|");
+      if(title.trim()) parsed.upcoming.push({title:title.trim(),when:when.trim()});
+    }else if(line.startsWith("CHECK|")){
+      const text=line.slice("CHECK|".length).trim();
+      if(text) parsed.checking.push(text);
+    }
+  }
+  return parsed;
+}
+
+function parseStoredSnapshot(rawText:string){
+  try{ return JSON.parse(rawText); }
+  catch{}
+  return parseLineSnapshot(rawText);
+}
+
 export default async (req:Request, _context:Context) => {
   if(req.method!=="GET") return json(405,{error:"허용되지 않은 요청입니다."});
 
@@ -87,10 +121,9 @@ export default async (req:Request, _context:Context) => {
       return json(200,{ok:true,ready:false,message:"첫 예약 브리핑 생성 전입니다."});
     }
 
-    let parsed:any;
-    try{ parsed=JSON.parse(rawText); }
-    catch{
-      console.error("Invalid briefing JSON",rawText.slice(0,300));
+    const parsed=parseStoredSnapshot(rawText);
+    if(!parsed){
+      console.error("Invalid briefing snapshot",rawText.slice(0,300));
       return json(502,{error:"저장된 일일 브리핑 형식이 올바르지 않습니다."});
     }
 
