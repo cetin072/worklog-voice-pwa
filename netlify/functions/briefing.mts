@@ -20,6 +20,15 @@ function textValue(value:any){
   return arr.map((v:any)=>v?.plain_text || v?.text?.content || "").join("").trim();
 }
 
+function personalConnection(req:Request){
+  const token=(req.headers.get("x-notion-token") || "").trim();
+  const dataSourceId=(req.headers.get("x-notion-data-source-id") || "").trim();
+  if(!token && !dataSourceId) return null;
+  if(!token || !dataSourceId) return {error:"개인 Notion 연결 정보가 불완전합니다."};
+  if(token.length>300 || dataSourceId.length>100) return {error:"개인 Notion 연결 정보 형식이 올바르지 않습니다."};
+  return {token,dataSourceId,mode:"personal" as const};
+}
+
 async function querySnapshot(token:string,dataSourceId:string){
   const res=await fetch(`https://api.notion.com/v1/data_sources/${dataSourceId}/query`,{
     method:"POST",
@@ -37,8 +46,10 @@ async function querySnapshot(token:string,dataSourceId:string){
 
   const data:any=await res.json().catch(()=>({}));
   if(!res.ok){
-    console.error("Notion briefing snapshot query error",res.status,data);
-    throw new Error(`NOTION_${res.status}`);
+    console.error("Notion briefing snapshot query error",res.status,String(data?.code || data?.message || "").slice(0,300));
+    const error:any=new Error(`NOTION_${res.status}`);
+    error.status=res.status;
+    throw error;
   }
 
   return Array.isArray(data.results) ? data.results[0] : null;
@@ -104,21 +115,36 @@ function parseStoredSnapshot(rawText:string){
 export default async (req:Request, _context:Context) => {
   if(req.method!=="GET") return json(405,{error:"허용되지 않은 요청입니다."});
 
-  const token=Netlify.env.get("NOTION_TOKEN");
-  const accessKey=Netlify.env.get("APP_ACCESS_KEY");
-  const dataSourceId=Netlify.env.get("NOTION_DATA_SOURCE_ID") || DEFAULT_DATA_SOURCE_ID;
+  const personal=personalConnection(req);
+  if(personal && "error" in personal) return json(400,{error:personal.error});
 
-  if(!token) return json(500,{error:"NOTION_TOKEN이 설정되지 않았습니다."});
-  if(!accessKey) return json(500,{error:"APP_ACCESS_KEY가 설정되지 않았습니다."});
-  if((req.headers.get("x-worklog-key")||"")!==accessKey) return json(401,{error:"개인 접근키가 올바르지 않습니다."});
+  let token:string;
+  let dataSourceId:string;
+  let mode:"personal"|"owner";
+
+  if(personal){
+    token=personal.token;
+    dataSourceId=personal.dataSourceId;
+    mode="personal";
+  }else{
+    const envToken=Netlify.env.get("NOTION_TOKEN");
+    const accessKey=Netlify.env.get("APP_ACCESS_KEY");
+    const envDataSourceId=Netlify.env.get("NOTION_DATA_SOURCE_ID") || DEFAULT_DATA_SOURCE_ID;
+    if(!envToken) return json(500,{error:"NOTION_TOKEN이 설정되지 않았습니다."});
+    if(!accessKey) return json(500,{error:"APP_ACCESS_KEY가 설정되지 않았습니다."});
+    if((req.headers.get("x-worklog-key")||"")!==accessKey) return json(401,{error:"개인 접근키가 올바르지 않습니다."});
+    token=envToken;
+    dataSourceId=envDataSourceId;
+    mode="owner";
+  }
 
   try{
     const page=await querySnapshot(token,dataSourceId);
-    if(!page) return json(200,{ok:true,ready:false,message:"아직 생성된 일일 브리핑이 없습니다."});
+    if(!page) return json(200,{ok:true,ready:false,message:"아직 생성된 일일 브리핑이 없습니다.",mode});
 
     const rawText=textValue(page?.properties?.["내용"]);
     if(!rawText || rawText==="브리핑 준비 중"){
-      return json(200,{ok:true,ready:false,message:"첫 예약 브리핑 생성 전입니다."});
+      return json(200,{ok:true,ready:false,message:mode==="personal" ? "ChatGPT 브리핑 설정 전입니다. 녹음 저장은 바로 사용할 수 있습니다." : "첫 예약 브리핑 생성 전입니다.",mode});
     }
 
     const parsed=parseStoredSnapshot(rawText);
@@ -127,8 +153,11 @@ export default async (req:Request, _context:Context) => {
       return json(502,{error:"저장된 일일 브리핑 형식이 올바르지 않습니다."});
     }
 
-    return json(200,{ok:true,ready:true,briefing:sanitizeSnapshot(parsed)});
-  }catch(error){
+    return json(200,{ok:true,ready:true,briefing:sanitizeSnapshot(parsed),mode});
+  }catch(error:any){
+    if(mode==="personal" && (error?.status===401 || error?.status===404)){
+      return json(401,{error:"개인 Notion 연결이 만료되었거나 DB를 찾을 수 없습니다. 다시 연결해주세요."});
+    }
     console.error(error);
     return json(502,{error:"최신 일일 브리핑을 불러오지 못했습니다."});
   }
