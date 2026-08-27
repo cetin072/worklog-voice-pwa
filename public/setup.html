@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="robots" content="noindex,nofollow">
+  <title>내 Notion 연결</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .setup{max-width:680px;margin:0 auto;padding:22px 16px 40px;display:grid;gap:16px}.setup h1{margin:0}.setup p{line-height:1.55}.step{display:grid;gap:8px}.step strong{font-size:1rem}.step input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d1d5db;border-radius:12px;font-size:1rem}.setup-actions{display:grid;gap:10px}.setup-actions button,.setup-actions a{display:block;text-align:center;text-decoration:none}.note{font-size:.86rem;color:#6b7280}.danger-note{font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px}.setup-result{min-height:1.4em;font-weight:700}.setup-result.error{color:#b91c1c}.setup-result.success{color:#047857}.setup-link{font-weight:700;color:#374151}.token-help{display:flex;gap:8px;flex-wrap:wrap}.token-help a{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;color:#111827;background:#fff}.mini-steps{margin:2px 0 4px;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.7}.complete-note{display:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 14px}.complete-note.show{display:block}.complete-note strong{color:#047857}.complete-note p{margin:.35rem 0 0;font-size:.88rem;color:#4b5563}
+  </style>
+</head>
+<body>
+  <main class="setup">
+    <header>
+      <div>
+        <p class="eyebrow">개인용 설정</p>
+        <h1>내 Notion으로 시작하기</h1>
+        <p class="note">처음 한 번만 연결하면 이후에는 앱을 열고 바로 녹음하면 됩니다.</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="step">
+        <strong>1. Notion 토큰 만들기</strong>
+        <ol class="mini-steps">
+          <li>Notion Developer portal에서 <b>Personal access tokens</b> 열기</li>
+          <li><b>New token</b> 선택</li>
+          <li>사용할 workspace 선택 + <b>Notion API</b> 권한 켜기</li>
+          <li>토큰을 만들고 바로 복사하기</li>
+        </ol>
+        <div class="token-help">
+          <a href="https://developers.notion.com/guides/get-started/personal-access-tokens" target="_blank" rel="noopener noreferrer">Notion 공식 안내 열기</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step">
+        <label for="notionToken"><strong>2. 복사한 토큰 붙여넣기</strong></label>
+        <input id="notionToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ntn_...">
+      </div>
+
+      <div class="step" style="margin-top:16px">
+        <label for="organization"><strong>3. 기본 기관명</strong></label>
+        <input id="organization" type="text" maxlength="60" value="회사" placeholder="예: 우리회사, 개인사업">
+        <p class="note">업무를 저장할 때 기본 기관명으로 사용합니다.</p>
+      </div>
+
+      <div class="setup-actions" style="margin-top:18px">
+        <button id="connect" class="save" type="button">4. 내 Notion 자동 설정</button>
+        <p id="setupResult" class="setup-result" aria-live="polite"></p>
+        <div id="completeNote" class="complete-note">
+          <strong>설정 끝</strong>
+          <p>아래 ‘업무기록 시작’을 누른 뒤 Chrome 메뉴에서 ‘홈 화면에 추가’를 하면 다음부터 앱처럼 바로 사용할 수 있습니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <strong>자동으로 만들어지는 것</strong>
+      <p class="note">🎙 업무비서 페이지 · 🎙 업무 통합 기록 DB · 추후 ChatGPT 브리핑용 시스템 기록</p>
+      <p class="danger-note">지인 테스트용입니다. Notion 토큰은 이 기기의 브라우저에 저장되며 Notion 작업 시 이 앱의 Netlify Function을 통해 전달됩니다. 개인 휴대폰·개인 PC에서만 사용하고 공용 PC에서는 사용하지 마세요.</p>
+    </section>
+
+    <a class="setup-link" href="/">← 업무기록 화면으로</a>
+  </main>
+
+  <script src="/auth.js" defer></script>
+  <script src="/setup.js" defer></script>
+</body>
+</html>

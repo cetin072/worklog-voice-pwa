@@ -32,22 +32,46 @@ function seoulDate(input?:string){
   return `${m.year}-${m.month}-${m.day}`;
 }
 
+function personalConnection(req:Request){
+  const token=(req.headers.get("x-notion-token") || "").trim();
+  const dataSourceId=(req.headers.get("x-notion-data-source-id") || "").trim();
+  if(!token && !dataSourceId) return null;
+  if(!token || !dataSourceId) return {error:"개인 Notion 연결 정보가 불완전합니다."};
+  if(token.length>300 || dataSourceId.length>100) return {error:"개인 Notion 연결 정보 형식이 올바르지 않습니다."};
+  return {token,dataSourceId,mode:"personal" as const};
+}
+
 export default async (req:Request, _context:Context) => {
-  const token = Netlify.env.get("NOTION_TOKEN");
+  const personal=personalConnection(req);
+  const envToken = Netlify.env.get("NOTION_TOKEN");
   const accessKey = Netlify.env.get("APP_ACCESS_KEY");
-  const dataSourceId = Netlify.env.get("NOTION_DATA_SOURCE_ID") || DEFAULT_DATA_SOURCE_ID;
+  const envDataSourceId = Netlify.env.get("NOTION_DATA_SOURCE_ID") || DEFAULT_DATA_SOURCE_ID;
 
   if(req.method==="GET"){
-    return json(200,{
-      ok:true,
-      configured:Boolean(token && accessKey && dataSourceId)
-    });
+    if(personal && "error" in personal) return json(400,{ok:false,configured:false,error:personal.error});
+    if(personal) return json(200,{ok:true,configured:true,mode:"personal"});
+    return json(200,{ok:true,configured:Boolean(envToken && accessKey && envDataSourceId),mode:"owner"});
   }
 
   if(req.method!=="POST") return json(405,{error:"허용되지 않은 요청입니다."});
-  if(!token) return json(500,{error:"NOTION_TOKEN이 설정되지 않았습니다."});
-  if(!accessKey) return json(500,{error:"APP_ACCESS_KEY가 설정되지 않았습니다."});
-  if((req.headers.get("x-worklog-key")||"")!==accessKey) return json(401,{error:"개인 접근키가 올바르지 않습니다."});
+  if(personal && "error" in personal) return json(400,{error:personal.error});
+
+  let token:string;
+  let dataSourceId:string;
+  let mode:"personal"|"owner";
+
+  if(personal){
+    token=personal.token;
+    dataSourceId=personal.dataSourceId;
+    mode="personal";
+  }else{
+    if(!envToken) return json(500,{error:"NOTION_TOKEN이 설정되지 않았습니다."});
+    if(!accessKey) return json(500,{error:"APP_ACCESS_KEY가 설정되지 않았습니다."});
+    if((req.headers.get("x-worklog-key")||"")!==accessKey) return json(401,{error:"개인 접근키가 올바르지 않습니다."});
+    token=envToken;
+    dataSourceId=envDataSourceId;
+    mode="owner";
+  }
 
   let body:any;
   try{ body=await req.json(); }catch{ return json(400,{error:"요청 형식이 올바르지 않습니다."}); }
@@ -56,7 +80,10 @@ export default async (req:Request, _context:Context) => {
   if(!transcript) return json(400,{error:"업무 내용이 비어 있습니다."});
   if(transcript.length>1800) return json(400,{error:"업무 내용은 1,800자 이하로 입력해주세요."});
 
-  const institution=INSTITUTIONS.has(body.institution) ? body.institution : "기타";
+  const requestedInstitution=String(body.institution || "").trim().slice(0,60);
+  const institution=mode==="personal"
+    ? (requestedInstitution || "기타")
+    : (INSTITUTIONS.has(requestedInstitution) ? requestedInstitution : "기타");
   const status=STATUSES.has(body.status) ? body.status : "진행중";
   const type=TYPES.has(body.type) ? body.type : "기타";
 
@@ -92,10 +119,13 @@ export default async (req:Request, _context:Context) => {
 
     const data:any=await res.json().catch(()=>({}));
     if(!res.ok){
-      console.error("Notion error",res.status,data);
+      console.error("Notion worklog error",res.status,String(data?.code || data?.message || "").slice(0,300));
+      if(mode==="personal" && (res.status===401 || res.status===404)){
+        return json(401,{error:"개인 Notion 연결이 만료되었거나 DB를 찾을 수 없습니다. ‘내 Notion으로 시작하기’에서 다시 연결해주세요."});
+      }
       return json(502,{error:"Notion 저장에 실패했습니다. 토큰과 DB 연결 권한을 확인해주세요.", notionStatus:res.status});
     }
-    return json(200,{ok:true,pageId:data.id,url:data.url});
+    return json(200,{ok:true,pageId:data.id,url:data.url,mode});
   }catch(err){
     console.error(err);
     return json(502,{error:"Notion 서버에 연결하지 못했습니다."});
