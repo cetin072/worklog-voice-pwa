@@ -3,6 +3,7 @@
   const organizationInput=document.getElementById("organization");
   const connectButton=document.getElementById("connect");
   const result=document.getElementById("setupResult");
+  const completeNote=document.getElementById("completeNote");
   let completed=false;
 
   function show(message,kind=""){
@@ -47,7 +48,8 @@
 
       tokenInput.value="";
       completed=true;
-      show("✓ 설정 완료. 이제 녹음해서 바로 저장할 수 있습니다.","success");
+      show("✓ 내 Notion 연결이 완료되었습니다.","success");
+      if(completeNote) completeNote.classList.add("show");
       connectButton.textContent="업무기록 시작";
       connectButton.disabled=false;
     }catch(error){
