@@ -23,6 +23,18 @@ function ownerAuthorized(req:Request){
   return {ok:true,status:200,error:""};
 }
 
+function siteUrl(){
+  return (Netlify.env.get("URL") || "https://worklog-voice-pwa.netlify.app").replace(/\/$/,"");
+}
+
+function isProductionRequest(requestUrl:string){
+  try{
+    return new URL(requestUrl).host===new URL(siteUrl()).host;
+  }catch{
+    return false;
+  }
+}
+
 function errorMessage(error:unknown){
   const code=String((error as any)?.message || "");
   const known:Record<string,string>={
@@ -40,22 +52,22 @@ function errorMessage(error:unknown){
 
 export default async (req:Request,_context:Context)=>{
   const url=new URL(req.url);
+  const production=isProductionRequest(req.url);
   const isCallback=url.pathname.endsWith("/callback");
 
   if(isCallback){
-    const siteUrl=(Netlify.env.get("URL") || "https://worklog-voice-pwa.netlify.app").replace(/\/$/,"");
     const error=url.searchParams.get("error");
     const code=url.searchParams.get("code") || "";
     const state=url.searchParams.get("state") || "";
     if(error || !code || !state){
-      return Response.redirect(`${siteUrl}/?kakao=error`,302);
+      return Response.redirect(`${siteUrl()}/?kakao=error`,302);
     }
     try{
-      await finishKakaoAuthorization(code,state);
-      return Response.redirect(`${siteUrl}/?kakao=connected`,302);
+      await finishKakaoAuthorization(code,state,production);
+      return Response.redirect(`${siteUrl()}/?kakao=connected`,302);
     }catch(error){
       console.error("Kakao callback error",String((error as any)?.message || "unknown").slice(0,120));
-      return Response.redirect(`${siteUrl}/?kakao=error`,302);
+      return Response.redirect(`${siteUrl()}/?kakao=error`,302);
     }
   }
 
@@ -64,7 +76,7 @@ export default async (req:Request,_context:Context)=>{
 
   try{
     if(req.method==="GET"){
-      const status=await getKakaoStatus();
+      const status=await getKakaoStatus(production);
       return json(200,{ok:true,...status});
     }
 
@@ -73,7 +85,7 @@ export default async (req:Request,_context:Context)=>{
     const action=String(body?.action || "");
 
     if(action==="authorize"){
-      const authorizeUrl=await beginKakaoAuthorization();
+      const authorizeUrl=await beginKakaoAuthorization(production);
       return json(200,{ok:true,authorizeUrl});
     }
     if(action==="send_current"){
