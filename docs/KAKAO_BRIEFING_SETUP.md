@@ -1,0 +1,72 @@
+# 카카오 브리핑 연결 설정
+
+업무기록 PWA의 최신 브리핑을 사용자 본인의 카카오톡 `나와의 채팅방`으로 보내기 위한 1회 설정입니다.
+
+## 1. Kakao Developers 앱 설정
+
+1. https://developers.kakao.com 에서 앱을 생성합니다.
+2. 카카오 로그인을 활성화합니다.
+3. REST API 방식 Redirect URI에 아래 주소를 등록합니다.
+
+   `https://worklog-voice-pwa.netlify.app/api/kakao/callback`
+
+4. 동의항목에서 카카오톡 메시지 전송 권한 `talk_message`를 사용할 수 있게 설정합니다.
+5. 제품 링크 관리의 웹 도메인에 아래 주소를 등록합니다.
+
+   `https://worklog-voice-pwa.netlify.app`
+
+6. REST API 키를 확인합니다.
+7. REST API 키의 Client Secret을 사용하는 경우 Client Secret 값도 확인합니다.
+
+## 2. Netlify 환경변수
+
+Netlify `worklog-voice-pwa` 프로젝트의 환경변수에 아래 값을 추가합니다.
+
+- `KAKAO_REST_API_KEY`: Kakao Developers REST API 키
+- `KAKAO_CLIENT_SECRET`: Client Secret을 사용하는 경우에만 입력
+- `KAKAO_REDIRECT_URI`: 선택 사항. 기본값은 아래 주소이므로 보통 생략 가능
+  - `https://worklog-voice-pwa.netlify.app/api/kakao/callback`
+
+키와 토큰은 GitHub 코드에 직접 기록하지 않습니다.
+
+## 3. 앱에서 최초 연결
+
+1. 운영판 `https://worklog-voice-pwa.netlify.app`을 엽니다.
+2. 오늘 브리핑 카드 하단의 `카카오 연결`을 누릅니다.
+3. 카카오 로그인 및 `talk_message` 동의를 완료합니다.
+4. 업무기록 앱으로 돌아오면 `카톡으로 보내기` 버튼이 표시됩니다.
+5. 버튼을 눌러 현재 브리핑이 `나와의 채팅방`에 오는지 확인합니다.
+
+연결이 완료되면 카카오 액세스 토큰과 리프레시 토큰은 Netlify Blobs에 서버 측으로 저장됩니다. 브라우저 localStorage에는 저장하지 않습니다.
+
+## 4. 자동 전송
+
+연결 완료 시 자동 전송이 기본 활성화됩니다.
+
+- 오전 브리핑: 매일 08:15 KST 전송 시도
+- 오후 브리핑: 매일 12:45 KST 전송 시도
+
+자동 전송 전에 다음을 확인합니다.
+
+- 오전 자동 전송은 `period=오전 8시` 브리핑만 허용
+- 오후 자동 전송은 `period=오후 12시 30분` 브리핑만 허용
+- 생성 시각이 오래된 브리핑은 전송하지 않음
+- 같은 날짜/같은 회차는 중복 전송하지 않음
+
+## 5. 카카오 메시지 형식
+
+카카오 기본 텍스트 템플릿의 200자 제한에 맞춰 다음을 우선 전송합니다.
+
+1. 브리핑 회차
+2. TOP 업무 최대 5개
+3. 오늘 일정 최대 2개
+4. 확인 필요 항목 1개
+
+메시지의 `업무기록 열기` 버튼을 누르면 PWA 운영판으로 이동합니다.
+
+## 6. 운영 원칙
+
+- 이 기능은 현재 운영자 본인 카카오톡 전용입니다.
+- 지인용 개인 Notion 모드에서는 카카오 기능을 노출하지 않습니다.
+- 카카오 앱 키와 토큰을 채팅, GitHub 소스, 프론트엔드 코드에 붙여넣지 않습니다.
+- 실제 카카오 계정 연결은 Deploy Preview가 아니라 운영판에서만 수행합니다.
