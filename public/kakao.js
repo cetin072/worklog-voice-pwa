@@ -117,8 +117,11 @@
     render();
     try{
       if(status.linked){
-        await postAction("send_current");
-        showMessage("현재 브리핑을 내 카카오톡으로 보냈습니다.");
+        const result=await postAction("send_current");
+        const count=Number(result?.messageCount || 1);
+        showMessage(count>1
+          ? `현재 브리핑을 카카오톡 ${count}개 메시지로 나눠 보냈습니다.`
+          : "현재 브리핑을 내 카카오톡으로 보냈습니다.");
       }else{
         const data=await postAction("authorize");
         if(!data.authorizeUrl) throw new Error("카카오 연결 주소를 만들지 못했습니다.");
