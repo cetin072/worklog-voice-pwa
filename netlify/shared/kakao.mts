@@ -1,4 +1,4 @@
-import { getDeployStore, getStore } from "@netlify/blobs";
+import { getStore } from "@netlify/blobs";
 
 type KakaoTokenRecord = {
   accessToken:string;
@@ -20,13 +20,8 @@ type BriefingPayload = {
   checking?:string[];
 };
 
-function isProduction(){
-  return Netlify.env.get("CONTEXT") === "production";
-}
-
 function kakaoStore(){
-  if(isProduction()) return getStore("worklog-kakao",{consistency:"strong"});
-  return getDeployStore("worklog-kakao");
+  return getStore("worklog-kakao",{consistency:"strong"});
 }
 
 function kakaoConfig(){
@@ -180,20 +175,20 @@ async function fetchCurrentBriefing(){
   return data.briefing as BriefingPayload;
 }
 
-export async function getKakaoStatus(){
+export async function getKakaoStatus(production:boolean){
   const config=kakaoConfig();
   const token=await readToken();
   return {
-    production:isProduction(),
+    production,
     configured:Boolean(config.restApiKey),
-    linked:Boolean(token?.refreshToken),
-    autoSend:Boolean(token?.refreshToken && token?.autoSend),
+    linked:Boolean(production && token?.refreshToken),
+    autoSend:Boolean(production && token?.refreshToken && token?.autoSend),
     redirectUri:config.redirectUri
   };
 }
 
-export async function beginKakaoAuthorization(){
-  if(!isProduction()) throw new Error("KAKAO_PRODUCTION_ONLY");
+export async function beginKakaoAuthorization(production:boolean){
+  if(!production) throw new Error("KAKAO_PRODUCTION_ONLY");
   const config=kakaoConfig();
   if(!config.restApiKey) throw new Error("KAKAO_NOT_CONFIGURED");
   const state=crypto.randomUUID();
@@ -207,8 +202,8 @@ export async function beginKakaoAuthorization(){
   return url.toString();
 }
 
-export async function finishKakaoAuthorization(code:string,state:string){
-  if(!isProduction()) throw new Error("KAKAO_PRODUCTION_ONLY");
+export async function finishKakaoAuthorization(code:string,state:string,production:boolean){
+  if(!production) throw new Error("KAKAO_PRODUCTION_ONLY");
   const config=kakaoConfig();
   if(!config.restApiKey) throw new Error("KAKAO_NOT_CONFIGURED");
   const saved:any=await kakaoStore().get("oauth-state",{type:"json"});
