@@ -6,6 +6,18 @@
 
 화려한 기능보다 `빠르게 말하고 확실히 Notion에 저장`되는 것이 우선이다.
 
+## 공통 웹 아키텍처 기준
+
+- 웹 제작 공통 source of truth는 `cetin072/ai-development-system`의 `docs/WEB_ARCHITECTURE_STANDARD_V1.md`다.
+- 핵심 원칙은 **Static by Default, Dynamic by Necessity**다.
+- 이 앱은 동적 PWA이므로 JavaScript 사용 자체를 줄이는 것이 목표가 아니다.
+- 앱을 열었을 때 핵심 녹음/입력/저장 진입점은 최초 App Shell에서 확정적으로 존재해야 한다.
+- 별도 후처리 모듈이 실행되어야만 핵심 버튼이나 입력 UI가 생기는 구조를 사용하지 않는다.
+- 음성 API, 네트워크, Notion 저장이 실패해도 사용자가 입력한 원문은 잃지 않아야 한다.
+- loading / empty / error / retry 상태를 가능한 범위에서 명확히 구분한다.
+- 비밀값과 중요한 검증은 클라이언트 JavaScript를 신뢰하지 않고 서버/Netlify 환경변수 등 신뢰 가능한 계층에서 처리한다.
+- 기존 정상 동작 구조를 표준 준수만을 이유로 대규모 재작성하지 않고 Issue #28에서 위험도 순으로 감사·정비한다.
+
 ## 작업 시작 시
 
 - 최신 `main`을 기준으로 현재 운영 상태를 확인한다.
