@@ -6,6 +6,13 @@
 
 화려한 기능보다 `빠르게 말하고 확실히 Notion에 저장`되는 것이 우선이다.
 
+## 문서 로딩 경량화
+
+- 일반 작업은 현재 Issue/요청 + `AGENTS.md` + 직접 수정할 인접 파일/테스트만 확인한다.
+- 큰 기능이나 여러 모듈 변경은 관련 planning/operations와 현재 PR/review를 추가로 확인한다.
+- 아키텍처·보안·권한·배포 구조 변경에서만 중앙 공통 표준 원문을 반드시 다시 확인한다.
+- 중앙 표준은 모든 작업의 상시 체크리스트가 아니라 아키텍처 판단과 감사의 상위 기준이다.
+
 ## 공통 웹 아키텍처 기준
 
 - 웹 제작 공통 source of truth는 `cetin072/ai-development-system`의 `docs/WEB_ARCHITECTURE_STANDARD_V1.md`다.
