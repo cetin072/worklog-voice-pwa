@@ -17,6 +17,8 @@
   let loading=false;
   let lastLoadedAt=0;
   let undoTimer=null;
+  let topExpanded=false;
+  let topToggle=null;
 
   function authHeaders({ask=true}={}){
     if(window.WorklogAuth?.getHeaders){
@@ -104,6 +106,42 @@
     target.innerHTML=items.map(renderer).join("");
   }
 
+  function ensureTopToggle(){
+    if(topToggle || !els.top) return topToggle;
+    topToggle=document.createElement("button");
+    topToggle.type="button";
+    topToggle.className="briefing-top-toggle";
+    topToggle.hidden=true;
+    topToggle.setAttribute("aria-controls","briefingTop");
+    topToggle.addEventListener("click",()=>{
+      topExpanded=!topExpanded;
+      applyTopExpansion();
+    });
+    els.top.insertAdjacentElement("afterend",topToggle);
+    return topToggle;
+  }
+
+  function applyTopExpansion(){
+    if(!els.top) return;
+    const rows=Array.from(els.top.children);
+    const extraCount=Math.max(0,rows.length-5);
+    rows.forEach((row,index)=>{
+      if(index>=5) row.hidden=!topExpanded;
+    });
+    const toggle=ensureTopToggle();
+    if(!toggle) return;
+    toggle.hidden=extraCount===0;
+    toggle.setAttribute("aria-expanded",String(topExpanded));
+    toggle.textContent=topExpanded ? "접기" : `${extraCount}개 더 보기`;
+  }
+
+  function renderTop(items,emptyText){
+    const topItems=Array.isArray(items) ? items.slice(0,10) : [];
+    renderList(els.top,topItems,emptyText,priorityHtml);
+    if(!topItems.length) topExpanded=false;
+    applyTopExpansion();
+  }
+
   function setBusy(kind=""){
     loading=Boolean(kind);
     els.card.classList.toggle("loading",loading);
@@ -131,7 +169,7 @@
     if(!data.ready){
       els.title.textContent="첫 브리핑 준비 중";
       els.meta.textContent=data.message || "오전 8시 또는 오후 12시 30분 브리핑 후 표시됩니다.";
-      renderList(els.top,[],"아직 확정된 브리핑이 없습니다.",priorityHtml);
+      renderTop([],"아직 확정된 브리핑이 없습니다.");
       renderList(els.today,[],"아직 확정된 일정이 없습니다.",scheduleHtml);
       renderList(els.upcoming,[],"아직 확정된 일정이 없습니다.",scheduleHtml);
       els.error.textContent="";
@@ -144,7 +182,7 @@
     const generated=formatGeneratedAt(briefing.generatedAt);
     els.meta.textContent=[generated,briefing.meta].filter(Boolean).join(" · ") || "예약 업무가 확정한 최신 브리핑";
 
-    renderList(els.top,briefing.top,"오늘 우선 업무가 없습니다.",priorityHtml);
+    renderTop(briefing.top,"오늘 우선 업무가 없습니다.");
     renderList(els.today,briefing.today,"오늘 확정 일정이 없습니다.",scheduleHtml);
     renderList(els.upcoming,briefing.upcoming,"다가오는 일정이 없습니다.",scheduleHtml);
 

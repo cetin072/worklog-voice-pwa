@@ -202,12 +202,13 @@ async function writeSnapshot(token:string,pageId:string,rawText:string){
 }
 
 function sanitizeSnapshot(raw:any){
+  const safeTop=(value:any)=>Array.isArray(value) ? value.slice(0,10) : [];
   const safeArray=(value:any)=>Array.isArray(value) ? value.slice(0,5) : [];
   return {
     generatedAt:String(raw?.generatedAt || ""),
     period:String(raw?.period || ""),
     meta:String(raw?.meta || ""),
-    top:safeArray(raw?.top).map((item:any)=>({
+    top:safeTop(raw?.top).map((item:any)=>({
       title:String(item?.title || ""),
       note:String(item?.note || ""),
       institution:String(item?.institution || ""),
@@ -325,7 +326,7 @@ async function buildQuickSnapshot(token:string,dataSourceId:string){
     return b.editedAt.localeCompare(a.editedAt);
   });
 
-  const top=tasks.slice(0,5);
+  const top=tasks.slice(0,10);
   const todayItems=tasks.filter((task:any)=>task.dueKey===today).slice(0,3);
   const upcoming=tasks.filter((task:any)=>{
     if(!task.dueKey) return false;
