@@ -50,13 +50,13 @@
       button.disabled=busy;
       button.textContent=busy ? "전송 중…" : "카톡으로 보내기";
       statusText.textContent=status.autoSend
-        ? "연결됨 · 오전/오후 브리핑 자동 전송"
+        ? "연결됨 · 하루 3회 브리핑 자동 전송"
         : "연결됨";
       return;
     }
     button.disabled=busy;
     button.textContent=busy ? "연결 준비 중…" : "카카오 연결";
-    statusText.textContent="한 번 연결하면 오전/오후 브리핑도 자동 전송됩니다.";
+    statusText.textContent="한 번 연결하면 오전 8시·오후 12시 30분·오후 6시 브리핑도 자동 전송됩니다.";
   }
 
   function showMessage(message,isError=false){
@@ -139,7 +139,7 @@
   const params=new URLSearchParams(window.location.search);
   const kakaoResult=params.get("kakao");
   if(kakaoResult){
-    if(kakaoResult==="connected") showMessage("카카오 연결 완료 · 오전/오후 자동 전송이 켜졌습니다.");
+    if(kakaoResult==="connected") showMessage("카카오 연결 완료 · 하루 3회 자동 전송이 켜졌습니다.");
     else showMessage("카카오 연결에 실패했습니다. 다시 시도해주세요.",true);
     params.delete("kakao");
     const next=`${window.location.pathname}${params.toString() ? `?${params}` : ""}${window.location.hash}`;
