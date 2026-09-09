@@ -61,15 +61,23 @@
     return /(홈페이지|도메인|모회사|직원|장애인|제조|테라리움|민화|범한|삼현|현대비앤지|청우|환경정비|업무|회의|미팅|납품|지원금)/.test(s);
   }
 
+  function isTouched(id) {
+    return Boolean(window.WorklogInferenceGuard?.isTouched?.(id));
+  }
+
   function inferFields(segment, fallback) {
     const s = normalize(segment);
     let inferredInstitution = fallback.institution;
-    if (likelyTaejang(s)) inferredInstitution = "태장";
-    else if (s.includes("미래원") || s.includes("미래여성가족")) inferredInstitution = "미래여성가족진흥원";
+    if (!isTouched("institution")) {
+      if (likelyTaejang(s)) inferredInstitution = "태장";
+      else if (s.includes("미래원") || s.includes("미래여성가족")) inferredInstitution = "미래여성가족진흥원";
+    }
 
     const done = /(완료|마무리|처리했|보냈|전달했|확인했|송금했|끝냈|했음|하였음|했다|됐음|되었음)/.test(s);
     const future = /(내일|해야|예정|필요|확인해야|요청해야|추후|다음\s*주|다음주)/.test(s);
-    const inferredStatus = done ? "완료" : future ? "대기" : "진행중";
+    const inferredStatus = isTouched("status")
+      ? fallback.status
+      : done ? "완료" : future ? "대기" : "진행중";
 
     let inferredType = "기타";
     if (/(송금|지출|세금|원천징수|비용|결제)/.test(s)) inferredType = "지출·세무";
@@ -79,6 +87,7 @@
     else if (/(문제|오류|누수|확인해야)/.test(s)) inferredType = "문제·확인";
     else if (done) inferredType = "완료업무";
     else if (future) inferredType = "할 일";
+    if (isTouched("type")) inferredType = fallback.type;
 
     return {
       institution: inferredInstitution,
