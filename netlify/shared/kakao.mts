@@ -20,6 +20,34 @@ type BriefingPayload = {
   checking?:string[];
 };
 
+type KakaoRunRecord = {
+  slot:string;
+  attemptedAt:string;
+  status:"sent"|"skipped"|"failed";
+  reason:string;
+  period:string;
+  generatedAt:string;
+  messageCount:number;
+};
+
+type DeliveryRecord = {
+  state:"sending"|"done";
+  runId:string;
+  generatedAt:string;
+  period:string;
+  messages:string[];
+  nextIndex:number;
+  updatedAt:string;
+};
+
+type SendOptions = {
+  expectedPeriod?:string;
+  slot?:string;
+  requireFresh?:boolean;
+  automatic?:boolean;
+  manual?:boolean;
+};
+
 function kakaoStore(){
   return getStore("worklog-kakao",{consistency:"strong"});
 }
@@ -44,7 +72,7 @@ function inline(value:unknown){
   return String(value || "").replace(/\s+/g," ").trim();
 }
 
-function splitLongLine(value:string,max=160){
+function splitLongLine(value:string,max=145){
   const text=value.trim();
   if(!text) return [""];
   const parts:string[]=[];
@@ -59,7 +87,7 @@ function splitLongLine(value:string,max=160){
   return parts;
 }
 
-function packLines(lines:string[],maxBody=160){
+function packLines(lines:string[],maxBody=145){
   const expanded=lines.flatMap(line=>splitLongLine(line,maxBody));
   const chunks:string[]=[];
   let current="";
@@ -76,9 +104,31 @@ function packLines(lines:string[],maxBody=160){
   return chunks;
 }
 
+function seoulDate(input:Date|string|number=new Date()){
+  const date=input instanceof Date ? input : new Date(input);
+  if(Number.isNaN(date.getTime())) return "";
+  const parts=new Intl.DateTimeFormat("en-CA",{
+    timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"
+  }).formatToParts(date);
+  const get=(type:string)=>parts.find(part=>part.type===type)?.value || "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function mmdd(dateKey:string){
+  const match=/^\d{4}-(\d{2})-(\d{2})$/.exec(dateKey);
+  return match ? `${Number(match[1])}/${Number(match[2])}` : "";
+}
+
 function buildBriefingMessages(briefing:BriefingPayload){
   const period=(inline(briefing.period) || "오늘").slice(0,20);
-  const lines:string[]=["📌 우선 업무"];
+  const generatedDate=seoulDate(String(briefing.generatedAt || ""));
+  const todayDate=seoulDate();
+  const stale=Boolean(generatedDate && generatedDate!==todayDate);
+  const dateLabel=mmdd(generatedDate);
+  const lines:string[]=[];
+
+  if(stale) lines.push(`⚠ ${dateLabel || generatedDate}에 생성된 브리핑입니다.`,"");
+  lines.push("📌 우선 업무");
 
   const top=Array.isArray(briefing.top) ? briefing.top.filter(Boolean) : [];
   if(top.length){
@@ -120,21 +170,13 @@ function buildBriefingMessages(briefing:BriefingPayload){
     });
   }
 
-  const bodies=packLines(lines,160);
+  const bodies=packLines(lines,145);
   const total=Math.max(1,bodies.length);
   return (bodies.length ? bodies : ["📌 우선 업무\n- 없음"]).map((body,index)=>{
-    const header=`📋 ${period} 브리핑${total>1 ? ` (${index+1}/${total})` : ""}`;
+    const datedPeriod=[dateLabel,period].filter(Boolean).join(" ");
+    const header=`📋 ${datedPeriod} 브리핑${total>1 ? ` (${index+1}/${total})` : ""}`;
     return `${header}\n${body}`.trim();
   });
-}
-
-function seoulDate(input:Date|string|number=new Date()){
-  const date=input instanceof Date ? input : new Date(input);
-  const parts=new Intl.DateTimeFormat("en-CA",{
-    timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"
-  }).formatToParts(date);
-  const get=(type:string)=>parts.find(part=>part.type===type)?.value || "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 function isFreshBriefing(value:string,maxMinutes=90){
@@ -223,7 +265,7 @@ async function fetchCurrentBriefing(){
   const config=kakaoConfig();
   const accessKey=(Netlify.env.get("APP_ACCESS_KEY") || "").trim();
   if(!accessKey) throw new Error("APP_ACCESS_KEY_MISSING");
-  const res=await fetch(`${config.siteUrl}/api/briefing`,{
+  const res=await fetch(`${config.siteUrl}/api/briefing?statuses=0`,{
     method:"GET",
     headers:{"x-worklog-key":accessKey},
     cache:"no-store"
@@ -233,15 +275,50 @@ async function fetchCurrentBriefing(){
   return data.briefing as BriefingPayload;
 }
 
+async function readRun(slot:string){
+  if(!slot) return null;
+  return await kakaoStore().get(`last-run:${slot}`,{type:"json"}) as KakaoRunRecord | null;
+}
+
+async function writeRun(slot:string,record:Omit<KakaoRunRecord,"slot">){
+  if(!slot) return;
+  await kakaoStore().setJSON(`last-run:${slot}`,{slot,...record});
+}
+
+async function recordResult(slot:string,status:KakaoRunRecord["status"],reason:string,briefing?:BriefingPayload,messageCount=0){
+  await writeRun(slot,{
+    attemptedAt:new Date().toISOString(),
+    status,
+    reason,
+    period:String(briefing?.period || ""),
+    generatedAt:String(briefing?.generatedAt || ""),
+    messageCount
+  });
+}
+
 export async function getKakaoStatus(production:boolean){
   const config=kakaoConfig();
-  const token=await readToken();
+  if(!production){
+    return {
+      production:false,
+      configured:Boolean(config.restApiKey),
+      linked:false,
+      autoSend:false,
+      redirectUri:config.redirectUri,
+      lastRuns:{morning:null,afternoon:null,evening:null}
+    };
+  }
+
+  const [token,morning,afternoon,evening]=await Promise.all([
+    readToken(),readRun("morning"),readRun("afternoon"),readRun("evening")
+  ]);
   return {
-    production,
+    production:true,
     configured:Boolean(config.restApiKey),
-    linked:Boolean(production && token?.refreshToken),
-    autoSend:Boolean(production && token?.refreshToken && token?.autoSend),
-    redirectUri:config.redirectUri
+    linked:Boolean(token?.refreshToken),
+    autoSend:Boolean(token?.refreshToken && token?.autoSend),
+    redirectUri:config.redirectUri,
+    lastRuns:{morning,afternoon,evening}
   };
 }
 
@@ -268,65 +345,128 @@ export async function finishKakaoAuthorization(code:string,state:string,producti
   const valid=saved?.state && saved.state===state && Date.now()-Number(saved.createdAt || 0)<10*60*1000;
   if(!valid) throw new Error("KAKAO_STATE_INVALID");
 
-  const res=await fetch("https://kauth.kakao.com/oauth/token",{
-    method:"POST",
-    headers:{"content-type":"application/x-www-form-urlencoded;charset=utf-8"},
-    body:formBody({
-      grant_type:"authorization_code",
-      client_id:config.restApiKey,
-      redirect_uri:config.redirectUri,
-      code,
-      client_secret:config.clientSecret
-    })
-  });
-  const data:any=await res.json().catch(()=>({}));
-  if(!res.ok || !data?.access_token || !data?.refresh_token) throw new Error("KAKAO_TOKEN_FAILED");
+  try{
+    const res=await fetch("https://kauth.kakao.com/oauth/token",{
+      method:"POST",
+      headers:{"content-type":"application/x-www-form-urlencoded;charset=utf-8"},
+      body:formBody({
+        grant_type:"authorization_code",
+        client_id:config.restApiKey,
+        redirect_uri:config.redirectUri,
+        code,
+        client_secret:config.clientSecret
+      })
+    });
+    const data:any=await res.json().catch(()=>({}));
+    if(!res.ok || !data?.access_token || !data?.refresh_token) throw new Error("KAKAO_TOKEN_FAILED");
 
-  const token:KakaoTokenRecord={
-    accessToken:String(data.access_token),
-    refreshToken:String(data.refresh_token),
-    expiresAt:Date.now()+Number(data.expires_in || 0)*1000,
-    refreshTokenExpiresAt:Date.now()+Number(data.refresh_token_expires_in || 0)*1000,
-    scope:String(data.scope || ""),
-    autoSend:true,
-    linkedAt:new Date().toISOString()
-  };
-  await saveToken(token);
-  await kakaoStore().delete("oauth-state");
-  return token;
+    const token:KakaoTokenRecord={
+      accessToken:String(data.access_token),
+      refreshToken:String(data.refresh_token),
+      expiresAt:Date.now()+Number(data.expires_in || 0)*1000,
+      refreshTokenExpiresAt:Date.now()+Number(data.refresh_token_expires_in || 0)*1000,
+      scope:String(data.scope || ""),
+      autoSend:true,
+      linkedAt:new Date().toISOString()
+    };
+    await saveToken(token);
+    return token;
+  }finally{
+    await kakaoStore().delete("oauth-state");
+  }
 }
 
 export async function disconnectKakao(){
   await kakaoStore().delete("owner-token");
 }
 
-export async function sendCurrentBriefing(options:{expectedPeriod?:string;slot?:string;requireFresh?:boolean;automatic?:boolean}={}){
-  const token=await readToken();
-  if(!token?.refreshToken) return {sent:false,reason:"not-linked"};
-  if(options.automatic && !token.autoSend) return {sent:false,reason:"auto-disabled"};
+export async function sendCurrentBriefing(options:SendOptions={}){
+  const slot=String(options.slot || "");
+  let briefing:BriefingPayload | undefined;
 
-  const briefing=await fetchCurrentBriefing();
-  if(options.expectedPeriod && briefing.period!==options.expectedPeriod){
-    return {sent:false,reason:"period-mismatch",period:briefing.period || ""};
-  }
-  if(options.requireFresh && !isFreshBriefing(String(briefing.generatedAt || ""))){
-    return {sent:false,reason:"stale"};
-  }
+  try{
+    const token=await readToken();
+    if(!token?.refreshToken){
+      if(slot) await recordResult(slot,"skipped","not-linked");
+      return {sent:false,reason:"not-linked"};
+    }
+    if(options.automatic && !token.autoSend){
+      if(slot) await recordResult(slot,"skipped","auto-disabled");
+      return {sent:false,reason:"auto-disabled"};
+    }
 
-  const date=seoulDate(briefing.generatedAt || new Date());
-  const dedupeKey=options.slot ? `sent:${date}:${options.slot}` : "";
-  if(dedupeKey){
-    const already=await kakaoStore().get(dedupeKey);
-    if(already) return {sent:false,reason:"duplicate"};
-  }
+    if(options.manual){
+      const lastManual:any=await kakaoStore().get("manual:last",{type:"json"});
+      if(lastManual?.at && Date.now()-Number(lastManual.at)<30*1000){
+        return {sent:false,reason:"cooldown"};
+      }
+    }
 
-  const messages=buildBriefingMessages(briefing);
-  for(const message of messages) await sendMemo(message);
-  if(dedupeKey) await kakaoStore().set(dedupeKey,new Date().toISOString());
-  return {
-    sent:true,
-    period:briefing.period || "",
-    generatedAt:briefing.generatedAt || "",
-    messageCount:messages.length
-  };
+    briefing=await fetchCurrentBriefing();
+    if(options.expectedPeriod && briefing.period!==options.expectedPeriod){
+      if(slot) await recordResult(slot,"skipped","period-mismatch",briefing);
+      return {sent:false,reason:"period-mismatch",period:briefing.period || ""};
+    }
+    if(options.requireFresh && !isFreshBriefing(String(briefing.generatedAt || ""))){
+      if(slot) await recordResult(slot,"skipped","stale",briefing);
+      return {sent:false,reason:"stale"};
+    }
+
+    const date=seoulDate();
+    const dedupeKey=slot ? `sent:${date}:${slot}` : "";
+    let messages=buildBriefingMessages(briefing);
+    let nextIndex=0;
+    let delivery:DeliveryRecord | null=null;
+
+    if(dedupeKey){
+      delivery=await kakaoStore().get(dedupeKey,{type:"json"}) as DeliveryRecord | null;
+      if(delivery?.state==="done") return {sent:false,reason:"duplicate"};
+
+      if(delivery?.state==="sending" && Array.isArray(delivery.messages) && delivery.messages.length){
+        messages=delivery.messages;
+        nextIndex=Math.max(0,Math.min(Number(delivery.nextIndex || 0),messages.length));
+      }else{
+        delivery={
+          state:"sending",
+          runId:crypto.randomUUID(),
+          generatedAt:String(briefing.generatedAt || ""),
+          period:String(briefing.period || ""),
+          messages,
+          nextIndex:0,
+          updatedAt:new Date().toISOString()
+        };
+        await kakaoStore().setJSON(dedupeKey,delivery);
+      }
+    }
+
+    for(let index=nextIndex;index<messages.length;index++){
+      await sendMemo(messages[index]);
+      if(dedupeKey && delivery){
+        delivery={...delivery,nextIndex:index+1,updatedAt:new Date().toISOString()};
+        await kakaoStore().setJSON(dedupeKey,delivery);
+      }
+    }
+
+    if(dedupeKey && delivery){
+      delivery={...delivery,state:"done",nextIndex:messages.length,updatedAt:new Date().toISOString()};
+      await kakaoStore().setJSON(dedupeKey,delivery);
+    }
+    if(options.manual) await kakaoStore().setJSON("manual:last",{at:Date.now(),generatedAt:String(briefing.generatedAt || "")});
+    if(slot) await recordResult(slot,"sent","sent",briefing,messages.length);
+
+    return {
+      sent:true,
+      period:briefing.period || "",
+      generatedAt:briefing.generatedAt || "",
+      messageCount:messages.length,
+      resumedFrom:nextIndex
+    };
+  }catch(error){
+    if(slot){
+      try{
+        await recordResult(slot,"failed",String((error as any)?.message || "unknown").slice(0,80),briefing);
+      }catch{}
+    }
+    throw error;
+  }
 }
