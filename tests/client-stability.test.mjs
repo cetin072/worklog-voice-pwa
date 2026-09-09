@@ -62,6 +62,26 @@ test("splitWorkItems separates explicit next-work markers",()=>{
   );
 });
 
+test("splitWorkItems accepts next-item particle and bare geudaeum",()=>{
+  const {api}=loadQuickSave();
+  assert.deepEqual(
+    Array.from(api.splitWorkItems("회의 끝났고 다음 건은 세금계산서")),
+    ["회의 끝났고","세금계산서"]
+  );
+  assert.deepEqual(
+    Array.from(api.splitWorkItems("첫 업무 그다음 차량등록소 전화")),
+    ["첫 업무","차량등록소 전화"]
+  );
+});
+
+test("splitWorkItems does not split ordinary phrase about other work",()=>{
+  const {api}=loadQuickSave();
+  assert.deepEqual(
+    Array.from(api.splitWorkItems("오늘 다른 업무 없음 확인했음")),
+    ["오늘 다른 업무 없음 확인했음"]
+  );
+});
+
 test("manual status and type survive split inference",()=>{
   const {api}=loadQuickSave(new Set(["status","type"]));
   const inferred=api.inferFields("내일 세금계산서 발행해야 함",{
