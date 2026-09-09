@@ -5,6 +5,7 @@ const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
 const BRIEFING_PROJECT = "SYSTEM_DAILY_BRIEFING";
 const EXCLUDED_PROJECTS = new Set(["SYSTEM_DAILY_BRIEFING","SYSTEM_SPLIT_SOURCE","SYSTEM_TEST"]);
 const ALLOWED_STATUSES = new Set(["완료","진행중","대기","확인필요"]);
+const SCHEDULED_PERIODS = new Set(["오전 8시","오후 12시 30분","오후 6시"]);
 
 function json(status:number, body:Record<string,unknown>){
   return new Response(JSON.stringify(body), {
@@ -67,8 +68,13 @@ function validPageId(value:string){
   return /^[0-9a-f]{32}$/i.test(value) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+function normalizedId(value:string){
+  return String(value || "").replace(/-/g,"").toLowerCase();
+}
+
 function seoulDate(input:Date|string|number=new Date()){
   const date=input instanceof Date ? input : new Date(input);
+  if(Number.isNaN(date.getTime())) return "";
   const parts=new Intl.DateTimeFormat("en-CA",{
     timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"
   }).formatToParts(date);
@@ -136,26 +142,40 @@ async function querySnapshot(token:string,dataSourceId:string){
 }
 
 async function queryQuickTasks(token:string,dataSourceId:string){
-  const res=await fetch(`https://api.notion.com/v1/data_sources/${dataSourceId}/query`,{
-    method:"POST",
-    headers:notionHeaders(token),
-    body:JSON.stringify({
+  const results:any[]=[];
+  let cursor="";
+  let hasMore=true;
+
+  while(hasMore && results.length<500){
+    const body:any={
       page_size:100,
       filter:{property:"상태",select:{does_not_equal:"완료"}},
       sorts:[{timestamp:"last_edited_time",direction:"descending"}]
-    })
-  });
-  const data:any=await res.json().catch(()=>({}));
-  if(!res.ok){
-    console.error("Notion quick briefing query error",res.status,String(data?.code || data?.message || "").slice(0,300));
-    const error:any=new Error(`NOTION_${res.status}`);
-    error.status=res.status;
-    throw error;
+    };
+    if(cursor) body.start_cursor=cursor;
+
+    const res=await fetch(`https://api.notion.com/v1/data_sources/${dataSourceId}/query`,{
+      method:"POST",
+      headers:notionHeaders(token),
+      body:JSON.stringify(body)
+    });
+    const data:any=await res.json().catch(()=>({}));
+    if(!res.ok){
+      console.error("Notion quick briefing query error",res.status,String(data?.code || data?.message || "").slice(0,300));
+      const error:any=new Error(`NOTION_${res.status}`);
+      error.status=res.status;
+      throw error;
+    }
+
+    if(Array.isArray(data.results)) results.push(...data.results);
+    hasMore=Boolean(data.has_more && data.next_cursor);
+    cursor=hasMore ? String(data.next_cursor) : "";
   }
-  return Array.isArray(data.results) ? data.results : [];
+
+  return {results:results.slice(0,500),truncated:hasMore};
 }
 
-async function getPageStatus(token:string,pageId:string){
+async function getPageStatus(token:string,pageId:string,expectedDataSourceId=""){
   const res=await fetch(`https://api.notion.com/v1/pages/${pageId}`,{
     method:"GET",
     headers:notionHeaders(token)
@@ -164,6 +184,13 @@ async function getPageStatus(token:string,pageId:string){
   if(!res.ok){
     const error:any=new Error(`NOTION_${res.status}`);
     error.status=res.status;
+    throw error;
+  }
+
+  const parentId=String(data?.parent?.data_source_id || data?.parent?.database_id || "");
+  if(expectedDataSourceId && parentId && normalizedId(parentId)!==normalizedId(expectedDataSourceId)){
+    const error:any=new Error("NOTION_PAGE_OUTSIDE_DATA_SOURCE");
+    error.status=403;
     throw error;
   }
   return selectValue(data?.properties?.["상태"]);
@@ -226,16 +253,32 @@ function sanitizeSnapshot(raw:any){
   };
 }
 
-async function enrichTopStatuses(token:string,briefing:any){
-  briefing.top=await Promise.all((briefing.top || []).map(async(item:any)=>{
-    if(!item.pageId || !validPageId(item.pageId)) return {...item,status:""};
-    try{
-      const status=await getPageStatus(token,item.pageId);
-      return {...item,status};
-    }catch{
-      return {...item,status:""};
+async function enrichTopStatuses(token:string,dataSourceId:string,briefing:any){
+  const items=Array.isArray(briefing.top) ? briefing.top : [];
+  const output=new Array(items.length);
+  let cursor=0;
+
+  const worker=async()=>{
+    while(true){
+      const index=cursor++;
+      if(index>=items.length) return;
+      const item=items[index];
+      if(!item.pageId || !validPageId(item.pageId)){
+        output[index]={...item,status:"",statusError:true};
+        continue;
+      }
+      try{
+        const status=await getPageStatus(token,item.pageId,dataSourceId);
+        output[index]={...item,status,statusError:false};
+      }catch{
+        output[index]={...item,status:"",statusError:true};
+      }
     }
-  }));
+  };
+
+  const concurrency=Math.min(3,Math.max(1,items.length));
+  await Promise.all(Array.from({length:concurrency},()=>worker()));
+  briefing.top=output;
   return briefing;
 }
 
@@ -268,8 +311,10 @@ function parseLineSnapshot(rawText:string){
 }
 
 function parseStoredSnapshot(rawText:string){
-  try{ return JSON.parse(rawText); }
-  catch{}
+  try{
+    const parsed=JSON.parse(rawText);
+    if(parsed && typeof parsed==="object" && !Array.isArray(parsed)) return parsed;
+  }catch{}
   return parseLineSnapshot(rawText);
 }
 
@@ -302,8 +347,9 @@ function quickNote(task:any,today:string){
   return "미완료 업무";
 }
 
-async function buildQuickSnapshot(token:string,dataSourceId:string){
-  const rawTasks=await queryQuickTasks(token,dataSourceId);
+async function buildQuickSnapshot(token:string,dataSourceId:string,period="빠른 업데이트"){
+  const query=await queryQuickTasks(token,dataSourceId);
+  const rawTasks=query.results;
   const today=seoulDate();
   const tasks=rawTasks.map((page:any)=>{
     const props=page?.properties || {};
@@ -334,11 +380,12 @@ async function buildQuickSnapshot(token:string,dataSourceId:string){
     return diff>0 && diff<=14;
   }).slice(0,3);
 
+  const countLabel=query.truncated ? `${tasks.length}건 이상` : `${tasks.length}건`;
   const lines=[
     "BRIEFING_V1",
     `generatedAt=${seoulIsoNow()}`,
-    "period=빠른 업데이트",
-    `meta=Notion 미완료 업무 ${tasks.length}건 기준 · AI 재정리 없이 즉시 반영`
+    `period=${cleanSnapshotValue(period,30) || "빠른 업데이트"}`,
+    `meta=Notion 미완료 업무 ${countLabel} 기준 · AI 재정리 없이 즉시 반영`
   ];
 
   top.forEach((task:any)=>{
@@ -347,7 +394,16 @@ async function buildQuickSnapshot(token:string,dataSourceId:string){
   todayItems.forEach((task:any)=>lines.push(`TODAY|${cleanSnapshotValue(task.title,80)}|${mmdd(task.dueKey)}`));
   upcoming.forEach((task:any)=>lines.push(`UPCOMING|${cleanSnapshotValue(task.title,80)}|${mmdd(task.dueKey)}`));
 
-  return {raw:lines.join("\n"),taskCount:tasks.length};
+  return {raw:lines.join("\n"),taskCount:tasks.length,truncated:query.truncated};
+}
+
+function preservedQuickPeriod(snapshotPage:any){
+  const raw=textValue(snapshotPage?.properties?.["내용"]);
+  const current=parseStoredSnapshot(raw || "");
+  const generatedDate=seoulDate(String(current?.generatedAt || ""));
+  const currentPeriod=String(current?.period || "");
+  if(generatedDate && generatedDate===seoulDate() && SCHEDULED_PERIODS.has(currentPeriod)) return currentPeriod;
+  return "빠른 업데이트";
 }
 
 export default async (req:Request, _context:Context) => {
@@ -356,6 +412,7 @@ export default async (req:Request, _context:Context) => {
   const connection:any=resolveConnection(req);
   if(connection.error) return json(connection.status || 400,{error:connection.error});
   const {token,dataSourceId,mode}=connection;
+  const includeStatuses=new URL(req.url).searchParams.get("statuses")!=="0";
 
   if(req.method==="POST"){
     let body:any;
@@ -366,11 +423,11 @@ export default async (req:Request, _context:Context) => {
       try{
         const snapshotPage=await querySnapshot(token,dataSourceId);
         if(!snapshotPage?.id) return json(409,{error:"브리핑 시스템 기록을 찾을 수 없습니다."});
-        const quick=await buildQuickSnapshot(token,dataSourceId);
+        const quick=await buildQuickSnapshot(token,dataSourceId,preservedQuickPeriod(snapshotPage));
         await writeSnapshot(token,snapshotPage.id,quick.raw);
         const parsed=parseStoredSnapshot(quick.raw);
-        const briefing=await enrichTopStatuses(token,sanitizeSnapshot(parsed));
-        return json(200,{ok:true,ready:true,briefing,mode,quick:true,taskCount:quick.taskCount});
+        const briefing=await enrichTopStatuses(token,dataSourceId,sanitizeSnapshot(parsed));
+        return json(200,{ok:true,ready:true,briefing,mode,quick:true,taskCount:quick.taskCount,truncated:quick.truncated});
       }catch(error:any){
         if(mode==="personal" && (error?.status===401 || error?.status===404)){
           return json(401,{error:"개인 Notion 연결이 만료되었거나 DB를 찾을 수 없습니다. 다시 연결해주세요."});
@@ -386,11 +443,12 @@ export default async (req:Request, _context:Context) => {
     if(!ALLOWED_STATUSES.has(nextStatus)) return json(400,{error:"변경할 상태가 올바르지 않습니다."});
 
     try{
-      const previousStatus=await getPageStatus(token,pageId);
+      const previousStatus=await getPageStatus(token,pageId,dataSourceId);
       if(!ALLOWED_STATUSES.has(previousStatus)) return json(409,{error:"현재 업무 상태를 확인할 수 없습니다."});
       if(previousStatus!==nextStatus) await setPageStatus(token,pageId,nextStatus);
       return json(200,{ok:true,pageId,previousStatus,status:nextStatus,mode});
     }catch(error:any){
+      if(error?.status===403) return json(403,{error:"이 업무는 현재 연결된 업무 DB에 속하지 않습니다."});
       if(mode==="personal" && (error?.status===401 || error?.status===404)){
         return json(401,{error:"개인 Notion 연결이 만료되었거나 업무를 찾을 수 없습니다. 다시 연결해주세요."});
       }
@@ -414,7 +472,8 @@ export default async (req:Request, _context:Context) => {
       return json(502,{error:"저장된 일일 브리핑 형식이 올바르지 않습니다."});
     }
 
-    const briefing=await enrichTopStatuses(token,sanitizeSnapshot(parsed));
+    let briefing=sanitizeSnapshot(parsed);
+    if(includeStatuses) briefing=await enrichTopStatuses(token,dataSourceId,briefing);
     return json(200,{ok:true,ready:true,briefing,mode});
   }catch(error:any){
     if(mode==="personal" && (error?.status===401 || error?.status===404)){
