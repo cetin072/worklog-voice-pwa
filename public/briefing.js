@@ -55,6 +55,26 @@
     }catch{ return value; }
   }
 
+  function seoulDateKey(value=new Date()){
+    const date=value instanceof Date ? value : new Date(value);
+    if(Number.isNaN(date.getTime())) return "";
+    const parts=new Intl.DateTimeFormat("en-CA",{
+      timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"
+    }).formatToParts(date);
+    const get=(type)=>parts.find(part=>part.type===type)?.value || "";
+    return `${get("year")}-${get("month")}-${get("day")}`;
+  }
+
+  function briefingFreshness(value){
+    const generated=seoulDateKey(value);
+    if(!generated) return {fresh:false,message:"⚠ 브리핑 생성 시각을 확인할 수 없습니다."};
+    const today=seoulDateKey();
+    if(generated!==today){
+      return {fresh:false,message:`⚠ ${formatGeneratedAt(value)}에 생성된 브리핑입니다. 오늘 브리핑이 아닙니다.`};
+    }
+    return {fresh:true,message:""};
+  }
+
   function loadUndoStates(){
     try{
       const raw=JSON.parse(localStorage.getItem(UNDO_KEY) || "{}");
@@ -83,13 +103,14 @@
   function priorityHtml(item){
     const institution=item.institution ? `<span class="briefing-tag">${escapeHtml(institutionLabel(item.institution))}</span>` : "";
     const note=item.note ? `<small>${escapeHtml(item.note)}</small>` : "";
+    const statusWarning=item.statusError ? `<small>상태 확인 실패</small>` : "";
     const pageId=String(item.pageId || "");
     const isDone=item.status==="완료";
     const canUndo=isDone && Boolean(loadUndoStates()[pageId]?.status);
     const action=pageId
       ? `<button class="briefing-complete${isDone ? " is-done" : ""}" type="button" data-page-id="${escapeHtml(pageId)}" data-title="${escapeHtml(item.title)}" data-action="${isDone ? "undo" : "complete"}"${isDone && !canUndo ? " disabled" : ""}>${isDone ? "✓ 완료" : "완료"}</button>`
       : "";
-    return `<li class="${isDone ? "briefing-done" : ""}"><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note}</div></div>${action}</li>`;
+    return `<li class="${isDone ? "briefing-done" : ""}"><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note}${statusWarning}</div></div>${action}</li>`;
   }
 
   function scheduleHtml(item){
@@ -168,7 +189,7 @@
   function render(data){
     if(!data.ready){
       els.title.textContent="첫 브리핑 준비 중";
-      els.meta.textContent=data.message || "오전 8시 또는 오후 12시 30분 브리핑 후 표시됩니다.";
+      els.meta.textContent=data.message || "오전 8시·오후 12시 30분·오후 6시 브리핑 후 표시됩니다.";
       renderTop([],"아직 확정된 브리핑이 없습니다.");
       renderList(els.today,[],"아직 확정된 일정이 없습니다.",scheduleHtml);
       renderList(els.upcoming,[],"아직 확정된 일정이 없습니다.",scheduleHtml);
@@ -178,7 +199,8 @@
     }
 
     const briefing=data.briefing || {};
-    els.title.textContent=briefing.period ? `${briefing.period} 브리핑` : "오늘 브리핑";
+    const freshness=briefingFreshness(briefing.generatedAt);
+    els.title.textContent=`${freshness.fresh ? "" : "⚠ "}${briefing.period ? `${briefing.period} 브리핑` : "오늘 브리핑"}`;
     const generated=formatGeneratedAt(briefing.generatedAt);
     els.meta.textContent=[generated,briefing.meta].filter(Boolean).join(" · ") || "예약 업무가 확정한 최신 브리핑";
 
@@ -186,13 +208,16 @@
     renderList(els.today,briefing.today,"오늘 확정 일정이 없습니다.",scheduleHtml);
     renderList(els.upcoming,briefing.upcoming,"다가오는 일정이 없습니다.",scheduleHtml);
 
+    const warnings=[];
+    if(!freshness.fresh) warnings.push(freshness.message);
     if(Array.isArray(briefing.checking) && briefing.checking.length){
-      els.error.textContent=`확인 필요: ${briefing.checking.join(" · ")}`;
-      els.card.classList.add("has-error");
-    }else{
-      els.error.textContent="";
-      els.card.classList.remove("has-error");
+      warnings.push(`확인 필요: ${briefing.checking.join(" · ")}`);
     }
+    const statusFailures=Array.isArray(briefing.top) ? briefing.top.filter(item=>item?.statusError).length : 0;
+    if(statusFailures) warnings.push(`업무 ${statusFailures}건의 현재 상태를 확인하지 못했습니다.`);
+
+    els.error.textContent=warnings.join(" ");
+    els.card.classList.toggle("has-error",warnings.length>0);
   }
 
   async function updateTaskStatus(pageId,status){
@@ -210,6 +235,7 @@
   }
 
   async function completeTask(button){
+    if(loading) return;
     const pageId=button.dataset.pageId || "";
     const title=button.dataset.title || "업무";
     if(!pageId || button.disabled) return;
@@ -320,7 +346,7 @@
   });
 
   document.addEventListener("visibilitychange",()=>{
-    if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>30*60*1000){
+    if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>5*60*1000){
       refreshBriefing({promptIfMissing:false});
     }
   });

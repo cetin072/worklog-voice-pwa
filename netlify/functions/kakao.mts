@@ -38,7 +38,7 @@ function isProductionRequest(requestUrl:string){
 function errorMessage(error:unknown){
   const code=String((error as any)?.message || "");
   const known:Record<string,string>={
-    KAKAO_PRODUCTION_ONLY:"카카오 연결은 운영판에서 설정할 수 있습니다.",
+    KAKAO_PRODUCTION_ONLY:"카카오 연결과 전송은 운영판에서만 사용할 수 있습니다.",
     KAKAO_NOT_CONFIGURED:"카카오 앱 설정이 아직 완료되지 않았습니다.",
     KAKAO_NOT_LINKED:"카카오 계정을 먼저 연결해주세요.",
     KAKAO_STATE_INVALID:"카카오 연결 요청이 만료되었습니다. 다시 연결해주세요.",
@@ -89,11 +89,18 @@ export default async (req:Request,_context:Context)=>{
       return json(200,{ok:true,authorizeUrl});
     }
     if(action==="send_current"){
-      const result=await sendCurrentBriefing();
-      if(!result.sent) return json(409,{error:"현재 브리핑을 전송하지 못했습니다.",reason:result.reason || "unknown"});
+      if(!production) return json(409,{error:"카카오톡 전송은 운영판에서만 사용할 수 있습니다.",reason:"production-only"});
+      const result=await sendCurrentBriefing({manual:true});
+      if(!result.sent){
+        const message=result.reason==="cooldown"
+          ? "방금 브리핑을 보냈습니다. 잠시 후 다시 시도해주세요."
+          : "현재 브리핑을 전송하지 못했습니다.";
+        return json(409,{error:message,reason:result.reason || "unknown"});
+      }
       return json(200,{ok:true,...result});
     }
     if(action==="disconnect"){
+      if(!production) return json(409,{error:"카카오 연결 해제는 운영판에서만 사용할 수 있습니다."});
       await disconnectKakao();
       return json(200,{ok:true});
     }

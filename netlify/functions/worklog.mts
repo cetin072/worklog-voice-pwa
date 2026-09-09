@@ -1,4 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
+import { getDeployStore, getStore } from "@netlify/blobs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -24,7 +25,8 @@ function makeTitle(v:string){
   return s.length<=60 ? s : `${s.slice(0,57)}…`;
 }
 function seoulDate(input?:string){
-  const d=input ? new Date(input) : new Date();
+  let d=input ? new Date(input) : new Date();
+  if(Number.isNaN(d.getTime())) d=new Date();
   const parts=new Intl.DateTimeFormat("en-CA",{
     timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"
   }).formatToParts(d);
@@ -39,6 +41,25 @@ function personalConnection(req:Request){
   if(!token || !dataSourceId) return {error:"개인 Notion 연결 정보가 불완전합니다."};
   if(token.length>300 || dataSourceId.length>100) return {error:"개인 Notion 연결 정보 형식이 올바르지 않습니다."};
   return {token,dataSourceId,mode:"personal" as const};
+}
+
+function isProductionRequest(requestUrl:string){
+  const siteUrl=(Netlify.env.get("URL") || "https://worklog-voice-pwa.netlify.app").replace(/\/$/,"");
+  try{
+    return new URL(requestUrl).host===new URL(siteUrl).host;
+  }catch{
+    return false;
+  }
+}
+
+function idempotencyStore(production:boolean){
+  return production
+    ? getStore("worklog-idempotency",{consistency:"strong"})
+    : getDeployStore("worklog-idempotency");
+}
+
+function validRequestId(value:string){
+  return /^[A-Za-z0-9-]{16,100}$/.test(value);
 }
 
 export default async (req:Request, _context:Context) => {
@@ -79,6 +100,19 @@ export default async (req:Request, _context:Context) => {
   const transcript=String(body.transcript||"").trim();
   if(!transcript) return json(400,{error:"업무 내용이 비어 있습니다."});
   if(transcript.length>1800) return json(400,{error:"업무 내용은 1,800자 이하로 입력해주세요."});
+
+  const requestId=String(body.clientRequestId || "").trim();
+  const idem=validRequestId(requestId) ? idempotencyStore(isProductionRequest(req.url)) : null;
+  if(idem){
+    try{
+      const existing:any=await idem.get(`request:${requestId}`,{type:"json"});
+      if(existing?.pageId){
+        return json(200,{ok:true,pageId:existing.pageId,url:existing.url || "",mode:existing.mode || mode,deduped:true});
+      }
+    }catch(error){
+      console.warn("Worklog idempotency read failed",String((error as any)?.message || "unknown").slice(0,120));
+    }
+  }
 
   const requestedInstitution=String(body.institution || "").trim().slice(0,60);
   const institution=mode==="personal"
@@ -125,6 +159,20 @@ export default async (req:Request, _context:Context) => {
       }
       return json(502,{error:"Notion 저장에 실패했습니다. 토큰과 DB 연결 권한을 확인해주세요.", notionStatus:res.status});
     }
+
+    if(idem){
+      try{
+        await idem.setJSON(`request:${requestId}`,{
+          pageId:String(data.id || ""),
+          url:String(data.url || ""),
+          mode,
+          createdAt:new Date().toISOString()
+        });
+      }catch(error){
+        console.warn("Worklog idempotency write failed",String((error as any)?.message || "unknown").slice(0,120));
+      }
+    }
+
     return json(200,{ok:true,pageId:data.id,url:data.url,mode});
   }catch(err){
     console.error(err);
