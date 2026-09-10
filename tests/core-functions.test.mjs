@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  briefingSnapshotFilter,
   buildKakaoBriefingMessages,
   deliverRemainingMessages,
   enrichBriefingStatuses,
@@ -37,6 +38,15 @@ test("worklog invalid recordedAt falls back to the current Seoul date",()=>{
   const now=new Date("2026-09-10T03:00:00.000Z");
   assert.equal(seoulDateFromRecordedAt("not-a-date",now),"2026-09-10");
   assert.equal(seoulDateFromRecordedAt("2026-09-09T16:00:00.000Z",now),"2026-09-10");
+});
+
+test("briefing snapshot query targets only the canonical system record",()=>{
+  assert.deepEqual(briefingSnapshotFilter("SYSTEM_DAILY_BRIEFING","[시스템] 현재 일일 브리핑"),{
+    and:[
+      {property:"프로젝트",rich_text:{equals:"SYSTEM_DAILY_BRIEFING"}},
+      {property:"업무명",title:{equals:"[시스템] 현재 일일 브리핑"}}
+    ]
+  });
 });
 
 test("briefing parses BRIEFING_V1 rows and rejects invalid snapshots",()=>{

@@ -28,6 +28,15 @@ export function pageBelongsToDataSource(parentId, expectedDataSourceId){
   return normalize(parentId)===normalize(expectedDataSourceId);
 }
 
+export function briefingSnapshotFilter(project,title){
+  return {
+    and:[
+      {property:"프로젝트",rich_text:{equals:String(project || "")}},
+      {property:"업무명",title:{equals:String(title || "")}}
+    ]
+  };
+}
+
 export function parseBriefingSnapshot(rawText){
   try{
     const parsed=JSON.parse(rawText);

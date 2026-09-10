@@ -1,9 +1,10 @@
 import type { Config, Context } from "@netlify/functions";
-import { enrichBriefingStatuses, pageBelongsToDataSource, parseBriefingSnapshot, preservedQuickBriefingPeriod, quickTaskRank, sanitizeBriefingSnapshot } from "../shared/core-logic.mjs";
+import { briefingSnapshotFilter, enrichBriefingStatuses, pageBelongsToDataSource, parseBriefingSnapshot, preservedQuickBriefingPeriod, quickTaskRank, sanitizeBriefingSnapshot } from "../shared/core-logic.mjs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
 const BRIEFING_PROJECT = "SYSTEM_DAILY_BRIEFING";
+const BRIEFING_TITLE = "[시스템] 현재 일일 브리핑";
 const EXCLUDED_PROJECTS = new Set(["SYSTEM_DAILY_BRIEFING","SYSTEM_SPLIT_SOURCE","SYSTEM_TEST"]);
 const ALLOWED_STATUSES = new Set(["완료","진행중","대기","확인필요"]);
 const SCHEDULED_PERIODS = new Set(["오전 8시","오후 12시 30분","오후 6시"]);
@@ -122,7 +123,7 @@ async function querySnapshot(token:string,dataSourceId:string){
     headers:notionHeaders(token),
     body:JSON.stringify({
       page_size:10,
-      filter:{property:"프로젝트",rich_text:{equals:BRIEFING_PROJECT}},
+      filter:briefingSnapshotFilter(BRIEFING_PROJECT,BRIEFING_TITLE),
       sorts:[{timestamp:"last_edited_time",direction:"descending"}]
     })
   });
