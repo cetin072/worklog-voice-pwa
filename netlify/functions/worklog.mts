@@ -1,5 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { getDeployStore, getStore } from "@netlify/blobs";
+import { idempotencyHit, isValidClientRequestId, seoulDateFromRecordedAt } from "../shared/core-logic.mjs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -24,16 +25,6 @@ function makeTitle(v:string){
   const s=v.replace(/\s+/g," ").trim();
   return s.length<=60 ? s : `${s.slice(0,57)}…`;
 }
-function seoulDate(input?:string){
-  let d=input ? new Date(input) : new Date();
-  if(Number.isNaN(d.getTime())) d=new Date();
-  const parts=new Intl.DateTimeFormat("en-CA",{
-    timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"
-  }).formatToParts(d);
-  const m=Object.fromEntries(parts.map(p=>[p.type,p.value]));
-  return `${m.year}-${m.month}-${m.day}`;
-}
-
 function personalConnection(req:Request){
   const token=(req.headers.get("x-notion-token") || "").trim();
   const dataSourceId=(req.headers.get("x-notion-data-source-id") || "").trim();
@@ -56,10 +47,6 @@ function idempotencyStore(production:boolean){
   return production
     ? getStore("worklog-idempotency",{consistency:"strong"})
     : getDeployStore("worklog-idempotency");
-}
-
-function validRequestId(value:string){
-  return /^[A-Za-z0-9-]{16,100}$/.test(value);
 }
 
 export default async (req:Request, _context:Context) => {
@@ -102,13 +89,12 @@ export default async (req:Request, _context:Context) => {
   if(transcript.length>1800) return json(400,{error:"업무 내용은 1,800자 이하로 입력해주세요."});
 
   const requestId=String(body.clientRequestId || "").trim();
-  const idem=validRequestId(requestId) ? idempotencyStore(isProductionRequest(req.url)) : null;
+  const idem=isValidClientRequestId(requestId) ? idempotencyStore(isProductionRequest(req.url)) : null;
   if(idem){
     try{
       const existing:any=await idem.get(`request:${requestId}`,{type:"json"});
-      if(existing?.pageId){
-        return json(200,{ok:true,pageId:existing.pageId,url:existing.url || "",mode:existing.mode || mode,deduped:true});
-      }
+      const duplicate=idempotencyHit(existing,mode);
+      if(duplicate) return json(200,{ok:true,...duplicate});
     }catch(error){
       console.warn("Worklog idempotency read failed",String((error as any)?.message || "unknown").slice(0,120));
     }
@@ -126,7 +112,7 @@ export default async (req:Request, _context:Context) => {
     "기관": {select:{name:institution}},
     "상태": {select:{name:status}},
     "유형": {select:{name:type}},
-    "기록일": {date:{start:seoulDate(body.recordedAt)}},
+    "기록일": {date:{start:seoulDateFromRecordedAt(body.recordedAt)}},
     "내용": richText(transcript),
     "음성원문": richText(transcript),
     "증빙": {select:{name:type==="지출·세무" ? "미첨부" : "해당없음"}}
