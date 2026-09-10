@@ -1,4 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
+import { enrichBriefingStatuses, pageBelongsToDataSource, parseBriefingSnapshot, preservedQuickBriefingPeriod, quickTaskRank, sanitizeBriefingSnapshot } from "../shared/core-logic.mjs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -66,10 +67,6 @@ function notionHeaders(token:string){
 
 function validPageId(value:string){
   return /^[0-9a-f]{32}$/i.test(value) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function normalizedId(value:string){
-  return String(value || "").replace(/-/g,"").toLowerCase();
 }
 
 function seoulDate(input:Date|string|number=new Date()){
@@ -188,7 +185,7 @@ async function getPageStatus(token:string,pageId:string,expectedDataSourceId="")
   }
 
   const parentId=String(data?.parent?.data_source_id || data?.parent?.database_id || "");
-  if(expectedDataSourceId && parentId && normalizedId(parentId)!==normalizedId(expectedDataSourceId)){
+  if(!pageBelongsToDataSource(parentId,expectedDataSourceId)){
     const error:any=new Error("NOTION_PAGE_OUTSIDE_DATA_SOURCE");
     error.status=403;
     throw error;
@@ -229,108 +226,21 @@ async function writeSnapshot(token:string,pageId:string,rawText:string){
 }
 
 function sanitizeSnapshot(raw:any){
-  const safeTop=(value:any)=>Array.isArray(value) ? value.slice(0,10) : [];
-  const safeArray=(value:any)=>Array.isArray(value) ? value.slice(0,5) : [];
-  return {
-    generatedAt:String(raw?.generatedAt || ""),
-    period:String(raw?.period || ""),
-    meta:String(raw?.meta || ""),
-    top:safeTop(raw?.top).map((item:any)=>({
-      title:String(item?.title || ""),
-      note:String(item?.note || ""),
-      institution:String(item?.institution || ""),
-      pageId:String(item?.pageId || "")
-    })).filter((item:any)=>item.title),
-    today:safeArray(raw?.today).map((item:any)=>({
-      title:String(item?.title || ""),
-      when:String(item?.when || "")
-    })).filter((item:any)=>item.title),
-    upcoming:safeArray(raw?.upcoming).map((item:any)=>({
-      title:String(item?.title || ""),
-      when:String(item?.when || "")
-    })).filter((item:any)=>item.title),
-    checking:safeArray(raw?.checking).map((item:any)=>String(item || "")).filter(Boolean)
-  };
+  return sanitizeBriefingSnapshot(raw);
 }
 
 async function enrichTopStatuses(token:string,dataSourceId:string,briefing:any){
   const items=Array.isArray(briefing.top) ? briefing.top : [];
-  const output=new Array(items.length);
-  let cursor=0;
-
-  const worker=async()=>{
-    while(true){
-      const index=cursor++;
-      if(index>=items.length) return;
-      const item=items[index];
-      if(!item.pageId || !validPageId(item.pageId)){
-        output[index]={...item,status:"",statusError:true};
-        continue;
-      }
-      try{
-        const status=await getPageStatus(token,item.pageId,dataSourceId);
-        output[index]={...item,status,statusError:false};
-      }catch{
-        output[index]={...item,status:"",statusError:true};
-      }
-    }
-  };
-
-  const concurrency=Math.min(3,Math.max(1,items.length));
-  await Promise.all(Array.from({length:concurrency},()=>worker()));
-  briefing.top=output;
+  briefing.top=await enrichBriefingStatuses(items,pageId=>getPageStatus(token,pageId,dataSourceId),validPageId);
   return briefing;
 }
 
-function parseLineSnapshot(rawText:string){
-  if(!rawText.startsWith("BRIEFING_V1")) return null;
-
-  const parsed:any={generatedAt:"",period:"",meta:"",top:[],today:[],upcoming:[],checking:[]};
-  for(const rawLine of rawText.split(/\r?\n/).slice(1)){
-    const line=rawLine.trim();
-    if(!line) continue;
-
-    if(line.startsWith("generatedAt=")) parsed.generatedAt=line.slice("generatedAt=".length).trim();
-    else if(line.startsWith("period=")) parsed.period=line.slice("period=".length).trim();
-    else if(line.startsWith("meta=")) parsed.meta=line.slice("meta=".length).trim();
-    else if(line.startsWith("TOP|")){
-      const [,title="",note="",institution="",pageId=""]=line.split("|");
-      if(title.trim()) parsed.top.push({title:title.trim(),note:note.trim(),institution:institution.trim(),pageId:pageId.trim()});
-    }else if(line.startsWith("TODAY|")){
-      const [,title="",when=""]=line.split("|");
-      if(title.trim()) parsed.today.push({title:title.trim(),when:when.trim()});
-    }else if(line.startsWith("UPCOMING|")){
-      const [,title="",when=""]=line.split("|");
-      if(title.trim()) parsed.upcoming.push({title:title.trim(),when:when.trim()});
-    }else if(line.startsWith("CHECK|")){
-      const text=line.slice("CHECK|".length).trim();
-      if(text) parsed.checking.push(text);
-    }
-  }
-  return parsed;
-}
-
 function parseStoredSnapshot(rawText:string){
-  try{
-    const parsed=JSON.parse(rawText);
-    if(parsed && typeof parsed==="object" && !Array.isArray(parsed)) return parsed;
-  }catch{}
-  return parseLineSnapshot(rawText);
+  return parseBriefingSnapshot(rawText);
 }
 
 function quickRank(task:any,today:string){
-  if(task.dueKey){
-    const diff=dayDiff(today,task.dueKey);
-    if(diff<0) return 0;
-    if(diff===0) return 1;
-    if(diff<=3) return 2;
-    if(diff<=7) return 3;
-    return 4;
-  }
-  if(task.status==="확인필요") return 5;
-  if(task.status==="진행중") return 6;
-  if(task.status==="대기") return 7;
-  return 8;
+  return quickTaskRank(task,today,dayDiff);
 }
 
 function quickNote(task:any,today:string){
@@ -402,8 +312,7 @@ function preservedQuickPeriod(snapshotPage:any){
   const current=parseStoredSnapshot(raw || "");
   const generatedDate=seoulDate(String(current?.generatedAt || ""));
   const currentPeriod=String(current?.period || "");
-  if(generatedDate && generatedDate===seoulDate() && SCHEDULED_PERIODS.has(currentPeriod)) return currentPeriod;
-  return "빠른 업데이트";
+  return preservedQuickBriefingPeriod({generatedDate,period:currentPeriod},seoulDate(),SCHEDULED_PERIODS);
 }
 
 export default async (req:Request, _context:Context) => {
