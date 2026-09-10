@@ -111,19 +111,44 @@ export async function enrichBriefingStatuses(items, getStatus, validPageId){
   return output;
 }
 
-function inline(value){ return String(value || "").replace(/\s+/g," ").trim(); }
+function inline(value){
+  return String(value || "").replace(/\s+/g," ").trim();
+}
+
 function splitLongLine(value,max=145){
-  const parts=[]; let remaining=String(value || "").trim();
-  while(remaining.length>max){ let cut=remaining.lastIndexOf(" ",max); if(cut<Math.floor(max*.6)) cut=max; parts.push(remaining.slice(0,cut).trim()); remaining=remaining.slice(cut).trim(); }
-  if(remaining) parts.push(remaining); return parts;
+  const text=String(value || "").trim();
+  if(!text) return [""];
+  const parts=[];
+  let remaining=text;
+  while(remaining.length>max){
+    let cut=remaining.lastIndexOf(" ",max);
+    if(cut<Math.floor(max*0.6)) cut=max;
+    parts.push(remaining.slice(0,cut).trim());
+    remaining=remaining.slice(cut).trim();
+  }
+  if(remaining) parts.push(remaining);
+  return parts;
 }
-function packLines(lines,max=145){
-  const chunks=[]; let current="";
-  for(const line of lines.flatMap(value=>splitLongLine(value,max))){ const candidate=current ? `${current}\n${line}` : line; if(candidate.length<=max) current=candidate; else { if(current) chunks.push(current); current=line; } }
-  if(current) chunks.push(current); return chunks;
+
+function packLines(lines,maxBody=145){
+  const expanded=lines.flatMap(line=>splitLongLine(line,maxBody));
+  const chunks=[];
+  let current="";
+  for(const line of expanded){
+    const candidate=current ? `${current}\n${line}` : line;
+    if(candidate.length<=maxBody){
+      current=candidate;
+      continue;
+    }
+    if(current.trim()) chunks.push(current.trimEnd());
+    current=line;
+  }
+  if(current.trim()) chunks.push(current.trimEnd());
+  return chunks;
 }
+
 export function buildKakaoBriefingMessages(briefing){
-  const period=(inline(briefing.period)||"오늘").slice(0,20);
+  const period=(inline(briefing.period) || "오늘").slice(0,20);
   const dateKey=value=>{
     const date=new Date(value);
     if(Number.isNaN(date.getTime())) return "";
@@ -135,22 +160,56 @@ export function buildKakaoBriefingMessages(briefing){
   const todayDate=dateKey(new Date());
   const dateLabel=/^\d{4}-(\d{2})-(\d{2})$/.test(generatedDate) ? `${Number(generatedDate.slice(5,7))}/${Number(generatedDate.slice(8,10))}` : "";
   const lines=[];
+
   if(generatedDate && generatedDate!==todayDate) lines.push(`⚠ ${dateLabel || generatedDate}에 생성된 브리핑입니다.`,"");
   lines.push("📌 우선 업무");
+
   const top=Array.isArray(briefing.top) ? briefing.top.filter(Boolean) : [];
-  if(top.length) top.forEach((item,index)=>{ const prefix=inline(item.institution)&&inline(item.institution)!=="기타" ? `[${inline(item.institution)}] ` : ""; lines.push(`${index+1}. ${prefix}${inline(item.title)||"제목 없음"}`); if(inline(item.note)) lines.push(`↳ ${inline(item.note)}`); }); else lines.push("- 없음");
-  const appendSchedule=(heading,items)=>{
-    if(!Array.isArray(items) || !items.length) return;
-    lines.push("",heading);
-    items.forEach(item=>{ const label=[inline(item?.when),inline(item?.title)].filter(Boolean).join(" "); if(label) lines.push(`- ${label}`); });
-  };
-  appendSchedule("📅 오늘 일정",briefing.today);
-  appendSchedule("🗓 다가오는 일정",briefing.upcoming);
-  if(Array.isArray(briefing.checking) && briefing.checking.length){ lines.push("","🔎 확인 필요"); briefing.checking.forEach(item=>{ const text=inline(item); if(text) lines.push(`- ${text}`); }); }
-  const bodies=packLines(lines,145); const total=Math.max(1,bodies.length);
+  if(top.length){
+    top.forEach((item,index)=>{
+      const institution=inline(item?.institution);
+      const prefix=institution && institution!=="기타" ? `[${institution}] ` : "";
+      lines.push(`${index+1}. ${prefix}${inline(item?.title) || "제목 없음"}`);
+      const note=inline(item?.note);
+      if(note) lines.push(`↳ ${note}`);
+    });
+  }else{
+    lines.push("- 없음");
+  }
+
+  const today=Array.isArray(briefing.today) ? briefing.today.filter(Boolean) : [];
+  if(today.length){
+    lines.push("","📅 오늘 일정");
+    today.forEach(item=>{
+      const label=[inline(item?.when),inline(item?.title)].filter(Boolean).join(" ");
+      if(label) lines.push(`- ${label}`);
+    });
+  }
+
+  const upcoming=Array.isArray(briefing.upcoming) ? briefing.upcoming.filter(Boolean) : [];
+  if(upcoming.length){
+    lines.push("","🗓 다가오는 일정");
+    upcoming.forEach(item=>{
+      const label=[inline(item?.when),inline(item?.title)].filter(Boolean).join(" ");
+      if(label) lines.push(`- ${label}`);
+    });
+  }
+
+  const checking=Array.isArray(briefing.checking) ? briefing.checking.filter(Boolean) : [];
+  if(checking.length){
+    lines.push("","🔎 확인 필요");
+    checking.forEach(item=>{
+      const text=inline(item);
+      if(text) lines.push(`- ${text}`);
+    });
+  }
+
+  const bodies=packLines(lines,145);
+  const total=Math.max(1,bodies.length);
   return (bodies.length ? bodies : ["📌 우선 업무\n- 없음"]).map((body,index)=>{
     const datedPeriod=[dateLabel,period].filter(Boolean).join(" ");
-    return `📋 ${datedPeriod} 브리핑${total>1 ? ` (${index+1}/${total})` : ""}\n${body}`.trim();
+    const header=`📋 ${datedPeriod} 브리핑${total>1 ? ` (${index+1}/${total})` : ""}`;
+    return `${header}\n${body}`.trim();
   });
 }
 
@@ -180,6 +239,9 @@ export function isKakaoManualCooldown(lastAttemptAt, now=Date.now(), cooldownMs=
 }
 
 export async function deliverRemainingMessages(messages,nextIndex,send,onProgress=async()=>{}){
-  for(let index=nextIndex;index<messages.length;index++){ await send(messages[index]); await onProgress(index+1); }
+  for(let index=nextIndex;index<messages.length;index++){
+    await send(messages[index]);
+    await onProgress(index+1);
+  }
   return messages.length;
 }
