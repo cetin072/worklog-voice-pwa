@@ -1,5 +1,5 @@
 [build]
-  command = "npm test"
+  command = "npm install --package-lock-only --ignore-scripts && cp package-lock.json public/generated-package-lock.json && npm test"
   publish = "public"
   functions = "netlify/functions"
 
