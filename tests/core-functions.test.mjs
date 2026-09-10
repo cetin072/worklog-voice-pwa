@@ -127,3 +127,51 @@ test("Kakao message packing keeps each generated message within the 200-characte
   assert.ok(messages.length>1);
   assert.ok(messages.every(message=>message.length<=200));
 });
+
+test("Kakao briefing preserves a blank line between TOP and today's schedule",()=>{
+  const messages=buildKakaoBriefingMessages({
+    period:"오전 8시",
+    top:[{title:"계약 확인"}],
+    today:[{when:"9/10",title:"회의"}]
+  });
+  assert.equal(messages.length,1);
+  assert.equal(messages[0],"📋 오전 8시 브리핑\n📌 우선 업무\n1. 계약 확인\n\n📅 오늘 일정\n- 9/10 회의");
+});
+
+test("Kakao briefing preserves section separators for upcoming and checking",()=>{
+  const messages=buildKakaoBriefingMessages({
+    period:"오후 6시",
+    top:[{title:"오늘 마감"}],
+    upcoming:[{when:"9/12",title:"보고"}],
+    checking:["견적 확인"]
+  });
+  assert.equal(messages.length,1);
+  assert.equal(messages[0],"📋 오후 6시 브리핑\n📌 우선 업무\n1. 오늘 마감\n\n🗓 다가오는 일정\n- 9/12 보고\n\n🔎 확인 필요\n- 견적 확인");
+});
+
+test("Kakao briefing ignores falsy schedule entries instead of emitting empty sections",()=>{
+  const messages=buildKakaoBriefingMessages({
+    period:"오전 8시",
+    top:[{title:"업무"}],
+    today:[null,false],
+    upcoming:[null],
+    checking:["",null,false]
+  });
+  assert.equal(messages.length,1);
+  assert.equal(messages[0],"📋 오전 8시 브리핑\n📌 우선 업무\n1. 업무");
+  assert.equal(messages[0].includes("오늘 일정"),false);
+  assert.equal(messages[0].includes("다가오는 일정"),false);
+  assert.equal(messages[0].includes("확인 필요"),false);
+});
+
+test("Kakao long multi-section messages preserve the API limit after section separation",()=>{
+  const messages=buildKakaoBriefingMessages({
+    period:"오후 12시 30분",
+    top:Array.from({length:10},(_,index)=>({title:`긴 업무 ${index+1} ${"가".repeat(45)}`,institution:"태장"})),
+    today:[{when:"9/10",title:"오늘 일정"}],
+    upcoming:[{when:"9/12",title:"다가오는 일정"}],
+    checking:["확인 필요 업무"]
+  });
+  assert.ok(messages.length>1);
+  assert.ok(messages.every(message=>message.length<=200));
+});
