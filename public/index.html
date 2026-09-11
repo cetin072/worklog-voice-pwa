@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#111827">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="업무를 음성이나 직접 입력으로 기록하고 Notion 업무 통합 기록에 저장">
+  <meta name="description" content="업무를 음성이나 직접 입력으로 기록하고 문서를 스캔해 Notion 업무 통합 기록에 저장">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192-v3.png">
   <link rel="apple-touch-icon" href="/icons/icon-192-v3.png">
   <title>업무수첩</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/scanner.css">
   <link rel="stylesheet" href="/briefing.css">
 </head>
 <body>
@@ -31,6 +32,23 @@
       <p id="hint">중지하면 바로 저장됩니다. 여러 건이면 “다음 업무”, “다음 건”, “그다음”처럼 구분해 말하세요.</p>
       <button id="save" class="save" type="button">Notion에 저장</button>
       <button id="manualEntry" class="manual-entry" type="button" aria-controls="text">⌨ 직접 입력</button>
+      <button id="scanDocument" class="scan-entry" type="button">📷 문서 스캔</button>
+      <input id="scanInput" type="file" accept="image/*" capture="environment" hidden>
+
+      <div id="scanPreviewCard" class="scan-preview-card" hidden>
+        <div class="scan-preview-row">
+          <img id="scanPreviewImage" class="scan-preview-image" alt="첨부할 스캔 문서 미리보기">
+          <div class="scan-preview-copy">
+            <p class="scan-preview-title">📎 스캔 문서 첨부 준비</p>
+            <p id="scanPreviewMeta" class="scan-preview-meta"></p>
+          </div>
+        </div>
+        <div class="scan-preview-actions">
+          <button id="scanPreviewEdit" type="button">다시 조정</button>
+          <button id="scanPreviewRemove" class="danger" type="button">첨부 취소</button>
+        </div>
+      </div>
+
       <button id="clear" class="clear" type="button">입력 지우기</button>
       <p id="result" class="result" aria-live="polite"></p>
     </section>
@@ -115,13 +133,52 @@
       </details>
     </section>
 
-    <footer>v1.5.0 · 녹음 우선 · 직접 입력 · 카카오 브리핑 · AI API 없음</footer>
+    <footer>v1.6.0 · 녹음 우선 · 직접 입력 · 문서 스캔 · 카카오 브리핑 · AI API 없음</footer>
   </main>
+
+  <dialog id="scannerDialog" class="scanner-dialog" aria-labelledby="scannerTitle">
+    <div class="scanner-shell">
+      <div class="scanner-head">
+        <h2 id="scannerTitle">📷 문서 스캔</h2>
+        <button id="scanClose" class="scanner-close" type="button" aria-label="스캐너 닫기">×</button>
+      </div>
+      <div class="scanner-body">
+        <p id="scanStatus" class="scanner-status" aria-live="polite">문서 사진을 준비합니다.</p>
+
+        <section class="scanner-panel">
+          <div class="scanner-panel-title">
+            <strong>1. 문서 모서리</strong>
+            <button id="scanAutoCorners" class="scanner-secondary" type="button">자동으로 다시 찾기</button>
+          </div>
+          <div class="scanner-canvas-wrap">
+            <canvas id="scanEditorCanvas"></canvas>
+          </div>
+          <p class="scanner-help">흰색 원 4개를 손가락으로 문서 네 귀퉁이에 맞추세요.</p>
+        </section>
+
+        <section class="scanner-panel">
+          <div class="scanner-panel-title"><strong>2. 보정 결과</strong></div>
+          <div class="scanner-canvas-wrap scanner-result-wrap">
+            <canvas id="scanResultCanvas"></canvas>
+          </div>
+          <div class="scanner-filter-row" role="group" aria-label="문서 보정 필터">
+            <button class="scanner-filter" type="button" data-scan-filter="color">원본</button>
+            <button class="scanner-filter active" type="button" data-scan-filter="document">문서</button>
+            <button class="scanner-filter" type="button" data-scan-filter="bw">흑백</button>
+          </div>
+        </section>
+
+        <button id="scanApply" class="scanner-apply" type="button">이 스캔 사용</button>
+        <p class="scanner-help">이미지는 휴대폰 브라우저에서 보정·압축된 뒤 저장할 때만 Notion으로 전송됩니다.</p>
+      </div>
+    </div>
+  </dialog>
 
   <script src="/auth.js" defer></script>
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
+  <script src="/scanner.js" defer></script>
   <script src="/quick-save.js" defer></script>
   <script src="/manual-input.js" defer></script>
   <script src="/briefing.js" defer></script>
