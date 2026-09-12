@@ -40,19 +40,22 @@
     <section id="callInboxCard" class="card call-inbox-card">
       <div class="call-inbox-head">
         <div>
-          <p class="eyebrow">통화녹음 V1</p>
+          <p class="eyebrow">통화녹음 V1.1</p>
           <h2>📞 중요한 통화 고르기</h2>
         </div>
       </div>
-      <p class="call-inbox-copy">삼성폰의 통화녹음 파일을 여러 개 고르면 연락처명·번호·통화시각을 읽어 목록으로 정리합니다. 중요한 통화만 체크하세요.</p>
+      <p class="call-inbox-copy">삼성폰의 통화녹음 파일을 여러 개 고르면 연락처명·번호·통화시각을 읽어 목록으로 정리합니다. 체크는 이번 분석 대상, ★는 계속 표시해둘 중요 연락처입니다.</p>
       <button id="callImport" class="call-import" type="button">통화녹음 가져오기</button>
       <input id="callFiles" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac,.3gp" multiple hidden>
-      <p class="call-privacy">이 단계에서는 녹음파일을 서버나 AI로 보내지 않습니다. 선택 목록은 이 기기 안에서만 만듭니다.</p>
+      <p class="call-privacy">이 단계에서는 녹음파일을 서버나 AI로 보내지 않습니다. 선택 목록과 중요 연락처 표시는 이 기기 안에서만 처리합니다.</p>
 
       <div id="callInboxEmpty" class="call-inbox-empty">통화녹음 여러 개를 한 번에 선택해 보세요. 파일명에 저장된 연락처 이름과 번호를 우선 표시합니다.</div>
       <div id="callInboxToolbar" class="call-inbox-toolbar" hidden>
         <p id="callInboxCount" class="call-inbox-count">불러온 통화 0건 · 선택 0건</p>
-        <button id="callInboxClear" class="call-inbox-clear" type="button">목록 비우기</button>
+        <div class="call-inbox-tools">
+          <button id="callInboxSelectedOnly" class="call-inbox-filter" type="button" aria-pressed="false" disabled>선택한 것만 보기</button>
+          <button id="callInboxClear" class="call-inbox-clear" type="button">목록 비우기</button>
+        </div>
       </div>
       <div id="callInboxList" aria-live="polite"></div>
       <button id="callSelectionAction" class="call-selection-action" type="button" disabled hidden>중요한 통화를 선택하세요</button>
@@ -140,7 +143,7 @@
       </details>
     </section>
 
-    <footer>v1.7.0 · 녹음 우선 · 통화녹음 선택 V1 · 브리핑 2.0 · 업무명 수정 · 직접 입력 · 카카오 브리핑 · AI API 없음</footer>
+    <footer>v1.7.1 · 녹음 우선 · 통화녹음 선택 V1.1 · 브리핑 2.0 · 업무명 수정 · 직접 입력 · 카카오 브리핑 · AI API 없음</footer>
   </main>
 
   <script src="/auth.js?v=20260912-2" defer></script>
