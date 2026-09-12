@@ -1,20 +1,32 @@
 (()=>{
   const $=(id)=>document.getElementById(id);
   const card=$("briefingCard");
-  const title=$("briefingTitle");
-  const meta=$("briefingMeta");
-  const error=$("briefingError");
+  let title=$("briefingTitle");
+  let meta=$("briefingMeta");
+  let error=$("briefingError");
   const legacyTop=$("briefingTop");
   const legacyMore=card?.querySelector?.(".briefing-more");
   const originalQuick=$("briefingQuickUpdate");
-  if(!card || !meta || !legacyTop) return;
+  if(!card || !title || !meta || !error || !legacyTop) return;
 
   const UNDO_KEY="worklogBriefingUndoStates";
   const MAX_VISIBLE=3;
   let loading=false;
   let lastLoadedAt=0;
-  let root=$("briefingV2");
 
+  // briefing.js has already captured the original nodes. Replace the visible
+  // header/error nodes so its asynchronous V1 refresh cannot overwrite V2 copy.
+  const nextTitle=title.cloneNode(true);
+  title.replaceWith(nextTitle);
+  title=nextTitle;
+  const nextMeta=meta.cloneNode(true);
+  meta.replaceWith(nextMeta);
+  meta=nextMeta;
+  const nextError=error.cloneNode(true);
+  error.replaceWith(nextError);
+  error=nextError;
+
+  let root=$("briefingV2");
   if(!root){
     root=document.createElement("div");
     root.id="briefingV2";
@@ -159,14 +171,14 @@
 
     root.hidden=false;
     hideLegacy();
-    if(title) title.textContent="오늘 업무 상황";
+    title.textContent="오늘 업무 상황";
     const generated=formatGeneratedAt(data.generatedAt);
     const countLabel=data.truncated ? `미완료 ${total}건 이상` : `미완료 ${total}건`;
     meta.textContent=[generated,countLabel,"Notion 최신 기준"].filter(Boolean).join(" · ");
     if(data.truncated){
       error.textContent="업무가 많아 최근 500건 기준으로 정리했습니다.";
       card.classList.add("has-error");
-    }else if(error.textContent?.includes("브리핑 2.0")){
+    }else{
       error.textContent="";
       card.classList.remove("has-error");
     }
