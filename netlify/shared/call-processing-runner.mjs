@@ -19,18 +19,6 @@ async function saveJob(deps, job) {
   return job;
 }
 
-async function recordReturnedUsage(deps, value, job) {
-  if (typeof deps?.recordUsage !== "function") return;
-  const usage = Array.isArray(value?.usage) ? value.usage : value?.usage ? [value.usage] : [];
-  for (const item of usage) {
-    await deps.recordUsage({
-      ...item,
-      requestId: item?.requestId || job.requestId || "",
-      relatedType: item?.relatedType || job.kind || "call",
-    });
-  }
-}
-
 function errorInfo(error) {
   if (error && typeof error === "object") {
     return {
@@ -39,6 +27,24 @@ function errorInfo(error) {
     };
   }
   return { code: "PROCESSING_ERROR", message: String(error || "처리 중 오류가 발생했습니다.").slice(0, 1000) };
+}
+
+async function recordReturnedUsage(deps, value, job, warnings) {
+  if (typeof deps?.recordUsage !== "function") return;
+  const usage = Array.isArray(value?.usage) ? value.usage : value?.usage ? [value.usage] : [];
+  for (const item of usage) {
+    try {
+      await deps.recordUsage({
+        ...item,
+        requestId: item?.requestId || job.requestId || "",
+        relatedType: item?.relatedType || job.kind || "call",
+      });
+    } catch (error) {
+      // 이미 비용이 발생한 공급자 호출을 사용량 기록 실패 때문에 다시 실행하면 안 된다.
+      // 호출 결과의 providerRequestId/checkpoint를 job에 남기고 사용량 동기화는 별도로 재시도한다.
+      warnings.push(errorInfo(error));
+    }
+  }
 }
 
 async function retryWait(job, stage, error, deps, policy) {
@@ -68,6 +74,7 @@ export async function runCallProcessingPipeline(input = {}, deps = {}) {
   const deleteTemp = required(deps, "deleteTemp");
 
   const policy = input.policy || {};
+  const usageWarnings = [];
   let job = { ...(input.job || {}) };
   if (job.status !== "queued") throw new Error("새 파이프라인은 queued 상태에서 시작해야 합니다.");
 
@@ -78,15 +85,18 @@ export async function runCallProcessingPipeline(input = {}, deps = {}) {
   try {
     uploaded = await uploadTemp({ job, source: input.source });
     if (!uploaded?.objectPath) throw new Error("임시 업로드 경로가 없습니다.");
-    await recordReturnedUsage(deps, uploaded, job);
     const uploadedAt = uploaded.uploadedAt ? new Date(uploaded.uploadedAt) : nowDate(deps);
-    const absoluteExpiry = new Date(uploadedAt.getTime() + Math.min(24, Number(policy.maxTempRetentionHours) || 24) * 3600_000);
+    if (Number.isNaN(uploadedAt.getTime())) throw new Error("임시 업로드 시각이 올바르지 않습니다.");
+    const maxHours = Math.min(24, Math.max(1, Number(policy.maxTempRetentionHours) || 24));
+    const absoluteExpiry = new Date(uploadedAt.getTime() + maxHours * 3600_000);
     job = {
       ...job,
       tempObjectPath: String(uploaded.objectPath),
       tempCreatedAt: uploadedAt.toISOString(),
       tempExpiresAt: absoluteExpiry.toISOString(),
     };
+    await saveJob(deps, job);
+    await recordReturnedUsage(deps, uploaded, job, usageWarnings);
     job = transitionProcessingJob(job, "transcribing", nowDate(deps));
     await saveJob(deps, job);
   } catch (error) {
@@ -99,7 +109,16 @@ export async function runCallProcessingPipeline(input = {}, deps = {}) {
     const transcript = String(transcription?.transcript || "").trim();
     if (!transcript) throw new Error("STT 결과가 비어 있습니다.");
     transcription = { ...transcription, transcript };
-    await recordReturnedUsage(deps, transcription, job);
+
+    // AI가 실패해도 STT를 다시 호출하지 않도록 먼저 체크포인트를 저장한다.
+    job = {
+      ...job,
+      transcriptCheckpoint: transcript,
+      sttProviderRequestId: String(transcription?.providerRequestId || ""),
+    };
+    await saveJob(deps, job);
+    await recordReturnedUsage(deps, transcription, job, usageWarnings);
+
     job = transitionProcessingJob(job, "analyzing", nowDate(deps));
     await saveJob(deps, job);
   } catch (error) {
@@ -109,10 +128,19 @@ export async function runCallProcessingPipeline(input = {}, deps = {}) {
   let analysisResult;
   try {
     const analyzed = await analyze({ job, transcript: transcription.transcript });
-    await recordReturnedUsage(deps, analyzed, job);
     analysisResult = normalizeCallAnalysisResult(analyzed?.analysis || analyzed, {
       recordedAt: input.recordedAt || job.sourceStartedAt || job.createdAt,
     });
+
+    // DB 저장이 실패해도 AI를 다시 호출하지 않도록 정규화 결과를 체크포인트로 저장한다.
+    job = {
+      ...job,
+      analysisCheckpoint: analysisResult,
+      aiProviderRequestId: String(analyzed?.providerRequestId || ""),
+    };
+    await saveJob(deps, job);
+    await recordReturnedUsage(deps, analyzed, job, usageWarnings);
+
     job = transitionProcessingJob(job, "persisting", nowDate(deps));
     await saveJob(deps, job);
   } catch (error) {
@@ -129,10 +157,12 @@ export async function runCallProcessingPipeline(input = {}, deps = {}) {
       transcriptDeleteAfter: transcriptDeleteAfter(persistedAt, policy),
       transcriptRetention: policy.transcriptRetention || "keep",
     });
-    await recordReturnedUsage(deps, persisted, job);
+    await recordReturnedUsage(deps, persisted, job, usageWarnings);
     job = {
       ...job,
       callId: String(persisted?.callId || ""),
+      transcriptCheckpoint: null,
+      analysisCheckpoint: null,
     };
     job = transitionProcessingJob(job, "cleanup_pending", nowDate(deps));
     await saveJob(deps, job);
@@ -158,6 +188,7 @@ export async function runCallProcessingPipeline(input = {}, deps = {}) {
       callId: job.callId,
       transcript: transcription.transcript,
       analysis: analysisResult,
+      usageWarnings,
     };
   } catch (error) {
     const info = errorInfo(error);
@@ -177,6 +208,7 @@ export async function runCallProcessingPipeline(input = {}, deps = {}) {
       transcript: transcription.transcript,
       analysis: analysisResult,
       cleanupError: info,
+      usageWarnings,
     };
   }
 }
