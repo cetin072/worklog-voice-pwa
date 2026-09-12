@@ -40,20 +40,12 @@ create table if not exists public.processing_jobs (
   finished_at timestamptz
 );
 
--- 같은 사용자/파일/파이프라인에 대해 동시에 중복 작업이 생성되는 것을 막기 위한 키.
 create unique index if not exists processing_jobs_user_idempotency_uidx
   on public.processing_jobs (user_id, idempotency_key)
   where status not in ('failed', 'cancelled');
-
-create index if not exists processing_jobs_user_created_idx
-  on public.processing_jobs (user_id, created_at desc);
-
-create index if not exists processing_jobs_status_idx
-  on public.processing_jobs (status, updated_at);
-
-create index if not exists processing_jobs_temp_expiry_idx
-  on public.processing_jobs (temp_expires_at)
-  where temp_object_path is not null;
+create index if not exists processing_jobs_user_created_idx on public.processing_jobs (user_id, created_at desc);
+create index if not exists processing_jobs_status_idx on public.processing_jobs (status, updated_at);
+create index if not exists processing_jobs_temp_expiry_idx on public.processing_jobs (temp_expires_at) where temp_object_path is not null;
 
 create table if not exists public.calls (
   id uuid primary key default gen_random_uuid(),
@@ -61,11 +53,14 @@ create table if not exists public.calls (
   user_id uuid not null,
   workspace_id uuid,
   kind text not null check (kind in ('call', 'meeting')),
+  title text,
+  analysis_version text not null default 'v1',
   contact_name text,
   phone text,
   occurred_at timestamptz,
   duration_seconds numeric(12,3) not null default 0 check (duration_seconds >= 0),
   transcript text,
+  transcript_segments jsonb not null default '[]'::jsonb,
   summary text,
   key_points jsonb not null default '[]'::jsonb,
   transcript_retention text not null default 'keep' check (
@@ -77,12 +72,28 @@ create table if not exists public.calls (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists calls_user_occurred_idx
-  on public.calls (user_id, occurred_at desc);
+create index if not exists calls_user_occurred_idx on public.calls (user_id, occurred_at desc);
+create index if not exists calls_transcript_delete_idx on public.calls (transcript_delete_after) where transcript_delete_after is not null;
 
-create index if not exists calls_transcript_delete_idx
-  on public.calls (transcript_delete_after)
-  where transcript_delete_after is not null;
+create table if not exists public.call_participants (
+  id uuid primary key default gen_random_uuid(),
+  call_id uuid not null references public.calls(id) on delete cascade,
+  user_id uuid not null,
+  name text,
+  phone text,
+  role text,
+  confidence numeric(5,4) check (confidence is null or (confidence >= 0 and confidence <= 1)),
+  linked_entity_type text,
+  linked_entity_id uuid,
+  confirmed boolean not null default false,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (name is not null or phone is not null)
+);
+
+create index if not exists call_participants_call_idx on public.call_participants (call_id, created_at);
+create index if not exists call_participants_phone_idx on public.call_participants (phone) where phone is not null;
 
 create table if not exists public.call_actions (
   id uuid primary key default gen_random_uuid(),
@@ -90,8 +101,7 @@ create table if not exists public.call_actions (
   user_id uuid not null,
   action_type text not null check (action_type in ('task', 'schedule', 'follow_up', 'decision')),
   content text not null,
-  -- 날짜만 있는 일정(2026-09-17)과 시간까지 있는 일정(2026-09-17T15:00:00+09:00)을
-  -- 기존 업무수첩/Notion 기한 구조와 동일하게 보존한다.
+  -- 날짜만 있는 일정과 시간까지 있는 일정을 기존 업무수첩/Notion 기한 구조와 동일하게 보존한다.
   due_start text,
   due_has_time boolean not null default false,
   confidence numeric(5,4) check (confidence is null or (confidence >= 0 and confidence <= 1)),
@@ -102,12 +112,8 @@ create table if not exists public.call_actions (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists call_actions_call_idx
-  on public.call_actions (call_id, created_at);
-
-create index if not exists call_actions_user_due_idx
-  on public.call_actions (user_id, due_start)
-  where due_start is not null;
+create index if not exists call_actions_call_idx on public.call_actions (call_id, created_at);
+create index if not exists call_actions_user_due_idx on public.call_actions (user_id, due_start) where due_start is not null;
 
 create table if not exists public.usage_events (
   id uuid primary key default gen_random_uuid(),
@@ -137,20 +143,11 @@ create table if not exists public.usage_events (
   created_at timestamptz not null default now()
 );
 
-create index if not exists usage_events_user_created_idx
-  on public.usage_events (user_id, created_at desc);
+create index if not exists usage_events_user_created_idx on public.usage_events (user_id, created_at desc);
+create index if not exists usage_events_feature_created_idx on public.usage_events (feature, created_at desc);
+create index if not exists usage_events_service_created_idx on public.usage_events (service, created_at desc);
+create index if not exists usage_events_request_idx on public.usage_events (request_id) where request_id is not null;
 
-create index if not exists usage_events_feature_created_idx
-  on public.usage_events (feature, created_at desc);
-
-create index if not exists usage_events_service_created_idx
-  on public.usage_events (service, created_at desc);
-
-create index if not exists usage_events_request_idx
-  on public.usage_events (request_id)
-  where request_id is not null;
-
--- 실제 적용 시 Supabase Auth 설계와 사용자/워크스페이스 매핑을 확정한 뒤
--- RLS 정책을 추가한다. RLS 정책 없이 클라이언트에 테이블을 직접 노출하지 않는다.
--- 서버(Netlify Functions 또는 별도 API)가 service-role 자격증명을 사용하는 경우에도
--- 해당 자격증명은 브라우저에 절대 노출하지 않는다.
+-- 실제 적용 시 Supabase Auth 설계와 사용자/워크스페이스 매핑을 확정한 뒤 RLS 정책을 추가한다.
+-- RLS 정책 없이 클라이언트에 테이블을 직접 노출하지 않는다.
+-- 서버의 service-role 자격증명은 브라우저에 절대 노출하지 않는다.
