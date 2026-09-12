@@ -25,14 +25,26 @@ test("실패 음성 임시보관은 24시간을 넘지 않는다", () => {
   const policy = normalizeCallProcessingPolicy({ failedTempRetentionHours: 99, maxTempRetentionHours: 99 });
   assert.equal(policy.failedTempRetentionHours, 24);
   assert.equal(policy.maxTempRetentionHours, 24);
-  const result = tempAudioDisposition("failed", "2026-09-13T00:00:00Z", policy);
+  const result = tempAudioDisposition("failed", "2026-09-13T00:00:00Z", policy, "2026-09-13T00:00:00Z");
   assert.equal(result.deleteAfter, "2026-09-14T00:00:00.000Z");
 });
 
-test("정상 처리 완료 시 원본 임시파일은 즉시 삭제 대상이다", () => {
-  const result = tempAudioDisposition("completed", "2026-09-13T00:00:00Z");
-  assert.equal(result.deleteImmediately, true);
-  assert.equal(result.deleteAfter, "2026-09-13T00:00:00.000Z");
+test("재시도하더라도 최초 업로드 기준 절대 24시간을 연장하지 않는다", () => {
+  const result = tempAudioDisposition(
+    "retry_wait",
+    "2026-09-13T23:00:00Z",
+    { failedTempRetentionHours: 6, maxTempRetentionHours: 24 },
+    "2026-09-13T00:00:00Z",
+  );
+  assert.equal(result.deleteAfter, "2026-09-14T00:00:00.000Z");
+});
+
+test("정상 처리 완료와 삭제 대기 상태는 즉시 삭제 대상이다", () => {
+  const completed = tempAudioDisposition("completed", "2026-09-13T00:00:00Z");
+  const cleanup = tempAudioDisposition("cleanup_pending", "2026-09-13T00:00:00Z");
+  assert.equal(completed.deleteImmediately, true);
+  assert.equal(completed.deleteAfter, "2026-09-13T00:00:00.000Z");
+  assert.equal(cleanup.deleteImmediately, true);
 });
 
 test("녹취록 30일 보관 정책의 삭제 시각을 계산한다", () => {
