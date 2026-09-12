@@ -166,7 +166,7 @@ export function extractScheduleFromText(value,recordedAt=new Date()){
   const datePart=parseDate(source,base);
   const timePart=parseTime(source);
   const signals=scheduleSignalCounts(source);
-  const ambiguous=signals.dates>1 || signals.times>1 || !schedulePartsAreLinked(source,datePart,timePart);
+  const ambiguous=signals.dates>1 || signals.times>1 || signals.dates>Number(Boolean(datePart)) || signals.times>Number(Boolean(timePart)) || !schedulePartsAreLinked(source,datePart,timePart);
   if(ambiguous){
     return {text:source,dueStart:"",dateKey:"",hasTime:false,matched:false};
   }
