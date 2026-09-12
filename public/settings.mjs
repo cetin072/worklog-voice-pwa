@@ -11,10 +11,12 @@ import {
   saveUsageSettings,
   summarizeUsage,
 } from "./usage-meter.mjs";
+import { mergeUsageEvents, summarizeUsageByUser } from "./usage-sync.mjs";
 import {
-  mergeUsageEvents,
-  summarizeUsageByUser,
-} from "./usage-sync.mjs";
+  TRANSCRIPT_RETENTION,
+  loadCallProcessingPolicy,
+  saveCallProcessingPolicy,
+} from "./call-processing-policy.mjs";
 
 const openButton = document.getElementById("settingsOpen");
 const closeButton = document.getElementById("settingsClose");
@@ -34,10 +36,11 @@ const status = document.getElementById("settingsStatus");
 let userBreakdownTarget = null;
 let importButton = null;
 let importInput = null;
+let tempRetentionSelect = null;
+let transcriptRetentionSelect = null;
 
 function ensureUsageMergeUi() {
   if (!summaryTarget) return;
-
   if (!userBreakdownTarget) {
     const section = document.createElement("div");
     section.className = "settings-section";
@@ -57,18 +60,47 @@ function ensureUsageMergeUi() {
     importButton = document.createElement("button");
     importButton.type = "button";
     importButton.textContent = "다른 개발자 사용량 가져오기";
-
     importInput = document.createElement("input");
     importInput.type = "file";
     importInput.accept = "application/json,.json";
     importInput.hidden = true;
-
     actions.insertBefore(importButton, clearButton || null);
     actions.append(importInput);
-
     importButton.addEventListener("click", () => importInput?.click());
     importInput.addEventListener("change", handleUsageImport);
   }
+}
+
+function ensureCallPolicyUi() {
+  if (!form || tempRetentionSelect) return;
+  const section = document.createElement("section");
+  section.className = "settings-section";
+  section.innerHTML = `
+    <h3>통화 · 회의 개인정보</h3>
+    <div class="settings-grid">
+      <label><span>처리 실패 음성 임시보관</span>
+        <select id="settingsTempRetention">
+          <option value="1">1시간</option>
+          <option value="3">3시간</option>
+          <option value="6">6시간</option>
+          <option value="12">12시간</option>
+          <option value="24">24시간</option>
+        </select>
+      </label>
+      <label><span>녹취록 보관</span>
+        <select id="settingsTranscriptRetention">
+          <option value="keep">계속 보관</option>
+          <option value="30d">30일 후 삭제</option>
+          <option value="delete_after_summary">요약 저장 후 전문 삭제</option>
+        </select>
+      </label>
+    </div>
+    <p class="settings-note">원본 녹음은 영구보관하지 않습니다. 정상 처리 후 즉시 삭제하고, 실패 시 위 시간까지만 재처리용으로 보관합니다. 절대 상한은 24시간입니다.</p>
+    <p class="settings-note">현재는 정책만 저장합니다. 실제 업로드·삭제·STT는 두 개발자 합의 전까지 실행되지 않습니다.</p>
+  `;
+  form.append(section);
+  tempRetentionSelect = section.querySelector("#settingsTempRetention");
+  transcriptRetentionSelect = section.querySelector("#settingsTranscriptRetention");
 }
 
 function settingsFromForm() {
@@ -80,11 +112,25 @@ function settingsFromForm() {
   };
 }
 
+function policyFromForm() {
+  return {
+    failedTempRetentionHours: tempRetentionSelect?.value || 6,
+    maxTempRetentionHours: 24,
+    transcriptRetention: transcriptRetentionSelect?.value || TRANSCRIPT_RETENTION.KEEP,
+  };
+}
+
 function fillForm(settings) {
   if (userLabel) userLabel.value = settings.userLabel || "";
   if (monthlyBudget) monthlyBudget.value = settings.monthlyBudgetKrw;
   if (warningPercent) warningPercent.value = settings.warningPercent;
   if (usdKrw) usdKrw.value = settings.usdKrw;
+}
+
+function fillPolicyForm(policy) {
+  ensureCallPolicyUi();
+  if (tempRetentionSelect) tempRetentionSelect.value = String(policy.failedTempRetentionHours);
+  if (transcriptRetentionSelect) transcriptRetentionSelect.value = policy.transcriptRetention;
 }
 
 function stat(label, value) {
@@ -103,7 +149,6 @@ function renderUserBreakdown(events) {
   if (!userBreakdownTarget) return;
   const summaries = summarizeUsageByUser(events);
   userBreakdownTarget.replaceChildren();
-
   if (!summaries.length) {
     const empty = document.createElement("p");
     empty.className = "settings-note";
@@ -111,7 +156,6 @@ function renderUserBreakdown(events) {
     userBreakdownTarget.append(empty);
     return;
   }
-
   for (const item of summaries) {
     const row = document.createElement("div");
     row.className = "rate-row";
@@ -135,24 +179,18 @@ function renderSummary() {
   const events = loadUsageEvents();
   const summary = summarizeUsage(events);
   const budget = budgetState(summary, settings);
-
   summaryTarget.replaceChildren(
     stat("STT 사용시간", formatDurationCompact(summary.durationSeconds)),
     stat("STT 호출", `${summary.sttCalls}건`),
     stat("AI 호출", `${summary.aiCalls}건`),
     stat("전체 예상비용", formatKrw(summary.estimatedCostKrw)),
   );
-
   budgetTarget.className = "usage-budget";
   if (budget.exceeded) budgetTarget.classList.add("exceeded");
   else if (budget.warning) budgetTarget.classList.add("warning");
-
-  if (budget.budgetKrw <= 0) {
-    budgetTarget.textContent = "월 예산이 설정되지 않았습니다.";
-  } else {
-    budgetTarget.textContent = `두 개발자 합산 기준 · 월 예산 ${formatKrw(budget.budgetKrw)} 중 ${formatKrw(budget.spentKrw)} 사용 예상 · ${budget.percent.toFixed(1)}%`;
-  }
-
+  budgetTarget.textContent = budget.budgetKrw <= 0
+    ? "월 예산이 설정되지 않았습니다."
+    : `두 개발자 합산 기준 · 월 예산 ${formatKrw(budget.budgetKrw)} 중 ${formatKrw(budget.spentKrw)} 사용 예상 · ${budget.percent.toFixed(1)}%`;
   exportButton.disabled = events.length === 0;
   clearButton.disabled = events.length === 0;
   renderUserBreakdown(events);
@@ -171,7 +209,6 @@ function renderRates() {
     const model = document.createElement("small");
     model.textContent = rate.model;
     left.append(title, model);
-
     const cost = estimateSttCost(rateId, 3600, { usdKrw: settings.usdKrw });
     const right = document.createElement("div");
     right.className = "rate-cost";
@@ -183,8 +220,9 @@ function renderRates() {
 
 function renderAll() {
   ensureUsageMergeUi();
-  const settings = loadUsageSettings();
-  fillForm(settings);
+  ensureCallPolicyUi();
+  fillForm(loadUsageSettings());
+  fillPolicyForm(loadCallProcessingPolicy());
   renderSummary();
   renderRates();
 }
@@ -222,15 +260,12 @@ async function handleUsageImport() {
   const file = importInput?.files?.[0];
   if (!file) return;
   importInput.value = "";
-
   if (file.size > 2 * 1024 * 1024) {
     status.textContent = "사용량 JSON은 2MB 이하 파일만 가져올 수 있습니다.";
     return;
   }
-
   try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(await file.text());
     const events = Array.isArray(parsed) ? parsed : parsed?.events;
     if (!Array.isArray(events)) throw new Error("events 배열 없음");
     const result = mergeUsageEvents(events);
@@ -246,10 +281,12 @@ closeButton?.addEventListener("click", closeSettings);
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
   const saved = saveUsageSettings(settingsFromForm());
+  const policy = saveCallProcessingPolicy(policyFromForm());
   fillForm(saved);
+  fillPolicyForm(policy);
   renderSummary();
   renderRates();
-  status.textContent = "설정을 이 기기에 저장했습니다.";
+  status.textContent = "설정과 통화 보관정책을 이 기기에 저장했습니다.";
 });
 exportButton?.addEventListener("click", exportUsage);
 clearButton?.addEventListener("click", () => {
@@ -274,6 +311,7 @@ window.WorklogUsageMeter = Object.freeze({
     return result;
   },
   estimateSttCost: (rateId, durationSeconds) => estimateSttCost(rateId, durationSeconds, { usdKrw: loadUsageSettings().usdKrw }),
+  getCallProcessingPolicy: () => loadCallProcessingPolicy(),
   paidFeaturesLocked: () => true,
 });
 
