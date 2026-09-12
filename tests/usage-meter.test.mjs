@@ -44,6 +44,39 @@ test("이번 달 사용량만 합산한다", () => {
   assert.equal(summary.estimatedCostKrw, 150);
 });
 
+test("통합 사용량 원장 필드를 보존하고 집계한다", () => {
+  const event = createUsageEvent({
+    id: "evt-1",
+    eventKey: "evt-1",
+    requestId: "req-1",
+    feature: "call_summary",
+    service: "ai",
+    provider: "Example",
+    model: "x1",
+    inputTokens: 1200,
+    outputTokens: 200,
+    storageBytes: 4096,
+    apiCalls: 2,
+    nativeCost: 0.1,
+    nativeCurrency: "USD",
+    estimatedCostKrw: 140,
+    actualCostKrw: 145,
+    relatedType: "call",
+    relatedId: "call-1",
+    providerRequestId: "provider-1",
+    createdAt: "2026-09-13T00:00:00+09:00",
+  });
+  assert.equal(event.category, "ai");
+  assert.equal(event.service, "ai");
+  assert.equal(event.feature, "call_summary");
+  assert.equal(event.actualCostKrw, 145);
+  const summary = summarizeUsage([event], new Date("2026-09-13T01:00:00+09:00"));
+  assert.equal(summary.apiCalls, 2);
+  assert.equal(summary.storageBytes, 4096);
+  assert.equal(summary.actualCostKrw, 145);
+  assert.equal(summary.actualCostEvents, 1);
+});
+
 test("예산 경고와 초과 상태를 구분한다", () => {
   const settings = normalizeUsageSettings({ monthlyBudgetKrw: 10000, warningPercent: 70, usdKrw: 1400 });
   assert.equal(budgetState({ estimatedCostKrw: 6999 }, settings).warning, false);
