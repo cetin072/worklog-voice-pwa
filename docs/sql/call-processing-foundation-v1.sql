@@ -18,6 +18,7 @@ create table if not exists public.processing_jobs (
   status text not null default 'queued' check (
     status in ('queued', 'uploading', 'transcribing', 'analyzing', 'persisting', 'cleanup_pending', 'completed', 'retry_wait', 'failed', 'cancelled')
   ),
+  retry_stage text,
   pipeline_version text not null default 'v1',
   source_filename text,
   source_contact_name text,
@@ -25,7 +26,12 @@ create table if not exists public.processing_jobs (
   source_started_at timestamptz,
   duration_seconds numeric(12,3) not null default 0 check (duration_seconds >= 0),
   temp_object_path text,
+  temp_created_at timestamptz,
   temp_expires_at timestamptz,
+  transcript_checkpoint text,
+  analysis_checkpoint jsonb,
+  stt_provider_request_id text,
+  ai_provider_request_id text,
   attempt_count integer not null default 0 check (attempt_count >= 0),
   error_code text,
   error_message text,
