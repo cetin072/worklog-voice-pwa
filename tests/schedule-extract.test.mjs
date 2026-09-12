@@ -68,3 +68,10 @@ test("preserves original text when more than one time is present",()=>{
   assert.equal(result.dueStart,"");
   assert.equal(result.text,"내일 오후 3시에 A 전화 그리고 오후 4시에 B 전화");
 });
+
+test("preserves invalid schedule instead of falling back to today",()=>{
+  const result=extractScheduleFromText("2월 30일 오후 3시에 잘못된 일정 확인",RECORDED_AT);
+  assert.equal(result.matched,false);
+  assert.equal(result.dueStart,"");
+  assert.equal(result.text,"2월 30일 오후 3시에 잘못된 일정 확인");
+});
