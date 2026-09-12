@@ -14,6 +14,7 @@
 
   const UNDO_KEY="worklogBriefingUndoStates";
   const MAX_VISIBLE=3;
+  const IS_PREVIEW_DEMO=location.hostname.startsWith("deploy-preview-") && new URLSearchParams(location.search).get("briefingDemo")==="1";
   let loading=false;
   let lastLoadedAt=0;
 
@@ -169,7 +170,10 @@
       ? `<small class="briefing-v2-follow">↳ ${escapeHtml(item.followUp)}</small>`
       : "";
     const hidden=index>=MAX_VISIBLE ? " hidden" : "";
-    return `<li${hidden}><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>${follow}</div><button class="briefing-complete briefing-v2-complete" type="button" data-page-id="${escapeHtml(item.pageId)}" data-status="${escapeHtml(item.status)}" data-title="${escapeHtml(item.title)}">완료</button></li>`;
+    const action=IS_PREVIEW_DEMO
+      ? `<button class="briefing-complete briefing-v2-complete" type="button" disabled>완료</button>`
+      : `<button class="briefing-complete briefing-v2-complete" type="button" data-page-id="${escapeHtml(item.pageId)}" data-status="${escapeHtml(item.status)}" data-title="${escapeHtml(item.title)}">완료</button>`;
+    return `<li${hidden}><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>${follow}</div>${action}</li>`;
   }
 
   function sectionHtml(kind,label,items){
@@ -187,10 +191,10 @@
 
     root.hidden=false;
     hideLegacy();
-    title.textContent="오늘 업무 상황";
+    title.textContent=IS_PREVIEW_DEMO ? "오늘 업무 상황 · 화면 미리보기" : "오늘 업무 상황";
     const generated=formatGeneratedAt(data.generatedAt);
     const countLabel=data.truncated ? `미완료 ${total}건 이상` : `미완료 ${total}건`;
-    meta.textContent=[generated,countLabel,"Notion 최신 기준"].filter(Boolean).join(" · ");
+    meta.textContent=IS_PREVIEW_DEMO ? "예시 업무로 보는 브리핑 2.0 화면" : [generated,countLabel,"Notion 최신 기준"].filter(Boolean).join(" · ");
     if(data.truncated){
       error.textContent="업무가 많아 최근 500건 기준으로 정리했습니다.";
       card.classList.add("has-error");
@@ -198,6 +202,37 @@
       error.textContent="";
       card.classList.remove("has-error");
     }
+  }
+
+  function previewDemoData(){
+    const sample=(title,status,dueKey="",extra={})=>({pageId:"demo",title,institution:"태장",status,dueKey,followUp:"",daysOverdue:0,daysUntil:0,...extra});
+    return {
+      generatedAt:new Date().toISOString(),
+      counts:{overdue:4,today:3,waiting:2,followUp:2,other:5,total:16},
+      structure:{
+        overdue:[
+          sample("견적서 금액 확인 후 대표 보고","진행중","2026-09-10",{daysOverdue:2}),
+          sample("거래처 세금계산서 확인","확인필요","2026-09-11",{daysOverdue:1}),
+          sample("지원사업 제출서류 보완","진행중","2026-09-11",{daysOverdue:1}),
+          sample("계약서 수정사항 회신","대기","2026-09-11",{daysOverdue:1})
+        ],
+        today:[
+          sample("삼현 행사 일정 최종 확인","진행중","2026-09-12"),
+          sample("대표이사 보고자료 전달","진행중","2026-09-12"),
+          sample("납품 수량 확정 연락","확인필요","2026-09-12")
+        ],
+        waiting:[
+          sample("업체 견적 회신 대기","대기","2026-09-15"),
+          sample("취재 일정 답변 대기","대기")
+        ],
+        followUp:[
+          sample("어제 받은 계약서 검토","진행중","",{followUp:"수정할 조항 표시 후 상대방에게 회신"}),
+          sample("통화 내용 담당자에게 전달","확인필요","",{followUp:"담당자 확인 후 결과 기록"})
+        ],
+        otherCount:5,
+        totalOpen:16
+      }
+    };
   }
 
   async function fetchV2({ask=true}={}){
@@ -213,7 +248,7 @@
   }
 
   async function refreshV2({ask=true,silentFallback=false}={}){
-    if(loading) return;
+    if(loading || IS_PREVIEW_DEMO) return;
     setBusy(true);
     try{
       const data=await fetchV2({ask});
@@ -259,7 +294,7 @@
   }
 
   async function completeTask(button){
-    if(loading || button.disabled) return;
+    if(IS_PREVIEW_DEMO || loading || button.disabled) return;
     const pageId=button.dataset.pageId || "";
     const itemTitle=button.dataset.title || "업무";
     if(!pageId) return;
@@ -279,6 +314,7 @@
   }
 
   async function undoTask(pageId){
+    if(IS_PREVIEW_DEMO) return;
     const state=loadUndoStates()[pageId];
     if(!state?.status) return;
     try{
@@ -303,7 +339,7 @@
   }
 
   async function quickUpdate(){
-    if(loading) return;
+    if(IS_PREVIEW_DEMO || loading) return;
     const headers=authHeaders({ask:true});
     if(!Object.keys(headers).length){
       error.textContent="브리핑을 다시 정리하려면 Notion 연결 또는 개인 접근키가 필요합니다.";
@@ -343,13 +379,19 @@
     if(undo) undoTask(undo.dataset.v2Undo || "");
   });
 
-  quick?.addEventListener("click",quickUpdate);
-
-  document.addEventListener("visibilitychange",()=>{
-    if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>90*1000){
-      refreshV2({ask:false,silentFallback:true});
+  if(IS_PREVIEW_DEMO){
+    render(previewDemoData());
+    if(quick){
+      quick.disabled=true;
+      quick.textContent="화면 미리보기";
     }
-  });
-
-  refreshV2({ask:false,silentFallback:true});
+  }else{
+    quick?.addEventListener("click",quickUpdate);
+    document.addEventListener("visibilitychange",()=>{
+      if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>90*1000){
+        refreshV2({ask:false,silentFallback:true});
+      }
+    });
+    refreshV2({ask:false,silentFallback:true});
+  }
 })();
