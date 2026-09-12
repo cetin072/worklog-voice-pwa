@@ -84,7 +84,10 @@ create table if not exists public.call_actions (
   user_id uuid not null,
   action_type text not null check (action_type in ('task', 'schedule', 'follow_up', 'decision')),
   content text not null,
-  due_at timestamptz,
+  -- 날짜만 있는 일정(2026-09-17)과 시간까지 있는 일정(2026-09-17T15:00:00+09:00)을
+  -- 기존 업무수첩/Notion 기한 구조와 동일하게 보존한다.
+  due_start text,
+  due_has_time boolean not null default false,
   confidence numeric(5,4) check (confidence is null or (confidence >= 0 and confidence <= 1)),
   confirmed boolean not null default false,
   source_excerpt text,
@@ -97,8 +100,8 @@ create index if not exists call_actions_call_idx
   on public.call_actions (call_id, created_at);
 
 create index if not exists call_actions_user_due_idx
-  on public.call_actions (user_id, due_at)
-  where due_at is not null;
+  on public.call_actions (user_id, due_start)
+  where due_start is not null;
 
 create table if not exists public.usage_events (
   id uuid primary key default gen_random_uuid(),
