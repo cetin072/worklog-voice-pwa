@@ -16,7 +16,7 @@ create table if not exists public.processing_jobs (
   workspace_id uuid,
   kind text not null check (kind in ('call', 'meeting')),
   status text not null default 'queued' check (
-    status in ('queued', 'uploading', 'transcribing', 'analyzing', 'persisting', 'completed', 'retry_wait', 'failed', 'cancelled')
+    status in ('queued', 'uploading', 'transcribing', 'analyzing', 'persisting', 'cleanup_pending', 'completed', 'retry_wait', 'failed', 'cancelled')
   ),
   pipeline_version text not null default 'v1',
   source_filename text,
