@@ -30,13 +30,33 @@ function uniqueTexts(values, maxItems = MAX_KEY_POINTS) {
   return result;
 }
 
+function validDateOnly(raw) {
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function validDateTime(raw) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2}|Z)$/.test(raw)) return false;
+  const datePart = raw.slice(0, 10);
+  if (!validDateOnly(datePart)) return false;
+  const timeMatch = raw.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!timeMatch) return false;
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const second = Number(timeMatch[3] || 0);
+  if (hour > 23 || minute > 59 || second > 59) return false;
+  return Number.isFinite(new Date(raw).getTime());
+}
+
 function validDueStart(value, dueHasTime) {
   const raw = text(value, 64);
   if (!raw) return "";
-  if (dueHasTime) {
-    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2}|Z)$/.test(raw) ? raw : "";
-  }
-  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
+  return dueHasTime ? (validDateTime(raw) ? raw : "") : (validDateOnly(raw) ? raw : "");
 }
 
 function resolveScheduleCandidate(action, recordedAt) {
