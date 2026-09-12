@@ -3,24 +3,9 @@ const EVENTS_KEY = "worklog.usage.events.v1";
 const SEOUL_TZ = "Asia/Seoul";
 
 export const DEFAULT_STT_RATES = Object.freeze({
-  "openai-gpt-transcribe": {
-    provider: "OpenAI",
-    model: "gpt-transcribe",
-    currency: "USD",
-    perMinute: 0.0045,
-  },
-  "clova-speech-basic": {
-    provider: "NAVER CLOVA Speech",
-    model: "Long-form basic",
-    currency: "KRW",
-    perMinute: 20,
-  },
-  "assemblyai-universal-2": {
-    provider: "AssemblyAI",
-    model: "Universal-2",
-    currency: "USD",
-    perMinute: 0.0025,
-  },
+  "openai-gpt-transcribe": { provider: "OpenAI", model: "gpt-transcribe", currency: "USD", perMinute: 0.0045 },
+  "clova-speech-basic": { provider: "NAVER CLOVA Speech", model: "Long-form basic", currency: "KRW", perMinute: 20 },
+  "assemblyai-universal-2": { provider: "AssemblyAI", model: "Universal-2", currency: "USD", perMinute: 0.0025 },
 });
 
 export const DEFAULT_USAGE_SETTINGS = Object.freeze({
@@ -34,6 +19,16 @@ export const DEFAULT_USAGE_SETTINGS = Object.freeze({
 function finiteNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function nonNegativeNumber(value, fallback = 0) {
+  return Math.max(0, finiteNumber(value, fallback));
+}
+
+function nullableNonNegativeNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
 export function normalizeUsageSettings(value = {}) {
@@ -52,13 +47,11 @@ export function normalizeUsageSettings(value = {}) {
 export function estimateSttCost(rateId, durationSeconds, options = {}) {
   const rate = DEFAULT_STT_RATES[rateId];
   if (!rate) return null;
-  const seconds = Math.max(0, finiteNumber(durationSeconds, 0));
+  const seconds = nonNegativeNumber(durationSeconds);
   const minutes = seconds / 60;
   const nativeCost = minutes * rate.perMinute;
   const usdKrw = Math.max(0, finiteNumber(options.usdKrw, DEFAULT_USAGE_SETTINGS.usdKrw));
-  const estimatedKrw = rate.currency === "KRW"
-    ? nativeCost
-    : nativeCost * usdKrw;
+  const estimatedKrw = rate.currency === "KRW" ? nativeCost : nativeCost * usdKrw;
   return {
     rateId,
     provider: rate.provider,
@@ -87,17 +80,35 @@ export function monthKey(date = new Date()) {
 export function createUsageEvent(input = {}) {
   const createdAt = input.createdAt ? new Date(input.createdAt) : new Date();
   const validCreatedAt = Number.isNaN(createdAt.getTime()) ? new Date() : createdAt;
+  const id = String(input.id || `${validCreatedAt.getTime()}-${Math.random().toString(36).slice(2, 10)}`);
+  const service = String(input.service || input.category || "unknown");
+  const audioSeconds = nonNegativeNumber(input.audioSeconds ?? input.durationSeconds);
   return {
-    id: String(input.id || `${validCreatedAt.getTime()}-${Math.random().toString(36).slice(2, 10)}`),
+    id,
+    eventKey: String(input.eventKey || id),
+    requestId: String(input.requestId || ""),
     createdAt: validCreatedAt.toISOString(),
     userLabel: String(input.userLabel || "").trim().slice(0, 40),
-    category: String(input.category || "unknown"),
+    feature: String(input.feature || "unknown"),
+    service,
+    category: service,
     provider: String(input.provider || ""),
     model: String(input.model || ""),
-    durationSeconds: Math.max(0, finiteNumber(input.durationSeconds, 0)),
-    inputTokens: Math.max(0, Math.round(finiteNumber(input.inputTokens, 0))),
-    outputTokens: Math.max(0, Math.round(finiteNumber(input.outputTokens, 0))),
-    estimatedCostKrw: Math.max(0, finiteNumber(input.estimatedCostKrw, 0)),
+    audioSeconds,
+    durationSeconds: audioSeconds,
+    inputTokens: Math.round(nonNegativeNumber(input.inputTokens)),
+    outputTokens: Math.round(nonNegativeNumber(input.outputTokens)),
+    imageCount: Math.round(nonNegativeNumber(input.imageCount)),
+    storageBytes: Math.round(nonNegativeNumber(input.storageBytes)),
+    apiCalls: Math.round(nonNegativeNumber(input.apiCalls, 1)),
+    nativeCost: nonNegativeNumber(input.nativeCost),
+    nativeCurrency: String(input.nativeCurrency || "KRW").toUpperCase().slice(0, 8),
+    estimatedCostKrw: nonNegativeNumber(input.estimatedCostKrw),
+    actualCostKrw: nullableNonNegativeNumber(input.actualCostKrw),
+    relatedType: String(input.relatedType || ""),
+    relatedId: String(input.relatedId || ""),
+    providerRequestId: String(input.providerRequestId || ""),
+    metadata: input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata) ? input.metadata : {},
     status: ["success", "failed", "cancelled"].includes(input.status) ? input.status : "success",
   };
 }
@@ -107,12 +118,21 @@ export function summarizeUsage(events = [], now = new Date()) {
   const monthEvents = events.filter((event) => monthKey(event?.createdAt) === currentMonth);
   return monthEvents.reduce((summary, event) => {
     summary.events += 1;
-    summary.durationSeconds += Math.max(0, finiteNumber(event.durationSeconds, 0));
-    summary.inputTokens += Math.max(0, finiteNumber(event.inputTokens, 0));
-    summary.outputTokens += Math.max(0, finiteNumber(event.outputTokens, 0));
-    summary.estimatedCostKrw += Math.max(0, finiteNumber(event.estimatedCostKrw, 0));
-    if (event.category === "stt") summary.sttCalls += 1;
-    if (event.category === "ai") summary.aiCalls += 1;
+    summary.durationSeconds += nonNegativeNumber(event.audioSeconds ?? event.durationSeconds);
+    summary.inputTokens += nonNegativeNumber(event.inputTokens);
+    summary.outputTokens += nonNegativeNumber(event.outputTokens);
+    summary.imageCount += nonNegativeNumber(event.imageCount);
+    summary.storageBytes += nonNegativeNumber(event.storageBytes);
+    summary.apiCalls += nonNegativeNumber(event.apiCalls, 1);
+    summary.estimatedCostKrw += nonNegativeNumber(event.estimatedCostKrw);
+    const actual = nullableNonNegativeNumber(event.actualCostKrw);
+    if (actual !== null) {
+      summary.actualCostKrw += actual;
+      summary.actualCostEvents += 1;
+    }
+    const service = event.service || event.category;
+    if (service === "stt") summary.sttCalls += 1;
+    if (service === "ai") summary.aiCalls += 1;
     if (event.status === "failed") summary.failed += 1;
     return summary;
   }, {
@@ -124,14 +144,19 @@ export function summarizeUsage(events = [], now = new Date()) {
     durationSeconds: 0,
     inputTokens: 0,
     outputTokens: 0,
+    imageCount: 0,
+    storageBytes: 0,
+    apiCalls: 0,
     estimatedCostKrw: 0,
+    actualCostKrw: 0,
+    actualCostEvents: 0,
   });
 }
 
 export function budgetState(summary, settings) {
   const normalized = normalizeUsageSettings(settings);
   const budget = normalized.monthlyBudgetKrw;
-  const spent = Math.max(0, finiteNumber(summary?.estimatedCostKrw, 0));
+  const spent = nonNegativeNumber(summary?.estimatedCostKrw);
   const percent = budget > 0 ? (spent / budget) * 100 : 0;
   return {
     budgetKrw: budget,
