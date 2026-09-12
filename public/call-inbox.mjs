@@ -9,6 +9,7 @@ const list = document.getElementById("callInboxList");
 const emptyState = document.getElementById("callInboxEmpty");
 const toolbar = document.getElementById("callInboxToolbar");
 const countLabel = document.getElementById("callInboxCount");
+const selectedOnlyButton = document.getElementById("callInboxSelectedOnly");
 const clearButton = document.getElementById("callInboxClear");
 const actionButton = document.getElementById("callSelectionAction");
 const status = document.getElementById("callInboxStatus");
@@ -18,7 +19,10 @@ const entries = new Map();
 let nextEntryId = 1;
 const durationQueue = [];
 let activeDurationLoads = 0;
+let showSelectedOnly = false;
 const MAX_DURATION_LOADS = 2;
+const FAVORITES_STORAGE_KEY = "worklog.callInbox.favoriteContacts.v1";
+const favoriteContacts = loadFavoriteContacts();
 
 function fileKey(file) {
   return `${file.name}::${file.size}::${file.lastModified}`;
@@ -69,18 +73,68 @@ function displayName(entry) {
   return entry.parsed.contact || entry.parsed.phoneDisplay || "알 수 없는 통화";
 }
 
+function contactIdentity(entry) {
+  if (entry.parsed.phone) return `phone:${entry.parsed.phone}`;
+  const contact = String(entry.parsed.contact || "").trim().toLocaleLowerCase("ko-KR");
+  return contact ? `contact:${contact}` : "";
+}
+
+function loadFavoriteContacts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || "[]");
+    return new Set(Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string" && item) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFavoriteContacts() {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...favoriteContacts]));
+  } catch {
+    // 즐겨찾기는 편의 기능이므로 저장 실패가 통화 선택을 막지 않는다.
+  }
+}
+
+function isFavorite(entry) {
+  const identity = contactIdentity(entry);
+  return Boolean(identity && favoriteContacts.has(identity));
+}
+
+function toggleFavorite(entry) {
+  const identity = contactIdentity(entry);
+  if (!identity) return false;
+  if (favoriteContacts.has(identity)) favoriteContacts.delete(identity);
+  else favoriteContacts.add(identity);
+  saveFavoriteContacts();
+  return favoriteContacts.has(identity);
+}
+
 function selectedEntries() {
   return [...entries.values()].filter((entry) => entry.selected);
 }
 
+function visibleEntries() {
+  const all = [...entries.values()];
+  return showSelectedOnly ? all.filter((entry) => entry.selected) : all;
+}
+
 function updateSelectionState() {
   const selected = selectedEntries();
+  if (showSelectedOnly && selected.length === 0) showSelectedOnly = false;
+  document.body.classList.toggle("call-selection-active", selected.length > 0);
+
   countLabel.textContent = `불러온 통화 ${entries.size}건 · 선택 ${selected.length}건`;
-  actionButton.hidden = entries.size === 0;
+  actionButton.hidden = selected.length === 0;
   actionButton.disabled = selected.length === 0;
   actionButton.textContent = selected.length > 0
-    ? `선택한 통화 ${selected.length}건 확인`
+    ? `선택 ${selected.length}건 · 분석 준비`
     : "중요한 통화를 선택하세요";
+
+  selectedOnlyButton.disabled = selected.length === 0;
+  selectedOnlyButton.classList.toggle("active", showSelectedOnly);
+  selectedOnlyButton.textContent = showSelectedOnly ? "전체 보기" : "선택한 것만 보기";
+  selectedOnlyButton.setAttribute("aria-pressed", String(showSelectedOnly));
 }
 
 function createMeta(entry) {
@@ -106,24 +160,31 @@ function createMeta(entry) {
   return meta;
 }
 
+function resetSelectionFeedback() {
+  summary.hidden = true;
+  status.textContent = "";
+}
+
 function createCallItem(entry) {
-  const label = document.createElement("label");
-  label.className = "call-item";
+  const item = document.createElement("div");
+  item.className = "call-item";
+  item.classList.toggle("selected", entry.selected);
+  item.classList.toggle("favorite", isFavorite(entry));
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
+  checkbox.id = `call-select-${entry.id}`;
   checkbox.checked = entry.selected;
   checkbox.setAttribute("aria-label", `${displayName(entry)} 분석 대상 선택`);
   checkbox.addEventListener("change", () => {
     entry.selected = checkbox.checked;
-    label.classList.toggle("selected", entry.selected);
-    summary.hidden = true;
-    status.textContent = "";
-    updateSelectionState();
+    resetSelectionFeedback();
+    render();
   });
 
-  const body = document.createElement("div");
+  const body = document.createElement("label");
   body.className = "call-item-body";
+  body.htmlFor = checkbox.id;
 
   const name = document.createElement("strong");
   name.className = "call-item-name";
@@ -139,19 +200,36 @@ function createCallItem(entry) {
 
   body.append(createMeta(entry));
 
-  const star = document.createElement("span");
+  const star = document.createElement("button");
+  star.type = "button";
   star.className = "call-item-star";
-  star.textContent = "★";
-  star.setAttribute("aria-hidden", "true");
+  const identity = contactIdentity(entry);
+  const favorite = isFavorite(entry);
+  star.disabled = !identity;
+  star.textContent = favorite ? "★" : "☆";
+  star.setAttribute("aria-pressed", String(favorite));
+  star.setAttribute("aria-label", !identity
+    ? `${displayName(entry)} 연락처 정보가 없어 중요 표시 불가`
+    : favorite
+      ? `${displayName(entry)} 중요 연락처 해제`
+      : `${displayName(entry)} 중요 연락처로 표시`);
+  star.title = !identity ? "연락처 정보가 없어 중요 표시 불가" : favorite ? "중요 연락처 해제" : "중요 연락처로 표시";
+  star.addEventListener("click", () => {
+    const enabled = toggleFavorite(entry);
+    status.textContent = enabled
+      ? `${displayName(entry)}을(를) 중요 연락처로 표시했습니다.`
+      : `${displayName(entry)} 중요 연락처 표시를 해제했습니다.`;
+    render();
+  });
 
-  label.classList.toggle("selected", entry.selected);
-  label.append(checkbox, body, star);
-  return label;
+  item.append(checkbox, body, star);
+  return item;
 }
 
 function render() {
+  if (showSelectedOnly && selectedEntries().length === 0) showSelectedOnly = false;
   list.replaceChildren();
-  const sorted = [...entries.values()].sort(
+  const sorted = visibleEntries().sort(
     (a, b) => b.parsed.recordedAt.getTime() - a.parsed.recordedAt.getTime(),
   );
 
@@ -174,6 +252,13 @@ function render() {
     groupEntries.forEach((entry) => group.append(createCallItem(entry)));
     list.append(group);
   });
+
+  if (showSelectedOnly && sorted.length === 0 && entries.size > 0) {
+    const message = document.createElement("div");
+    message.className = "call-inbox-empty call-inbox-filter-empty";
+    message.textContent = "선택된 통화가 없습니다. 전체 보기로 돌아가 통화를 선택하세요.";
+    list.append(message);
+  }
 
   const hasEntries = entries.size > 0;
   emptyState.hidden = hasEntries;
@@ -202,6 +287,10 @@ function loadAudioDuration(file) {
   });
 }
 
+function refreshSelectionSummaryIfOpen() {
+  if (!summary.hidden) showSelectionSummary({ scroll: false });
+}
+
 function drainDurationQueue() {
   while (activeDurationLoads < MAX_DURATION_LOADS && durationQueue.length > 0) {
     const entry = durationQueue.shift();
@@ -213,6 +302,7 @@ function drainDurationQueue() {
         if (Number.isFinite(duration) && duration > 0) entry.duration = duration;
         const target = document.getElementById(`call-duration-${entry.id}`);
         if (target) target.textContent = entry.duration ? formatDuration(entry.duration) : formatBytes(entry.file.size);
+        refreshSelectionSummaryIfOpen();
       })
       .finally(() => {
         activeDurationLoads -= 1;
@@ -258,6 +348,7 @@ function importFiles(fileList) {
     added += 1;
   });
 
+  showSelectedOnly = false;
   render();
   summary.hidden = true;
   const notes = [];
@@ -267,35 +358,50 @@ function importFiles(fileList) {
   status.textContent = notes.join(" ") || "새로 추가된 통화가 없습니다.";
 }
 
-function showSelectionSummary() {
+function selectedDurationSummary(selected) {
+  const loaded = selected.filter((entry) => Number.isFinite(entry.duration) && entry.duration > 0);
+  if (!loaded.length) return "통화 길이 확인 중";
+  const seconds = loaded.reduce((total, entry) => total + entry.duration, 0);
+  const formatted = formatDuration(seconds);
+  return loaded.length === selected.length
+    ? `총 녹음 길이 ${formatted}`
+    : `확인된 녹음 길이 ${formatted} · ${selected.length - loaded.length}건 확인 중`;
+}
+
+function showSelectionSummary(options = {}) {
   const selected = selectedEntries();
   if (!selected.length) return;
   summary.replaceChildren();
 
   const title = document.createElement("strong");
-  title.textContent = `분석 대상으로 ${selected.length}건 선택`;
+  title.textContent = `분석 준비 ${selected.length}건`;
   summary.append(title);
+
+  const duration = document.createElement("p");
+  duration.className = "call-selection-duration";
+  duration.textContent = selectedDurationSummary(selected);
+  summary.append(duration);
 
   const names = document.createElement("ul");
   names.className = "call-selection-list";
-  selected.slice(0, 5).forEach((entry) => {
+  selected.slice(0, 8).forEach((entry) => {
     const item = document.createElement("li");
-    item.textContent = `${displayName(entry)} · ${timeLabel(entry.parsed.recordedAt)}`;
+    item.textContent = `${displayName(entry)} · ${groupLabel(entry.parsed.recordedAt)} ${timeLabel(entry.parsed.recordedAt)}${entry.duration ? ` · ${formatDuration(entry.duration)}` : ""}`;
     names.append(item);
   });
-  if (selected.length > 5) {
+  if (selected.length > 8) {
     const more = document.createElement("li");
-    more.textContent = `외 ${selected.length - 5}건`;
+    more.textContent = `외 ${selected.length - 8}건`;
     names.append(more);
   }
   summary.append(names);
 
   const note = document.createElement("p");
-  note.textContent = "현재 V1에서는 여기까지 로컬에서만 처리합니다. STT 연결 전이라 녹음파일은 서버로 전송되지 않습니다.";
+  note.textContent = "현재 V1.1에서는 선택 확인까지만 로컬에서 처리합니다. STT 연결 전이라 녹음파일은 서버로 전송되지 않습니다.";
   summary.append(note);
   summary.hidden = false;
-  status.textContent = "선택 결과를 확인했습니다. 다음 단계에서 이 파일들만 STT 분석하도록 연결합니다.";
-  summary.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  status.textContent = `선택 ${selected.length}건이 분석 준비 상태입니다.`;
+  if (options.scroll !== false) summary.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 importButton?.addEventListener("click", () => fileInput?.click());
@@ -303,13 +409,22 @@ fileInput?.addEventListener("change", () => {
   if (fileInput.files?.length) importFiles(fileInput.files);
   fileInput.value = "";
 });
+selectedOnlyButton?.addEventListener("click", () => {
+  if (!selectedEntries().length) return;
+  showSelectedOnly = !showSelectedOnly;
+  render();
+});
 clearButton?.addEventListener("click", () => {
+  if (!entries.size) return;
+  const confirmed = window.confirm("불러온 통화 목록을 비울까요? 휴대폰의 원본 녹음파일은 삭제되지 않습니다.");
+  if (!confirmed) return;
   entries.clear();
   durationQueue.length = 0;
+  showSelectedOnly = false;
   summary.hidden = true;
   status.textContent = "통화 목록을 비웠습니다. 원본 녹음파일은 삭제되지 않습니다.";
   render();
 });
-actionButton?.addEventListener("click", showSelectionSummary);
+actionButton?.addEventListener("click", () => showSelectionSummary());
 
 render();
