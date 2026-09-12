@@ -1,9 +1,12 @@
 (()=>{
   const $=(id)=>document.getElementById(id);
   const card=$("briefingCard");
-  let title=$("briefingTitle");
-  let meta=$("briefingMeta");
-  let error=$("briefingError");
+  const legacyTitle=$("briefingTitle");
+  const legacyMeta=$("briefingMeta");
+  const legacyError=$("briefingError");
+  let title=legacyTitle;
+  let meta=legacyMeta;
+  let error=legacyError;
   const legacyTop=$("briefingTop");
   const legacyMore=card?.querySelector?.(".briefing-more");
   const originalQuick=$("briefingQuickUpdate");
@@ -34,6 +37,18 @@
     root.hidden=true;
     meta.insertAdjacentElement("afterend",root);
   }
+
+  function syncLegacyHeader(){
+    if(!root.hidden) return;
+    title.textContent=legacyTitle.textContent;
+    meta.textContent=legacyMeta.textContent;
+    error.textContent=legacyError.textContent;
+  }
+
+  const legacyObserver=new MutationObserver(syncLegacyHeader);
+  [legacyTitle,legacyMeta,legacyError].forEach(node=>{
+    legacyObserver.observe(node,{childList:true,subtree:true,characterData:true});
+  });
 
   let quick=originalQuick;
   if(originalQuick){
@@ -119,6 +134,7 @@
     legacyTop.hidden=false;
     legacyMore?.removeAttribute("hidden");
     root.hidden=true;
+    syncLegacyHeader();
   }
 
   function setBusy(value){
