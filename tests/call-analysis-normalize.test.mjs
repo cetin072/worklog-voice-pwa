@@ -78,6 +78,15 @@ test("명시적 dueStart도 날짜/시간 형식을 구분해 보존한다", () 
   assert.equal(result.actions[1].dueHasTime, true);
 });
 
+test("형식만 맞는 잘못된 AI 명시 날짜는 자동 수용하지 않는다", () => {
+  const result = normalizeCallAnalysisResult({
+    actions: [{ type: "schedule", content: "서류 제출", dueStart: "2026-02-30", dueHasTime: false }],
+  }, { recordedAt: RECORDED_AT });
+  const schedule = result.actions[0];
+  assert.equal(schedule.dueStart, "");
+  assert.equal(schedule.needsReview, true);
+});
+
 test("액션을 할일/일정/후속조치/결정사항으로 나눈다", () => {
   const result = normalizeCallAnalysisResult({
     actions: [
