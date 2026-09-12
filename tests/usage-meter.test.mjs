@@ -9,14 +9,10 @@ import {
   summarizeUsage,
 } from "../public/usage-meter.mjs";
 
-function assertClose(actual, expected, epsilon = 1e-9) {
-  assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} is not close to ${expected}`);
-}
-
 test("OpenAI STT 1시간 예상비용을 계산한다", () => {
   const result = estimateSttCost("openai-gpt-transcribe", 3600, { usdKrw: 1400 });
   assert.equal(result.currency, "USD");
-  assertClose(result.nativeCost, 0.27);
+  assert.ok(Math.abs(result.nativeCost - 0.27) < 1e-9);
   assert.equal(Math.round(result.estimatedKrw), 378);
 });
 
@@ -29,7 +25,7 @@ test("CLOVA 1시간 예상비용을 원화로 계산한다", () => {
 
 test("AssemblyAI 1시간 예상비용을 계산한다", () => {
   const result = estimateSttCost("assemblyai-universal-2", 3600, { usdKrw: 1400 });
-  assertClose(result.nativeCost, 0.15);
+  assert.ok(Math.abs(result.nativeCost - 0.15) < 1e-9);
   assert.equal(Math.round(result.estimatedKrw), 210);
 });
 
