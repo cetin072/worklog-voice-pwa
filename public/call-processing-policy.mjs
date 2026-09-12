@@ -121,3 +121,7 @@ export function createProcessingRequest(input = {}, now = new Date()) {
     createdAt: time.toISOString(),
   };
 }
+
+if (typeof document !== "undefined") {
+  void import("./call-analysis-preview.mjs");
+}
