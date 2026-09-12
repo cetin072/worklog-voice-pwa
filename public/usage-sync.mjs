@@ -72,10 +72,11 @@ export function summarizeUsageByUser(events = [], now = new Date()) {
     }
     const summary = groups.get(userLabel);
     summary.events += 1;
-    summary.durationSeconds += Math.max(0, finiteNumber(event?.durationSeconds));
+    summary.durationSeconds += Math.max(0, finiteNumber(event?.audioSeconds ?? event?.durationSeconds));
     summary.estimatedCostKrw += Math.max(0, finiteNumber(event?.estimatedCostKrw));
-    if (event?.category === "stt") summary.sttCalls += 1;
-    if (event?.category === "ai") summary.aiCalls += 1;
+    const service = event?.service || event?.category;
+    if (service === "stt") summary.sttCalls += 1;
+    if (service === "ai") summary.aiCalls += 1;
   }
 
   return [...groups.values()].sort((a, b) => {
