@@ -33,8 +33,17 @@
     if(localStorage.getItem(OWNER_KEY)===PERSONAL_SENTINEL) localStorage.removeItem(OWNER_KEY);
   }
 
+  function readOwnerKey(){
+    const key=(localStorage.getItem(OWNER_KEY) || "").trim();
+    if(key.startsWith("ntn_")){
+      localStorage.removeItem(OWNER_KEY);
+      return "";
+    }
+    return key;
+  }
+
   function ownerKey({promptIfMissing=false}={}){
-    let key=localStorage.getItem(OWNER_KEY) || "";
+    let key=readOwnerKey();
     if(key===PERSONAL_SENTINEL){
       if(hasPersonal()) return key;
       localStorage.removeItem(OWNER_KEY);
@@ -42,6 +51,11 @@
     }
     if(!key && promptIfMissing){
       key=(prompt("기존 운영자라면 개인 접근키를 입력하세요. 처음 사용하는 분은 취소 후 ‘내 Notion으로 시작하기’를 눌러주세요.") || "").trim();
+      if(key.startsWith("ntn_")){
+        localStorage.removeItem(OWNER_KEY);
+        location.href="/setup.html";
+        return "";
+      }
       if(key) localStorage.setItem(OWNER_KEY,key);
     }
     return key;
@@ -62,7 +76,7 @@
 
   function mode(){
     if(hasPersonal()) return "personal";
-    const key=localStorage.getItem(OWNER_KEY) || "";
+    const key=readOwnerKey();
     if(key && key!==PERSONAL_SENTINEL) return "owner";
     return "unset";
   }
