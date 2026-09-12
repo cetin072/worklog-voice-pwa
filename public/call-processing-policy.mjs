@@ -57,21 +57,27 @@ export function saveCallProcessingPolicy(policy, storage = globalThis.localStora
   return normalized;
 }
 
-export function tempAudioDisposition(status, at = new Date(), policy = DEFAULT_CALL_PROCESSING_POLICY) {
-  const normalized = normalizeCallProcessingPolicy(policy);
-  const time = at instanceof Date ? at : new Date(at);
-  if (Number.isNaN(time.getTime())) throw new TypeError("유효한 처리 시각이 필요합니다.");
+function validDate(value, fallback) {
+  const date = value instanceof Date ? value : new Date(value ?? fallback);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-  if (status === "completed") {
+export function tempAudioDisposition(status, at = new Date(), policy = DEFAULT_CALL_PROCESSING_POLICY, tempCreatedAt = at) {
+  const normalized = normalizeCallProcessingPolicy(policy);
+  const time = validDate(at);
+  const created = validDate(tempCreatedAt, at);
+  if (!time || !created) throw new TypeError("유효한 임시파일 시각이 필요합니다.");
+
+  if (["completed", "cleanup_pending"].includes(status)) {
     return { deleteImmediately: true, deleteAfter: time.toISOString() };
   }
 
   if (["failed", "retry_wait"].includes(status)) {
-    const deleteAt = new Date(time.getTime() + normalized.failedTempRetentionHours * 3600_000);
-    const absoluteMax = new Date(time.getTime() + normalized.maxTempRetentionHours * 3600_000);
+    const retryGrace = new Date(time.getTime() + normalized.failedTempRetentionHours * 3600_000);
+    const absoluteMax = new Date(created.getTime() + normalized.maxTempRetentionHours * 3600_000);
     return {
       deleteImmediately: false,
-      deleteAfter: new Date(Math.min(deleteAt.getTime(), absoluteMax.getTime())).toISOString(),
+      deleteAfter: new Date(Math.min(retryGrace.getTime(), absoluteMax.getTime())).toISOString(),
     };
   }
 
