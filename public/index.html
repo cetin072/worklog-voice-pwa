@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/briefing-edit.css">
   <link rel="stylesheet" href="/call-inbox.css">
+  <link rel="stylesheet" href="/settings.css">
 </head>
 <body>
   <main class="app">
@@ -22,8 +23,57 @@
         <p class="eyebrow">업무 통합 기록</p>
         <h1>🎙 업무수첩</h1>
       </div>
-      <span id="health" class="badge">확인 중</span>
+      <div class="header-actions">
+        <span id="health" class="badge">확인 중</span>
+        <button id="settingsOpen" class="settings-open" type="button" aria-controls="settingsCard" aria-label="설정 열기">⚙</button>
+      </div>
     </header>
+
+    <section id="settingsCard" class="card settings-card" hidden>
+      <div class="settings-head">
+        <div>
+          <p class="eyebrow">설정 · 사용량 V1</p>
+          <h2>⚙ 설정</h2>
+        </div>
+        <button id="settingsClose" class="settings-close" type="button">닫기</button>
+      </div>
+
+      <div class="paid-lock">
+        <strong>🔒 유료 STT · AI 기능 잠금</strong>
+        <p>두 개발자 합의 전에는 OpenAI, CLOVA, AssemblyAI 등 유료 API를 호출하지 않습니다. 현재 화면은 사용량·예상비용 측정 기반만 준비합니다.</p>
+      </div>
+
+      <form id="settingsForm">
+        <section class="settings-section">
+          <h3>이 기기 사용자</h3>
+          <div class="settings-grid">
+            <label><span>사용자 이름</span><input id="settingsUserLabel" type="text" maxlength="40" placeholder="예: 개발자 A"></label>
+            <label><span>월 예산(원)</span><input id="settingsMonthlyBudget" type="number" min="0" step="1000" inputmode="numeric"></label>
+            <label><span>경고 기준(%)</span><input id="settingsWarningPercent" type="number" min="1" max="100" step="1" inputmode="numeric"></label>
+            <label><span>참고 환율 USD 1달러</span><input id="settingsUsdKrw" type="number" min="0" step="1" inputmode="numeric"></label>
+          </div>
+          <button class="settings-save" type="submit">설정 저장</button>
+          <p class="settings-note">현재 설정과 사용량 기록은 이 기기 브라우저에만 저장됩니다. 두 개발자 합산 집계는 중앙 저장소를 정한 뒤 연결합니다.</p>
+        </section>
+      </form>
+
+      <section class="settings-section">
+        <h3>이번 달 사용량</h3>
+        <div id="usageSummary" class="usage-summary"></div>
+        <p id="usageBudgetState" class="usage-budget"></p>
+        <div class="usage-actions">
+          <button id="usageExport" type="button">사용량 내보내기</button>
+          <button id="usageClear" type="button">이 기기 기록 비우기</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>STT 참고 비용</h3>
+        <div id="usageRateList" class="rate-list"></div>
+        <p class="settings-note">1시간 녹음 기준 단순 예상치입니다. 실제 연결 전 각 업체 최신 단가와 환율을 다시 확인합니다. 현재는 어떤 업체에도 파일을 보내지 않습니다.</p>
+      </section>
+      <p id="settingsStatus" class="settings-status" aria-live="polite"></p>
+    </section>
 
     <section class="card voice-card">
       <button id="mic" class="mic" type="button">
@@ -143,7 +193,7 @@
       </details>
     </section>
 
-    <footer>v1.7.1 · 녹음 우선 · 통화녹음 선택 V1.1 · 브리핑 2.0 · 업무명 수정 · 직접 입력 · 카카오 브리핑 · AI API 없음</footer>
+    <footer>v1.8.0 · 녹음 우선 · 통화녹음 선택 · 설정/사용량 기반 · 유료 API 잠금 · 브리핑 2.0</footer>
   </main>
 
   <script src="/auth.js?v=20260912-2" defer></script>
@@ -153,6 +203,7 @@
   <script src="/inference-guard.js" defer></script>
   <script src="/quick-save.js" defer></script>
   <script src="/manual-input.js" defer></script>
+  <script type="module" src="/settings.mjs"></script>
   <script type="module" src="/call-inbox.mjs"></script>
   <script src="/briefing.js" defer></script>
   <script src="/briefing-v2.js" defer></script>
