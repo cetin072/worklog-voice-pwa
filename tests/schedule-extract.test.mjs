@@ -48,3 +48,23 @@ test("keeps ordinary text unchanged when no schedule is present",()=>{
   assert.equal(result.dueStart,"");
   assert.equal(result.text,"범한메카텍 견적서 확인");
 });
+
+test("treats night twelve as midnight",()=>{
+  const result=extractScheduleFromText("내일 밤 12시에 배치 확인",RECORDED_AT);
+  assert.equal(result.dueStart,"2026-09-13T00:00:00+09:00");
+  assert.equal(result.text,"배치 확인");
+});
+
+test("preserves original text when separate schedule phrases could be combined incorrectly",()=>{
+  const result=extractScheduleFromText("회의는 오후 3시에 하고 자료는 내일 보내기",RECORDED_AT);
+  assert.equal(result.matched,false);
+  assert.equal(result.dueStart,"");
+  assert.equal(result.text,"회의는 오후 3시에 하고 자료는 내일 보내기");
+});
+
+test("preserves original text when more than one time is present",()=>{
+  const result=extractScheduleFromText("내일 오후 3시에 A 전화 그리고 오후 4시에 B 전화",RECORDED_AT);
+  assert.equal(result.matched,false);
+  assert.equal(result.dueStart,"");
+  assert.equal(result.text,"내일 오후 3시에 A 전화 그리고 오후 4시에 B 전화");
+});
