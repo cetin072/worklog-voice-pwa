@@ -56,6 +56,8 @@ test("유료 기능 잠금은 설정값으로 해제되지 않는다", () => {
   assert.equal(settings.paidFeaturesLocked, true);
 });
 
-test("monthKey는 월 단위 키를 만든다", () => {
+test("monthKey는 한국시간 기준 월 단위 키를 만든다", () => {
   assert.equal(monthKey(new Date("2026-09-13T00:00:00+09:00")), "2026-09");
+  assert.equal(monthKey(new Date("2026-08-31T15:30:00Z")), "2026-09");
+  assert.equal(monthKey(new Date("2026-08-31T14:30:00Z")), "2026-08");
 });
