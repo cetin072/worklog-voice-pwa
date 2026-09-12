@@ -1,5 +1,6 @@
 const SETTINGS_KEY = "worklog.usage.settings.v1";
 const EVENTS_KEY = "worklog.usage.events.v1";
+const SEOUL_TZ = "Asia/Seoul";
 
 export const DEFAULT_STT_RATES = Object.freeze({
   "openai-gpt-transcribe": {
@@ -73,7 +74,14 @@ export function estimateSttCost(rateId, durationSeconds, options = {}) {
 export function monthKey(date = new Date()) {
   const target = date instanceof Date ? date : new Date(date);
   if (Number.isNaN(target.getTime())) return "";
-  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SEOUL_TZ,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(target);
+  const year = parts.find((part) => part.type === "year")?.value || "";
+  const month = parts.find((part) => part.type === "month")?.value || "";
+  return year && month ? `${year}-${month}` : "";
 }
 
 export function createUsageEvent(input = {}) {
