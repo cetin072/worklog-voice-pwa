@@ -51,11 +51,14 @@ test("동일 녹음 파일은 동일 fingerprint를 만든다", () => {
   assert.notEqual(buildCallProcessingFingerprint(input), buildCallProcessingFingerprint({ ...input, fileSize: 1025 }));
 });
 
-test("정상 처리 상태는 순서대로 진행할 수 있다", () => {
+test("정상 처리 상태는 삭제 대기까지 순서대로 진행한다", () => {
   assert.equal(canTransitionProcessingStatus("queued", "uploading"), true);
   assert.equal(canTransitionProcessingStatus("uploading", "transcribing"), true);
   assert.equal(canTransitionProcessingStatus("transcribing", "completed"), false);
-  const job = transitionProcessingJob({ status: "persisting", finishedAt: null }, "completed", "2026-09-13T00:00:00Z");
-  assert.equal(job.status, "completed");
-  assert.equal(job.finishedAt, "2026-09-13T00:00:00.000Z");
+  assert.equal(canTransitionProcessingStatus("persisting", "cleanup_pending"), true);
+  assert.equal(canTransitionProcessingStatus("persisting", "completed"), false);
+  const cleanupJob = transitionProcessingJob({ status: "persisting", finishedAt: null }, "cleanup_pending", "2026-09-13T00:00:00Z");
+  const completed = transitionProcessingJob(cleanupJob, "completed", "2026-09-13T00:00:01Z");
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.finishedAt, "2026-09-13T00:00:01.000Z");
 });
