@@ -27,6 +27,7 @@ function selectedItemsFromDom() {
 
 function announce() {
   if (!summary || summary.hidden) return;
+  if (summary.querySelector(".mock-start-button")) return;
   const items = selectedItemsFromDom();
   if (!items.length) return;
   window.dispatchEvent(new CustomEvent("worklog:call-selection-ready", {
