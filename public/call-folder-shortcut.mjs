@@ -1,15 +1,15 @@
-import { rankAudioFileHandles } from "./call-folder-utils.mjs";
+import {
+  DEFAULT_FOLDER_LIMIT,
+  ensureReadPermission,
+  readFolderFiles,
+} from "./call-folder-runtime.mjs";
 
 const DB_NAME = "worklog-local-handles-v1";
 const STORE_NAME = "handles";
 const HANDLE_KEY = "call-recordings";
 const PICKER_ID = "worklog-call-recordings";
 const EXPECTED_FOLDER_NAME = "TPhoneCallRecords";
-const MAX_FOLDER_FILES = 150;
-const FOLDER_SCAN_TIMEOUT_MS = 20000;
-const FILE_OPEN_TIMEOUT_MS = 4000;
-const FILE_OPEN_TOTAL_TIMEOUT_MS = 20000;
-const FILE_OPEN_CONCURRENCY = 6;
+const MAX_FOLDER_FILES = DEFAULT_FOLDER_LIMIT;
 
 const importButton = document.getElementById("callImport");
 const fileInput = document.getElementById("callFiles");
@@ -58,122 +58,6 @@ async function removeHandle() {
     tx.onerror = () => reject(tx.error);
   });
   db.close();
-}
-
-function timeoutError(code, message) {
-  const error = new Error(message || code);
-  error.code = code;
-  return error;
-}
-
-function withTimeout(promise, timeoutMs, code, message) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(timeoutError(code, message)), Math.max(1, timeoutMs));
-    Promise.resolve(promise).then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
-async function ensureReadPermission(handle) {
-  if (!handle) return false;
-  try {
-    if (typeof handle.queryPermission === "function") {
-      const current = await handle.queryPermission({ mode: "read" });
-      if (current === "granted") return true;
-    }
-    if (typeof handle.requestPermission === "function") {
-      return (await handle.requestPermission({ mode: "read" })) === "granted";
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function directoryIterator(handle) {
-  if (typeof handle?.values === "function") return handle.values()[Symbol.asyncIterator]();
-  if (typeof handle?.entries === "function") return handle.entries()[Symbol.asyncIterator]();
-  throw timeoutError("DIRECTORY_ITERATOR_UNSUPPORTED", "폴더 목록 읽기를 지원하지 않는 브라우저입니다.");
-}
-
-async function scanFolderEntries(handle) {
-  const iterator = directoryIterator(handle);
-  const entries = [];
-  const deadline = Date.now() + FOLDER_SCAN_TIMEOUT_MS;
-  let scannedCount = 0;
-
-  while (true) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) throw timeoutError("FOLDER_SCAN_TIMEOUT", "폴더 목록 확인 시간이 초과됐습니다.");
-    const step = await withTimeout(
-      iterator.next(),
-      remaining,
-      "FOLDER_SCAN_TIMEOUT",
-      "폴더 목록 확인 시간이 초과됐습니다.",
-    );
-    if (step.done) break;
-    const raw = step.value;
-    const entry = Array.isArray(raw) ? raw[1] : raw;
-    scannedCount += 1;
-    if (entry?.kind === "file") entries.push(entry);
-  }
-
-  const rankedAll = rankAudioFileHandles(entries, Math.max(1, entries.length));
-  return {
-    ranked: rankedAll.slice(0, MAX_FOLDER_FILES),
-    totalAudioCount: rankedAll.length,
-    scannedCount,
-    newestName: rankedAll[0]?.name || "",
-  };
-}
-
-async function materializeFiles(ranked = []) {
-  if (!ranked.length) return { files: [], failedCount: 0 };
-  const deadline = Date.now() + FILE_OPEN_TOTAL_TIMEOUT_MS;
-  const files = new Array(ranked.length).fill(null);
-  let cursor = 0;
-
-  async function worker() {
-    while (true) {
-      const index = cursor++;
-      if (index >= ranked.length) return;
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) return;
-      try {
-        files[index] = await withTimeout(
-          ranked[index].entry.getFile(),
-          Math.min(FILE_OPEN_TIMEOUT_MS, remaining),
-          "FILE_OPEN_TIMEOUT",
-          "녹음파일 열기 시간이 초과됐습니다.",
-        );
-      } catch {
-        // 일부 파일 실패는 나머지 최근 파일을 계속 불러온다.
-      }
-    }
-  }
-
-  await Promise.all(Array.from(
-    { length: Math.min(FILE_OPEN_CONCURRENCY, ranked.length) },
-    () => worker(),
-  ));
-
-  const opened = files.filter(Boolean);
-  return { files: opened, failedCount: ranked.length - opened.length };
-}
-
-async function readFolderFiles(handle, onIndexed = null) {
-  const scan = await scanFolderEntries(handle);
-  onIndexed?.(scan);
-  const opened = await materializeFiles(scan.ranked);
-  return { ...scan, ...opened };
 }
 
 function handoffFiles(files) {
