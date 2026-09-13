@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 
 function run(command,args){
   const result=spawnSync(command,args,{encoding:"utf8",env:process.env});
@@ -12,8 +12,18 @@ function run(command,args){
 }
 
 const prepare=run("npm",["run","prepare:ocr"]);
-const test=prepare.status===0?run("npm",["test"]):{status:null,signal:null,stdout:"",stderr:"skipped because prepare:ocr failed"};
+const results=[];
+if(prepare.status===0){
+  for(const file of readdirSync("tests").filter(name=>name.endsWith(".test.mjs")).sort()){
+    const result=run(process.execPath,["--test",`tests/${file}`]);
+    results.push({file,...result});
+  }
+}
+const failed=prepare.status!==0?"prepare-ocr":results.find(item=>item.status!==0)?.file.replace(/\.test\.mjs$/,"" )||"all-pass";
+const safe=failed.replace(/[^a-z0-9-]/gi,"-").toLowerCase().slice(0,60);
 mkdirSync("public",{recursive:true});
-writeFileSync("public/build-diagnostic.txt",JSON.stringify({node:process.version,platform:process.platform,prepare,test},null,2));
-console.log(`diagnostic written: prepare=${prepare.status} test=${test.status}`);
+mkdirSync("netlify/functions",{recursive:true});
+writeFileSync("public/build-diagnostic.txt",JSON.stringify({node:process.version,platform:process.platform,prepare,results},null,2));
+writeFileSync(`netlify/functions/diag-${safe}.mjs`,`export default async()=>new Response(${JSON.stringify(failed)});\n`);
+console.log(`diagnostic written: ${failed}`);
 process.exit(0);
