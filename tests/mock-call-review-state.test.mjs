@@ -32,6 +32,18 @@ test("모의 분석은 실제 분석이 아님을 표시한다", () => {
   assert.equal(result.actions.find((item) => item.type === "schedule").confirmed, false);
 });
 
+test("모의 일정 후보는 전달받은 실제 통화일시의 다음 날을 기준으로 만든다", () => {
+  const result = buildMockCallAnalysis({
+    id: "call-1",
+    contactName: "이선영이사",
+    recordedAt: "2026-09-12T13:29:53+09:00",
+    durationSeconds: 68,
+  });
+  const schedule = result.actions.find((item) => item.type === "schedule");
+  assert.equal(schedule.dueDate, "2026-09-13");
+  assert.equal(result.source.durationSeconds, 68);
+});
+
 test("사용자가 제외한 액션은 모의 저장 payload에서 빠진다", () => {
   const result = buildMockCallAnalysis({ id: "1", contactName: "고객" });
   result.actions.find((item) => item.type === "decision").included = false;
