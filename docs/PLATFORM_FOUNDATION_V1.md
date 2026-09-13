@@ -267,8 +267,102 @@ Workspace 전체 삭제는 다수 사용자의 고객·업무·통화·회의·�
 
 ---
 
+# Decision 06 — 외부 서비스 연동 원칙과 Adapter 경계
+
+- 상태: **확정**
+- 확정일: 2026-09-13
+- 변경 원칙: 별도의 중대한 기술·사업·보안상 대안이 생기지 않는 한 기본 플랫폼 원칙으로 유지한다.
+
+> **업무수첩 자체 데이터와 기능이 먼저이고 외부 서비스는 Processor, Connector, Delivery, Infrastructure Provider로 연결한다. 특정 외부 서비스 하나가 없어도 가능한 범위에서는 핵심 기능이 계속 작동해야 한다.**
+
+## 외부 서비스 역할 구분
+
+- `Processor`: STT, AI, OCR 등 입력을 처리해 결과를 반환한다.
+- `Connector`: Notion, Google Calendar, Gmail 등 외부 데이터를 읽거나 쓴다.
+- `Delivery`: Kakao, 이메일 발송 등 업무수첩 결과를 전달한다.
+- `Infrastructure Provider`: Supabase Storage, S3/R2 등 저장·서버 기반을 제공한다.
+
+각 모듈은 외부 Provider의 API를 직접 호출하거나 Provider 고유 응답을 그대로 UI 상태로 사용하지 않는다. 내부 표준 요청/결과와 Adapter 경계를 거친다.
+
+## 내부 ID와 외부 ID를 분리한다
+
+업무수첩 내부 `task_id`, `schedule_id`, `customer_id` 등이 기준이며 Notion `page_id`, Google `event_id`, Gmail `message_id` 등은 외부 연결정보로 관리한다.
+
+외부 서비스 ID를 업무수첩 내부 데이터의 기본 식별자로 사용하지 않는다.
+
+## 초기 연동은 가능한 한 단방향을 우선한다
+
+초기에는 연동별 방향을 명확히 정한다.
+
+예:
+- 업무수첩 Schedule → Google Calendar
+- Notion → 업무수첩 또는 업무수첩 → Notion 중 해당 기능에 맞는 명확한 한 방향
+- Gmail message → 업무수첩 Candidate
+
+완전한 양방향 동기화는 충돌·삭제·반복일정·timezone·version 정책이 필요한 별도 기능으로 보고 실제 수요가 확인된 후 설계한다.
+
+## Core Result와 Integration Result를 분리한다
+
+외부 서비스 실패 때문에 이미 만든 핵심 결과를 실패로 취급하거나 삭제하지 않는다.
+
+예:
+- `CallReport 생성 성공 / Notion 연동 실패`
+- `PDF 생성 성공 / Cloud Drive 업로드 실패`
+- `Schedule 저장 성공 / Google Calendar Sync 실패`
+
+연동 실패는 별도 상태로 표시하고 재시도할 수 있어야 한다.
+
+## Retry, Idempotency, Sync 상태
+
+외부 연동은 중복 생성·중복 과금·중복 전송을 막기 위해 내부 ID, 외부 ID, Sync 상태, Idempotency Key를 사용할 수 있어야 한다.
+
+사용자 중복 클릭이나 네트워크 재시도로 Google 일정, Notion 페이지, 외부 메시지가 중복 생성되지 않게 한다.
+
+## 권한과 연결 해제
+
+OAuth 및 외부 서비스 권한은 기능 수행에 필요한 최소 Scope만 요청한다.
+
+사용자는 외부 연결을 해제할 수 있어야 하며 다음 세 작업을 서로 다르게 취급한다.
+
+- 외부 서비스 연결 해제
+- 업무수첩 내부 데이터 삭제
+- 외부 서비스에 이미 생성된 데이터 삭제
+
+연결 해제만으로 내부 업무 데이터나 외부 데이터를 임의로 삭제하지 않는다.
+
+## 유료 Processor와 Cost Gate
+
+STT/AI/OCR 등 사용량 기반 비용이 발생하는 Processor는 공통 Usage/Cost 체계를 거친다.
+
+필요한 경우 Workspace 정책, 사용량 한도, 예상비용 확인 등 Cost Gate를 적용할 수 있게 한다.
+
+Provider 비용과 사용량은 특정 모듈 내부에만 기록하지 않고 공통 Usage/Cost Ledger에서 추적한다.
+
+## Provider 교체 가능성
+
+내부 표준 요청/결과 계약을 먼저 정의하고 실제 Provider 응답은 Adapter에서 정규화한다.
+
+Provider 교체가 모듈 UI와 도메인 로직의 대규모 재작성으로 이어지지 않아야 한다.
+
+장기적으로 기능·언어·비용에 따라 Provider를 달리 선택할 수 있으나 V1에서 범용 자동 Provider Routing 시스템까지 만들지는 않는다.
+
+## 외부 원본 SourceRef
+
+Gmail 등 외부 서비스가 실제 원본인 경우 업무수첩이 원본 소유권을 억지로 가져오지 않는다.
+
+예:
+`Gmail message → Mail Analysis → TaskCandidate / ScheduleCandidate`
+
+이 경우 Candidate/Result의 `SourceRef`에 원본 서비스 종류와 외부 참조를 기록해 출처를 추적할 수 있게 한다.
+
+## 한 줄 기준
+
+> **내부 모델이 먼저이고 외부 서비스는 교체 가능한 연결 계층이다. 외부 연동 실패는 핵심 결과를 파괴하지 않으며, 최소 권한·단방향 우선·Retry/Idempotency·Cost 추적을 기본으로 한다.**
+
+---
+
 # 다음 결정 예정
 
-## Decision 06 — 외부 서비스 연동 원칙과 Adapter 경계
+## Decision 07 — 상용화 전환 기준과 단계별 출시 구조
 
-다음 논의에서는 Notion, Google Calendar, Gmail/메일, Kakao, STT/AI/OCR, Storage 등 외부 서비스와 업무수첩의 관계를 어떤 수준까지 표준화하고, 단방향·양방향 동기화 및 Provider 교체를 어떤 원칙으로 다룰지 확정한다.
+다음 논의에서는 현재 2인 실사용 단계에서 내부 Alpha, 제한 Beta, 일반 사용자 출시, 유료화로 넘어가기 위해 어떤 기능·보안·데이터·비용 기준을 반드시 충족해야 하는지 확정한다.
