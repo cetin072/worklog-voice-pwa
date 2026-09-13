@@ -2,7 +2,7 @@
 
 ## 문서 상태
 
-- 상태: **우선순위 확정 / 최종 검수 완료 / main 반영 승인 대기**
+- 상태: **우선순위 확정 / 내용 검수 완료 / exact-commit Preview 재검증 중**
 - 기준일: 2026-09-13
 - 상위 기준: `PROJECT_CHARTER.md`, `docs/MODULE_ARCHITECTURE_V1.md`, `docs/PLATFORM_FOUNDATION_V1.md`
 - 기준 Issue: #91
@@ -353,7 +353,7 @@ AI가 이름 유사성만으로 고객을 자동 병합하지 않는다. 고객 
 
 ---
 
-# 17. 최종 검수 결과
+# 17. 내용 검수 결과
 
 다음 항목을 대조했고 현재 **중대한 충돌 없음**으로 판정한다.
 
@@ -366,4 +366,4 @@ AI가 이름 유사성만으로 고객을 자동 병합하지 않는다. 고객 
 - 빠른 업무기록/브리핑을 불필요하게 재작성하지 않는 원칙
 - V1에서 과도한 범용화 시스템을 만들지 않는 원칙
 
-기술 검수 시점 기준 PR #92는 main 대비 behind 0이며 변경 파일은 `docs/PLATFORM_FOUNDATION_V1.md`, `docs/MODULE_REGISTRY.md` 두 개뿐이다. 최신 Deploy Preview 검증 완료 후 사용자 main 반영 승인을 기다린다.
+내용 검수 시점 기준 PR #92는 main 대비 behind 0이며 변경 파일은 `docs/PLATFORM_FOUNDATION_V1.md`, `docs/MODULE_REGISTRY.md` 두 개뿐이다. 최종 exact-commit Deploy Preview 성공을 확인한 뒤 사용자 main 반영 승인을 받는다.
