@@ -28,13 +28,23 @@ test("OCR supports Korean and English and requires explicit user action",()=>{
   assert.doesNotMatch(ocr,/previewImage\.addEventListener\("load",recognize/);
 });
 
-test("build copies pinned local OCR assets",()=>{
+test("build copies complete local OCR runtime",()=>{
   assert.equal(pkg.dependencies["tesseract.js"],"7.0.0");
   assert.equal(pkg.dependencies["@tesseract.js-data/kor"],"1.0.0");
   assert.equal(pkg.dependencies["@tesseract.js-data/eng"],"1.0.0");
-  assert.match(build,/tesseract-core-simd-lstm\.wasm\.js/);
+  assert.match(build,/\.wasm\(\?:\\\.js\)\?/);
+  assert.match(build,/readdir\(coreSource\)/);
   assert.match(build,/kor\.traineddata\.gz/);
   assert.match(build,/eng\.traineddata\.gz/);
+
+  const coreDir="public/vendor/tesseract-core";
+  const coreFiles=fs.readdirSync(coreDir);
+  assert.ok(coreFiles.some(file=>file.endsWith(".wasm.js")),"missing Tesseract wasm loader");
+  assert.ok(coreFiles.some(file=>file.endsWith(".wasm")),"missing Tesseract wasm binary");
+  assert.ok(fs.existsSync("public/vendor/tesseract/tesseract.min.js"));
+  assert.ok(fs.existsSync("public/vendor/tesseract/worker.min.js"));
+  assert.ok(fs.existsSync("public/vendor/tessdata/kor.traineddata.gz"));
+  assert.ok(fs.existsSync("public/vendor/tessdata/eng.traineddata.gz"));
 });
 
 test("OCR insertion preserves review and respects worklog text limit",()=>{
