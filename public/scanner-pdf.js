@@ -8,6 +8,12 @@
     name=name.replace(/\.pdf$/i,'').trim()||'스캔 문서';
     return `${name}.pdf`;
   };
+  if(typeof root.File!=='function'&&typeof Blob==='function'){
+    try{Object.defineProperty(root,'File',{configurable:true,writable:true,value:class File extends Blob{constructor(parts,name,options={}){super(parts,options);this.name=String(name);this.lastModified=Number(options.lastModified)||Date.now();}}});}catch{}
+  }
+  if(root.navigator&&typeof root.navigator.share==='function'&&typeof root.navigator.canShare!=='function'){
+    try{root.navigator.canShare=()=>false;}catch{}
+  }
   const a4For=(width,height)=>width>height?{width:841.89,height:595.28}:{width:595.28,height:841.89};
   async function createPdf(pages){
     if(!Array.isArray(pages)||!pages.length)throw new Error('PDF로 만들 페이지가 없습니다.');
