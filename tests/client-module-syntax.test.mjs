@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const targets = [
   "../public/call-folder-shortcut.mjs",
+  "../public/call-folder-guide.mjs",
   "../public/call-folder-runtime.mjs",
   "../public/call-folder-utils.mjs",
   "../public/call-inbox.mjs",
