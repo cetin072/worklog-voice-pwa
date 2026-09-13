@@ -6,7 +6,6 @@ import {
 } from "./mock-call-review-state.mjs";
 
 const SESSION_KEY = "worklog.mockCallReview.results.v1";
-const callCard = document.getElementById("callInboxCard");
 const selectionSummary = document.getElementById("callSelectionSummary");
 
 let selection = [];
@@ -18,6 +17,33 @@ let processing = false;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (!total) return "길이 확인 중";
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remain = total % 60;
+  if (hours) return `${hours}시간 ${minutes}분`;
+  return `${minutes}분 ${String(remain).padStart(2, "0")}초`;
+}
+
+function formatRecordedAt(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "통화시각 확인 필요";
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function scrollReviewTop(card) {
+  if (typeof card?.scrollTo === "function") card.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function saveMockPayload(payload) {
@@ -42,12 +68,17 @@ function createButton(label, className, onClick) {
 
 function ensureStartButton() {
   if (!selectionSummary || selectionSummary.hidden || !selection.length) return;
+  const existing = selectionSummary.querySelector(".mock-start-button");
+  if (existing) {
+    startButton = existing;
+    return;
+  }
   if (startButton?.isConnected) return;
 
   startButton = createButton("무료 모의 분석 체험", "mock-start-button", startMockProcessing);
   const note = document.createElement("p");
   note.className = "mock-start-note";
-  note.textContent = "실제 녹음내용은 읽지 않습니다. 연락처·시간 메타데이터만 사용해 검수 화면용 예시를 만듭니다.";
+  note.textContent = "실제 녹음내용은 읽지 않습니다. 선택된 통화의 연락처·통화시각·길이만 사용해 검수 화면용 예시를 만듭니다.";
   selectionSummary.append(startButton, note);
 }
 
@@ -57,7 +88,13 @@ function ensureReviewCard() {
   reviewCard.id = "mockCallReviewCard";
   reviewCard.className = "card mock-review-card";
   reviewCard.setAttribute("aria-live", "polite");
-  callCard?.insertAdjacentElement("afterend", reviewCard);
+  reviewCard.setAttribute("role", "dialog");
+  reviewCard.setAttribute("aria-modal", "true");
+  reviewCard.setAttribute("aria-label", "통화요약 검수");
+  reviewCard.tabIndex = -1;
+  document.body.classList.add("mock-review-open");
+  document.body.append(reviewCard);
+  queueMicrotask(() => reviewCard?.focus({ preventScroll: true }));
   return reviewCard;
 }
 
@@ -86,6 +123,7 @@ function closeReview() {
   reviewCard?.remove();
   reviewCard = null;
   processing = false;
+  document.body.classList.remove("mock-review-open");
 }
 
 async function startMockProcessing() {
@@ -115,13 +153,13 @@ async function startMockProcessing() {
   lock.className = "mock-lock-note";
   lock.textContent = "🔒 실제 녹음 업로드·STT·AI 호출은 실행하지 않습니다.";
   card.append(steps, lock);
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  scrollReviewTop(card);
 
   for (const item of items) {
-    await delay(260);
+    await delay(170);
     item.classList.add("done");
   }
-  await delay(180);
+  await delay(120);
   processing = false;
   renderCurrentReview();
 }
@@ -133,6 +171,19 @@ function fieldLabel(labelText, control) {
   span.textContent = labelText;
   label.append(span, control);
   return label;
+}
+
+function renderSourceMeta(source) {
+  const meta = document.createElement("div");
+  meta.className = "mock-source-meta";
+  const name = document.createElement("strong");
+  name.textContent = source.contactName || "상대방";
+  const phone = document.createElement("span");
+  phone.textContent = source.phone || "전화번호 없음";
+  const timing = document.createElement("span");
+  timing.textContent = `${formatRecordedAt(source.recordedAt)} · ${formatDuration(source.durationSeconds)}`;
+  meta.append(name, phone, timing);
+  return meta;
 }
 
 function renderTranscript(result) {
@@ -192,7 +243,11 @@ function renderAction(result, action) {
     const confirmText = document.createElement("span");
     confirmText.textContent = "이 일정을 저장 대상으로 확정";
     confirmLabel.append(confirm, confirmText);
-    box.append(schedule, confirmLabel);
+
+    const hint = document.createElement("p");
+    hint.className = "mock-schedule-note";
+    hint.textContent = "AI가 찾은 일정 후보입니다. 직접 확정한 일정만 실제 일정 저장 대상으로 사용합니다.";
+    box.append(schedule, confirmLabel, hint);
 
     date.addEventListener("change", () => { action.dueDate = date.value; });
     time.addEventListener("change", () => { action.dueTime = time.value; });
@@ -250,13 +305,13 @@ function renderCurrentReview() {
   if (!result) return renderFinished();
   const card = ensureReviewCard();
   const source = result.source;
-  const subtitle = `${currentIndex + 1} / ${analyses.length} · ${source.contactName}${source.phone ? ` · ${source.phone}` : ""}`;
+  const subtitle = `${currentIndex + 1} / ${analyses.length}`;
   card.replaceChildren(header("📞 통화요약 검수", subtitle));
 
   const banner = document.createElement("div");
   banner.className = "mock-data-banner";
   banner.innerHTML = "<strong>모의 데이터</strong><span>실제 STT·AI 결과가 아닙니다. 화면과 저장 흐름만 검수합니다.</span>";
-  card.append(banner);
+  card.append(banner, renderSourceMeta(source));
 
   const title = document.createElement("input");
   title.type = "text";
@@ -286,7 +341,7 @@ function renderCurrentReview() {
   const actionSection = document.createElement("section");
   actionSection.className = "mock-review-section";
   const actionHeading = document.createElement("h3");
-  actionHeading.textContent = "해야 할 일 · 일정 · 후속조치";
+  actionHeading.textContent = "해야 할 일 · 일정 · 후속조치 · 결정사항";
   actionSection.append(actionHeading);
   result.actions.forEach((action) => actionSection.append(renderAction(result, action)));
   card.append(actionSection);
@@ -308,7 +363,7 @@ function renderCurrentReview() {
   const save = createButton("검수 완료 · 모의 저장", "mock-primary", () => saveCurrent(result));
   foot.append(skip, save);
   card.append(foot);
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  scrollReviewTop(card);
 }
 
 function saveCurrent(result) {
@@ -322,15 +377,22 @@ function saveCurrent(result) {
   const title = document.createElement("strong");
   title.textContent = "✅ 실제 DB에는 저장하지 않았습니다.";
   const detail = document.createElement("p");
-  detail.textContent = `할 일 ${stats.tasks}건 · 일정 ${stats.schedules}건(확정 ${stats.confirmedSchedules}건) · 후속조치 ${stats.followUps}건 · 결정사항 ${stats.decisions}건`;
+  detail.textContent = `할 일 ${stats.tasks}건 · 일정 후보 ${stats.schedules}건(확정 ${stats.confirmedSchedules}건) · 후속조치 ${stats.followUps}건 · 결정사항 ${stats.decisions}건`;
   success.append(title, detail);
+  if (stats.schedules > stats.confirmedSchedules) {
+    const warning = document.createElement("p");
+    warning.className = "mock-save-warning";
+    warning.textContent = `미확정 일정 ${stats.schedules - stats.confirmedSchedules}건은 실제 일정 저장 대상이 아닙니다.`;
+    success.append(warning);
+  }
   card.append(success);
 
   const nextLabel = currentIndex + 1 < analyses.length ? "다음 통화 검수" : "전체 완료 보기";
-  card.append(createButton(nextLabel, "mock-primary", () => {
+  card.append(createButton(nextLabel, "mock-primary mock-next", () => {
     currentIndex += 1;
     renderCurrentReview();
   }));
+  scrollReviewTop(card);
 }
 
 function renderFinished() {
@@ -348,13 +410,17 @@ function renderFinished() {
   const text = document.createElement("p");
   text.textContent = "실제 서버·STT·AI·Supabase·Notion에는 아무것도 전송하거나 저장하지 않았습니다.";
   done.append(strong, text);
-  card.append(done, createButton("통화 목록으로 돌아가기", "mock-primary", closeReview));
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  card.append(done, createButton("통화 목록으로 돌아가기", "mock-primary mock-next", closeReview));
+  scrollReviewTop(card);
 }
 
 window.addEventListener("worklog:call-selection-ready", (event) => {
   const items = Array.isArray(event.detail?.items) ? event.detail.items : [];
   selection = items.map(normalizeMockSelectionItem);
-  startButton = null;
+  if (!startButton?.isConnected) startButton = null;
   ensureStartButton();
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && reviewCard?.isConnected) closeReview();
 });
