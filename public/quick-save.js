@@ -20,8 +20,6 @@
   const baseClearClick = clear.onclick;
   if (typeof baseMicClick !== "function" || typeof baseSaveClick !== "function") return;
 
-  // Galaxy/Chrome may return progressively expanded recognition fragments.
-  // Treat a direct character prefix as replacement, not as a new sentence.
   if (typeof window.mergeWithOverlap === "function") {
     const previousMerge = window.mergeWithOverlap;
     window.mergeWithOverlap = (base, addition) => {
@@ -191,8 +189,9 @@
 
       const transcript = normalize(text.value);
       const items = splitWorkItems(transcript);
+      const hasScan = Boolean(window.WorklogScanner?.hasPending?.());
 
-      if (items.length <= 1 || hasManualExtras()) {
+      if (hasScan || items.length <= 1 || hasManualExtras()) {
         await baseSaveClick.call(save);
       } else {
         save.disabled = true;
@@ -202,9 +201,11 @@
       }
 
       if (result.classList.contains("success")) {
-        hint.textContent = items.length > 1
-          ? `${items.length}개 업무로 나눠 저장했습니다. 말하기를 누르면 새 기록을 시작합니다.`
-          : "저장 완료. 말하기를 누르면 새 기록을 시작합니다.";
+        hint.textContent = hasScan
+          ? "스캔 문서와 함께 저장했습니다. 말하기를 누르면 새 기록을 시작합니다."
+          : items.length > 1
+            ? `${items.length}개 업무로 나눠 저장했습니다. 말하기를 누르면 새 기록을 시작합니다.`
+            : "저장 완료. 말하기를 누르면 새 기록을 시작합니다.";
         try { navigator.vibrate?.([220, 100, 220]); } catch {}
       }
     } catch (error) {
