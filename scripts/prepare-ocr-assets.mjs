@@ -1,4 +1,4 @@
-import {mkdir,rm,copyFile,access} from "node:fs/promises";
+import {mkdir,rm,copyFile,access,readdir} from "node:fs/promises";
 import path from "node:path";
 
 const root=process.cwd();
@@ -27,16 +27,17 @@ await copyRequired(
   path.join(tessOut,"worker.min.js")
 );
 
-for(const file of [
-  "tesseract-core.wasm.js",
-  "tesseract-core-simd.wasm.js",
-  "tesseract-core-lstm.wasm.js",
-  "tesseract-core-simd-lstm.wasm.js"
-]){
-  await copyRequired(
-    path.join(root,"node_modules","tesseract.js-core",file),
-    path.join(coreOut,file)
-  );
+// Tesseract.js selects the best core at runtime (SIMD / relaxed SIMD / LSTM).
+// Each *.wasm.js loader also fetches a sibling *.wasm binary, so both must be deployed.
+const coreSource=path.join(root,"node_modules","tesseract.js-core");
+const coreFiles=(await readdir(coreSource)).filter(file=>
+  /^tesseract-core.*\.wasm(?:\.js)?$/.test(file)
+);
+if(!coreFiles.some(file=>file.endsWith(".wasm.js")) || !coreFiles.some(file=>file.endsWith(".wasm"))){
+  throw new Error("Tesseract core runtime files are incomplete");
+}
+for(const file of coreFiles){
+  await copyRequired(path.join(coreSource,file),path.join(coreOut,file));
 }
 
 await copyRequired(
@@ -48,4 +49,4 @@ await copyRequired(
   path.join(langOut,"eng.traineddata.gz")
 );
 
-console.log("Prepared self-hosted OCR assets in public/vendor");
+console.log(`Prepared self-hosted OCR assets (${coreFiles.length} core files) in public/vendor`);
