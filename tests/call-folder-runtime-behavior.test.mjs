@@ -6,6 +6,10 @@ import {
   readFolderFiles,
   scanFolderEntries,
 } from "../public/call-folder-runtime.mjs";
+import {
+  dateInputRange,
+  recentCalendarRange,
+} from "../public/call-folder-utils.mjs";
 
 function pad(value, size = 2) {
   return String(value).padStart(size, "0");
@@ -37,45 +41,69 @@ function directoryHandle(entries) {
   };
 }
 
-test("폴더 스캔은 getFile을 호출하지 않고 최신 파일명만 선별한다", async () => {
+test("폴더 스캔은 getFile을 호출하지 않고 최근 3일 파일명만 선별한다", async () => {
   let openCount = 0;
-  const entries = [];
-  const base = new Date(2026, 8, 10, 9, 0, 0);
-  for (let index = 0; index < 160; index += 1) {
-    const date = new Date(base.getTime() + index * 60_000);
-    entries.push(fileHandle(recordingName(date), { onOpen: () => { openCount += 1; } }));
-  }
-  entries.push({ kind: "file", name: "memo.txt", async getFile() { throw new Error("should not open"); } });
-  entries.push({ kind: "directory", name: "nested" });
+  const now = new Date(2026, 8, 13, 15, 0, 0);
+  const range = recentCalendarRange(3, now);
+  const entries = [
+    fileHandle(recordingName(new Date(2026, 8, 13, 10, 0, 0)), { onOpen: () => { openCount += 1; } }),
+    fileHandle(recordingName(new Date(2026, 8, 12, 10, 0, 0)), { onOpen: () => { openCount += 1; } }),
+    fileHandle(recordingName(new Date(2026, 8, 11, 10, 0, 0)), { onOpen: () => { openCount += 1; } }),
+    fileHandle(recordingName(new Date(2026, 8, 10, 10, 0, 0)), { onOpen: () => { openCount += 1; } }),
+    { kind: "file", name: "memo.txt", async getFile() { throw new Error("should not open"); } },
+    { kind: "directory", name: "nested" },
+  ];
 
-  const result = await scanFolderEntries(directoryHandle(entries), { maxFiles: 150, scanTimeoutMs: 1000 });
+  const result = await scanFolderEntries(directoryHandle(entries), {
+    startMs: range.startMs,
+    endMs: range.endMs,
+    scanTimeoutMs: 1000,
+    fallbackDate: now,
+  });
 
   assert.equal(openCount, 0);
-  assert.equal(result.scannedCount, 162);
-  assert.equal(result.totalAudioCount, 160);
-  assert.equal(result.ranked.length, 150);
-  assert.equal(result.newestName, recordingName(new Date(base.getTime() + 159 * 60_000)));
+  assert.equal(result.scannedCount, 6);
+  assert.equal(result.totalAudioCount, 4);
+  assert.equal(result.matchedCount, 3);
+  assert.equal(result.ranked.length, 3);
+  assert.equal(result.newestName, recordingName(new Date(2026, 8, 13, 10, 0, 0)));
 });
 
-test("전체 폴더 흐름은 최신 파일만 열고 인덱싱 콜백 뒤에 파일을 연다", async () => {
+test("전체 폴더 흐름은 선택 기간 파일만 열고 인덱싱 콜백 뒤에 파일을 연다", async () => {
   const events = [];
-  const base = new Date(2026, 8, 12, 12, 0, 0);
-  const entries = Array.from({ length: 5 }, (_, index) => {
-    const name = recordingName(new Date(base.getTime() + index * 60_000));
-    return fileHandle(name, { onOpen: () => events.push(`open:${name}`) });
-  });
+  const entries = [
+    fileHandle("기간밖_01012345678_20260831120000.m4a", { onOpen: (name) => events.push(`open:${name}`) }),
+    fileHandle("기간안1_01012345678_20260901120000.m4a", { onOpen: (name) => events.push(`open:${name}`) }),
+    fileHandle("기간안2_01012345678_20260905120000.m4a", { onOpen: (name) => events.push(`open:${name}`) }),
+    fileHandle("기간밖2_01012345678_20260906120000.m4a", { onOpen: (name) => events.push(`open:${name}`) }),
+  ];
+  const range = dateInputRange("2026-09-01", "2026-09-05");
 
   const result = await readFolderFiles(
     directoryHandle(entries),
-    (scan) => events.push(`indexed:${scan.totalAudioCount}`),
-    { maxFiles: 3, scanTimeoutMs: 1000, fileOpenTimeoutMs: 100, totalTimeoutMs: 1000, concurrency: 2 },
+    (scan) => events.push(`indexed:${scan.matchedCount}`),
+    {
+      startMs: range.startMs,
+      endMs: range.endMs,
+      scanTimeoutMs: 1000,
+      fileOpenTimeoutMs: 100,
+      totalTimeoutMs: 1000,
+      concurrency: 2,
+      fallbackDate: new Date(2026, 8, 13),
+    },
   );
 
-  assert.equal(events[0], "indexed:5");
-  assert.equal(result.totalAudioCount, 5);
-  assert.equal(result.files.length, 3);
+  assert.equal(events[0], "indexed:2");
+  assert.equal(result.totalAudioCount, 4);
+  assert.equal(result.matchedCount, 2);
+  assert.equal(result.files.length, 2);
   assert.equal(result.failedCount, 0);
-  assert.deepEqual(result.files.map((file) => file.name), result.ranked.map((item) => item.name));
+  assert.deepEqual(result.files.map((file) => file.name), [
+    "기간안2_01012345678_20260905120000.m4a",
+    "기간안1_01012345678_20260901120000.m4a",
+  ]);
+  assert.equal(events.some((event) => event.includes("20260831")), false);
+  assert.equal(events.some((event) => event.includes("20260906")), false);
 });
 
 test("일부 파일 열기 실패가 있어도 나머지 녹음은 반환한다", async () => {
