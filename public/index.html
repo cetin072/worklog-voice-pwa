@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/settings.css">
   <link rel="stylesheet" href="/mock-call-review.css">
   <link rel="stylesheet" href="/usage-dashboard.css">
+  <link rel="stylesheet" href="/home-folds.css">
 </head>
 <body>
   <main class="app">
@@ -132,13 +133,9 @@
       <details class="briefing-more">
         <summary>오늘 일정 · 다가오는 일정</summary>
         <p class="label">오늘 확정 일정</p>
-        <ul id="briefingToday" class="briefing-list">
-          <li class="briefing-empty">확인 중입니다.</li>
-        </ul>
+        <ul id="briefingToday" class="briefing-list"><li class="briefing-empty">확인 중입니다.</li></ul>
         <p class="label">14일 안의 일정</p>
-        <ul id="briefingUpcoming" class="briefing-list">
-          <li class="briefing-empty">확인 중입니다.</li>
-        </ul>
+        <ul id="briefingUpcoming" class="briefing-list"><li class="briefing-empty">확인 중입니다.</li></ul>
       </details>
       <p id="briefingError" class="briefing-error"></p>
       <div id="kakaoDelivery" class="kakao-delivery">
@@ -151,51 +148,15 @@
       <label class="label" for="text">업무 내용</label>
       <textarea id="text" rows="5" placeholder="말하거나 직접 입력하세요. 예: 계좌 개설 서류 확인해야 함."></textarea>
       <button id="typedSave" class="save typed-save" type="button">Notion에 저장</button>
-
       <div class="grid">
-        <label><span>기관</span>
-          <select id="institution">
-            <option value="태장">태장</option>
-            <option value="미래여성가족진흥원">미래여성가족진흥원</option>
-            <option value="기타" selected>기타</option>
-          </select>
-        </label>
-
-        <label><span>상태</span>
-          <select id="status">
-            <option value="완료">완료</option>
-            <option value="진행중" selected>진행중</option>
-            <option value="대기">대기</option>
-            <option value="확인필요">확인필요</option>
-          </select>
-        </label>
-
-        <label><span>유형</span>
-          <select id="type">
-            <option value="완료업무">완료업무</option>
-            <option value="할 일">할 일</option>
-            <option value="회의·통화">회의·통화</option>
-            <option value="지출·세무">지출·세무</option>
-            <option value="지시·위임">지시·위임</option>
-            <option value="아이디어">아이디어</option>
-            <option value="문제·확인">문제·확인</option>
-            <option value="기타" selected>기타</option>
-          </select>
-        </label>
+        <label><span>기관</span><select id="institution"><option value="태장">태장</option><option value="미래여성가족진흥원">미래여성가족진흥원</option><option value="기타" selected>기타</option></select></label>
+        <label><span>상태</span><select id="status"><option value="완료">완료</option><option value="진행중" selected>진행중</option><option value="대기">대기</option><option value="확인필요">확인필요</option></select></label>
+        <label><span>유형</span><select id="type"><option value="완료업무">완료업무</option><option value="할 일">할 일</option><option value="회의·통화">회의·통화</option><option value="지출·세무">지출·세무</option><option value="지시·위임">지시·위임</option><option value="아이디어">아이디어</option><option value="문제·확인">문제·확인</option><option value="기타" selected>기타</option></select></label>
       </div>
-
-      <details>
-        <summary>추가 정보</summary>
-        <div class="detailsGrid">
-          <label><span>금액</span><input id="amount" type="number" inputmode="numeric" min="0"></label>
-          <label><span>담당자</span><input id="assignee" type="text"></label>
-          <label><span>기한</span><input id="dueDate" type="date"></label>
-          <label class="wide"><span>후속조치</span><input id="followUp" type="text"></label>
-        </div>
-      </details>
+      <details><summary>추가 정보</summary><div class="detailsGrid"><label><span>금액</span><input id="amount" type="number" inputmode="numeric" min="0"></label><label><span>담당자</span><input id="assignee" type="text"></label><label><span>기한</span><input id="dueDate" type="date"></label><label class="wide"><span>후속조치</span><input id="followUp" type="text"></label></div></details>
     </section>
 
-    <footer>v1.10.0 · 사용량 원가 대시보드 · 통화 모의 검수 · 유료 API 잠금</footer>
+    <footer>v1.11.0 · 메인 접기 · 통화폴더 바로가기 · 사용량 원가 대시보드 · 유료 API 잠금</footer>
   </main>
 
   <script src="/auth.js?v=20260912-2" defer></script>
@@ -207,7 +168,9 @@
   <script src="/manual-input.js" defer></script>
   <script type="module" src="/settings.mjs"></script>
   <script type="module" src="/usage-dashboard.mjs"></script>
+  <script type="module" src="/home-folds.mjs"></script>
   <script type="module" src="/call-inbox.mjs"></script>
+  <script type="module" src="/call-folder-shortcut.mjs"></script>
   <script type="module" src="/call-analysis-preview.mjs"></script>
   <script type="module" src="/mock-call-review.mjs"></script>
   <script type="module" src="/mock-call-review-bridge.mjs"></script>
