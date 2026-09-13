@@ -46,8 +46,8 @@ test("snake_case 저장 경계도 canonical 필드로 읽는다", () => {
   assert.equal(result.objectPath, "w/tmp/doc.pdf");
 });
 
-test("URL/absolute/traversal object path를 차단한다", () => {
-  for (const value of ["https://example.com/a", "/tmp/a", "a/../b", ""]) {
+test("URL/absolute/traversal/Windows식 object path를 차단한다", () => {
+  for (const value of ["https://example.com/a", "/tmp/a", "a/../b", "a\\..\\b", "a//b", ""]) {
     assert.throws(() => normalizeStorageObjectPath(value), (e) => e?.code === "STORAGE_INVALID_OBJECT_PATH");
   }
 });
@@ -74,8 +74,8 @@ test("잘못된 시각과 만료 순서를 차단한다", () => {
   );
 });
 
-test("0 이하/비수치 size를 차단한다", () => {
-  for (const sizeBytes of [0, -1, "bad"]) {
+test("sizeBytes는 0보다 큰 안전한 정수만 허용한다", () => {
+  for (const sizeBytes of [0, -1, "bad", 0.4, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(
       () => normalizePreparedStorageObject({ ...prepared, sizeBytes }),
       (e) => e?.code === "STORAGE_INVALID_SIZE",
