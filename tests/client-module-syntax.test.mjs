@@ -16,6 +16,7 @@ const targets = [
   "../public/mock-call-review-bridge.mjs",
   "../public/home-folds.mjs",
   "../public/settings.mjs",
+  "../public/settings-ux.mjs",
 ];
 
 test("Preview 핵심 클라이언트 모듈은 JavaScript 문법검사를 통과한다", () => {
