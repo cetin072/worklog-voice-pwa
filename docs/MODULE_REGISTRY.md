@@ -2,9 +2,11 @@
 
 ## 문서 상태
 
-- 상태: **초안 / 종합기획 검토 필요**
+- 상태: **초안 / 우선순위 1차 확정 / 최종 검수 중**
 - 기준일: 2026-09-13
 - 상위 기준: `PROJECT_CHARTER.md`, `docs/MODULE_ARCHITECTURE_V1.md`, `docs/PLATFORM_FOUNDATION_V1.md`
+- 기준 Issue: #91
+- 기준 PR: #92
 - 목적: 업무수첩의 각 모듈이 무엇을 소유하고, 현재 어디까지 구현됐으며, 어떤 공통 계약·Platform Service·Adapter에 의존하는지 한눈에 관리한다.
 
 이 문서는 기능 요구사항 전체를 적는 백로그가 아니다. 모듈 경계와 현재 제품 상태를 관리하는 Registry다. 상세 구현은 각 Issue/PR에서 관리한다.
@@ -26,53 +28,50 @@
 
 | 모듈 | 현재 상태 | 독립 핵심 Result | 공통 Candidate | 주요 Platform Service | 외부 Adapter / Processor | 현재 우선순위 |
 |---|---|---|---|---|---|---|
-| 빠른 업무기록 | MAIN / 실사용 | 기존 업무기록 결과, 내부 Result 계약은 정식 명명 필요 | Task / Schedule / FollowUp 일부 연결 | Auth/Permission 현행, 향후 Workspace Context / Sync | Notion Worklog Adapter, Web Speech | **P0** |
-| 일정 | PARTIAL / 독립 모듈 미완성 | `Schedule` / 일정 화면 계약 정식화 필요 | `ScheduleCandidate` | Workspace Context / Sync / Conflict / Audit | Google Calendar Adapter(향후) | **P0 — 놓치지 않는 일정이 제품 최우선 가치** |
-| 통화정리 | DRAFT / 개발 고도화 중 | `CallReport` | Task / Schedule / Contact / FollowUp | Storage / Processing Job / Retry·Idempotency / Usage·Cost / Retention | STT Adapter / AI Adapter / 향후 CRM·Calendar | **P0** |
-| 문서 스캔/PDF | DRAFT / 개발 중 | `ScanDocument` | 기본 없음, OCR/AI 확장 시 기존 Candidate 연결 | Local Storage / Storage Adapter(선택) / Export | 기기 카메라·갤러리 / OCR은 선택 Processor | **P0~P1** |
-| 브리핑 | MAIN / 실사용 | 읽기/View 결과, 정식 Result 계약은 추후 | Confirmed 업무/일정 조회 중심 | Workspace Context(향후) / Sync read / Audit 일부 | 현재 Notion / Kakao Delivery | **P1** |
+| 빠른 업무기록 | MAIN / 실사용 | 기존 업무기록 결과, 내부 Result 계약은 정식 명명 필요 | Task / Schedule / FollowUp 일부 연결 | Auth/Permission 현행, 향후 Workspace Context / Sync | Notion Worklog Adapter, Web Speech | **P0 · 기존 핵심 보호** |
+| 일정 | PARTIAL / 독립 모듈 미완성 | `Schedule` | `ScheduleCandidate` | Workspace Context / Sync / Conflict / Audit | Google Calendar Adapter(향후) | **P0 · 신규 공통 연결의 중심** |
+| 통화정리 | DRAFT / 개발 고도화 중 | `CallReport` | Task / Schedule / Contact / FollowUp | Storage / Processing Job / Retry·Idempotency / Usage·Cost / Retention | STT / AI / 향후 CRM·Calendar | **P0 · 일정 계약 이후 재정리** |
+| 문서 스캔/PDF | DRAFT / 개발 중 | `ScanDocument` | 기본 없음, OCR/AI 확장 시 기존 Candidate 연결 | Local Storage / Storage Adapter(선택) / Export | 기기 카메라·갤러리 / OCR 선택 | **P0~P1 · 병렬 마무리 가능** |
+| 브리핑 | MAIN / 실사용 | 읽기/View 결과 | Confirmed 업무/일정 조회 중심 | Workspace Context(향후) / Sync read / Audit 일부 | 현재 Notion / Kakao Delivery | **P1 · 기존 핵심 보호** |
 | 회의정리 | PLANNED | `MeetingReport` | Task / Schedule / Contact / FollowUp | Storage / Processing Job / Usage·Cost / Retention | STT / AI | **P1** |
+| 캡처 분석 | PLANNED | `CaptureAnalysis` | Task / Schedule / Contact / FollowUp | Local Storage / Processing Job(필요 시) / Usage·Cost | OCR / AI | **P1 · 일정 유입경로로 중요** |
 | 메일 업무화 | PLANNED | `MailAnalysis` | Task / Schedule / Contact / FollowUp | Auth/Permission / Processing Job(필요 시) | Gmail/메일 Connector / AI | **P1~P2** |
-| 캡처 분석 | PLANNED | `CaptureAnalysis` | Task / Schedule / Contact / FollowUp | Local Storage / Processing Job(필요 시) / Usage·Cost | OCR / AI | **P1 — 일정 유입 경로로 중요** |
-| CRM | PLANNED | `Contact`/`Customer` 영역 Result 정식화 필요 | `ContactCandidate`, FollowUp 연결 | Workspace Context / Permission / Sync / Conflict / Audit | 외부 CRM은 향후 Adapter | **P1~P2** |
-| 업무 문서 | PLANNED | `WorkDocument` 후보, 정식 계약 필요 | 기본 없음 | Workspace Context / Storage / Export | PDF/문서 Export, 외부 문서도구는 향후 Adapter | **P2** |
+| CRM | PLANNED | `Contact`/`Customer` 영역 Result 정식화 필요 | Contact / FollowUp | Workspace Context / Permission / Sync / Conflict / Audit | 외부 CRM은 향후 Adapter | **P1~P2** |
+| 업무 문서 | PLANNED | `WorkDocument` 후보 | 기본 없음 | Workspace Context / Storage / Export | 문서/PDF Export / 향후 외부 문서 Adapter | **P2** |
 
-우선순위는 구현 순서를 절대 고정하는 값이 아니라 현재 제품가치와 플랫폼 의존성을 나타낸다.
+우선순위는 모든 기능을 순차 개발한다는 뜻이 아니다. 제품가치와 공통 의존성을 기준으로 `중심 계약`, `병렬 가능`, `후속 확장`을 구분한다.
 
 ---
 
-# 3. 모듈별 기준
+# 3. 빠른 업무기록
 
-## A. 빠른 업무기록
-
-### 사용자 가치
+## 사용자 가치
 말하거나 직접 입력한 업무를 최대한 빠르게 잃지 않고 기록한다.
 
-### 현재 상태
+## 현재 상태
 **MAIN / 실사용.** 현재 제품의 가장 성숙한 핵심 흐름이다.
 
-현재 main에는 음성/직접입력, 여러 업무 분리, 날짜·시간 구조화, Notion 저장, 실패 시 입력 보존 등이 이미 존재한다. 현재 운영 업무기록의 실제 원장은 Notion `🎙 업무 통합 기록`이다.
+현재 main에는 음성/직접입력, 여러 업무 분리, 날짜·시간 구조화, Notion 저장, 실패 시 입력 보존 등이 존재한다. 현재 운영 업무기록의 실제 원장은 Notion `🎙 업무 통합 기록`이다.
 
-### 독립 완료선
-`말하기/직접입력 → 내용 확인 → 빠른 저장 → 즉시 수정 가능 → 실패 시 원문 보존`
+## 독립 완료선
+`말하기/직접입력 → 빠른 기록 → 즉시 수정 가능 → 실패 시 원문 보존`
 
-### Platform Foundation 대조
+## Platform Foundation 대조
 - 오타·음성인식 오류가 있어도 의미가 전달되면 기록을 막지 않는다.
-- 직접 명시한 일정/업무는 낮은 위험이면 빠르게 저장 가능하다.
-- 현재 Notion 종속 부분은 정상 작동을 깨지 않는 범위에서 점진적으로 Worklog Adapter 뒤로 이동한다.
-- Workspace 도입 시 기존 개인 사용 흐름을 복잡하게 만들지 않는다.
+- 직접 명시한 일정/업무는 낮은 위험이면 빠르게 저장할 수 있다.
+- Notion 종속 부분은 정상 작동을 깨지 않는 범위에서 점진적으로 Adapter 뒤로 이동한다.
+- Workspace 도입 시 현재 개인 사용 흐름을 복잡하게 만들지 않는다.
 
-### 주의
-정상 작동 중인 현재 음성 기록을 Platform Foundation 도입만을 이유로 전면 재작성하지 않는다.
+정상 작동 중인 음성 기록을 Platform Foundation 도입만을 이유로 전면 재작성하지 않는다.
 
 ---
 
-## B. 일정
+# 4. 일정
 
-### 사용자 가치
-**일정을 놓치지 않는 것이 제품의 최우선 가치 중 하나다.**
+## 사용자 가치
+**일정을 놓치지 않는 것이 제품의 최우선 가치다.**
 
-일정 유입 경로는 장기적으로 다음을 포함한다.
+장기 일정 유입 경로:
 - 사용자가 직접 말함
 - 직접 입력
 - 통화에서 추출
@@ -80,60 +79,67 @@
 - 메일에서 추출
 - 카카오톡/문자 캡처에서 추출
 
-### 현재 상태
-**PARTIAL.** main에는 음성 입력의 날짜·시간을 구조화해 Notion 기한으로 저장하는 기능과 브리핑에서 일정성 정보를 보여주는 흐름이 있다. 그러나 업무수첩 자체의 독립 일정 모듈/일정 저장소/일정 화면은 아직 완성되지 않았다.
+## 현재 상태
+**PARTIAL.** main에는 음성 입력의 날짜·시간 구조화와 브리핑의 일정성 정보 표시가 있다. 그러나 업무수첩 자체의 독립 일정 저장소·화면·계약은 아직 완성되지 않았다.
 
-### 목표 핵심 흐름
-`직접 일정 입력 또는 ScheduleCandidate → 확인/수정 → 업무수첩 일정 저장 → 알림/브리핑 → 선택적 Google Calendar 전송`
+## 목표 핵심 흐름
+`직접 일정 입력 또는 ScheduleCandidate → 확인/수정 → 업무수첩 Schedule 저장 → 브리핑/알림 → 선택적 Google Calendar 전송`
 
-### 공통 계약
+## 공통 계약
 - `ScheduleCandidate`: AI/문맥 추출 제안
 - `Schedule`: 사용자 명시 입력 또는 Confirmed 일정
 - `SourceRef`: 통화/회의/메일/캡처 등 출처
 
-### 중요한 UX
-- 사용자가 `내일 3시 김대리 전화 일정 잡아줘`처럼 직접 명시한 경우 불필요한 재확인을 최소화한다.
-- 통화/회의/메일에서 추론한 일정은 기본 Candidate로 보여준다.
-- 수정 버튼은 결과 가까이에 둔다.
+## UX 기준
+- 사용자가 `내일 3시 김대리 전화 일정 잡아줘`처럼 직접 명시하면 불필요한 재확인을 최소화한다.
+- 통화/회의/메일/캡처에서 추론한 일정은 기본 Candidate다.
+- 수정 기능은 결과 가까이에 둔다.
+- 사소한 오타 때문에 일정 기록 자체를 막지 않는다.
 
-### 아직 결정/구현 필요한 것
-- 업무수첩 내부 일정의 정식 Result/DB 계약
-- 알림 방식
-- 반복 일정
-- Google Calendar 단방향 Adapter 1차 범위
-- Timezone/충돌 정책의 일정 도메인 적용
+## 1차 설계 범위
+다른 모듈보다 먼저 일정 앱 전체를 완성하는 것이 목적이 아니다. 다음 **중심 뼈대**를 먼저 확정한다.
+
+1. `Schedule` 최소 내부 계약
+2. `ScheduleCandidate → Schedule` 확정 경계
+3. `SourceRef`
+4. 빠른 수정/삭제 UX
+5. Workspace 소유권
+6. revision/sync_state 최소 필드
+7. 향후 Calendar Adapter가 붙을 외부 ID 경계
+
+알림 고도화, 반복 일정 전체, 복잡한 양방향 Calendar Sync는 이후 단계다.
 
 ---
 
-## C. 통화정리
+# 5. 통화정리
 
-### 사용자 가치
-휴대폰에 이미 저장된 통화녹음을 선택해 중요한 통화만 정리하고, 녹취·보고서·업무·일정·후속조치 후보를 만든다.
+## 사용자 가치
+휴대폰에 저장된 통화녹음을 선택해 중요한 통화만 정리하고, 녹취·보고서·업무·일정·후속조치 후보를 만든다.
 
-### 현재 상태
+## 현재 상태
 **DRAFT / 고도화 중. main 미반영.**
 
-주요 개발 흐름:
+주요 흐름:
 - Issue #58 / PR #59: 통화녹음 선택·분류
 - Issue #74 / PR #75: Android 직접 파일선택 UX
 - Issue #78 / PR #79: 모의 분석 검수 UX V2
-- Issue #80 / PR #81: CallReport V1 + STT 연결 직전 준비
+- Issue #80 / PR #81: `CallReport` V1 + STT 연결 직전 준비
 - 관련 기반 PR #62/#64/#66/#68/#70/#72 등
 
-PR #81 기준으로 실제 STT/AI 공급자 호출, 실제 Object Storage, 실제 중앙 Usage DB, API Key, 유료 처리 승인은 아직 의도적으로 연결하지 않았다.
+PR #81 기준 실제 STT/AI 공급자 호출, 실제 업무수첩 Object Storage, 중앙 Usage DB, API Key, 유료 처리 승인은 의도적으로 미연결이다.
 
-### 독립 완료선
+## 독립 완료선
 `통화녹음 선택 → STT → 전체 녹취 → CallReport → 사용자 검수/수정 → 로컬 결과 보존/공유`
 
 업무/일정/CRM 연결 실패가 `CallReport`를 파괴하면 안 된다.
 
-### Result / Candidate
+## Result / Candidate
 - Result: `CallReport`
 - Candidate: `TaskCandidate`, `ScheduleCandidate`, `ContactCandidate`, `FollowUpCandidate`
 - 출처: Call `SourceRef`
 
-### 공통 플랫폼으로 승격 검토할 기존 통화 코드
-통화 stacked PR에 이미 만들어진 다음 기반은 **통화 전용 표준으로 굳히지 않고 Platform Foundation과 대조한다.**
+## 공통 플랫폼으로 승격 검토할 기존 기반
+통화 stacked PR의 다음 기반은 통화 전용 표준으로 굳히지 않는다.
 - Processing Job
 - Retry / Idempotency
 - Usage / Cost Ledger
@@ -141,143 +147,127 @@ PR #81 기준으로 실제 STT/AI 공급자 호출, 실제 Object Storage, 실�
 - STT/AI Adapter Contract
 - Storage prepared-upload 경계
 
-공통 계약과 일치하는 부분은 별도 Platform Foundation 구현에서 재사용/이관하고, 통화 모듈은 소비자 역할로 정리하는 것이 목표다.
+Platform Foundation 최소 기반과 일정 계약을 먼저 확정한 뒤, 공통 계약과 일치하는 부분만 integration checkpoint에서 재사용/이관한다.
 
-### 현재 위험
-깊은 stacked PR 구조가 존재한다. 개별 브랜치를 그대로 순서대로 main에 병합하기보다 Platform Foundation 확정 후 integration checkpoint를 잡아 stack을 얕게 재정리할 필요가 있다.
+## 현재 위험
+깊은 stacked PR 구조가 있다. 개별 브랜치를 오래된 순서대로 모두 main에 병합하지 않고, 공통 플랫폼 기준으로 stack을 얕게 재정리한다.
 
 ---
 
-## D. 문서 스캔 / PDF
+# 6. 문서 스캔 / PDF
 
-### 사용자 가치
+## 사용자 가치
 카메라로 새로 촬영하거나 **이미 갤러리에 찍어둔 문서 사진을 빠르게 가져와 스캔**하고 여러 장 PDF로 저장/공유한다.
 
-### 현재 상태
+## 현재 상태
 **DRAFT / main 미반영.**
 
 - Issue #49 / PR #60: 1장 스캔 + Notion 첨부 V1
 - Issue #82 / PR #83: 갤러리 우선 + 여러 장 + PDF 저장/공유
 - PR #84: Preview QA 전용
 
-### 독립 완료선
+## 독립 완료선
 `갤러리 선택 또는 카메라 촬영 → 모서리/보정 → 페이지 관리 → PDF → 로컬 저장/공유`
 
 OCR과 Notion은 필수 성공조건이 아니다.
 
-### Result / Candidate
+## Result / Candidate
 - Result: `ScanDocument`
 - 기본 Candidate 없음
-- 향후 OCR/AI 문서분석이 붙으면 별도 Candidate를 무리하게 만들기보다 기존 Task/Schedule Candidate로 연결한다.
+- 향후 OCR/AI 분석은 기존 Task/Schedule Candidate에 선택적으로 연결
 
-### 플랫폼 의존성
-가능한 처리는 브라우저/기기 로컬에서 수행한다. Cloud Storage는 백업/동기화 또는 서버 Processor가 필요한 경우에만 선택적으로 사용한다.
-
-### 현재 우선 검수
-갤러리 우선 UX가 실제 삼성 Android에서 편한지, 다중 페이지 순서/수정/PDF 공유가 안정적인지 확인한다.
+## 개발 위치
+스캔/PDF는 공통 플랫폼 의존성이 상대적으로 낮다. 따라서 **Platform 최소 뼈대와 일정 중심 계약을 진행하는 동안 병렬로 독립 도구 완성 검수를 진행할 수 있다.**
 
 ---
 
-## E. 브리핑
+# 7. 브리핑
 
-### 사용자 가치
+## 사용자 가치
 오늘 놓치면 안 되는 업무, 지난 업무, 기다리는 일, 후속조치를 한 화면에서 확인한다.
 
-### 현재 상태
-**MAIN / 실사용.** 브리핑 2.0은 main에 반영돼 있고, 업무명 즉시 수정 등 후속 개선도 main에 반영됐다.
+## 현재 상태
+**MAIN / 실사용.** 브리핑 2.0과 업무명 즉시 수정 등 후속 개선도 main에 반영돼 있다.
 
-### 현재 데이터 관계
-현재는 Notion의 업무기록을 읽어 규칙 기반으로 분류하는 비중이 크다. Kakao 전달 기능도 별도 Delivery 경로로 존재한다.
-
-### 독립 역할
+## 역할
 브리핑은 새로운 업무 원장을 소유하는 모듈이 아니라 Confirmed 업무/일정/후속조치의 읽기 모델(View)에 가깝다.
 
-### Platform Foundation 대조
-장기적으로 Notion 직접 모델에 묶이지 않고 Worklog/Schedule 표준 계약을 읽도록 이동한다. 그러나 현재 정상 기능을 전면 재작성하지 않는다.
+현재는 Notion 데이터에 의존하지만 장기적으로 Worklog/Schedule 표준 계약을 읽도록 점진 이동한다. 현재 정상 기능을 전면 재작성하지 않는다.
 
 ---
 
-## F. 회의정리
+# 8. 회의정리
 
-### 현재 상태
+## 현재 상태
 **PLANNED.** 독립 구현 Issue/PR은 아직 없다.
 
-### 목표 흐름
+## 목표 흐름
 `회의 녹음 선택/녹음 → STT → MeetingReport → 수정/보존/공유 → Task/Schedule/Contact/FollowUp Candidate`
 
-### 재사용 원칙
-통화정리와 STT/Storage/Processing Job/Usage·Cost/Retention을 공유한다. `CallReport`와 `MeetingReport`의 도메인 내용은 별개로 유지한다.
+통화정리와 STT/Storage/Processing Job/Usage·Cost/Retention을 공유하되 `MeetingReport`와 `CallReport`의 도메인 내용은 분리한다.
 
 ---
 
-## G. 메일 업무화
+# 9. 캡처 분석
 
-### 현재 상태
+## 현재 상태
 **PLANNED.** 독립 구현 Issue/PR은 아직 없다.
 
-### 목표 흐름
-`메일 Connector → 필요한 메일 선택/조회 → MailAnalysis → 업무/일정/후속조치 Candidate`
+## 사용자 가치
+카카오톡/SMS 등의 화면 캡처에서 약속·날짜·할 일을 찾아 일정 누락을 줄인다.
 
-원본 이메일의 원장은 Gmail/메일 공급자이며 업무수첩은 `SourceRef`로 원본을 참조한다.
-
-### 초기 원칙
-- 읽기/분석 중심으로 시작
-- 최소 OAuth Scope
-- 자동 메일 발송은 별도 고위험 Delivery 기능으로 취급
-
----
-
-## H. 캡처 분석
-
-### 현재 상태
-**PLANNED.** 독립 구현 Issue/PR은 아직 없다.
-
-### 사용자 가치
-카카오톡/SMS 등 화면 캡처에서 약속·날짜·할 일을 찾아 일정 누락을 줄인다.
-
-### 목표 흐름
+## 목표 흐름
 `갤러리/공유로 캡처 입력 → OCR/기기 처리 → CaptureAnalysis → Schedule/Task/Contact/FollowUp Candidate`
 
-### 우선순위 메모
-사용자의 최우선 가치인 `일정을 놓치지 않기`와 직접 연결되므로, 일정 모듈의 기본 계약이 잡힌 뒤 비교적 높은 우선순위로 검토한다.
+일정 중심 계약이 잡힌 뒤 비교적 높은 우선순위로 검토한다.
 
 ---
 
-## I. CRM
+# 10. 메일 업무화
 
-### 현재 상태
-**PLANNED.** 통화 Draft에는 연락처 후보 개념이 있으나 독립 CRM 모듈은 아직 없다.
+## 현재 상태
+**PLANNED.** 독립 구현 Issue/PR은 아직 없다.
 
-### 역할
-- 고객/연락처의 Workspace 기준 데이터
-- 담당자 User는 별도
-- 통화/회의/메일에서 나온 `ContactCandidate`를 기존 고객과 연결하거나 신규 후보로 제안
+## 목표 흐름
+`메일 Connector → 필요한 메일 선택/조회 → MailAnalysis → Task/Schedule/Contact/FollowUp Candidate`
+
+원본 이메일의 원장은 Gmail/메일 공급자이며 업무수첩은 `SourceRef`로 참조한다.
+
+초기에는 읽기/분석 중심, 최소 OAuth Scope로 시작하며 자동 메일 발송은 별도 고위험 Delivery 기능으로 취급한다.
+
+---
+
+# 11. CRM
+
+## 현재 상태
+**PLANNED.** 통화 Draft에는 연락처 후보가 있으나 독립 CRM 모듈은 아직 없다.
+
+## 역할
+- 고객/연락처는 Workspace 기준 데이터
+- 담당 User는 별도
+- 통화/회의/메일의 `ContactCandidate`를 기존 고객과 연결하거나 신규 후보로 제안
 - FollowUp/일정/업무와 관계 연결
 
-### 주의
-AI가 이름이 비슷하다는 이유만으로 고객을 자동 병합하지 않는다. 고객 병합은 고위험 변경으로 사용자 확인을 요구한다.
+AI가 이름 유사성만으로 고객을 자동 병합하지 않는다. 고객 병합은 고위험 변경이다.
 
 ---
 
-## J. 업무 문서
+# 12. 업무 문서
 
-### 현재 상태
+## 현재 상태
 **PLANNED.** 독립 문서작성/템플릿 모듈은 아직 없다.
 
-### 사용자 가치
-업무기록·고객·회의·통화 등의 이미 확정된 정보를 활용해 보고서, 확인서, 제안서 등 반복 문서를 빠르게 만든다.
+## 사용자 가치
+업무기록·고객·회의·통화의 확정 정보를 활용해 보고서, 확인서, 제안서 등 반복 문서를 빠르게 만든다.
 
-### 목표 흐름
-`문서 유형 선택 → 필요한 내부 데이터 선택 → 문서 초안 생성/편집 → 로컬 저장/공유/Export`
+## 목표 흐름
+`문서 유형 선택 → 내부 데이터 선택 → 문서 초안 생성/편집 → 로컬 저장/공유/Export`
 
-### 경계
-- 스캔/PDF 모듈은 기존 종이/이미지를 디지털 문서로 만드는 도구다.
-- 업무 문서 모듈은 업무수첩의 구조화 데이터로 새 문서를 작성하는 도구다.
-- AI를 사용하더라도 사용자 검수 전 외부 발송/확정 문서로 자동 처리하지 않는다.
+스캔/PDF가 기존 종이·이미지를 디지털 문서로 만드는 도구라면, 업무 문서는 구조화 데이터를 이용해 새 문서를 작성하는 도구다.
 
 ---
 
-# 4. 공통 Platform Service와 모듈 소비 관계
+# 13. 공통 Platform Service와 소비 관계
 
 | Platform Service | 1차 소비 모듈 | 비고 |
 |---|---|---|
@@ -293,37 +283,63 @@ AI가 이름이 비슷하다는 이유만으로 고객을 자동 병합하지 �
 
 ---
 
-# 5. Adapter / Processor Registry
+# 14. Adapter / Processor Registry
 
 | 경계 | 현재/목표 상태 | 소비 모듈 |
 |---|---|---|
-| Worklog / Notion Adapter | 현재 Notion 운영 원장을 유지하되 도메인 직접종속 축소 | 업무기록, 브리핑, 선택적 각 모듈 |
+| Worklog / Notion Adapter | 현재 Notion 원장을 유지하되 도메인 직접종속 축소 | 업무기록, 브리핑, 선택적 각 모듈 |
 | Calendar Adapter | 아직 독립 구현 전. 초기 단방향 우선 | 일정 및 Candidate 생성 모듈 |
 | STT Adapter | 통화 Draft에 계약 존재, 실제 Provider 미연결 | 통화, 회의 |
 | AI Adapter | 통화 Draft에 계약 존재, 실제 Provider 미연결 | 통화, 회의, 메일, 캡처, 업무문서 |
 | Storage Adapter | 통화 Draft에 prepared-upload 계약 존재, 실제 업무수첩 Storage 미연결 | 통화, 회의, 선택적 OCR/문서 |
 | Kakao Delivery | 기존 브리핑 전달 경로 실사용 | 브리핑 |
 | Gmail/Mail Connector | 미구현 | 메일 업무화 |
-| CRM Adapter | 업무수첩 내부 CRM 이후 필요 시 외부 CRM 연결 | CRM |
+| CRM Adapter | 내부 CRM 이후 필요 시 외부 CRM 연결 | CRM |
 
 ---
 
-# 6. 현재 우선 실행 순서
+# 15. 확정된 현재 실행 순서
 
-Registry 기준으로 당장의 제품개발 축은 다음처럼 본다.
+2026-09-13 종합기획에서 다음 순서를 1차 실행 기준으로 확정한다.
 
-1. **Platform Foundation 문서 + Module Registry 최종 확정**
-2. **공통 플랫폼 최소 기반**: Workspace Context, Job, Retry/Idempotency, Usage/Cost, Storage/Adapter 경계
-3. **현재 Draft 통화 stack을 공통 플랫폼 기준에 맞춰 얕게 재정리**하고 실제 STT 연결 전 Gate 검수
-4. **스캔/PDF 독립 도구 완성**: 갤러리 우선, 다중 페이지, 저장/공유
-5. **일정 모듈의 업무수첩 내부 기준 확정**: Schedule/ScheduleCandidate와 빠른 수정 UX
-6. 일정 입력 경로 확장: 통화 → 회의/캡처/메일 순으로 Candidate 연결
+1. **Platform Foundation 최소 뼈대**
+   - Workspace Context
+   - Processing Job
+   - Retry / Idempotency
+   - Usage / Cost
+   - Storage / Adapter 최소 경계
+   - Auth/Sync/Retention/Audit은 최소 계약
+2. **일정 모듈의 중심 계약을 우선 확정**
+   - `Schedule`
+   - `ScheduleCandidate`
+   - `SourceRef`
+   - Candidate → Confirmed 경계
+   - 빠른 수정 UX
+   - Workspace/Sync 최소 필드
+3. **스캔/PDF는 병렬로 독립 도구 완성**
+   - 갤러리 우선
+   - 다중 페이지
+   - 로컬 저장/공유
+4. **통화 stack을 새 Platform + Schedule 계약 기준으로 재정리**
+   - 깊은 stack을 그대로 순차 병합하지 않음
+   - integration checkpoint에서 공통 기반과 통화 도메인을 분리
+5. **실제 STT 연결 Gate 검수 후 Provider 연결 여부 결정**
+6. **일정 유입 경로 확대**
+   - 통화
+   - 캡처
+   - 회의
+   - 메일
+7. CRM/업무문서는 핵심 개인 업무 흐름 안정 후 확장
 
-단, 이미 main에서 실사용 중인 빠른 업무기록과 브리핑의 안정성 회귀는 모든 단계에서 우선 보호한다.
+핵심 해석:
+
+> **일정 앱 전체를 먼저 완성하는 것이 아니라, 모든 모듈이 같은 방식으로 일정을 만들어낼 수 있도록 일정의 중심 뼈대를 먼저 만든다.**
+
+빠른 업무기록과 브리핑의 main 실사용 안정성은 모든 단계에서 회귀 보호한다.
 
 ---
 
-# 7. V1에서 하지 않는 것
+# 16. V1에서 하지 않는 것
 
 - 모든 PLANNED 모듈을 동시에 개발하지 않는다.
 - 기존 main 기능을 모듈화 명분으로 전면 재작성하지 않는다.
@@ -331,18 +347,20 @@ Registry 기준으로 당장의 제품개발 축은 다음처럼 본다.
 - 완전한 실시간 다기기 공동편집을 만들지 않는다.
 - 기업용 세분 권한/복잡한 Billing을 개인 V1보다 먼저 만들지 않는다.
 - 특정 Notion/STT/AI/Cloud Provider를 도메인 모델의 기준으로 삼지 않는다.
+- 일정 모듈 전체 완성을 기다리느라 독립적인 스캔/PDF 완성을 막지 않는다.
 
 ---
 
-# 8. 다음 검토 항목
+# 17. 최종 검수 포인트
 
-이 초안에서 종합기획으로 확인할 것은 다음이다.
+main 반영 전 다음을 확인한다.
 
-- 모듈 목록 자체에 빠진 독립 도구가 있는가
-- `일정`을 P0 독립 모듈로 두는 것이 맞는가
-- 통화와 스캔의 현재 우선순위가 맞는가
-- 브리핑을 독립 원장 모듈이 아니라 읽기/View 모듈로 보는 것이 맞는가
-- `업무기록`의 내부 Result 계약 이름을 별도로 확정할 필요가 있는가
-- Platform Foundation 최소 구현 후 통화 stack을 어떤 integration checkpoint로 재정리할 것인가
+- Charter의 제품 범위와 Registry 모듈 목록이 일치하는가
+- 각 DRAFT 상태가 main 기능처럼 표현되지 않았는가
+- 일정 중심 계약이 통화/회의/메일/캡처의 공통 연결점으로 일관적인가
+- 통화 stack의 공통 기반이 Platform Service와 충돌하지 않는가
+- 기존 업무기록/브리핑을 불필요하게 재작성하도록 요구하지 않는가
+- V1 범위가 과도한 범용화로 커지지 않았는가
+- Platform Foundation과 Registry 사이에 저장/소유권/동기화/외부 Adapter 원칙 충돌이 없는가
 
-사용자 검토·확정 전 이 문서를 main 기준으로 취급하지 않는다.
+이 문서는 최종 검수와 사용자 main 반영 승인 전까지 Draft 기준이다.
