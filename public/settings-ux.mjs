@@ -93,6 +93,56 @@ function buildFolderSection() {
   return section;
 }
 
+function buildSttReadinessSection() {
+  const section = document.createElement("section");
+  section.className = "settings-section settings-section-compact stt-readiness-section";
+  const title = document.createElement("h4");
+  title.textContent = "STT 연결 준비상태";
+  const summary = document.createElement("p");
+  summary.id = "settingsSttReadinessSummary";
+  summary.className = "settings-note stt-readiness-summary";
+  summary.textContent = "준비상태 확인 중…";
+  const list = document.createElement("ul");
+  list.id = "settingsSttReadinessList";
+  list.className = "stt-readiness-list";
+  const note = document.createElement("p");
+  note.className = "settings-note";
+  note.textContent = "모든 항목이 준비되어도 개발자 2인 합의 전에는 실제 유료 STT를 활성화하지 않습니다.";
+  section.append(title, summary, list, note);
+  return section;
+}
+
+function readinessLabel(item) {
+  return `${item.ready ? "✓" : "○"} ${item.label}`;
+}
+
+async function loadSttReadiness() {
+  const summary = document.getElementById("settingsSttReadinessSummary");
+  const list = document.getElementById("settingsSttReadinessList");
+  if (!summary || !list) return;
+  try {
+    const response = await fetch("/api/call-processing-status", { headers: { accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const readiness = data?.sttReadiness;
+    const checks = Array.isArray(readiness?.checks) ? readiness.checks : [];
+    if (!checks.length) throw new Error("readiness_missing");
+    list.replaceChildren();
+    checks.forEach((item) => {
+      const row = document.createElement("li");
+      row.className = item.ready ? "ready" : "pending";
+      row.textContent = readinessLabel(item);
+      list.append(row);
+    });
+    summary.textContent = readiness.readyForLiveStt
+      ? `준비 ${readiness.readyCount}/${readiness.totalCount} · 기술 준비 완료 · 승인 후 연결 가능`
+      : `준비 ${readiness.readyCount}/${readiness.totalCount} · 실제 STT 연결 잠금`;
+  } catch {
+    summary.textContent = "준비상태 조회 실패 · 실제 STT 연결은 계속 잠금";
+    list.replaceChildren();
+  }
+}
+
 function organizeSettings() {
   if (!card || !form || card.dataset.uxOrganized === "true") return;
 
@@ -109,7 +159,7 @@ function organizeSettings() {
   const display = createCategory("settingsCategoryDisplay", "화면", "메인 화면에서 자주 보이는 영역의 기본 표시 상태를 항목별로 정합니다.");
   const user = createCategory("settingsCategoryUser", "사용자", "이 기기에서 기록되는 사용자 구분값을 설정합니다.");
   const call = createCategory("settingsCategoryCall", "통화 · 녹음", "통화녹음 위치와 개인정보 보관정책을 관리합니다.");
-  const ai = createCategory("settingsCategoryAi", "AI · 비용", "유료 기능 잠금, 월 예산, 사용량과 예상원가를 확인합니다.");
+  const ai = createCategory("settingsCategoryAi", "AI · 비용", "유료 기능 잠금, STT 연결 준비상태, 월 예산, 사용량과 예상원가를 확인합니다.");
 
   const displaySection = buildDisplaySection();
   if (displaySection) display.body.append(displaySection);
@@ -122,6 +172,7 @@ function organizeSettings() {
   call.body.append(buildFolderSection());
   if (privacySection) call.body.append(privacySection);
 
+  ai.body.append(buildSttReadinessSection());
   if (paidLock) ai.body.append(paidLock);
   const budgetSection = buildBudgetSection(accountSection);
   if (budgetSection) ai.body.append(budgetSection);
@@ -146,3 +197,4 @@ function organizeSettings() {
 }
 
 organizeSettings();
+loadSttReadiness();
