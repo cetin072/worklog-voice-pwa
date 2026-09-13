@@ -1,7 +1,9 @@
 export const WORKSPACE_ROLES = Object.freeze(["owner", "member"]);
 
-function text(value, max = 200) {
-  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+const MAX_CONTEXT_ID_LENGTH = 200;
+
+function text(value) {
+  return String(value ?? "").trim();
 }
 
 function workspaceContextError(code, message) {
@@ -10,24 +12,32 @@ function workspaceContextError(code, message) {
   return error;
 }
 
+function normalizeIdentifier(value, fieldName) {
+  const normalized = text(value);
+  const upperField = fieldName === "userId" ? "USER" : "WORKSPACE";
+
+  if (!normalized) {
+    throw workspaceContextError(
+      `WORKSPACE_CONTEXT_${upperField}_REQUIRED`,
+      `Workspace Context에는 ${fieldName}가 필요합니다.`,
+    );
+  }
+
+  if (normalized.length > MAX_CONTEXT_ID_LENGTH) {
+    throw workspaceContextError(
+      `WORKSPACE_CONTEXT_${upperField}_INVALID`,
+      `${fieldName}가 허용 길이를 초과했습니다.`,
+    );
+  }
+
+  return normalized;
+}
+
 export function normalizeWorkspaceContext(raw = {}) {
-  const userId = text(raw.userId ?? raw.user_id);
-  const workspaceId = text(raw.workspaceId ?? raw.workspace_id);
-  const role = text(raw.role, 40).toLowerCase();
-
-  if (!userId) {
-    throw workspaceContextError(
-      "WORKSPACE_CONTEXT_USER_REQUIRED",
-      "Workspace Context에는 userId가 필요합니다.",
-    );
-  }
-
-  if (!workspaceId) {
-    throw workspaceContextError(
-      "WORKSPACE_CONTEXT_WORKSPACE_REQUIRED",
-      "Workspace Context에는 workspaceId가 필요합니다.",
-    );
-  }
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const userId = normalizeIdentifier(source.userId ?? source.user_id, "userId");
+  const workspaceId = normalizeIdentifier(source.workspaceId ?? source.workspace_id, "workspaceId");
+  const role = text(source.role).toLowerCase();
 
   if (!WORKSPACE_ROLES.includes(role)) {
     throw workspaceContextError(
