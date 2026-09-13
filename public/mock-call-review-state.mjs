@@ -2,6 +2,13 @@ function cleanText(value, max = 4000) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+function cleanList(values, maxItems = 20) {
+  return (Array.isArray(values) ? values : [])
+    .map((item) => cleanText(item, 1000))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
 function localDateParts(value) {
   const date = value ? new Date(value) : new Date();
   const safe = Number.isNaN(date.getTime()) ? new Date() : date;
@@ -40,19 +47,30 @@ export function buildMockCallAnalysis(value = {}, index = 0) {
   const contact = item.contactName;
   const scheduleDate = nextDayYmd(item.recordedAt);
   const suffix = index > 0 ? ` ${index + 1}` : "";
+  const summary = `${contact}와의 통화 내용을 업무수첩에서 검수하는 모의 결과입니다. 실제 STT/AI 결과가 아니며 저장 흐름 확인용입니다.`;
+  const keyPoints = [
+    `${contact} 관련 요청사항 확인`,
+    "후속 업무 담당과 진행 시점 확인",
+    "일정 후보는 사용자 확인 후에만 확정",
+  ];
 
   return {
     mock: true,
-    analysisVersion: "mock-v1",
+    analysisVersion: "mock-v2",
     source: item,
     title: `${contact} 통화 후속조치 확인${suffix}`,
     transcript: `[모의 녹취] 실제 녹음파일을 듣지 않고 화면 검수용으로 만든 예시입니다.\n화자 1: ${contact} 관련 요청사항과 다음 일정에 대해 확인했습니다.\n화자 2: 필요한 내용을 정리하고 후속조치를 진행하기로 했습니다.`,
-    summary: `${contact}와의 통화 내용을 업무수첩에서 검수하는 모의 결과입니다. 실제 STT/AI 결과가 아니며 저장 흐름 확인용입니다.`,
-    keyPoints: [
-      `${contact} 관련 요청사항 확인`,
-      "후속 업무 담당과 진행 시점 확인",
-      "일정 후보는 사용자 확인 후에만 확정",
-    ],
+    summary,
+    keyPoints,
+    report: {
+      headline: `${contact} 요청사항과 후속 일정 확인`,
+      overview: summary,
+      discussionPoints: [...keyPoints],
+      counterpartRequests: [`${contact} 관련 요청사항을 확인해 달라는 요청`],
+      userCommitments: ["요청 내용을 검토하고 후속조치를 진행하기로 함"],
+      decisions: ["확정 일정은 사용자가 검수 후 저장하기로 함"],
+      openQuestions: ["실제 통화 내용 연결 후 추가 확인사항을 다시 판별해야 함"],
+    },
     actions: [
       {
         id: `task-${item.id}`,
@@ -84,7 +102,7 @@ export function buildMockCallAnalysis(value = {}, index = 0) {
         id: `decision-${item.id}`,
         type: "decision",
         label: "결정사항",
-        content: "통화에서 합의된 내용을 검토 후 업무기록에 반영", 
+        content: "통화에서 합의된 내용을 검토 후 업무기록에 반영",
         included: true,
         confirmed: true,
       },
@@ -102,12 +120,23 @@ export function buildMockCallAnalysis(value = {}, index = 0) {
   };
 }
 
+function normalizeMockReport(result = {}) {
+  const source = result.report && typeof result.report === "object" ? result.report : {};
+  return {
+    headline: cleanText(source.headline || result.title, 300),
+    overview: cleanText(source.overview || result.summary, 6000),
+    discussionPoints: cleanList(source.discussionPoints?.length ? source.discussionPoints : result.keyPoints),
+    counterpartRequests: cleanList(source.counterpartRequests),
+    userCommitments: cleanList(source.userCommitments),
+    decisions: cleanList(source.decisions),
+    openQuestions: cleanList(source.openQuestions),
+  };
+}
+
 export function buildMockReviewPayload(result = {}) {
   const source = normalizeMockSelectionItem(result.source || {});
-  const keyPoints = (Array.isArray(result.keyPoints) ? result.keyPoints : [])
-    .map((item) => cleanText(item, 1000))
-    .filter(Boolean)
-    .slice(0, 20);
+  const keyPoints = cleanList(result.keyPoints);
+  const report = normalizeMockReport(result);
 
   const actions = (Array.isArray(result.actions) ? result.actions : [])
     .filter((item) => item?.included)
@@ -145,6 +174,7 @@ export function buildMockReviewPayload(result = {}) {
     summary: cleanText(result.summary, 6000),
     transcript: cleanText(result.transcript, 12000),
     keyPoints,
+    report,
     actions,
     contacts,
   };
