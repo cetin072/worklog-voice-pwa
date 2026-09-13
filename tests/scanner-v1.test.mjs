@@ -43,12 +43,16 @@ test("scanner core detects a high-contrast document rectangle",()=>{
   assert.ok(Math.abs(corners.bottomRightCorner.y-100)<4);
 });
 
-test("scanner runtime has no external OpenCV or jscanify dependency",()=>{
+test("scanner runtime has no external OpenCV, jscanify, or deprecated scanner shims",()=>{
   const scanner=fs.readFileSync("public/scanner.js","utf8");
   const index=fs.readFileSync("public/index.html","utf8");
+  const sw=fs.readFileSync("public/sw.js","utf8");
   assert.doesNotMatch(scanner,/opencv\.org|jsdelivr|jscanify|OPEN_CV_URL|JSCANIFY_URL/i);
   assert.match(index,/scanner-core\.js/);
-  assert.doesNotMatch(index,/scanner-mobile-guard\.js/);
+  assert.doesNotMatch(index,/scanner-mobile-guard\.js|scanner-save-bridge\.js/);
+  assert.doesNotMatch(sw,/scanner-mobile-guard\.js|scanner-save-bridge\.js/);
+  assert.equal(fs.existsSync("public/scanner-mobile-guard.js"),false);
+  assert.equal(fs.existsSync("public/scanner-save-bridge.js"),false);
 });
 
 test("scan button opens the native image capture immediately",()=>{
