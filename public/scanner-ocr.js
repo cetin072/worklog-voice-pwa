@@ -36,6 +36,15 @@
       .trim();
   }
 
+  function errorText(error){
+    if(error instanceof Error && error.message)return error.message;
+    if(typeof error==="string" && error.trim())return error.trim();
+    try{
+      const value=String(error?.message||error||"").trim();
+      return value && value!=="[object Object]" ? value : "";
+    }catch{return "";}
+  }
+
   function resetOcr(message="스캔 이미지를 휴대폰에서 읽습니다. OCR API 비용은 없습니다."){
     textArea.value="";
     resultBox.hidden=true;
@@ -103,6 +112,7 @@
     resultBox.hidden=true;
     setStatus("OCR 엔진을 준비하는 중입니다…");
     let worker=null;
+    let workerFailure="";
     try{
       const Tesseract=await loadTesseract();
       const blob=await previewBlob();
@@ -110,7 +120,9 @@
         workerPath:WORKER_PATH,
         corePath:CORE_PATH,
         langPath:LANG_PATH,
-        logger:progressLogger
+        workerBlobURL:false,
+        logger:progressLogger,
+        errorHandler:error=>{workerFailure=errorText(error);}
       });
       const response=await worker.recognize(blob);
       const text=normalizeOcr(response?.data?.text);
@@ -122,7 +134,8 @@
         ? `문서 읽기 완료 · 인식 신뢰도 약 ${confidence}% · 아래 내용은 수정할 수 있습니다.`
         : "문서 읽기 완료 · 아래 내용은 수정할 수 있습니다.","success");
     }catch(error){
-      setStatus(error?.message||"문서 내용을 읽지 못했습니다.","error");
+      const detail=errorText(error)||workerFailure;
+      setStatus(detail ? `OCR 실패: ${detail}` : "문서 내용을 읽지 못했습니다. 새로고침 후 다시 시도해주세요.","error");
     }finally{
       try{await worker?.terminate?.();}catch{}
       running=false;
