@@ -12,6 +12,7 @@ export function buildCallSelectionItems(selected = []) {
 
   return selected.map((entry, index) => {
     const parsed = entry?.parsed || {};
+    const file = entry?.file || {};
     const duration = Number(entry?.duration);
     return {
       id: `call-${cleanText(entry?.id, 40) || index + 1}`,
@@ -19,6 +20,10 @@ export function buildCallSelectionItems(selected = []) {
       phone: cleanText(parsed.phoneDisplay || parsed.phone || "", 80),
       recordedAt: safeRecordedAt(parsed.recordedAt),
       durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : 0,
+      fileName: cleanText(file.name, 255),
+      mimeType: cleanText(file.type, 120).toLowerCase(),
+      fileSize: Math.max(0, Number(file.size) || 0),
+      lastModified: Math.max(0, Number(file.lastModified) || 0),
     };
   });
 }
