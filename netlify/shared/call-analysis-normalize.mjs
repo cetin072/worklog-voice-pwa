@@ -4,6 +4,7 @@ const ACTION_TYPES = new Set(["task", "schedule", "follow_up", "decision"]);
 const MAX_KEY_POINTS = 20;
 const MAX_ACTIONS = 30;
 const MAX_CONTACTS = 20;
+const MAX_REPORT_ITEMS = 20;
 
 function text(value, max = 4000) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -143,6 +144,19 @@ function normalizeContact(value) {
   };
 }
 
+function normalizeReport(value = {}, fallback = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    headline: text(source.headline || fallback.title, 300),
+    overview: text(source.overview || fallback.summary, 6000),
+    discussionPoints: uniqueTexts(source.discussionPoints?.length ? source.discussionPoints : fallback.keyPoints, MAX_REPORT_ITEMS),
+    counterpartRequests: uniqueTexts(source.counterpartRequests, MAX_REPORT_ITEMS),
+    userCommitments: uniqueTexts(source.userCommitments, MAX_REPORT_ITEMS),
+    decisions: uniqueTexts(source.decisions?.length ? source.decisions : fallback.decisions, MAX_REPORT_ITEMS),
+    openQuestions: uniqueTexts(source.openQuestions, MAX_REPORT_ITEMS),
+  };
+}
+
 export function normalizeCallAnalysisResult(value = {}, options = {}) {
   const recordedAt = options.recordedAt || new Date();
   const actions = [];
@@ -161,11 +175,18 @@ export function normalizeCallAnalysisResult(value = {}, options = {}) {
     if (contacts.length >= MAX_CONTACTS) break;
   }
 
+  const title = text(value.title, 200);
+  const summary = text(value.summary, 6000);
+  const keyPoints = uniqueTexts(value.keyPoints);
+  const decisions = actions.filter((item) => item.type === "decision").map((item) => item.content);
+  const report = normalizeReport(value.report, { title, summary, keyPoints, decisions });
+
   return {
-    analysisVersion: "v1",
-    title: text(value.title, 200),
-    summary: text(value.summary, 6000),
-    keyPoints: uniqueTexts(value.keyPoints),
+    analysisVersion: "v2",
+    title,
+    summary,
+    keyPoints,
+    report,
     actions,
     contacts,
   };
