@@ -46,6 +46,13 @@ test("Edge Android에서는 실패한 폴더 자동읽기 UI를 숨기고 직접
   assert.match(css, /\.call-folder-shortcut\[hidden\]\{display:none!important\}/);
 });
 
+test("Edge 직접 선택 모드는 모듈 로딩 순서가 달라도 MutationObserver로 최종 적용한다", async () => {
+  const guide = await text("../public/call-folder-guide.mjs");
+  assert.equal(guide.includes("watchEdgeDirectSelectionUx"), true);
+  assert.equal(guide.includes("new MutationObserver"), true);
+  assert.equal(guide.includes("observer.disconnect()"), true);
+});
+
 test("Edge 안내는 폴더 재연결을 유도하지 않고 오디오 파일 다중선택을 설명한다", async () => {
   const guide = await text("../public/call-folder-guide.mjs");
   assert.equal(guide.includes("파일 선택창에서 ‘오디오’를 누르고 필요한 통화녹음을 여러 개 고르세요"), true);
