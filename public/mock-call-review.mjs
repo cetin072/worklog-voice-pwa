@@ -5,7 +5,7 @@ import {
   normalizeMockSelectionItem,
 } from "./mock-call-review-state.mjs";
 
-const SESSION_KEY = "worklog.mockCallReview.results.v1";
+const SESSION_KEY = "worklog.mockCallReview.results.v2";
 const selectionSummary = document.getElementById("callSelectionSummary");
 
 let selection = [];
@@ -78,7 +78,7 @@ function ensureStartButton() {
   startButton = createButton("무료 모의 분석 체험", "mock-start-button", startMockProcessing);
   const note = document.createElement("p");
   note.className = "mock-start-note";
-  note.textContent = "실제 녹음내용은 읽지 않습니다. 선택된 통화의 연락처·통화시각·길이만 사용해 검수 화면용 예시를 만듭니다.";
+  note.textContent = "실제 녹음내용은 읽지 않습니다. 선택된 통화의 연락처·통화시각·길이만 사용해 보고서/검수 화면용 예시를 만듭니다.";
   selectionSummary.append(startButton, note);
 }
 
@@ -140,7 +140,7 @@ async function startMockProcessing() {
   const labels = [
     "선택 통화 메타데이터 확인",
     "STT 모의 결과 생성",
-    "AI 모의 분석 결과 생성",
+    "통화 보고서·업무항목 모의 분석 생성",
     "검수 화면 준비",
   ];
   const items = labels.map((label) => {
@@ -173,6 +173,16 @@ function fieldLabel(labelText, control) {
   return label;
 }
 
+function listTextarea(labelText, values, onChange, rows = 3) {
+  const control = document.createElement("textarea");
+  control.rows = rows;
+  control.value = (Array.isArray(values) ? values : []).join("\n");
+  control.addEventListener("input", () => {
+    onChange(control.value.split("\n").map((item) => item.trim()).filter(Boolean));
+  });
+  return fieldLabel(labelText, control);
+}
+
 function renderSourceMeta(source) {
   const meta = document.createElement("div");
   meta.className = "mock-source-meta";
@@ -186,14 +196,63 @@ function renderSourceMeta(source) {
   return meta;
 }
 
+function renderReport(result) {
+  const report = result.report || (result.report = {
+    headline: result.title || "",
+    overview: result.summary || "",
+    discussionPoints: [...(result.keyPoints || [])],
+    counterpartRequests: [],
+    userCommitments: [],
+    decisions: [],
+    openQuestions: [],
+  });
+
+  const section = document.createElement("section");
+  section.className = "mock-review-section mock-report-section";
+  const heading = document.createElement("h3");
+  heading.textContent = "통화 보고서";
+  const note = document.createElement("p");
+  note.className = "mock-section-note";
+  note.textContent = "실제 연결 후에는 STT 녹취를 한 번 분석해 이 보고서와 아래 업무항목을 함께 만듭니다.";
+  section.append(heading, note);
+
+  const headline = document.createElement("input");
+  headline.type = "text";
+  headline.maxLength = 300;
+  headline.value = report.headline || "";
+  headline.addEventListener("input", () => { report.headline = headline.value; });
+
+  const overview = document.createElement("textarea");
+  overview.rows = 4;
+  overview.value = report.overview || "";
+  overview.addEventListener("input", () => {
+    report.overview = overview.value;
+    result.summary = overview.value;
+  });
+
+  section.append(
+    fieldLabel("한 줄 요약", headline),
+    fieldLabel("통화 개요", overview),
+    listTextarea("주요 논의사항 · 한 줄에 하나", report.discussionPoints, (values) => {
+      report.discussionPoints = values;
+      result.keyPoints = [...values];
+    }, 4),
+    listTextarea("상대방 요청사항", report.counterpartRequests, (values) => { report.counterpartRequests = values; }),
+    listTextarea("내가 약속한 사항", report.userCommitments, (values) => { report.userCommitments = values; }),
+    listTextarea("결정사항", report.decisions, (values) => { report.decisions = values; }),
+    listTextarea("확인 필요사항", report.openQuestions, (values) => { report.openQuestions = values; }),
+  );
+  return section;
+}
+
 function renderTranscript(result) {
   const details = document.createElement("details");
   details.className = "mock-transcript";
   const summary = document.createElement("summary");
-  summary.textContent = "모의 녹취록 보기";
+  summary.textContent = "전체 녹취록 보기";
   const warning = document.createElement("p");
   warning.className = "mock-data-warning";
-  warning.textContent = "⚠ 실제 녹음에서 변환된 내용이 아닙니다.";
+  warning.textContent = "⚠ 현재는 실제 녹음에서 변환된 내용이 아닌 모의 녹취입니다.";
   const text = document.createElement("pre");
   text.textContent = result.transcript;
   details.append(summary, warning, text);
@@ -306,11 +365,11 @@ function renderCurrentReview() {
   const card = ensureReviewCard();
   const source = result.source;
   const subtitle = `${currentIndex + 1} / ${analyses.length}`;
-  card.replaceChildren(header("📞 통화요약 검수", subtitle));
+  card.replaceChildren(header("📞 통화 분석 결과 검수", subtitle));
 
   const banner = document.createElement("div");
   banner.className = "mock-data-banner";
-  banner.innerHTML = "<strong>모의 데이터</strong><span>실제 STT·AI 결과가 아닙니다. 화면과 저장 흐름만 검수합니다.</span>";
+  banner.innerHTML = "<strong>모의 데이터</strong><span>실제 STT·AI 결과가 아닙니다. 보고서와 저장 흐름만 검수합니다.</span>";
   card.append(banner, renderSourceMeta(source));
 
   const title = document.createElement("input");
@@ -319,30 +378,20 @@ function renderCurrentReview() {
   title.maxLength = 200;
   title.addEventListener("input", () => { result.title = title.value; });
 
-  const summary = document.createElement("textarea");
-  summary.rows = 4;
-  summary.value = result.summary;
-  summary.addEventListener("input", () => { result.summary = summary.value; });
-
-  const keyPoints = document.createElement("textarea");
-  keyPoints.rows = 4;
-  keyPoints.value = result.keyPoints.join("\n");
-  keyPoints.addEventListener("input", () => {
-    result.keyPoints = keyPoints.value.split("\n").map((item) => item.trim()).filter(Boolean);
-  });
-
   card.append(
     fieldLabel("업무 제목", title),
-    fieldLabel("통화 요약", summary),
-    fieldLabel("핵심 내용 · 한 줄에 하나", keyPoints),
+    renderReport(result),
     renderTranscript(result),
   );
 
   const actionSection = document.createElement("section");
   actionSection.className = "mock-review-section";
   const actionHeading = document.createElement("h3");
-  actionHeading.textContent = "해야 할 일 · 일정 · 후속조치 · 결정사항";
-  actionSection.append(actionHeading);
+  actionHeading.textContent = "업무로 옮길 항목";
+  const actionNote = document.createElement("p");
+  actionNote.className = "mock-section-note";
+  actionNote.textContent = "보고서는 기록용 결과이고, 아래 항목만 할 일·일정·후속조치로 별도 저장할 수 있습니다.";
+  actionSection.append(actionHeading, actionNote);
   result.actions.forEach((action) => actionSection.append(renderAction(result, action)));
   card.append(actionSection);
 
@@ -375,10 +424,12 @@ function saveCurrent(result) {
   const success = document.createElement("div");
   success.className = "mock-save-success";
   const title = document.createElement("strong");
-  title.textContent = "✅ 실제 DB에는 저장하지 않았습니다.";
+  title.textContent = "✅ 통화 보고서와 검수 결과를 모의 저장했습니다.";
   const detail = document.createElement("p");
   detail.textContent = `할 일 ${stats.tasks}건 · 일정 후보 ${stats.schedules}건(확정 ${stats.confirmedSchedules}건) · 후속조치 ${stats.followUps}건 · 결정사항 ${stats.decisions}건`;
-  success.append(title, detail);
+  const safety = document.createElement("p");
+  safety.textContent = "실제 DB·STT·AI에는 전송하지 않았습니다.";
+  success.append(title, detail, safety);
   if (stats.schedules > stats.confirmedSchedules) {
     const warning = document.createElement("p");
     warning.className = "mock-save-warning";
@@ -406,7 +457,7 @@ function renderFinished() {
   const done = document.createElement("div");
   done.className = "mock-finished";
   const strong = document.createElement("strong");
-  strong.textContent = "전체 흐름 검수가 끝났습니다.";
+  strong.textContent = "통화 보고서 → 업무항목 검수 흐름이 끝났습니다.";
   const text = document.createElement("p");
   text.textContent = "실제 서버·STT·AI·Supabase·Notion에는 아무것도 전송하거나 저장하지 않았습니다.";
   done.append(strong, text);
