@@ -18,7 +18,7 @@ test("App Shell에 통화폴더 대표 흐름의 필수 DOM과 모듈이 모두 
   assert.equal(html.includes("파일 직접 선택"), true);
 });
 
-test("폴더에서 읽은 파일 전달은 내부 이벤트를 우선하고 file input change를 fallback으로 유지한다", async () => {
+test("폴더 파일 전달은 앱 내부 이벤트를 시도하고 기존 file input change fallback을 유지한다", async () => {
   const shortcut = await text("../public/call-folder-shortcut.mjs");
   const inbox = await text("../public/call-inbox.mjs");
   assert.equal(shortcut.includes("worklog:call-files-import"), true);
