@@ -26,6 +26,7 @@ function baseJob() {
 function successDeps(overrides = {}) {
   const saved = [];
   const usage = [];
+  const persistedPayloads = [];
   const calls = { upload: 0, stt: 0, ai: 0, persist: 0, delete: 0 };
   const deps = {
     now: clock(),
@@ -54,14 +55,24 @@ function successDeps(overrides = {}) {
           title: "고객 미팅 약속",
           summary: "내일 오후 3시 미팅을 약속했다.",
           keyPoints: ["미팅 일정 확정"],
+          report: {
+            headline: "고객과 내일 오후 3시 미팅 합의",
+            overview: "미팅 시간과 후속 확인을 논의했다.",
+            discussionPoints: ["미팅 시간"],
+            counterpartRequests: [],
+            userCommitments: ["미팅 참석"],
+            decisions: ["내일 오후 3시 미팅"],
+            openQuestions: [],
+          },
           actions: [{ type: "schedule", content: "고객 미팅", dueText: "내일 오후 3시", confirmed: true }],
           contacts: [],
         },
         usage: { feature: "call_summary", service: "ai", inputTokens: 100, outputTokens: 50, estimatedCostKrw: 2 },
       };
     },
-    persistResult: async () => {
+    persistResult: async (payload) => {
       calls.persist += 1;
+      persistedPayloads.push(structuredClone(payload));
       return {
         callId: "call-1",
         usage: { feature: "call_persist", service: "database", apiCalls: 1, estimatedCostKrw: 0.1 },
@@ -71,19 +82,21 @@ function successDeps(overrides = {}) {
     recordUsage: async (event) => usage.push(event),
     ...overrides,
   };
-  return { deps, saved, usage, calls };
+  return { deps, saved, usage, persistedPayloads, calls };
 }
 
 const policy = { failedTempRetentionHours: 6, maxTempRetentionHours: 24, transcriptRetention: "keep" };
 
-test("정상 처리하면 STT와 AI를 각 1회 실행하고 임시음성을 삭제한다", async () => {
-  const { deps, saved, usage, calls } = successDeps();
+test("정상 처리하면 STT와 AI를 각 1회 실행하고 보고서를 저장 단계까지 전달한 뒤 임시음성을 삭제한다", async () => {
+  const { deps, saved, usage, persistedPayloads, calls } = successDeps();
   const result = await runCallProcessingPipeline({ job: baseJob(), source: { fake: true }, policy }, deps);
   assert.equal(result.ok, true);
   assert.equal(result.cleanupPending, false);
   assert.equal(result.job.status, "completed");
   assert.equal(result.job.tempObjectPath, null);
   assert.equal(result.analysis.actions[0].confirmed, false);
+  assert.equal(result.analysis.report.headline, "고객과 내일 오후 3시 미팅 합의");
+  assert.equal(persistedPayloads[0].analysis.report.decisions[0], "내일 오후 3시 미팅");
   assert.deepEqual(calls, { upload: 1, stt: 1, ai: 1, persist: 1, delete: 1 });
   assert.equal(usage.length, 4);
   assert.ok(saved.some((job) => job.status === "cleanup_pending"));
@@ -129,6 +142,7 @@ test("DB 저장이 실패하면 AI 분석 체크포인트를 남긴다", async (
   assert.equal(result.ok, false);
   assert.equal(result.stage, "persisting");
   assert.equal(result.job.analysisCheckpoint.summary, "내일 오후 3시 미팅을 약속했다.");
+  assert.equal(result.job.analysisCheckpoint.report.headline, "고객과 내일 오후 3시 미팅 합의");
   assert.equal(base.calls.stt, 1);
   assert.equal(base.calls.ai, 1);
 });
