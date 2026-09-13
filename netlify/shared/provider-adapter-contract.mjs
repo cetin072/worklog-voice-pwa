@@ -87,8 +87,14 @@ export function normalizeAiAdapterResult(raw = {}, context = {}) {
   const model = text(raw.model ?? context.model, 120);
   const source = raw.analysis && typeof raw.analysis === "object" ? raw.analysis : raw;
   const analysis = normalizeCallAnalysisResult(source, { recordedAt: context.recordedAt || new Date() });
+  const report = analysis.report || {};
+  const hasReport = Boolean(
+    report.headline || report.overview ||
+    report.discussionPoints?.length || report.counterpartRequests?.length ||
+    report.userCommitments?.length || report.decisions?.length || report.openQuestions?.length,
+  );
   const hasContent = Boolean(
-    analysis.title || analysis.summary || analysis.keyPoints.length || analysis.actions.length || analysis.contacts.length,
+    analysis.title || analysis.summary || analysis.keyPoints.length || analysis.actions.length || analysis.contacts.length || hasReport,
   );
   if (!hasContent) throw new Error("AI_EMPTY_ANALYSIS");
 
