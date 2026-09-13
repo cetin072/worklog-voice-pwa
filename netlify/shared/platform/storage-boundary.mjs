@@ -24,7 +24,16 @@ function validDate(value, code) {
 
 export function normalizeStorageObjectPath(value) {
   const path = boundedText(value, 500, "STORAGE_INVALID_OBJECT_PATH", "objectPath");
-  if (!path || /:\/\//.test(path) || path.startsWith("/") || path.split("/").includes("..")) {
+  const segments = path.split("/");
+  if (
+    !path
+    || /:\/\//.test(path)
+    || path.startsWith("/")
+    || path.includes("\\")
+    || /[\u0000-\u001F\u007F]/.test(path)
+    || segments.includes("..")
+    || segments.includes("")
+  ) {
     throw storageError("STORAGE_INVALID_OBJECT_PATH", "objectPath가 올바르지 않습니다.");
   }
   return path;
@@ -54,8 +63,8 @@ export function normalizePreparedStorageObject(raw = {}) {
   }
 
   const sizeBytes = Number(source.sizeBytes ?? source.size_bytes);
-  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
-    throw storageError("STORAGE_INVALID_SIZE", "sizeBytes는 0보다 커야 합니다.");
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0) {
+    throw storageError("STORAGE_INVALID_SIZE", "sizeBytes는 0보다 큰 안전한 정수여야 합니다.");
   }
 
   const metadata = source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata)
@@ -67,7 +76,7 @@ export function normalizePreparedStorageObject(raw = {}) {
     objectPath,
     uploadedAt: uploadedAt.toISOString(),
     expiresAt: expiresAt.toISOString(),
-    sizeBytes: Math.round(sizeBytes),
+    sizeBytes,
     mimeType: boundedText(source.mimeType ?? source.mime_type, 120, "STORAGE_MIME_TYPE_INVALID", "mimeType").toLowerCase(),
     fileName: boundedText(source.fileName ?? source.file_name, 240, "STORAGE_FILE_NAME_INVALID", "fileName"),
     metadata: Object.freeze(metadata),
