@@ -1,6 +1,7 @@
 import type { Config, Context } from "@netlify/functions";
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { idempotencyHit, isValidClientRequestId, seoulDateFromRecordedAt } from "../shared/core-logic.mjs";
+import { extractScheduleFromText } from "../shared/schedule-extract.mjs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -161,13 +162,20 @@ export default async (req:Request, _context:Context) => {
   const status=STATUSES.has(body.status) ? body.status : "진행중";
   const type=TYPES.has(body.type) ? body.type : "기타";
 
+  const explicitDueDate=String(body.dueDate || "").trim();
+  const hasExplicitDueDate=/^\d{4}-\d{2}-\d{2}$/.test(explicitDueDate);
+  const schedule=hasExplicitDueDate
+    ? {text:transcript,dueStart:explicitDueDate,matched:false,hasTime:false}
+    : extractScheduleFromText(transcript,body.recordedAt || new Date());
+  const cleanTranscript=String(schedule.text || transcript).trim() || transcript;
+
   const properties:any={
-    "업무명":title(makeTitle(transcript)),
+    "업무명":title(makeTitle(cleanTranscript)),
     "기관":{select:{name:institution}},
     "상태":{select:{name:status}},
     "유형":{select:{name:type}},
     "기록일":{date:{start:seoulDateFromRecordedAt(body.recordedAt)}},
-    "내용":richText(transcript),
+    "내용":richText(cleanTranscript),
     "음성원문":richText(transcript),
     "증빙":{select:{name:"첨부완료"}}
   };
@@ -175,7 +183,7 @@ export default async (req:Request, _context:Context) => {
   if(typeof body.amount==="number" && Number.isFinite(body.amount)) properties["금액"]={number:body.amount};
   if(String(body.assignee||"").trim()) properties["담당자"]=richText(String(body.assignee).trim());
   if(String(body.followUp||"").trim()) properties["후속조치"]=richText(String(body.followUp).trim());
-  if(body.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(body.dueDate)) properties["기한"]={date:{start:body.dueDate}};
+  if(schedule.dueStart) properties["기한"]={date:{start:schedule.dueStart}};
 
   try{
     const fileUploadId=await createNotionFileUpload(token,scanValue);
@@ -223,7 +231,16 @@ export default async (req:Request, _context:Context) => {
       }
     }
 
-    return json(200,{ok:true,pageId:data.id,url:data.url,mode,scanAttached:true});
+    return json(200,{
+      ok:true,
+      pageId:data.id,
+      url:data.url,
+      mode,
+      scanAttached:true,
+      scheduleDetected:Boolean(schedule.matched),
+      dueStart:String(schedule.dueStart || ""),
+      cleanTranscript
+    });
   }catch(error){
     console.error("Worklog scan upload failed",String((error as any)?.message || error).slice(0,300));
     return json(502,{error:(error as any)?.message || "스캔 문서를 Notion에 저장하지 못했습니다."});
