@@ -13,6 +13,22 @@
 - 아키텍처·보안·권한·배포 구조 변경에서만 중앙 공통 표준 원문을 반드시 다시 확인한다.
 - 중앙 표준은 모든 작업의 상시 체크리스트가 아니라 아키텍처 판단과 감사의 상위 기준이다.
 
+## 중앙 개발 규칙 / Preview QA Gate
+
+- 공통 source of truth는 `cetin072/ai-development-system`의 최신 `DEVELOPMENT_CONSTITUTION.md`, `AI_DEVELOPMENT_STANDARD.md`, `docs/PREVIEW_QA_GATE.md`다.
+- 사용자는 최종 수용 검수자이지 기본 디버거가 아니다.
+- 사용자에게 Preview, 모바일 실기, 캡처, 버튼 확인을 요청하기 전에 가능한 범위에서 다음을 개발 측에서 먼저 끝낸다.
+  - 최신 `main`/기준 브랜치 대비 behind·충돌 상태와 전체 diff 검수
+  - 관련 자동 테스트·정적 검사와 새 기능 전용 검증
+  - 기존 핵심 기능 회귀 확인
+  - 빌드 산출물과 Worker/WASM/모델/동적 import/API 등 런타임 의존 경로 확인
+  - Preview가 실제 대상 커밋으로 배포됐는지 확인
+  - 브라우저에서 자동화 가능한 대표 정상 사용자 흐름 검증
+  - 실패 시 입력·첨부·작성 중 데이터 보존 확인
+- `CI green`, `npm test 통과`, `Preview Ready` 중 하나만으로 사용자 검수 요청을 하지 않는다.
+- 사용자가 발견한 기계적 버그는 단순 패치로 끝내지 않고 같은 유형을 재현하는 테스트·fixture·경로 검사·회귀 규칙 중 하나를 남긴다.
+- 사용자에게 남기는 검수는 실제 기기 조작감, 실제 업무 데이터 정확도, 모바일 UX, 요구사항 누락처럼 사람과 실제 환경이 필요한 항목으로 제한한다.
+
 ## 공통 웹 아키텍처 기준
 
 - 웹 제작 공통 source of truth는 `cetin072/ai-development-system`의 `docs/WEB_ARCHITECTURE_STANDARD_V1.md`다.
