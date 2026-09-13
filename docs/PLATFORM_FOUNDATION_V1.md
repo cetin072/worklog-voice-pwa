@@ -2,7 +2,7 @@
 
 ## 문서 상태
 
-- 상태: Decision 01~07 확정 / 전체 검토 중
+- 상태: Decision 01~08 확정 / 전체 검토 완료
 - 기준 Issue: #91
 - 기준 PR: #92
 - 목적: 독립적으로 개발되는 업무수첩 모듈들이 하나의 상용 제품으로 결합될 때 따라야 할 공통 플랫폼 기준을 정의한다.
@@ -471,10 +471,76 @@ Android Native/Shell/Bridge는 통화녹음 접근, 파일시스템, 카메라, 
 
 ---
 
-# 다음 단계
+# Decision 08 — Local-first 동기화와 충돌 기준
 
-## Platform Foundation V1 전체 검토
+- 상태: **확정**
+- 확정일: 2026-09-13
+- 변경 원칙: 실제 다기기/협업 사용에서 더 나은 충돌 모델이 검증되기 전까지 기본 동기화 원칙으로 유지한다.
 
-Decision 01~07을 `PROJECT_CHARTER.md`, `docs/MODULE_ARCHITECTURE_V1.md`, 현재 모듈 개발 상태와 대조해 누락·충돌·과도한 설계를 점검한다.
+> **Local-first는 항상 휴대폰 값이 이긴다는 뜻이 아니다. 원본 미디어는 기기 기준, 시스템 운영 데이터는 서버 기준, 공유 Workspace의 확정 데이터는 Cloud 조정 기준으로 하며, 동기화된 사용자 데이터의 충돌은 사용자 확정값을 조용히 덮어쓰지 않는다.**
 
-전체 검토에서 필요한 추가 Decision만 보완한 뒤 `MODULE_REGISTRY.md` 작성으로 넘어간다.
+## 데이터 종류별 조정 기준
+
+- Device Original(원본 음성·사진·캡처): 사용자 기기가 원본 기준이다.
+- 개인 사용자 결과물(녹취록·AI 보고서·PDF 등): Local-first 작업본을 우선 보존하고, Cloud는 Sync/Backup 계층으로 사용한다.
+- 조직/공유 Workspace에 확정·공유된 업무·일정·CRM·공유 보고서: 여러 사용자의 일관성이 필요하므로 Cloud가 조정 기준 역할을 한다.
+- Auth, Workspace/Membership, Usage/Cost, Processing Job 등 System Record: 서버가 기준이다.
+
+Cloud가 조정 기준인 데이터도 사용자의 로컬 수정본을 확인 없이 파괴하지 않는다.
+
+## 최소 동기화 메타데이터
+
+동기화 가능한 중요 레코드는 필요에 따라 다음 개념을 가질 수 있어야 한다.
+
+- 안정적인 내부 `record_id`
+- `revision` 또는 동등한 version
+- `updated_at`
+- `sync_state`
+
+V1 최소 Sync State는 다음 수준을 우선한다.
+
+- `local`
+- `pending`
+- `synced`
+- `conflict`
+- `failed`
+
+실시간 공동편집이나 문장 단위 자동 Merge는 V1 범위로 만들지 않는다.
+
+## 충돌 처리
+
+한쪽만 변경되었다면 안전한 범위에서 자동 동기화할 수 있다.
+
+동일한 기준 revision 이후 로컬과 Cloud가 모두 수정됐다면 충돌로 본다. 다음과 같은 사용자 확정 데이터는 단순 `last write wins`로 조용히 덮어쓰지 않는다.
+
+- 사용자가 직접 수정한 업무
+- 확정 일정
+- CRM의 중요 정보
+- 통화/회의 보고서의 사용자 수정 내용
+- 사용자가 Confirm한 Candidate 결과
+
+충돌 시 가능한 범위에서 양쪽 값을 보존하고 사용자가 확인·선택·수정할 수 있는 경로를 둔다.
+
+Decision 03의 `사용자 확정값은 이후 AI 재분석보다 우선한다`는 원칙도 동일하게 적용한다.
+
+## 삭제 동기화
+
+동기화 대상의 삭제 사실이 다른 기기에서 이전 데이터로 되살아나지 않도록 `deleted_at`, tombstone 또는 동등한 삭제 표시를 사용할 수 있어야 한다.
+
+기본 흐름은 다음과 같다.
+
+`한 기기에서 삭제 → 삭제 상태 Sync → 다른 기기에 반영 → 휴지통 30일 → 영구삭제`
+
+즉시 영구삭제를 사용자가 명시적으로 요청한 경우에는 Decision 05의 Everywhere 삭제 정책과 연결한다.
+
+## 한 줄 기준
+
+> **원본 미디어는 기기 기준, 시스템 데이터는 서버 기준, 공유 Workspace 데이터는 Cloud 조정 기준으로 한다. 사용자 수정·확정 데이터가 서로 충돌하면 revision으로 감지하고 양쪽을 보존해 확인시키며, 삭제도 동기화 상태로 전파한다.**
+
+---
+
+# Platform Foundation V1 검토 결과
+
+Decision 01~08을 `PROJECT_CHARTER.md`와 `docs/MODULE_ARCHITECTURE_V1.md`에 대조한 결과 현재 큰 방향 충돌은 없다. 기존 상위 문서의 `독립 모듈`, `외부 서비스 Adapter`, `점진적 이행`, `PWA 우선`, `원본 기기 보존`, `비용 통제` 원칙을 Platform Foundation이 더 구체화하는 관계로 본다.
+
+V1에서 더 많은 추상화·범용 시스템을 선제적으로 추가하지 않는다. 다음 단계는 실제 기능 목록과 현재 개발상태를 공통 기준에 대조하는 `docs/MODULE_REGISTRY.md` 작성이다.
