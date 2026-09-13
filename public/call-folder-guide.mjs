@@ -60,11 +60,11 @@ function buildGuide() {
 
   const steps = document.createElement("p");
   steps.className = "call-folder-path-help";
-  steps.textContent = "탐색기에서는 내장 저장공간을 연 뒤 Recordings → TPhoneCallRecords 순서로 들어가세요.";
+  steps.textContent = "폴더 연결 화면에서는 파일이 보이지 않는 것이 정상입니다. TPhoneCallRecords까지 들어간 뒤 아래 ‘이 폴더 사용’을 누르세요.";
 
   const note = document.createElement("p");
   note.className = "call-folder-path-note";
-  note.textContent = "현재 확인된 에이닷 전화 녹음 경로입니다. 휴대폰·전화앱 버전에 따라 위치가 다를 수 있습니다.";
+  note.textContent = "일반 파일 가져오기에서는 내장 저장공간 → Recordings → TPhoneCallRecords 순서로 들어가 녹음파일을 선택하면 됩니다. 휴대폰·전화앱 버전에 따라 위치가 다를 수 있습니다.";
 
   guide.append(top, steps, note);
   importButton.insertAdjacentElement("beforebegin", guide);
