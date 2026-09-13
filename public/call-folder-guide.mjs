@@ -77,15 +77,30 @@ function buildGuide() {
 }
 
 function applyEdgeDirectSelectionUx() {
-  if (!isEdgeAndroid() || !importButton) return;
-  const shortcut = document.getElementById("callFolderShortcut");
-  if (shortcut) {
-    shortcut.hidden = true;
-    shortcut.setAttribute("aria-hidden", "true");
-  }
+  if (!isEdgeAndroid() || !importButton) return false;
   importButton.hidden = false;
   importButton.textContent = "통화녹음 파일 선택";
   importButton.setAttribute("aria-label", "통화녹음 오디오 파일 여러 개 선택");
+
+  const shortcut = document.getElementById("callFolderShortcut");
+  if (!shortcut) return false;
+  shortcut.hidden = true;
+  shortcut.setAttribute("aria-hidden", "true");
+  return true;
+}
+
+function watchEdgeDirectSelectionUx() {
+  if (!isEdgeAndroid() || !importButton) return;
+  if (applyEdgeDirectSelectionUx()) return;
+
+  const observer = new MutationObserver(() => {
+    if (applyEdgeDirectSelectionUx()) observer.disconnect();
+  });
+  observer.observe(importButton.parentElement || document.body, { childList: true, subtree: true });
+  setTimeout(() => {
+    applyEdgeDirectSelectionUx();
+    observer.disconnect();
+  }, 2000);
 }
 
 function hideUnsupportedShortcut() {
@@ -99,7 +114,6 @@ function hideUnsupportedShortcut() {
 }
 
 buildGuide();
-setTimeout(applyEdgeDirectSelectionUx, 0);
-setTimeout(applyEdgeDirectSelectionUx, 300);
+watchEdgeDirectSelectionUx();
 setTimeout(hideUnsupportedShortcut, 0);
 setTimeout(hideUnsupportedShortcut, 300);
