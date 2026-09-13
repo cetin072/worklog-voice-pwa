@@ -10,6 +10,8 @@ const targets = [
   "../public/call-folder-utils.mjs",
   "../public/call-selection-event.mjs",
   "../public/call-inbox.mjs",
+  "../public/call-analysis-preview.mjs",
+  "../public/call-upload-preflight.mjs",
   "../public/mock-call-review.mjs",
   "../public/mock-call-review-bridge.mjs",
   "../public/home-folds.mjs",
