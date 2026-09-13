@@ -29,10 +29,17 @@ function rawText(value) {
   return String(value ?? "").trim();
 }
 
-function requiredIdentifier(value, code, label) {
+function requiredIdentifier(value, requiredCode, invalidCode, label) {
   const normalized = rawText(value);
-  if (!normalized) throw jobError(code, `${label}가 필요합니다.`);
-  if (normalized.length > 200) throw jobError(`${code}_INVALID`, `${label}가 허용 길이를 초과했습니다.`);
+  if (!normalized) throw jobError(requiredCode, `${label}가 필요합니다.`);
+  if (normalized.length > 200) throw jobError(invalidCode, `${label}가 허용 길이를 초과했습니다.`);
+  return normalized;
+}
+
+function optionalBoundedIdentifier(value, max, invalidCode, label) {
+  const normalized = rawText(value);
+  if (!normalized) return "";
+  if (normalized.length > max) throw jobError(invalidCode, `${label}가 허용 길이를 초과했습니다.`);
   return normalized;
 }
 
@@ -72,11 +79,13 @@ function normalizeOwner(source, context) {
     userId: requiredIdentifier(
       source?.userId ?? source?.user_id ?? context?.userId ?? context?.user_id,
       "PROCESSING_JOB_USER_REQUIRED",
+      "PROCESSING_JOB_USER_INVALID",
       "userId",
     ),
     workspaceId: requiredIdentifier(
       source?.workspaceId ?? source?.workspace_id ?? context?.workspaceId ?? context?.workspace_id,
       "PROCESSING_JOB_WORKSPACE_REQUIRED",
+      "PROCESSING_JOB_WORKSPACE_INVALID",
       "workspaceId",
     ),
   };
@@ -90,6 +99,12 @@ function nonNegativeInteger(value) {
 
 function frozenRecord(value) {
   return Object.freeze(value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {});
+}
+
+function assertMutableJob(job) {
+  if (TERMINAL_STATUSES.has(job.status)) {
+    throw jobError("PROCESSING_JOB_TERMINAL_IMMUTABLE", "종료된 Processing Job은 변경할 수 없습니다.");
+  }
 }
 
 export function canTransitionProcessingJobStatus(from, to) {
@@ -120,9 +135,24 @@ export function normalizeProcessingJob(raw = {}, context = {}) {
 
   return Object.freeze({
     schemaVersion: PROCESSING_JOB_SCHEMA_VERSION,
-    jobId: requiredIdentifier(source.jobId ?? source.job_id ?? source.id, "PROCESSING_JOB_ID_REQUIRED", "jobId"),
-    requestId: requiredIdentifier(source.requestId ?? source.request_id, "PROCESSING_JOB_REQUEST_ID_REQUIRED", "requestId"),
-    idempotencyKey: optionalText(source.idempotencyKey ?? source.idempotency_key, 500),
+    jobId: requiredIdentifier(
+      source.jobId ?? source.job_id ?? source.id,
+      "PROCESSING_JOB_ID_REQUIRED",
+      "PROCESSING_JOB_ID_INVALID",
+      "jobId",
+    ),
+    requestId: requiredIdentifier(
+      source.requestId ?? source.request_id,
+      "PROCESSING_JOB_REQUEST_ID_REQUIRED",
+      "PROCESSING_JOB_REQUEST_ID_INVALID",
+      "requestId",
+    ),
+    idempotencyKey: optionalBoundedIdentifier(
+      source.idempotencyKey ?? source.idempotency_key,
+      500,
+      "PROCESSING_JOB_IDEMPOTENCY_KEY_INVALID",
+      "idempotencyKey",
+    ),
     userId: owner.userId,
     workspaceId: owner.workspaceId,
     kind: normalizeToken(source.kind, "PROCESSING_JOB_KIND", "kind", true),
@@ -176,6 +206,7 @@ export function transitionProcessingJob(job, next = {}, at = new Date()) {
 
 export function setProcessingCheckpoint(job, name, value, at = new Date()) {
   const current = normalizeProcessingJob(job);
+  assertMutableJob(current);
   const checkpointName = normalizeToken(name, "PROCESSING_JOB_CHECKPOINT", "checkpoint", true);
   const time = normalizeDate(at, undefined, "PROCESSING_JOB_UPDATED_AT_INVALID");
   return normalizeProcessingJob({
@@ -187,6 +218,7 @@ export function setProcessingCheckpoint(job, name, value, at = new Date()) {
 
 export function clearProcessingCheckpoint(job, name, at = new Date()) {
   const current = normalizeProcessingJob(job);
+  assertMutableJob(current);
   const checkpointName = normalizeToken(name, "PROCESSING_JOB_CHECKPOINT", "checkpoint", true);
   const checkpoints = { ...current.checkpoints };
   delete checkpoints[checkpointName];
@@ -196,6 +228,7 @@ export function clearProcessingCheckpoint(job, name, at = new Date()) {
 
 export function incrementProcessingAttempt(job, at = new Date()) {
   const current = normalizeProcessingJob(job);
+  assertMutableJob(current);
   const time = normalizeDate(at, undefined, "PROCESSING_JOB_UPDATED_AT_INVALID");
   return normalizeProcessingJob({
     ...current,
