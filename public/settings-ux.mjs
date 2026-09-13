@@ -50,17 +50,22 @@ function moveBudgetFields(accountSection, targetGrid) {
 }
 
 function buildDisplaySection() {
-  const select = document.getElementById("settingsHomeFoldDefault");
-  const label = select?.closest("label");
-  if (!label) return null;
+  const labels = ["settingsHomeFoldCalls", "settingsHomeFoldBriefing"]
+    .map((id) => document.getElementById(id)?.closest("label"))
+    .filter(Boolean);
+  if (!labels.length) return null;
+
   const section = document.createElement("section");
   section.className = "settings-section settings-section-compact";
   const title = document.createElement("h4");
-  title.textContent = "메인 화면";
+  title.textContent = "메인 화면 기본 상태";
   const grid = document.createElement("div");
   grid.className = "settings-grid";
-  grid.append(label);
-  section.append(title, grid);
+  labels.forEach((label) => grid.append(label));
+  const note = document.createElement("p");
+  note.className = "settings-note";
+  note.textContent = "각 항목을 따로 설정할 수 있습니다. 예: 통화녹음은 접기, 브리핑·일정은 펼치기.";
+  section.append(title, grid, note);
   return section;
 }
 
@@ -101,7 +106,7 @@ function organizeSettings() {
 
   if (accountSection?.querySelector("h3")) accountSection.querySelector("h3").textContent = "사용자";
 
-  const display = createCategory("settingsCategoryDisplay", "화면", "메인 화면에서 자주 보이는 영역의 기본 표시 상태를 정합니다.");
+  const display = createCategory("settingsCategoryDisplay", "화면", "메인 화면에서 자주 보이는 영역의 기본 표시 상태를 항목별로 정합니다.");
   const user = createCategory("settingsCategoryUser", "사용자", "이 기기에서 기록되는 사용자 구분값을 설정합니다.");
   const call = createCategory("settingsCategoryCall", "통화 · 녹음", "통화녹음 위치와 개인정보 보관정책을 관리합니다.");
   const ai = createCategory("settingsCategoryAi", "AI · 비용", "유료 기능 잠금, 월 예산, 사용량과 예상원가를 확인합니다.");
