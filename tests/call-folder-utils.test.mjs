@@ -5,11 +5,16 @@ import {
   rankAudioFileHandles,
   recentCalendarRange,
   recordingTimestampFromFilename,
+  selectAudioFilesInRange,
   selectAudioHandlesInRange,
 } from "../public/call-folder-utils.mjs";
 
 function handle(name) {
   return { kind: "file", name };
+}
+
+function pickedFile(name, lastModified = 0, type = "audio/mp4") {
+  return { name, lastModified, type, size: 1024 };
 }
 
 function pad(value) {
@@ -85,6 +90,34 @@ test("최근 3일 범위는 오늘·어제·그제만 선택하고 그 이전은
   ]);
 });
 
+test("기억형 파일선택 결과도 최근 3일만 남긴다", () => {
+  const range = recentCalendarRange(3, new Date(2026, 8, 13, 14, 30, 0));
+  const selected = selectAudioFilesInRange([
+    pickedFile("오늘_01012345678_20260913100000.m4a"),
+    pickedFile("어제_01012345678_20260912100000.m4a"),
+    pickedFile("그제_01012345678_20260911100000.m4a"),
+    pickedFile("나흘전_01012345678_20260910100000.m4a"),
+    pickedFile("memo.txt", Date.now(), "text/plain"),
+  ], range);
+  assert.equal(selected.totalAudioCount, 4);
+  assert.equal(selected.matchedCount, 3);
+  assert.deepEqual(selected.files.map((file) => file.name), [
+    "오늘_01012345678_20260913100000.m4a",
+    "어제_01012345678_20260912100000.m4a",
+    "그제_01012345678_20260911100000.m4a",
+  ]);
+});
+
+test("파일명 날짜가 없으면 명시적으로 선택한 파일의 수정일을 fallback으로 쓴다", () => {
+  const range = dateInputRange("2026-09-12", "2026-09-12");
+  const lastModified = new Date(2026, 8, 12, 9, 0, 0).getTime();
+  const selected = selectAudioFilesInRange([
+    pickedFile("날짜없는녹음.m4a", lastModified),
+  ], range);
+  assert.equal(selected.matchedCount, 1);
+  assert.equal(selected.fallbackDateCount, 1);
+});
+
 test("사용자가 고른 시작일·종료일 범위만 선택한다", () => {
   const range = dateInputRange("2026-09-01", "2026-09-05");
   assert.ok(range);
@@ -106,7 +139,7 @@ test("잘못된 기간 입력은 거부한다", () => {
   assert.equal(dateInputRange("", "2026-09-01"), null);
 });
 
-test("파일명 날짜를 읽을 수 없는 오디오는 기간 자동선택에서 제외하고 개수를 센다", () => {
+test("파일명 날짜를 읽을 수 없는 폴더 항목은 기간 자동선택에서 제외하고 개수를 센다", () => {
   const range = dateInputRange("2026-09-01", "2026-09-30");
   const selected = selectAudioHandlesInRange([
     handle("정상_01012345678_20260912123000.m4a"),
