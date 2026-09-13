@@ -18,13 +18,31 @@ test("App Shell에 통화폴더 대표 흐름의 필수 DOM과 모듈이 모두 
   assert.equal(html.includes("파일 직접 선택"), true);
 });
 
-test("폴더 파일 전달은 앱 내부 이벤트를 시도하고 기존 file input change fallback을 유지한다", async () => {
+test("폴더·파일선택 결과는 앱 내부 이벤트로 통화함에 직접 전달되고 file input fallback도 유지한다", async () => {
   const shortcut = await text("../public/call-folder-shortcut.mjs");
   const inbox = await text("../public/call-inbox.mjs");
   assert.equal(shortcut.includes("worklog:call-files-import"), true);
+  assert.equal(inbox.includes('window.addEventListener("worklog:call-files-import"'), true);
+  assert.equal(inbox.includes("event.detail.accepted = true"), true);
   assert.equal(shortcut.includes("fileInput.dispatchEvent(new Event(\"change\", { bubbles: true }))"), true);
   assert.equal(inbox.includes("fileInput?.addEventListener(\"change\""), true);
-  assert.equal(inbox.includes("importFiles(fileInput.files)"), true);
+});
+
+test("Edge Android에서는 폴더 자동읽기보다 위치 기억형 다중 파일선택을 우선한다", async () => {
+  const shortcut = await text("../public/call-folder-shortcut.mjs");
+  assert.match(shortcut, /EdgA\\\//);
+  assert.equal(shortcut.includes("showOpenFilePicker"), true);
+  assert.equal(shortcut.includes('id: FILE_PICKER_ID'), true);
+  assert.equal(shortcut.includes("multiple: true"), true);
+  assert.equal(shortcut.includes("options.startIn = currentHandle"), true);
+  assert.equal(shortcut.includes("selectAudioFilesInRange"), true);
+});
+
+test("폴더 timeout·iterator 실패는 같은 기기에서 파일선택 모드로 학습한다", async () => {
+  const shortcut = await text("../public/call-folder-shortcut.mjs");
+  assert.equal(shortcut.includes("DIRECTORY_BLOCKED_KEY"), true);
+  assert.equal(shortcut.includes('["FOLDER_SCAN_TIMEOUT", "DIRECTORY_ITERATOR_UNSUPPORTED"]'), true);
+  assert.equal(shortcut.includes("setDirectoryReadBlocked(true)"), true);
 });
 
 test("동적 UX 보강 모듈 파일이 저장소에 존재하고 로딩 실패가 핵심 통화 가져오기를 막지 않는다", async () => {
