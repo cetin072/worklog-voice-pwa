@@ -54,7 +54,7 @@ create table if not exists public.calls (
   workspace_id uuid,
   kind text not null check (kind in ('call', 'meeting')),
   title text,
-  analysis_version text not null default 'v1',
+  analysis_version text not null default 'v2',
   contact_name text,
   phone text,
   occurred_at timestamptz,
@@ -63,6 +63,7 @@ create table if not exists public.calls (
   transcript_segments jsonb not null default '[]'::jsonb,
   summary text,
   key_points jsonb not null default '[]'::jsonb,
+  report jsonb not null default '{"headline":"","overview":"","discussionPoints":[],"counterpartRequests":[],"userCommitments":[],"decisions":[],"openQuestions":[]}'::jsonb,
   transcript_retention text not null default 'keep' check (
     transcript_retention in ('keep', '30d', 'delete_after_summary')
   ),
@@ -101,7 +102,6 @@ create table if not exists public.call_actions (
   user_id uuid not null,
   action_type text not null check (action_type in ('task', 'schedule', 'follow_up', 'decision')),
   content text not null,
-  -- 날짜만 있는 일정과 시간까지 있는 일정을 기존 업무수첩/Notion 기한 구조와 동일하게 보존한다.
   due_start text,
   due_has_time boolean not null default false,
   confidence numeric(5,4) check (confidence is null or (confidence >= 0 and confidence <= 1)),
