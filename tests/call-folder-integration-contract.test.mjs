@@ -32,7 +32,7 @@ test("Edge Android에서는 폴더 자동읽기보다 위치 기억형 다중 �
   const shortcut = await text("../public/call-folder-shortcut.mjs");
   assert.match(shortcut, /EdgA\\\//);
   assert.equal(shortcut.includes("showOpenFilePicker"), true);
-  assert.equal(shortcut.includes('id: FILE_PICKER_ID'), true);
+  assert.equal(shortcut.includes("id: FILE_PICKER_ID"), true);
   assert.equal(shortcut.includes("multiple: true"), true);
   assert.equal(shortcut.includes("options.startIn = currentHandle"), true);
   assert.equal(shortcut.includes("selectAudioFilesInRange"), true);
@@ -43,6 +43,14 @@ test("폴더 timeout·iterator 실패는 같은 기기에서 파일선택 모드
   assert.equal(shortcut.includes("DIRECTORY_BLOCKED_KEY"), true);
   assert.equal(shortcut.includes('["FOLDER_SCAN_TIMEOUT", "DIRECTORY_ITERATOR_UNSUPPORTED"]'), true);
   assert.equal(shortcut.includes("setDirectoryReadBlocked(true)"), true);
+});
+
+test("Edge 안내는 시스템 폴더선택 재시도보다 파일 선택 모드를 설명한다", async () => {
+  const guide = await text("../public/call-folder-guide.mjs");
+  assert.match(guide, /EdgA\\\//);
+  assert.equal(guide.includes("파일 선택 모드를 우선 사용합니다"), true);
+  assert.equal(guide.includes("같은 선택기 ID가 마지막 위치를 기억"), true);
+  assert.equal(guide.includes("홈으로 나갔다가 업무수첩으로 돌아오면"), false);
 });
 
 test("동적 UX 보강 모듈 파일이 저장소에 존재하고 로딩 실패가 핵심 통화 가져오기를 막지 않는다", async () => {
