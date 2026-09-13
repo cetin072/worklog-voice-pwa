@@ -6,7 +6,7 @@ async function text(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
 }
 
-test("App Shell에 통화폴더 대표 흐름의 필수 DOM과 모듈이 모두 연결돼 있다", async () => {
+test("App Shell에 통화녹음 직접 선택 대표 흐름의 필수 DOM과 모듈이 모두 연결돼 있다", async () => {
   const html = await text("../public/index.html");
   for (const id of ["callImport", "callFiles", "callInboxList", "callInboxStatus", "settingsCard", "settingsOpen", "settingsClose"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
@@ -14,42 +14,42 @@ test("App Shell에 통화폴더 대표 흐름의 필수 DOM과 모듈이 모두 
   for (const src of ["/home-folds.mjs", "/call-inbox.mjs", "/call-folder-shortcut.mjs"]) {
     assert.equal(html.includes(`src=\"${src}\"`), true, `${src}가 index.html에 연결돼 있어야 한다`);
   }
-  assert.equal(html.includes("최근 3일 통화를 기본으로 불러옵니다"), true);
-  assert.equal(html.includes("파일 직접 선택"), true);
+  assert.equal(html.includes("통화녹음 파일 선택"), true);
+  assert.equal(html.includes('accept="audio/*,.m4a,.mp3,.wav,.aac,.3gp,.mp4,.ogg,.opus"'), true);
+  assert.equal(html.includes("Edge Android에서는 검증된 파일 선택 방식을 기본으로 사용합니다"), true);
 });
 
-test("폴더·파일선택 결과는 앱 내부 이벤트로 통화함에 직접 전달되고 file input fallback도 유지한다", async () => {
+test("직접 파일선택 결과는 기존 통화함 import 경로로 전달된다", async () => {
+  const inbox = await text("../public/call-inbox.mjs");
+  assert.equal(inbox.includes('importButton?.addEventListener("click", () => fileInput?.click())'), true);
+  assert.equal(inbox.includes('fileInput?.addEventListener("change"'), true);
+  assert.equal(inbox.includes("importFiles(fileInput.files)"), true);
+});
+
+test("폴더·고급 파일선택 결과는 앱 내부 이벤트로 통화함에 직접 전달되고 file input fallback도 유지한다", async () => {
   const shortcut = await text("../public/call-folder-shortcut.mjs");
   const inbox = await text("../public/call-inbox.mjs");
   assert.equal(shortcut.includes("worklog:call-files-import"), true);
   assert.equal(inbox.includes('window.addEventListener("worklog:call-files-import"'), true);
   assert.equal(inbox.includes("event.detail.accepted = true"), true);
   assert.equal(shortcut.includes("fileInput.dispatchEvent(new Event(\"change\", { bubbles: true }))"), true);
-  assert.equal(inbox.includes("fileInput?.addEventListener(\"change\""), true);
 });
 
-test("Edge Android에서는 폴더 자동읽기보다 위치 기억형 다중 파일선택을 우선한다", async () => {
-  const shortcut = await text("../public/call-folder-shortcut.mjs");
-  assert.match(shortcut, /EdgA\\\//);
-  assert.equal(shortcut.includes("showOpenFilePicker"), true);
-  assert.equal(shortcut.includes("id: FILE_PICKER_ID"), true);
-  assert.equal(shortcut.includes("multiple: true"), true);
-  assert.equal(shortcut.includes("options.startIn = currentHandle"), true);
-  assert.equal(shortcut.includes("selectAudioFilesInRange"), true);
-});
-
-test("폴더 timeout·iterator 실패는 같은 기기에서 파일선택 모드로 학습한다", async () => {
-  const shortcut = await text("../public/call-folder-shortcut.mjs");
-  assert.equal(shortcut.includes("DIRECTORY_BLOCKED_KEY"), true);
-  assert.equal(shortcut.includes('["FOLDER_SCAN_TIMEOUT", "DIRECTORY_ITERATOR_UNSUPPORTED"]'), true);
-  assert.equal(shortcut.includes("setDirectoryReadBlocked(true)"), true);
-});
-
-test("Edge 안내는 시스템 폴더선택 재시도보다 파일 선택 모드를 설명한다", async () => {
+test("Edge Android에서는 실패한 폴더 자동읽기 UI를 숨기고 직접 파일선택 버튼을 기본으로 노출한다", async () => {
   const guide = await text("../public/call-folder-guide.mjs");
+  const css = await text("../public/home-folds.css");
   assert.match(guide, /EdgA\\\//);
-  assert.equal(guide.includes("파일 선택 모드를 우선 사용합니다"), true);
-  assert.equal(guide.includes("같은 선택기 ID가 마지막 위치를 기억"), true);
+  assert.equal(guide.includes("applyEdgeDirectSelectionUx"), true);
+  assert.equal(guide.includes("shortcut.hidden = true"), true);
+  assert.equal(guide.includes('importButton.textContent = "통화녹음 파일 선택"'), true);
+  assert.equal(guide.includes("검증된 파일 선택 방식을 사용합니다"), true);
+  assert.match(css, /\.call-folder-shortcut\[hidden\]\{display:none!important\}/);
+});
+
+test("Edge 안내는 폴더 재연결을 유도하지 않고 오디오 파일 다중선택을 설명한다", async () => {
+  const guide = await text("../public/call-folder-guide.mjs");
+  assert.equal(guide.includes("파일 선택창에서 ‘오디오’를 누르고 필요한 통화녹음을 여러 개 고르세요"), true);
+  assert.equal(guide.includes("위 경로는 찾을 때 참고용입니다"), true);
   assert.equal(guide.includes("홈으로 나갔다가 업무수첩으로 돌아오면"), false);
 });
 
