@@ -62,7 +62,10 @@
         const started=Date.now();
         const wait=()=>{
           if(window.Tesseract?.createWorker)return resolve(window.Tesseract);
-          if(Date.now()-started>12000)return reject(new Error("OCR 엔진을 시작하지 못했습니다."));
+          if(Date.now()-started>12000){
+            try{existing.remove();}catch{}
+            return reject(new Error("OCR 엔진을 시작하지 못했습니다."));
+          }
           setTimeout(wait,100);
         };
         wait();
@@ -71,10 +74,15 @@
       const script=document.createElement("script");
       script.src=TESSERACT_SCRIPT;
       script.async=true;
-      script.onload=()=>window.Tesseract?.createWorker
-        ? resolve(window.Tesseract)
-        : reject(new Error("OCR 엔진을 시작하지 못했습니다."));
-      script.onerror=()=>reject(new Error("OCR 엔진 파일을 불러오지 못했습니다."));
+      script.onload=()=>{
+        if(window.Tesseract?.createWorker)return resolve(window.Tesseract);
+        try{script.remove();}catch{}
+        reject(new Error("OCR 엔진을 시작하지 못했습니다."));
+      };
+      script.onerror=()=>{
+        try{script.remove();}catch{}
+        reject(new Error("OCR 엔진 파일을 불러오지 못했습니다."));
+      };
       document.head.appendChild(script);
     }).catch(error=>{
       scriptPromise=null;
