@@ -133,7 +133,7 @@ function updateUi(hasHandle) {
   ui.actions.hidden = !hasHandle;
   ui.note.textContent = hasHandle
     ? `연결된 폴더의 최근 오디오 최대 ${MAX_FOLDER_FILES}개를 이 기기에서만 읽습니다.`
-    : "한 번 폴더를 연결하면 지원되는 브라우저에서는 다음부터 파일 탐색 단계를 줄일 수 있습니다.";
+    : "폴더 연결 화면에서는 파일이 보이지 않는 것이 정상입니다. TPhoneCallRecords에서 ‘이 폴더 사용’을 누르면 됩니다.";
 }
 
 async function loadFromHandle(handle) {
@@ -155,7 +155,7 @@ async function loadFromHandle(handle) {
 async function chooseFolderAndLoad() {
   if (typeof window.showDirectoryPicker !== "function") return;
   try {
-    setStatus("녹음 폴더를 선택해 주세요.");
+    setStatus("TPhoneCallRecords까지 들어간 뒤 ‘이 폴더 사용’을 누르세요. 파일이 안 보이는 것이 정상입니다.");
     const handle = await window.showDirectoryPicker({ id: PICKER_ID, mode: "read" });
     await saveHandle(handle);
     currentHandle = handle;
