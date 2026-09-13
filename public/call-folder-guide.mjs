@@ -65,8 +65,8 @@ function buildGuide() {
   const steps = document.createElement("p");
   steps.className = "call-folder-path-help";
   steps.textContent = isEdgeAndroid()
-    ? "Edge Android에서는 폴더 자동읽기가 기기별로 제한될 수 있어 파일 선택 모드를 우선 사용합니다. 파일 선택창에서 이 위치로 한 번 이동하면 같은 선택기 ID가 마지막 위치를 기억할 수 있습니다."
-    : "폴더 자동읽기를 지원하는 브라우저에서는 TPhoneCallRecords를 한 번 연결해 최근 통화를 불러올 수 있습니다. 지원하지 않으면 파일 선택 모드로 자동 전환합니다.";
+    ? "Edge Android에서는 폴더 자동읽기 대신 검증된 파일 선택 방식을 사용합니다. 파일 선택창에서 ‘오디오’를 누르고 필요한 통화녹음을 여러 개 고르세요. 위 경로는 찾을 때 참고용입니다."
+    : "폴더 자동읽기를 지원하는 브라우저에서는 최근 3일 통화를 자동으로 추릴 수 있습니다. 지원하지 않으면 파일 선택 방식으로 전환합니다.";
 
   const note = document.createElement("p");
   note.className = "call-folder-path-note";
@@ -76,9 +76,21 @@ function buildGuide() {
   importButton.insertAdjacentElement("beforebegin", guide);
 }
 
+function applyEdgeDirectSelectionUx() {
+  if (!isEdgeAndroid() || !importButton) return;
+  const shortcut = document.getElementById("callFolderShortcut");
+  if (shortcut) {
+    shortcut.hidden = true;
+    shortcut.setAttribute("aria-hidden", "true");
+  }
+  importButton.hidden = false;
+  importButton.textContent = "통화녹음 파일 선택";
+  importButton.setAttribute("aria-label", "통화녹음 오디오 파일 여러 개 선택");
+}
+
 function hideUnsupportedShortcut() {
   const shortcut = document.getElementById("callFolderShortcut");
-  if (!shortcut) return;
+  if (!shortcut || isEdgeAndroid()) return;
   const primary = shortcut.querySelector(".call-folder-primary");
   if (primary?.disabled && !shortcut.querySelector(".call-folder-connection:not([hidden])")) {
     primary.hidden = true;
@@ -87,5 +99,7 @@ function hideUnsupportedShortcut() {
 }
 
 buildGuide();
+setTimeout(applyEdgeDirectSelectionUx, 0);
+setTimeout(applyEdgeDirectSelectionUx, 300);
 setTimeout(hideUnsupportedShortcut, 0);
 setTimeout(hideUnsupportedShortcut, 300);
