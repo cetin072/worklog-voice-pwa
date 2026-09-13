@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 
 const scanner=await readFile(new URL('../public/scanner.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../public/scanner.css',import.meta.url),'utf8');
+const sw=await readFile(new URL('../public/sw.js',import.meta.url),'utf8');
 
 test('gallery import is primary and camera capture remains separate',()=>{
   assert.match(scanner,/galleryInput\.multiple=true/);
@@ -20,4 +21,5 @@ test('multi-page scanner supports edit delete reorder PDF save and share',()=>{
   assert.match(scanner,/sourceBlob/);
   assert.match(css,/\.scan-pdf-card/);
   assert.match(css,/\.scan-page-item/);
+  assert.match(sw,/\/scanner-pdf\.js/);
 });
