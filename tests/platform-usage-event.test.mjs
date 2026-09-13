@@ -96,6 +96,7 @@ test("snake_case DB shape도 canonical field로 정규화한다", () => {
 test("음수 사용량과 비용은 0으로 정규화하고 actualCost null은 보존한다", () => {
   const event = normalizeUsageEvent({
     eventKey: "negative-test",
+    feature: "call_summary",
     service: "ai",
     inputTokens: -3,
     outputTokens: -4,
@@ -124,21 +125,62 @@ test("deterministic eventKey는 같은 입력에 안정적이고 providerRequest
 
 test("eventKey를 만들 정보가 없으면 명시적으로 실패한다", () => {
   assert.throws(
-    () => normalizeUsageEvent({ service: "ai" }, { workspaceContext, now: fixedNow }),
+    () => normalizeUsageEvent({ feature: "call_summary", service: "ai" }, { workspaceContext, now: fixedNow }),
     (error) => error?.code === "USAGE_EVENT_KEY_REQUIRES_REQUEST_AND_SERVICE",
   );
 });
 
 test("Workspace 소유권이 없으면 Usage Event 생성을 차단한다", () => {
   assert.throws(
-    () => normalizeUsageEvent({ eventKey: "event-1", service: "ai" }, { now: fixedNow }),
+    () => normalizeUsageEvent({ eventKey: "event-1", feature: "call_summary", service: "ai" }, { now: fixedNow }),
     (error) => error?.code === "USAGE_EVENT_USER_REQUIRED",
+  );
+});
+
+test("직접 전달된 userId/workspaceId 길이 초과를 조용히 자르지 않는다", () => {
+  assert.throws(
+    () => normalizeUsageEvent({
+      eventKey: "event-1",
+      userId: "u".repeat(201),
+      workspaceId: "workspace-1",
+      feature: "call_summary",
+      service: "ai",
+    }, { now: fixedNow }),
+    (error) => error?.code === "USAGE_EVENT_USER_INVALID",
+  );
+});
+
+test("feature/service 누락은 canonical Usage Event에서 차단한다", () => {
+  assert.throws(
+    () => normalizeUsageEvent({ eventKey: "event-1" }, { workspaceContext, now: fixedNow }),
+    (error) => error?.code === "USAGE_EVENT_FEATURE_REQUIRED",
+  );
+  assert.throws(
+    () => normalizeUsageEvent({ eventKey: "event-1", feature: "call_summary" }, { workspaceContext, now: fixedNow }),
+    (error) => error?.code === "USAGE_EVENT_SERVICE_REQUIRED",
+  );
+});
+
+test("잘못된 status는 success로 조용히 바꾸지 않는다", () => {
+  assert.throws(
+    () => normalizeUsageEvent({
+      eventKey: "event-1",
+      feature: "call_summary",
+      service: "ai",
+      status: "unknown",
+    }, { workspaceContext, now: fixedNow }),
+    (error) => error?.code === "USAGE_EVENT_STATUS_INVALID",
   );
 });
 
 test("잘못된 createdAt은 조용히 현재시각으로 바꾸지 않는다", () => {
   assert.throws(
-    () => normalizeUsageEvent({ eventKey: "event-1", service: "ai", createdAt: "bad" }, { workspaceContext }),
+    () => normalizeUsageEvent({
+      eventKey: "event-1",
+      feature: "call_summary",
+      service: "ai",
+      createdAt: "bad",
+    }, { workspaceContext }),
     (error) => error?.code === "USAGE_EVENT_CREATED_AT_INVALID",
   );
 });
