@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const index=fs.readFileSync("public/index.html","utf8");
 const ocr=fs.readFileSync("public/scanner-ocr.js","utf8");
+const sw=fs.readFileSync("public/sw.js","utf8");
 const build=fs.readFileSync("scripts/prepare-ocr-assets.mjs","utf8");
 const pkg=JSON.parse(fs.readFileSync("package.json","utf8"));
 
@@ -26,6 +27,18 @@ test("OCR supports Korean and English and requires explicit user action",()=>{
   assert.match(ocr,/createWorker\(\["kor","eng"\]/);
   assert.match(ocr,/readButton\.addEventListener\("click",recognize\)/);
   assert.doesNotMatch(ocr,/previewImage\.addEventListener\("load",recognize/);
+});
+
+test("failed OCR script loads are removable so retry performs a real reload",()=>{
+  assert.match(ocr,/existing\.remove\(\)/);
+  assert.match(ocr,/script\.remove\(\)/);
+  assert.match(ocr,/scriptPromise=null/);
+});
+
+test("service worker caches self-hosted OCR assets after the first successful load",()=>{
+  assert.match(sw,/pathname\.startsWith\("\/vendor\/"\)/);
+  assert.match(sw,/cache\.match\(e\.request\)/);
+  assert.match(sw,/cache\.put\(e\.request,response\.clone\(\)\)/);
 });
 
 test("build copies complete local OCR runtime",()=>{
