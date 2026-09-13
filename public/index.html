@@ -50,12 +50,12 @@
         </div>
         <div class="scan-ocr-box">
           <button id="scanOcrRead" class="scan-ocr-read" type="button">🔎 문서 내용 읽기</button>
-          <p id="scanOcrStatus" class="scan-ocr-status">스캔 이미지를 휴대폰에서 읽습니다. OCR API 비용은 없습니다.</p>
+          <p id="scanOcrStatus" class="scan-ocr-status">확정한 스캔을 휴대폰에서 읽습니다. OCR API 비용은 없습니다.</p>
           <div id="scanOcrResult" class="scan-ocr-result" hidden>
             <label for="scanOcrText">읽은 내용 · 저장 전 수정 가능</label>
             <textarea id="scanOcrText" rows="6" spellcheck="false"></textarea>
             <div class="scan-ocr-actions">
-              <button id="scanOcrUse" type="button">업무 내용에 넣기</button>
+              <button id="scanOcrUse" type="button">업무 내용으로 바꾸기</button>
               <button id="scanOcrClear" type="button">OCR 지우기</button>
             </div>
           </div>
@@ -166,7 +166,7 @@
           <div class="scanner-canvas-wrap">
             <canvas id="scanEditorCanvas"></canvas>
           </div>
-          <p class="scanner-help">흰색 원 4개를 손가락으로 문서 네 귀퉁이에 맞추세요.</p>
+          <p class="scanner-help">흰색 원은 한 모서리씩, 파란 점은 해당 변의 두 끝을 같이 움직입니다. 반대쪽 변은 고정됩니다.</p>
         </section>
 
         <section class="scanner-panel">
@@ -181,8 +181,8 @@
           </div>
         </section>
 
-        <button id="scanApply" class="scanner-apply" type="button">이 스캔 사용</button>
-        <p class="scanner-help">이미지는 휴대폰 브라우저에서 보정·압축된 뒤 저장할 때만 Notion으로 전송됩니다.</p>
+        <button id="scanApply" class="scanner-apply" type="button">스캔 확정</button>
+        <p class="scanner-help">확정한 스캔이 메인 화면으로 넘어간 뒤 ‘문서 내용 읽기’를 눌러 OCR을 실행합니다.</p>
       </div>
     </div>
   </dialog>
@@ -193,6 +193,7 @@
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
   <script src="/scanner-core.js" defer></script>
+  <script src="/scanner-geometry.js" defer></script>
   <script src="/scanner.js" defer></script>
   <script src="/scanner-ocr.js" defer></script>
   <script src="/quick-save.js" defer></script>
