@@ -1,3 +1,11 @@
+if (!document.querySelector('link[data-worklog-ux-refinement="true"]')) {
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "/ux-refinement.css";
+  link.dataset.worklogUxRefinement = "true";
+  document.head.append(link);
+}
+
 const card = document.getElementById("settingsCard");
 const form = document.getElementById("settingsForm");
 
