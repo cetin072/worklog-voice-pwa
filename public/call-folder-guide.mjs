@@ -5,6 +5,10 @@ export const CALL_RECORDING_PATH_GUIDE = Object.freeze({
 
 const importButton = document.getElementById("callImport");
 
+function isEdgeAndroid() {
+  return /\bEdgA\//i.test(navigator.userAgent || "");
+}
+
 function copyFallback(text) {
   const area = document.createElement("textarea");
   area.value = text;
@@ -45,7 +49,7 @@ function buildGuide() {
   top.className = "call-folder-path-top";
   const text = document.createElement("div");
   const title = document.createElement("strong");
-  title.textContent = "📍 통화녹음 폴더";
+  title.textContent = "📍 통화녹음 위치";
   const path = document.createElement("p");
   path.className = "call-folder-path";
   path.textContent = CALL_RECORDING_PATH_GUIDE.label;
@@ -60,17 +64,15 @@ function buildGuide() {
 
   const steps = document.createElement("p");
   steps.className = "call-folder-path-help";
-  steps.textContent = "폴더 연결에서는 파일이 안 보이는 것이 정상입니다. TPhoneCallRecords까지 들어간 뒤 ‘이 폴더 사용’ → ‘허용’을 누르세요.";
-
-  const edgeNote = document.createElement("p");
-  edgeNote.className = "call-folder-path-help";
-  edgeNote.textContent = "Edge에서 ‘허용’ 뒤에도 폴더 화면이 남는 경우 뒤로가기를 누르면 취소될 수 있습니다. 홈으로 나갔다가 업무수첩으로 돌아오면 연결 상태를 확인할 수 있습니다.";
+  steps.textContent = isEdgeAndroid()
+    ? "Edge Android에서는 폴더 자동읽기가 기기별로 제한될 수 있어 파일 선택 모드를 우선 사용합니다. 파일 선택창에서 이 위치로 한 번 이동하면 같은 선택기 ID가 마지막 위치를 기억할 수 있습니다."
+    : "폴더 자동읽기를 지원하는 브라우저에서는 TPhoneCallRecords를 한 번 연결해 최근 통화를 불러올 수 있습니다. 지원하지 않으면 파일 선택 모드로 자동 전환합니다.";
 
   const note = document.createElement("p");
   note.className = "call-folder-path-note";
   note.textContent = "현재 확인된 에이닷 전화 녹음 경로입니다. 휴대폰·전화앱 버전에 따라 위치가 다를 수 있습니다.";
 
-  guide.append(top, steps, edgeNote, note);
+  guide.append(top, steps, note);
   importButton.insertAdjacentElement("beforebegin", guide);
 }
 
