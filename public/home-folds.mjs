@@ -1,12 +1,27 @@
 import {
   HOME_FOLD_DEFAULT,
+  HOME_FOLD_SECTION,
   loadHomeFoldDefault,
   saveHomeFoldDefault,
 } from "./home-folds-state.mjs";
 
 const FOLD_SECTIONS = [
-  { cardId: "callInboxCard", headSelector: ".call-inbox-head", name: "통화녹음" },
-  { cardId: "briefingCard", headSelector: ".briefing-head", name: "브리핑·일정" },
+  {
+    sectionId: HOME_FOLD_SECTION.CALLS,
+    settingId: "settingsHomeFoldCalls",
+    cardId: "callInboxCard",
+    headSelector: ".call-inbox-head",
+    name: "통화녹음",
+    settingLabel: "통화녹음 기본 상태",
+  },
+  {
+    sectionId: HOME_FOLD_SECTION.BRIEFING,
+    settingId: "settingsHomeFoldBriefing",
+    cardId: "briefingCard",
+    headSelector: ".briefing-head",
+    name: "브리핑·일정",
+    settingLabel: "브리핑·일정 기본 상태",
+  },
 ];
 
 const foldControllers = [];
@@ -60,20 +75,24 @@ function setupFoldSection(config) {
   return controller;
 }
 
-function applyDefault(defaultState) {
-  const expanded = defaultState === HOME_FOLD_DEFAULT.EXPANDED;
-  foldControllers.forEach((controller) => controller.setExpanded(expanded));
+function applySectionDefault(sectionId, defaultState) {
+  const controller = foldControllers.find((item) => item.sectionId === sectionId);
+  if (!controller) return;
+  controller.setExpanded(defaultState === HOME_FOLD_DEFAULT.EXPANDED);
 }
 
-function installSettingControl() {
-  const grid = document.querySelector("#settingsForm .settings-grid");
-  if (!grid || document.getElementById("settingsHomeFoldDefault")) return;
+function applySavedDefaults() {
+  FOLD_SECTIONS.forEach((config) => {
+    applySectionDefault(config.sectionId, loadHomeFoldDefault(config.sectionId));
+  });
+}
 
+function createSettingControl(config) {
   const label = document.createElement("label");
   const span = document.createElement("span");
-  span.textContent = "메인 보조영역 기본 상태";
+  span.textContent = config.settingLabel;
   const select = document.createElement("select");
-  select.id = "settingsHomeFoldDefault";
+  select.id = config.settingId;
 
   const collapsed = document.createElement("option");
   collapsed.value = HOME_FOLD_DEFAULT.COLLAPSED;
@@ -82,25 +101,33 @@ function installSettingControl() {
   expanded.value = HOME_FOLD_DEFAULT.EXPANDED;
   expanded.textContent = "기본 펼치기";
   select.append(collapsed, expanded);
-  select.value = loadHomeFoldDefault();
+  select.value = loadHomeFoldDefault(config.sectionId);
   label.append(span, select);
-  grid.append(label);
 
   select.addEventListener("change", () => {
-    const saved = saveHomeFoldDefault(select.value);
-    applyDefault(saved);
+    const saved = saveHomeFoldDefault(config.sectionId, select.value);
+    applySectionDefault(config.sectionId, saved);
     const status = document.getElementById("settingsStatus");
     if (status) {
-      status.textContent = saved === HOME_FOLD_DEFAULT.EXPANDED
-        ? "메인 통화·브리핑 영역을 기본 펼치기로 저장했습니다."
-        : "메인 통화·브리핑 영역을 기본 접기로 저장했습니다.";
+      status.textContent = `${config.name} 영역을 ${saved === HOME_FOLD_DEFAULT.EXPANDED ? "기본 펼치기" : "기본 접기"}로 저장했습니다.`;
     }
+  });
+
+  return label;
+}
+
+function installSettingControls() {
+  const grid = document.querySelector("#settingsForm .settings-grid");
+  if (!grid) return;
+  FOLD_SECTIONS.forEach((config) => {
+    if (document.getElementById(config.settingId)) return;
+    grid.append(createSettingControl(config));
   });
 }
 
 FOLD_SECTIONS.forEach(setupFoldSection);
-installSettingControl();
-applyDefault(loadHomeFoldDefault());
+installSettingControls();
+applySavedDefaults();
 
 import("./call-folder-guide.mjs").catch(() => {});
 import("./settings-ux.mjs").catch(() => {});
