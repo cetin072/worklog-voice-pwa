@@ -29,12 +29,13 @@
 | 빠른 업무기록 | MAIN / 실사용 | 기존 업무기록 결과, 내부 Result 계약은 정식 명명 필요 | Task / Schedule / FollowUp 일부 연결 | Auth/Permission 현행, 향후 Workspace Context / Sync | Notion Worklog Adapter, Web Speech | **P0** |
 | 일정 | PARTIAL / 독립 모듈 미완성 | `Schedule` / 일정 화면 계약 정식화 필요 | `ScheduleCandidate` | Workspace Context / Sync / Conflict / Audit | Google Calendar Adapter(향후) | **P0 — 놓치지 않는 일정이 제품 최우선 가치** |
 | 통화정리 | DRAFT / 개발 고도화 중 | `CallReport` | Task / Schedule / Contact / FollowUp | Storage / Processing Job / Retry·Idempotency / Usage·Cost / Retention | STT Adapter / AI Adapter / 향후 CRM·Calendar | **P0** |
-| 문서 스캔/PDF | DRAFT / 개발 중 | `ScanDocument` | 기본 없음, OCR/AI 확장 시 별도 | Local Storage / Storage Adapter(선택) / Export | 기기 카메라·갤러리 / OCR은 선택 Processor | **P0~P1** |
-| 브리핑 | MAIN / 실사용 | `BriefingView` 성격의 읽기 결과, 정식 Result 계약은 추후 | 직접 Candidate 생성보다 Confirmed 업무/일정 조회 중심 | Workspace Context(향후) / Sync read / Audit 일부 | 현재 Notion / Kakao Delivery | **P1** |
+| 문서 스캔/PDF | DRAFT / 개발 중 | `ScanDocument` | 기본 없음, OCR/AI 확장 시 기존 Candidate 연결 | Local Storage / Storage Adapter(선택) / Export | 기기 카메라·갤러리 / OCR은 선택 Processor | **P0~P1** |
+| 브리핑 | MAIN / 실사용 | 읽기/View 결과, 정식 Result 계약은 추후 | Confirmed 업무/일정 조회 중심 | Workspace Context(향후) / Sync read / Audit 일부 | 현재 Notion / Kakao Delivery | **P1** |
 | 회의정리 | PLANNED | `MeetingReport` | Task / Schedule / Contact / FollowUp | Storage / Processing Job / Usage·Cost / Retention | STT / AI | **P1** |
 | 메일 업무화 | PLANNED | `MailAnalysis` | Task / Schedule / Contact / FollowUp | Auth/Permission / Processing Job(필요 시) | Gmail/메일 Connector / AI | **P1~P2** |
 | 캡처 분석 | PLANNED | `CaptureAnalysis` | Task / Schedule / Contact / FollowUp | Local Storage / Processing Job(필요 시) / Usage·Cost | OCR / AI | **P1 — 일정 유입 경로로 중요** |
 | CRM | PLANNED | `Contact`/`Customer` 영역 Result 정식화 필요 | `ContactCandidate`, FollowUp 연결 | Workspace Context / Permission / Sync / Conflict / Audit | 외부 CRM은 향후 Adapter | **P1~P2** |
+| 업무 문서 | PLANNED | `WorkDocument` 후보, 정식 계약 필요 | 기본 없음 | Workspace Context / Storage / Export | PDF/문서 Export, 외부 문서도구는 향후 Adapter | **P2** |
 
 우선순위는 구현 순서를 절대 고정하는 값이 아니라 현재 제품가치와 플랫폼 의존성을 나타낸다.
 
@@ -91,7 +92,7 @@
 - `SourceRef`: 통화/회의/메일/캡처 등 출처
 
 ### 중요한 UX
-- 사용자가 직접 `내일 3시 김대리 전화 일정 잡아줘`라고 한 경우 불필요한 재확인을 최소화한다.
+- 사용자가 `내일 3시 김대리 전화 일정 잡아줘`처럼 직접 명시한 경우 불필요한 재확인을 최소화한다.
 - 통화/회의/메일에서 추론한 일정은 기본 Candidate로 보여준다.
 - 수정 버튼은 결과 가까이에 둔다.
 
@@ -167,7 +168,7 @@ OCR과 Notion은 필수 성공조건이 아니다.
 ### Result / Candidate
 - Result: `ScanDocument`
 - 기본 Candidate 없음
-- 향후 OCR/AI 문서분석이 붙으면 별도 Candidate를 무리하게 만들기보다 기존 Task/Schedule Candidate로 연결 가능
+- 향후 OCR/AI 문서분석이 붙으면 별도 Candidate를 무리하게 만들기보다 기존 Task/Schedule Candidate로 연결한다.
 
 ### 플랫폼 의존성
 가능한 처리는 브라우저/기기 로컬에서 수행한다. Cloud Storage는 백업/동기화 또는 서버 Processor가 필요한 경우에만 선택적으로 사용한다.
@@ -258,13 +259,31 @@ AI가 이름이 비슷하다는 이유만으로 고객을 자동 병합하지 �
 
 ---
 
+## J. 업무 문서
+
+### 현재 상태
+**PLANNED.** 독립 문서작성/템플릿 모듈은 아직 없다.
+
+### 사용자 가치
+업무기록·고객·회의·통화 등의 이미 확정된 정보를 활용해 보고서, 확인서, 제안서 등 반복 문서를 빠르게 만든다.
+
+### 목표 흐름
+`문서 유형 선택 → 필요한 내부 데이터 선택 → 문서 초안 생성/편집 → 로컬 저장/공유/Export`
+
+### 경계
+- 스캔/PDF 모듈은 기존 종이/이미지를 디지털 문서로 만드는 도구다.
+- 업무 문서 모듈은 업무수첩의 구조화 데이터로 새 문서를 작성하는 도구다.
+- AI를 사용하더라도 사용자 검수 전 외부 발송/확정 문서로 자동 처리하지 않는다.
+
+---
+
 # 4. 공통 Platform Service와 모듈 소비 관계
 
 | Platform Service | 1차 소비 모듈 | 비고 |
 |---|---|---|
 | Workspace Context | 전 모듈 | 개인 UX에서는 복잡성을 숨김 |
 | Auth / Permission | 전 모듈 | Closed Beta 전에 실제 다중사용자 격리 필요 |
-| Storage Service | 통화, 회의, 선택적 스캔/캡처 | 원본 영구보관 기본 아님 |
+| Storage Service | 통화, 회의, 선택적 스캔/캡처/업무문서 | 원본 영구보관 기본 아님 |
 | Processing Job | 통화, 회의, OCR/AI 처리 모듈 | 도메인 보고서 형식은 소유하지 않음 |
 | Retry / Idempotency | 통화, 회의, 외부 연동 | 중복 비용·중복 일정 생성 방지 |
 | Usage / Cost | STT/AI/OCR/Storage 사용 모듈 | workspace_id + user_id |
@@ -281,8 +300,8 @@ AI가 이름이 비슷하다는 이유만으로 고객을 자동 병합하지 �
 | Worklog / Notion Adapter | 현재 Notion 운영 원장을 유지하되 도메인 직접종속 축소 | 업무기록, 브리핑, 선택적 각 모듈 |
 | Calendar Adapter | 아직 독립 구현 전. 초기 단방향 우선 | 일정 및 Candidate 생성 모듈 |
 | STT Adapter | 통화 Draft에 계약 존재, 실제 Provider 미연결 | 통화, 회의 |
-| AI Adapter | 통화 Draft에 계약 존재, 실제 Provider 미연결 | 통화, 회의, 메일, 캡처 |
-| Storage Adapter | 통화 Draft에 prepared-upload 계약 존재, 실제 업무수첩 Storage 미연결 | 통화, 회의, 선택적 OCR |
+| AI Adapter | 통화 Draft에 계약 존재, 실제 Provider 미연결 | 통화, 회의, 메일, 캡처, 업무문서 |
+| Storage Adapter | 통화 Draft에 prepared-upload 계약 존재, 실제 업무수첩 Storage 미연결 | 통화, 회의, 선택적 OCR/문서 |
 | Kakao Delivery | 기존 브리핑 전달 경로 실사용 | 브리핑 |
 | Gmail/Mail Connector | 미구현 | 메일 업무화 |
 | CRM Adapter | 업무수첩 내부 CRM 이후 필요 시 외부 CRM 연결 | CRM |
