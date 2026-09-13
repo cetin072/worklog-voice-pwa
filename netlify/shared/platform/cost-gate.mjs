@@ -64,6 +64,7 @@ export function normalizeCostGateDecision(raw = {}, context = {}) {
     reason: token(source.reason, "COST_GATE_REASON", "reason"),
     userId: owner.userId,
     workspaceId: owner.workspaceId,
+    role: owner.role,
     evaluatedAt: validDate(source.evaluatedAt ?? source.evaluated_at, context.now ?? new Date()),
     metadata: Object.freeze({ ...metadata }),
   });
