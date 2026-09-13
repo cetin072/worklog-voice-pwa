@@ -361,8 +361,120 @@ Gmail 등 외부 서비스가 실제 원본인 경우 업무수첩이 원본 소
 
 ---
 
-# 다음 결정 예정
+# Decision 07 — 상용화 전환 기준과 단계별 출시 구조
 
-## Decision 07 — 상용화 전환 기준과 단계별 출시 구조
+- 상태: **확정**
+- 확정일: 2026-09-13
+- 변경 원칙: 시장·비용·법률 환경이 크게 바뀌지 않는 한 단계 전환의 기본 Gate로 사용한다.
 
-다음 논의에서는 현재 2인 실사용 단계에서 내부 Alpha, 제한 Beta, 일반 사용자 출시, 유료화로 넘어가기 위해 어떤 기능·보안·데이터·비용 기준을 반드시 충족해야 하는지 확정한다.
+> **출시는 날짜나 기능 개수로 결정하지 않고 단계별 품질·보안·운영 Gate 충족 여부로 결정한다. 모든 모듈 완성을 기다리지 않고 반복 사용 가치가 검증된 핵심 모듈과 안정적인 플랫폼이 준비되면 다음 단계로 올라간다.**
+
+## 단계 구조
+
+`2인 실사용 → Internal Alpha → Closed Beta → Public Beta → Paid Launch → Team/Business`
+
+### 현재: 2인 실사용
+
+실제 업무에서 반복 사용 가치를 검증한다. 기능을 많이 만드는 것보다 `계속 쓰는 기능`을 찾는 것이 우선이다. UX와 데이터 구조는 아직 비교적 빠르게 수정할 수 있다.
+
+### Internal Alpha
+
+한 제품으로서의 최소 골격을 갖춘다.
+
+진입 기준:
+- App Shell
+- Workspace Context
+- 공통 Platform Foundation 최소 구현
+- 최소 2~3개의 실제로 완성도 있게 쓸 수 있는 독립 모듈
+- 모듈 간 연결이 공통 계약을 따름
+
+모든 모듈 완성을 요구하지 않는다.
+
+### Closed Beta
+
+개발자가 아닌 제한된 외부 사용자가 스스로 가입하고 사용할 수 있어야 한다.
+
+진입 전 필수:
+- 회원가입/Auth
+- Personal Workspace 자동 생성
+- 사용자/Workspace 데이터 격리와 권한 검증
+- RLS 또는 동등한 서버 권한 보호
+- Secret의 Client 노출 방지
+- 기본 데이터 삭제
+- 최소 Export 경로
+- Usage/Cost 기록
+- 오류 로그/실패 복구
+- 개인정보 기본 정책
+- 개발자 설명 없이 사용할 수 있는 기본 Onboarding
+
+### Public Beta
+
+불특정 사용자를 받기 전에 운영 통제 능력을 갖춘다.
+
+필수:
+- Usage/Cost 기반 Quota 또는 Limit
+- 비용 폭주 방지
+- 장애/오류 감지
+- 계정 삭제 절차
+- 개인정보 처리 안내와 서비스 이용약관
+- 문의/지원 경로
+- 기본 운영 대응체계
+
+무료 한도는 기능 이름만으로 자르기보다 실제 원가를 기준으로 설계한다. 로컬 PDF 생성·메모처럼 원가가 거의 없는 기능과 STT/AI/OCR/Cloud Storage처럼 사용량 원가가 발생하는 기능을 구분한다.
+
+### Paid Launch
+
+돈을 받기 전에 사용자당 단위원가와 안정성을 검증한다.
+
+필수 Gate:
+- 사용자당 월 평균 STT/AI/Storage/DB/Bandwidth 원가 파악
+- Free/Paid 사용량 정책
+- 가격 및 Quota가 변동비를 감당하는지 검증
+- Auth/Workspace/RLS/Secret 관리 검수
+- 삭제/Export/Backup/Recovery 경로
+- 오류감지/Usage/Cost/Provider 장애 대응
+- Onboarding과 핵심 모바일 UX 안정성
+- 약관/개인정보/결제 관련 운영 준비
+
+구독 가격은 감으로 먼저 정하지 않고 실제 Usage/Cost 데이터를 근거로 결정한다.
+
+### Team / Business
+
+개인용 제품이 안정된 뒤 조직용 기능을 확장한다.
+
+후보:
+- 조직 Workspace
+- Admin 역할
+- 세분화된 권한
+- 공유 CRM/업무/일정
+- 조직 Retention 정책
+- 조직 Usage/Cost/Billing
+- 감사/관리 기능 강화
+
+V1 개인 제품을 완성하기 전에 기업용 복잡성을 먼저 끌어오지 않는다.
+
+## PWA와 Native의 관계
+
+Native 앱 완성을 상용화 Gate로 두지 않는다.
+
+PWA에서 로그인, 업무기록, 파일 선택, 스캔/PDF, 일정, 보고서, 기본 결제/계정관리 등 충분한 사용자 가치를 제공할 수 있다면 Beta와 상용화를 진행할 수 있다.
+
+Android Native/Shell/Bridge는 통화녹음 접근, 파일시스템, 카메라, 공유, Background 작업, 알림 등 명확한 기기 이점이 있을 때 단계적으로 추가한다.
+
+## 출시 후에도 개발 기준 유지
+
+사용자가 늘어도 `Issue → Branch → Test → Preview → Review → Merge` 원칙을 유지한다. 오히려 Public Beta/Paid 단계로 갈수록 검증 기준을 강화한다.
+
+## 한 줄 기준
+
+> **강한 핵심 기능 몇 개와 안정적인 플랫폼이 있으면 Beta를 시작할 수 있다. 외부 사용자 전에는 보안·데이터 격리·삭제·Export를, 공개 Beta 전에는 Quota·비용통제·운영체계를, 유료화 전에는 실제 단위원가와 Backup/Recovery까지 검증한다. Native 완성은 상용화 필수조건이 아니다.**
+
+---
+
+# 다음 단계
+
+## Platform Foundation V1 전체 검토
+
+Decision 01~07을 `PROJECT_CHARTER.md`, `docs/MODULE_ARCHITECTURE_V1.md`, 현재 모듈 개발 상태와 대조해 누락·충돌·과도한 설계를 점검한다.
+
+전체 검토에서 필요한 추가 Decision만 보완한 뒤 `MODULE_REGISTRY.md` 작성으로 넘어간다.
