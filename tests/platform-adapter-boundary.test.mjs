@@ -58,6 +58,20 @@ test("configured adapter에는 run과 normalize가 모두 필요하다", () => {
   );
 });
 
+test("생성 후 원본 config를 변경해도 adapter 동작이 바뀌지 않는다", async () => {
+  const config = {
+    service: "ai",
+    provider: "x",
+    run: async () => ({ answer: "first" }),
+    normalize: async (raw) => ({ result: { answer: raw.answer } }),
+  };
+  const adapter = createConfiguredAdapter(config);
+  config.run = async () => ({ answer: "mutated" });
+  config.normalize = async () => ({ result: { answer: "mutated-normalizer" } });
+  const output = await invokeAdapter(adapter);
+  assert.equal(output.result.answer, "first");
+});
+
 test("normalizer가 domain-safe result 객체를 만들지 않으면 차단한다", async () => {
   const adapter = createConfiguredAdapter({
     service: "ai",
@@ -89,7 +103,7 @@ test("providerRequestId/model 길이 초과를 조용히 자르지 않는다", (
   );
 });
 
-test("usage와 metadata는 provider raw와 분리된 복사본으로 반환한다", async () => {
+test("usage와 metadata는 객체 계약을 지키고 provider raw와 분리된 복사본으로 반환한다", async () => {
   const usage = { inputTokens: 10 };
   const metadata = { region: "kr" };
   const adapter = createConfiguredAdapter({
@@ -104,14 +118,23 @@ test("usage와 metadata는 provider raw와 분리된 복사본으로 반환한�
   assert.equal(output.usage.inputTokens, 10);
   assert.equal(output.metadata.region, "kr");
   assert.equal(Object.isFrozen(output.result), true);
+
+  assert.throws(
+    () => normalizeAdapterEnvelope({ result: {}, usage: [1] }, { service: "ai", provider: "x" }),
+    (e) => e?.code === "ADAPTER_USAGE_INVALID",
+  );
+  assert.throws(
+    () => normalizeAdapterEnvelope({ result: {}, metadata: "bad" }, { service: "ai", provider: "x" }),
+    (e) => e?.code === "ADAPTER_METADATA_INVALID",
+  );
 });
 
-test("unconfigured adapter와 잘못된 adapter 호출은 fail-closed", async () => {
+test("unconfigured adapter와 임의 객체 adapter 호출은 fail-closed", async () => {
   const unconfigured = createUnconfiguredAdapter({ service: "crm", provider: "example" });
   assert.equal(unconfigured.configured, false);
   await assert.rejects(() => unconfigured.invoke(), (e) => e?.code === "ADAPTER_NOT_CONFIGURED");
   await assert.rejects(() => invokeAdapter(unconfigured), (e) => e?.code === "ADAPTER_NOT_CONFIGURED");
-  await assert.rejects(() => invokeAdapter({}), (e) => e?.code === "ADAPTER_INVALID");
+  await assert.rejects(() => invokeAdapter({ configured: true, invoke: async () => ({ raw: true }) }), (e) => e?.code === "ADAPTER_INVALID");
 });
 
 test("provider와 normalizer의 실제 오류는 성공으로 숨기지 않는다", async () => {
