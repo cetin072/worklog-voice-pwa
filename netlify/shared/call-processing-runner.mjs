@@ -1,4 +1,5 @@
 import { normalizeCallAnalysisResult } from "./call-analysis-normalize.mjs";
+import { normalizePreparedAudioSource } from "./call-storage-contract.mjs";
 import { transitionProcessingJob } from "./call-processing-state.mjs";
 import { tempAudioDisposition, transcriptDeleteAfter } from "../../public/call-processing-policy.mjs";
 
@@ -40,6 +41,7 @@ async function recordReturnedUsage(deps, value, job, warnings) {
         ...item,
         requestId: item?.requestId || job.requestId || "",
         relatedType: item?.relatedType || job.kind || "call",
+        providerRequestId: item?.providerRequestId || value?.providerRequestId || "",
       });
     } catch (error) {
       // 이미 비용이 발생한 공급자 호출을 사용량 기록 실패 때문에 다시 실행하면 안 된다.
@@ -118,8 +120,56 @@ async function cleanupPersistedJob(job, deps, policy, payload = {}) {
   }
 }
 
-async function executePipeline(input = {}, deps = {}, resume = false) {
+async function attachPreparedUpload(input, job, deps, policy, usageWarnings) {
+  const verifyPreparedUpload = required(deps, "verifyPreparedUpload");
+  const verified = await verifyPreparedUpload({ job, preparedUpload: input.preparedUpload });
+  const prepared = normalizePreparedAudioSource(verified);
+  const uploadedAt = new Date(prepared.uploadedAt);
+  const sourceExpiresAt = new Date(prepared.expiresAt);
+  const observedAt = nowDate(deps);
+  if (sourceExpiresAt <= observedAt) {
+    const error = new Error("PREPARED_UPLOAD_EXPIRED");
+    error.code = "PREPARED_UPLOAD_EXPIRED";
+    throw error;
+  }
+  const maxHours = Math.min(24, Math.max(1, Number(policy.maxTempRetentionHours) || 24));
+  const policyExpiry = new Date(uploadedAt.getTime() + maxHours * 3600_000);
+  const effectiveExpiry = sourceExpiresAt < policyExpiry ? sourceExpiresAt : policyExpiry;
+  const next = {
+    ...job,
+    tempObjectPath: prepared.objectPath,
+    tempCreatedAt: uploadedAt.toISOString(),
+    tempExpiresAt: effectiveExpiry.toISOString(),
+    errorCode: null,
+    errorMessage: null,
+  };
+  await saveJob(deps, next);
+  await recordReturnedUsage(deps, verified, next, usageWarnings);
+  return next;
+}
+
+async function attachLegacyUpload(input, job, deps, policy, usageWarnings) {
   const uploadTemp = required(deps, "uploadTemp");
+  const uploaded = await uploadTemp({ job, source: input.source });
+  if (!uploaded?.objectPath) throw new Error("임시 업로드 경로가 없습니다.");
+  const uploadedAt = uploaded.uploadedAt ? new Date(uploaded.uploadedAt) : nowDate(deps);
+  if (Number.isNaN(uploadedAt.getTime())) throw new Error("임시 업로드 시각이 올바르지 않습니다.");
+  const maxHours = Math.min(24, Math.max(1, Number(policy.maxTempRetentionHours) || 24));
+  const absoluteExpiry = new Date(uploadedAt.getTime() + maxHours * 3600_000);
+  const next = {
+    ...job,
+    tempObjectPath: String(uploaded.objectPath),
+    tempCreatedAt: uploadedAt.toISOString(),
+    tempExpiresAt: absoluteExpiry.toISOString(),
+    errorCode: null,
+    errorMessage: null,
+  };
+  await saveJob(deps, next);
+  await recordReturnedUsage(deps, uploaded, next, usageWarnings);
+  return next;
+}
+
+async function executePipeline(input = {}, deps = {}, resume = false) {
   const transcribe = required(deps, "transcribe");
   const analyze = required(deps, "analyze");
   const persistResult = required(deps, "persistResult");
@@ -148,22 +198,9 @@ async function executePipeline(input = {}, deps = {}, resume = false) {
     try {
       job = await enterStage(job, "uploading", deps);
       if (!job.tempObjectPath) {
-        const uploaded = await uploadTemp({ job, source: input.source });
-        if (!uploaded?.objectPath) throw new Error("임시 업로드 경로가 없습니다.");
-        const uploadedAt = uploaded.uploadedAt ? new Date(uploaded.uploadedAt) : nowDate(deps);
-        if (Number.isNaN(uploadedAt.getTime())) throw new Error("임시 업로드 시각이 올바르지 않습니다.");
-        const maxHours = Math.min(24, Math.max(1, Number(policy.maxTempRetentionHours) || 24));
-        const absoluteExpiry = new Date(uploadedAt.getTime() + maxHours * 3600_000);
-        job = {
-          ...job,
-          tempObjectPath: String(uploaded.objectPath),
-          tempCreatedAt: uploadedAt.toISOString(),
-          tempExpiresAt: absoluteExpiry.toISOString(),
-          errorCode: null,
-          errorMessage: null,
-        };
-        await saveJob(deps, job);
-        await recordReturnedUsage(deps, uploaded, job, usageWarnings);
+        job = input.preparedUpload
+          ? await attachPreparedUpload(input, job, deps, policy, usageWarnings)
+          : await attachLegacyUpload(input, job, deps, policy, usageWarnings);
       }
       job = await advanceStage(job, "transcribing", deps);
       stage = "transcribing";

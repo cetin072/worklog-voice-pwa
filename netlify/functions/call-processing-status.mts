@@ -9,10 +9,17 @@ export default async (_req: Request, _context: Context) => {
     PAID_PROCESSING_ENABLED: Netlify.env.get("PAID_PROCESSING_ENABLED"),
     PAID_PROCESSING_APPROVAL_COUNT: Netlify.env.get("PAID_PROCESSING_APPROVAL_COUNT"),
   });
+  const providerId = Netlify.env.get("CALL_STT_PROVIDER") || "";
+  const providerLimitsConfirmed = String(Netlify.env.get("CALL_STT_LIMITS_CONFIRMED") || "").toLowerCase() === "true";
   const readiness = buildCurrentSttReadiness({
     paidGate: gate,
     contractVersion: CALL_ANALYSIS_CONTRACT_VERSION,
     registry: defaultProviderRegistry(),
+    providerId,
+    providerLimitsConfirmed,
+    tempStorageConfigured: false,
+    usageLedgerConfigured: false,
+    pipelineConfigured: false,
   });
 
   return Response.json({
@@ -22,8 +29,11 @@ export default async (_req: Request, _context: Context) => {
     reason: gate.reason,
     pipelineConfigured: false,
     originalAudioPermanentStorage: false,
+    directUploadRequired: true,
+    functionAudioBodyUploadAllowed: false,
     maxTemporaryAudioRetentionHours: 24,
     analysisContractVersion: CALL_ANALYSIS_CONTRACT_VERSION,
+    selectedSttProvider: readiness.providerSelection.providerId || null,
     sttReadiness: readiness,
   });
 };

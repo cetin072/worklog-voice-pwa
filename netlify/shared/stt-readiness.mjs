@@ -1,3 +1,5 @@
+import { resolveSttProviderSelection } from "./stt-provider-selection.mjs";
+
 const CHECK_DEFINITIONS = Object.freeze([
   ["report_contract", "통화 보고서·업무항목 분석 계약"],
   ["provider_selected", "STT 공급자 선택"],
@@ -38,18 +40,33 @@ export function evaluateSttReadiness(input = {}) {
   };
 }
 
-export function buildCurrentSttReadiness({ paidGate, contractVersion, registry } = {}) {
-  const sttAdapters = registry?.stt && typeof registry.stt === "object" ? Object.values(registry.stt) : [];
-  const configuredStt = sttAdapters.find((adapter) => adapter?.configured === true) || null;
-
-  return evaluateSttReadiness({
-    reportContractReady: String(contractVersion || "") === "v2",
-    providerSelected: Boolean(configuredStt?.provider),
-    providerLimitsConfirmed: false,
-    providerAdapterConfigured: Boolean(configuredStt),
-    tempStorageConfigured: false,
-    usageLedgerConfigured: false,
-    paidApprovalReady: paidGate?.enabled === true,
-    pipelineConfigured: false,
+export function buildCurrentSttReadiness({
+  paidGate,
+  contractVersion,
+  registry,
+  providerId = "",
+  providerLimitsConfirmed = false,
+  tempStorageConfigured = false,
+  usageLedgerConfigured = false,
+  pipelineConfigured = false,
+} = {}) {
+  const providerSelection = resolveSttProviderSelection({
+    providerId,
+    registry,
+    limitsConfirmed: providerLimitsConfirmed,
   });
+
+  return {
+    ...evaluateSttReadiness({
+      reportContractReady: String(contractVersion || "") === "v2",
+      providerSelected: providerSelection.selected,
+      providerLimitsConfirmed: providerSelection.limitsConfirmed,
+      providerAdapterConfigured: providerSelection.adapterConfigured,
+      tempStorageConfigured,
+      usageLedgerConfigured,
+      paidApprovalReady: paidGate?.enabled === true,
+      pipelineConfigured,
+    }),
+    providerSelection,
+  };
 }
