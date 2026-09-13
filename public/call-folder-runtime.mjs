@@ -1,6 +1,5 @@
-import { rankAudioFileHandles } from "./call-folder-utils.mjs";
+import { selectAudioHandlesInRange } from "./call-folder-utils.mjs";
 
-export const DEFAULT_FOLDER_LIMIT = 150;
 export const DEFAULT_SCAN_TIMEOUT_MS = 20000;
 export const DEFAULT_FILE_OPEN_TIMEOUT_MS = 4000;
 export const DEFAULT_FILE_OPEN_TOTAL_TIMEOUT_MS = 20000;
@@ -51,7 +50,6 @@ export function directoryIterator(handle) {
 }
 
 export async function scanFolderEntries(handle, options = {}) {
-  const maxFiles = Math.max(1, Math.floor(Number(options.maxFiles) || DEFAULT_FOLDER_LIMIT));
   const scanTimeoutMs = Math.max(1, Number(options.scanTimeoutMs) || DEFAULT_SCAN_TIMEOUT_MS);
   const iterator = directoryIterator(handle);
   const entries = [];
@@ -74,12 +72,14 @@ export async function scanFolderEntries(handle, options = {}) {
     if (entry?.kind === "file") entries.push(entry);
   }
 
-  const rankedAll = rankAudioFileHandles(entries, Math.max(1, entries.length));
+  const selected = selectAudioHandlesInRange(entries, {
+    startMs: options.startMs,
+    endMs: options.endMs,
+  }, options.fallbackDate || new Date());
+
   return {
-    ranked: rankedAll.slice(0, maxFiles),
-    totalAudioCount: rankedAll.length,
+    ...selected,
     scannedCount,
-    newestName: rankedAll[0]?.name || "",
   };
 }
 
@@ -106,7 +106,7 @@ export async function materializeFiles(ranked = [], options = {}) {
           "녹음파일 열기 시간이 초과됐습니다.",
         );
       } catch {
-        // 일부 파일 실패는 나머지 최근 파일을 계속 불러온다.
+        // 일부 파일 실패는 나머지 날짜 범위의 파일을 계속 불러온다.
       }
     }
   }
