@@ -60,13 +60,17 @@ function buildGuide() {
 
   const steps = document.createElement("p");
   steps.className = "call-folder-path-help";
-  steps.textContent = "폴더 연결 화면에서는 파일이 보이지 않는 것이 정상입니다. TPhoneCallRecords까지 들어간 뒤 아래 ‘이 폴더 사용’을 누르세요.";
+  steps.textContent = "폴더 연결에서는 파일이 안 보이는 것이 정상입니다. TPhoneCallRecords까지 들어간 뒤 ‘이 폴더 사용’ → ‘허용’을 누르세요.";
+
+  const edgeNote = document.createElement("p");
+  edgeNote.className = "call-folder-path-help";
+  edgeNote.textContent = "Edge에서 ‘허용’ 뒤에도 폴더 화면이 남는 경우 뒤로가기를 누르면 취소될 수 있습니다. 홈으로 나갔다가 업무수첩으로 돌아오면 연결 상태를 확인할 수 있습니다.";
 
   const note = document.createElement("p");
   note.className = "call-folder-path-note";
-  note.textContent = "일반 파일 가져오기에서는 내장 저장공간 → Recordings → TPhoneCallRecords 순서로 들어가 녹음파일을 선택하면 됩니다. 휴대폰·전화앱 버전에 따라 위치가 다를 수 있습니다.";
+  note.textContent = "현재 확인된 에이닷 전화 녹음 경로입니다. 휴대폰·전화앱 버전에 따라 위치가 다를 수 있습니다.";
 
-  guide.append(top, steps, note);
+  guide.append(top, steps, edgeNote, note);
   importButton.insertAdjacentElement("beforebegin", guide);
 }
 
@@ -74,7 +78,7 @@ function hideUnsupportedShortcut() {
   const shortcut = document.getElementById("callFolderShortcut");
   if (!shortcut) return;
   const primary = shortcut.querySelector(".call-folder-primary");
-  if (primary?.disabled) {
+  if (primary?.disabled && !shortcut.querySelector(".call-folder-connection:not([hidden])")) {
     primary.hidden = true;
     shortcut.classList.add("is-fallback-only");
   }
