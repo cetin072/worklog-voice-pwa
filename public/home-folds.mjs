@@ -101,3 +101,6 @@ function installSettingControl() {
 FOLD_SECTIONS.forEach(setupFoldSection);
 installSettingControl();
 applyDefault(loadHomeFoldDefault());
+
+import("./call-folder-guide.mjs").catch(() => {});
+import("./settings-ux.mjs").catch(() => {});
