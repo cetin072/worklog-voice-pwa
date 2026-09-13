@@ -32,3 +32,21 @@ jobs:
       - name: OCR runtime smoke
         continue-on-error: true
         run: node --test tests/ocr-runtime-smoke.test.mjs
+      - name: Briefing v2 test
+        continue-on-error: true
+        run: node --test tests/briefing-v2.test.mjs
+      - name: Client stability test
+        continue-on-error: true
+        run: node --test tests/client-stability.test.mjs
+      - name: Core functions test
+        continue-on-error: true
+        run: node --test tests/core-functions.test.mjs
+      - name: Schedule extract test
+        continue-on-error: true
+        run: node --test tests/schedule-extract.test.mjs
+      - name: Worklog edit test
+        continue-on-error: true
+        run: node --test tests/worklog-edit.test.mjs
+      - name: Full suite
+        continue-on-error: true
+        run: npm test
