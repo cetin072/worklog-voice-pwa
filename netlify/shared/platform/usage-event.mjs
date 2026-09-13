@@ -7,6 +7,10 @@ function text(value, max = 500) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+function identifierText(value) {
+  return String(value ?? "").trim();
+}
+
 function nonNegative(value) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(0, number) : 0;
@@ -27,9 +31,10 @@ function usageError(code, message) {
   return error;
 }
 
-function requiredIdentifier(value, code, label) {
-  const normalized = text(value, 200);
-  if (!normalized) throw usageError(code, `${label}가 필요합니다.`);
+function requiredIdentifier(value, requiredCode, invalidCode, label) {
+  const normalized = identifierText(value);
+  if (!normalized) throw usageError(requiredCode, `${label}가 필요합니다.`);
+  if (normalized.length > 200) throw usageError(invalidCode, `${label}가 허용 길이를 초과했습니다.`);
   return normalized;
 }
 
@@ -52,11 +57,13 @@ function identity(raw, context) {
     userId: requiredIdentifier(
       raw?.userId ?? raw?.user_id ?? context?.userId ?? context?.user_id,
       "USAGE_EVENT_USER_REQUIRED",
+      "USAGE_EVENT_USER_INVALID",
       "userId",
     ),
     workspaceId: requiredIdentifier(
       raw?.workspaceId ?? raw?.workspace_id ?? context?.workspaceId ?? context?.workspace_id,
       "USAGE_EVENT_WORKSPACE_REQUIRED",
+      "USAGE_EVENT_WORKSPACE_INVALID",
       "workspaceId",
     ),
   };
@@ -83,6 +90,9 @@ export function normalizeUsageEvent(raw = {}, context = {}) {
   const requestId = text(source.requestId ?? source.request_id ?? context.requestId ?? context.request_id, 200);
   const feature = text(source.feature ?? context.feature, 100).toLowerCase();
   const service = text(source.service ?? source.category ?? context.service, 80).toLowerCase();
+  if (!feature) throw usageError("USAGE_EVENT_FEATURE_REQUIRED", "Usage Event에는 feature가 필요합니다.");
+  if (!service) throw usageError("USAGE_EVENT_SERVICE_REQUIRED", "Usage Event에는 service가 필요합니다.");
+
   const operation = text(source.operation ?? context.operation, 100).toLowerCase();
   const providerRequestId = text(
     source.providerRequestId ?? source.provider_request_id ?? context.providerRequestId,
@@ -99,6 +109,11 @@ export function normalizeUsageEvent(raw = {}, context = {}) {
   const legacyUserLabel = text(source.userLabel, 80);
   if (legacyUserLabel && metadata.legacyUserLabel === undefined) metadata.legacyUserLabel = legacyUserLabel;
   if (legacyId && metadata.legacyEventId === undefined) metadata.legacyEventId = legacyId;
+
+  const rawStatus = text(source.status, 40).toLowerCase();
+  if (rawStatus && !USAGE_EVENT_STATUSES.includes(rawStatus)) {
+    throw usageError("USAGE_EVENT_STATUS_INVALID", "Usage Event status가 올바르지 않습니다.");
+  }
 
   return Object.freeze({
     schemaVersion: USAGE_EVENT_SCHEMA_VERSION,
@@ -126,7 +141,7 @@ export function normalizeUsageEvent(raw = {}, context = {}) {
     providerRequestId,
     relatedType: text(source.relatedType ?? source.related_type ?? context.relatedType, 80),
     relatedId: text(source.relatedId ?? source.related_id ?? context.relatedId, 200),
-    status: USAGE_EVENT_STATUSES.includes(source.status) ? source.status : "success",
+    status: rawStatus || "success",
     createdAt: normalizeCreatedAt(source.createdAt ?? source.created_at, context.now ?? new Date()),
     metadata: Object.freeze(metadata),
   });
