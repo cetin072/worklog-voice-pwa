@@ -1,12 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 
+const source=await readFile(new URL('../public/scanner-pdf.js',import.meta.url),'utf8');
 await import('../public/scanner-pdf.js');
 const {createPdf,normalizeFileName}=globalThis.WorklogScannerPdf;
 
 test('PDF filename is sanitized and gets one .pdf extension',()=>{
   assert.equal(normalizeFileName('  계약서:최종?.PDF  '),'계약서-최종-.pdf');
   assert.equal(normalizeFileName(''),'스캔 문서.pdf');
+});
+
+test('share compatibility falls back safely when file sharing capability cannot be confirmed',()=>{
+  assert.match(source,/typeof root\.File!==['"]function['"]/);
+  assert.match(source,/typeof root\.navigator\.canShare!==['"]function['"]/);
+  assert.match(source,/root\.navigator\.canShare=\(\)=>false/);
 });
 
 test('creates a multi-page PDF in the supplied page order',async()=>{
