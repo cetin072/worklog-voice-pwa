@@ -8,7 +8,10 @@ const targets = [
   "../public/call-folder-guide.mjs",
   "../public/call-folder-runtime.mjs",
   "../public/call-folder-utils.mjs",
+  "../public/call-selection-event.mjs",
   "../public/call-inbox.mjs",
+  "../public/mock-call-review.mjs",
+  "../public/mock-call-review-bridge.mjs",
   "../public/home-folds.mjs",
   "../public/settings.mjs",
 ];
