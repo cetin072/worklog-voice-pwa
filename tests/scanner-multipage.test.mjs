@@ -19,6 +19,7 @@ test('multi-page scanner supports edit delete reorder PDF save and share',()=>{
   assert.match(scanner,/pages\.push\(page\)/);
   assert.match(scanner,/persistPages\(\)/);
   assert.match(scanner,/sourceBlob/);
+  assert.match(scanner,/import\("\/scanner-pdf\.js"\)/);
   assert.match(css,/\.scan-pdf-card/);
   assert.match(css,/\.scan-page-item/);
   assert.match(sw,/\/scanner-pdf\.js/);
