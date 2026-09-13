@@ -356,6 +356,7 @@ function importFiles(fileList) {
   if (duplicate) notes.push(`중복 ${duplicate}건은 제외했습니다.`);
   if (unsupported) notes.push(`오디오가 아닌 파일 ${unsupported}건은 제외했습니다.`);
   status.textContent = notes.join(" ") || "새로 추가된 통화가 없습니다.";
+  return { added, duplicate, unsupported };
 }
 
 function selectedDurationSummary(selected) {
@@ -408,6 +409,12 @@ importButton?.addEventListener("click", () => fileInput?.click());
 fileInput?.addEventListener("change", () => {
   if (fileInput.files?.length) importFiles(fileInput.files);
   fileInput.value = "";
+});
+window.addEventListener("worklog:call-files-import", (event) => {
+  const incoming = Array.isArray(event?.detail?.files) ? event.detail.files : [];
+  if (!incoming.length) return;
+  importFiles(incoming);
+  if (event.detail && typeof event.detail === "object") event.detail.accepted = true;
 });
 selectedOnlyButton?.addEventListener("click", () => {
   if (!selectedEntries().length) return;
