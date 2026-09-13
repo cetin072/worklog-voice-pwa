@@ -2,7 +2,7 @@
 
 ## 문서 상태
 
-- 상태: **초안 / 우선순위 1차 확정 / 최종 검수 중**
+- 상태: **우선순위 확정 / 최종 검수 완료 / main 반영 승인 대기**
 - 기준일: 2026-09-13
 - 상위 기준: `PROJECT_CHARTER.md`, `docs/MODULE_ARCHITECTURE_V1.md`, `docs/PLATFORM_FOUNDATION_V1.md`
 - 기준 Issue: #91
@@ -335,6 +335,8 @@ AI가 이름 유사성만으로 고객을 자동 병합하지 않는다. 고객 
 
 > **일정 앱 전체를 먼저 완성하는 것이 아니라, 모든 모듈이 같은 방식으로 일정을 만들어낼 수 있도록 일정의 중심 뼈대를 먼저 만든다.**
 
+`MODULE_ARCHITECTURE_V1.md`에서 통화정리와 스캔/PDF를 첫 표준 모듈 사례로 정의한 원칙은 유지한다. 여기서 일정 우선은 그 두 모듈보다 일정 앱 전체를 먼저 완성한다는 뜻이 아니라, 통화·회의·캡처·메일이 공통으로 사용할 `Schedule`/`ScheduleCandidate` 계약을 선행 고정한다는 뜻이다.
+
 빠른 업무기록과 브리핑의 main 실사용 안정성은 모든 단계에서 회귀 보호한다.
 
 ---
@@ -351,16 +353,17 @@ AI가 이름 유사성만으로 고객을 자동 병합하지 않는다. 고객 
 
 ---
 
-# 17. 최종 검수 포인트
+# 17. 최종 검수 결과
 
-main 반영 전 다음을 확인한다.
+다음 항목을 대조했고 현재 **중대한 충돌 없음**으로 판정한다.
 
-- Charter의 제품 범위와 Registry 모듈 목록이 일치하는가
-- 각 DRAFT 상태가 main 기능처럼 표현되지 않았는가
-- 일정 중심 계약이 통화/회의/메일/캡처의 공통 연결점으로 일관적인가
-- 통화 stack의 공통 기반이 Platform Service와 충돌하지 않는가
-- 기존 업무기록/브리핑을 불필요하게 재작성하도록 요구하지 않는가
-- V1 범위가 과도한 범용화로 커지지 않았는가
-- Platform Foundation과 Registry 사이에 저장/소유권/동기화/외부 Adapter 원칙 충돌이 없는가
+- Charter의 장기 제품 범위와 Registry 모듈 목록
+- `MODULE_ARCHITECTURE_V1.md`의 Standalone-first / Result Model / Adapter / 점진적 이행 원칙
+- Platform Foundation Decision 01~08의 저장·소유권·Candidate·Platform Service·개인정보·Adapter·상용화·Sync 기준
+- 실제 main 기능과 DRAFT PR 상태의 구분
+- 일정 중심 계약과 통화/회의/메일/캡처의 공통 연결 관계
+- 통화 stack에 존재하는 공통 기반과 향후 Platform Service 승격 방향
+- 빠른 업무기록/브리핑을 불필요하게 재작성하지 않는 원칙
+- V1에서 과도한 범용화 시스템을 만들지 않는 원칙
 
-이 문서는 최종 검수와 사용자 main 반영 승인 전까지 Draft 기준이다.
+기술 검수 시점 기준 PR #92는 main 대비 behind 0이며 변경 파일은 `docs/PLATFORM_FOUNDATION_V1.md`, `docs/MODULE_REGISTRY.md` 두 개뿐이다. 최신 Deploy Preview 검증 완료 후 사용자 main 반영 승인을 기다린다.
