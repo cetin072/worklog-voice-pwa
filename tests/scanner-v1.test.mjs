@@ -80,12 +80,16 @@ test("scan button opens the native image capture immediately",()=>{
   assert.match(scanner,/scanButton\.addEventListener\("click",\(\)=>scanInput\.click\(\)\)/);
 });
 
-test("manual scanner adjustment supports dragging the entire selected document",()=>{
+test("manual scanner adjustment uses anchored edges instead of moving the whole document",()=>{
   const scanner=fs.readFileSync("public/scanner.js","utf8");
-  assert.match(scanner,/pointInQuad/);
-  assert.match(scanner,/type:"move"/);
-  assert.match(scanner,/translatedCorners/);
-  assert.match(scanner,/초록 영역 안쪽/);
+  const geometry=fs.readFileSync("public/scanner-geometry.js","utf8");
+  assert.match(scanner,/geometry\.nearestEdge/);
+  assert.match(scanner,/geometry\.moveEdge/);
+  assert.match(scanner,/type:"edge"/);
+  assert.match(geometry,/moveEdge/);
+  assert.doesNotMatch(scanner,/type:"move"/);
+  assert.doesNotMatch(scanner,/translatedCorners/);
+  assert.doesNotMatch(scanner,/pointInQuad/);
 });
 
 test("OCR reads a separate high-quality lossless scan while Notion keeps the compressed attachment",()=>{
