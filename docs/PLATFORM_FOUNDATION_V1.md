@@ -118,8 +118,69 @@ Candidate는 제안이고 Confirmed Record는 실제 업무 데이터다. 사용
 
 ---
 
+# Decision 04 — 공통 Platform Services의 범위
+
+- 상태: **확정**
+- 확정일: 2026-09-13
+- 변경 원칙: 별도의 중대한 기술·사업·보안상 대안이 생기지 않는 한 기본 플랫폼 원칙으로 유지한다.
+
+> **플랫폼은 여러 모듈이 공유해야 하는 공통 기반만 소유하고, 통화·회의·스캔·CRM 등 각 도메인의 고유 기능과 UI는 소유하지 않는다. 둘 이상의 모듈에서 반복되거나 Auth·보안·비용처럼 명백한 전역 관심사일 때만 Platform Service로 승격한다.**
+
+## V1 우선 실제 구현 대상
+
+- `Workspace Context`: 현재 User/Workspace/Role을 공통으로 제공한다. 각 모듈이 별도 Workspace 선택·권한 체계를 만들지 않는다.
+- `Storage Service`: 임시 업로드, 파일 참조, 삭제, 만료 등 최소 Storage 경계를 제공하고 공급자 세부사항은 Adapter 뒤에 숨긴다.
+- `Processing Job`: `queued`, `processing`, `completed`, `failed`, `cancelled` 등 공통 처리상태와 Job 식별자를 제공한다.
+- `Retry / Idempotency`: 사용자 중복 클릭·네트워크 재시도 때문에 STT/AI/OCR 호출과 비용이 중복되지 않도록 공통 중복방지/재시도 기준을 둔다.
+- `Usage / Cost`: `workspace_id`, `user_id`, feature, provider, model, usage, estimated/actual cost를 공통 방식으로 기록할 수 있게 한다.
+- `Adapter Boundary`: STT, AI, Storage, Worklog/Notion, Calendar, CRM 등 외부 공급자를 모듈에서 직접 결합하지 않도록 공통 경계를 둔다.
+
+## V1에서 계약은 두되 최소 구현하는 대상
+
+- `Auth / Permission`: 모듈에는 현재 사용자·Workspace·역할과 필요한 권한 결과만 전달하고, 특정 Auth 공급자에 직접 결합하지 않는다.
+- `Sync State`: Local-first를 지원하기 위한 최소 상태(`local`, `pending`, `synced`, `failed` 등)를 정의하되 완전한 양방향 동기화 엔진은 만들지 않는다.
+- `Retention / Delete`: `retentionPolicy`, `expiresAt`, 삭제요청/완료 상태 등 확장 가능한 최소 개념을 둔다.
+- `Audit / Event Log`: 삭제, 권한 변경, 외부 전송, 유료 처리 등 중요한 사건을 추적할 수 있는 최소 경계를 둔다. 모든 클릭을 기록하는 거대한 감사 시스템은 만들지 않는다.
+
+## Platform Service 승격 원칙 — 2-Module Rule
+
+특정 모듈 하나에서만 필요한 기능은 우선 그 모듈에 둔다.
+
+다음 중 하나일 때 공통 Platform Service 승격을 검토한다.
+
+1. 둘 이상의 모듈에서 같은 문제가 반복된다.
+2. Auth, Permission, Security, Cost, Workspace처럼 본질적으로 전역 관심사다.
+3. 제각각 구현할 경우 비용 중복, 보안 위험, 데이터 계약 충돌이 발생한다.
+
+공통화를 위해 정상 작동 중인 모듈을 선제적으로 대규모 리팩터링하지 않는다. 실제 기능 확장·버그수정·Provider 교체 등 자연스러운 변경 시점에 점진적으로 공통 경계에 연결한다.
+
+## 플랫폼이 소유하지 않는 것
+
+다음은 각 도메인 모듈이 소유한다.
+
+- CallReport 생성 규칙과 통화 UX
+- MeetingReport/회의록 형식과 회의 UX
+- ScanDocument/PDF 보정·페이지 관리 UX
+- CRM 고유 화면과 업무규칙
+- 일정 고유 화면과 업무규칙
+- 특정 모듈 전용 AI Prompt/분석 방식
+
+App Shell과 Platform Service가 이 로직을 흡수해 거대한 단일 모듈이 되지 않게 한다.
+
+## V1에서 의도적으로 만들지 않는 것
+
+- 완전한 양방향 Multi-device Sync Engine
+- 복잡한 조직 Role/Permission 체계
+- 모든 사용자 행동을 저장하는 정교한 Audit 시스템
+- 자동 Billing/결제 시스템 전체
+- 모든 Provider를 런타임에 꽂는 범용 Plugin Framework
+
+상용화에 필요해지는 시점에 별도 결정과 검증을 거쳐 확장한다.
+
+---
+
 # 다음 결정 예정
 
-## Decision 04 — 공통 Platform Services의 범위
+## Decision 05 — 개인정보·보관기간·삭제 원칙
 
-다음 논의에서는 Auth/Permission, Storage, Processing Job, Retry/Idempotency, Usage/Cost, Sync, Retention/Audit 등 여러 모듈이 반복 구현하면 안 되는 공통 기능 중 무엇을 플랫폼 책임으로 두고, V1에서는 어디까지 구현할지 확정한다.
+다음 논의에서는 원본 음성·사진, 녹취록, AI 요약/보고서, 처리용 임시파일, Cloud Sync 데이터, 계정/Workspace 데이터에 대해 어떤 정보는 기본 보관하고 어떤 정보는 자동 삭제하며, 사용자 삭제·내보내기·조직 정책을 어디까지 지원해야 하는지 확정한다.
