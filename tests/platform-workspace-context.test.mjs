@@ -73,6 +73,39 @@ test("Workspace Context는 workspaceId 누락을 차단한다", () => {
   );
 });
 
+test("Workspace Context는 null/non-object 입력도 명시적 검증 오류로 처리한다", () => {
+  assert.throws(
+    () => normalizeWorkspaceContext(null),
+    (error) => error?.code === "WORKSPACE_CONTEXT_USER_REQUIRED",
+  );
+  assert.throws(
+    () => normalizeWorkspaceContext("invalid"),
+    (error) => error?.code === "WORKSPACE_CONTEXT_USER_REQUIRED",
+  );
+});
+
+test("Workspace Context는 userId 길이 초과를 조용히 잘라내지 않는다", () => {
+  assert.throws(
+    () => normalizeWorkspaceContext({
+      userId: "u".repeat(201),
+      workspaceId: "workspace-1",
+      role: "owner",
+    }),
+    (error) => error?.code === "WORKSPACE_CONTEXT_USER_INVALID",
+  );
+});
+
+test("Workspace Context는 workspaceId 길이 초과를 조용히 잘라내지 않는다", () => {
+  assert.throws(
+    () => normalizeWorkspaceContext({
+      userId: "user-1",
+      workspaceId: "w".repeat(201),
+      role: "owner",
+    }),
+    (error) => error?.code === "WORKSPACE_CONTEXT_WORKSPACE_INVALID",
+  );
+});
+
 test("Workspace Context는 허용되지 않은 role을 차단한다", () => {
   assert.throws(
     () => normalizeWorkspaceContext({ userId: "user-1", workspaceId: "workspace-1", role: "admin" }),
