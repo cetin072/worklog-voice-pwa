@@ -14,11 +14,14 @@ test("App Shell에 통화폴더 대표 흐름의 필수 DOM과 모듈이 모두 
   for (const src of ["/home-folds.mjs", "/call-inbox.mjs", "/call-folder-shortcut.mjs"]) {
     assert.equal(html.includes(`src=\"${src}\"`), true, `${src}가 index.html에 연결돼 있어야 한다`);
   }
+  assert.equal(html.includes("최근 3일 통화를 기본으로 불러옵니다"), true);
+  assert.equal(html.includes("파일 직접 선택"), true);
 });
 
-test("폴더에서 읽은 FileList 전달은 기존 통화함 change 이벤트 흐름을 재사용한다", async () => {
+test("폴더에서 읽은 파일 전달은 내부 이벤트를 우선하고 file input change를 fallback으로 유지한다", async () => {
   const shortcut = await text("../public/call-folder-shortcut.mjs");
   const inbox = await text("../public/call-inbox.mjs");
+  assert.equal(shortcut.includes("worklog:call-files-import"), true);
   assert.equal(shortcut.includes("fileInput.dispatchEvent(new Event(\"change\", { bubbles: true }))"), true);
   assert.equal(inbox.includes("fileInput?.addEventListener(\"change\""), true);
   assert.equal(inbox.includes("importFiles(fileInput.files)"), true);
