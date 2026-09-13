@@ -1,14 +1,20 @@
-import { selectRecentAudioFiles } from "./call-folder-utils.mjs";
+import { rankAudioFileHandles } from "./call-folder-utils.mjs";
 
 const DB_NAME = "worklog-local-handles-v1";
 const STORE_NAME = "handles";
 const HANDLE_KEY = "call-recordings";
 const PICKER_ID = "worklog-call-recordings";
+const EXPECTED_FOLDER_NAME = "TPhoneCallRecords";
 const MAX_FOLDER_FILES = 150;
+const FOLDER_SCAN_TIMEOUT_MS = 20000;
+const FILE_OPEN_TIMEOUT_MS = 4000;
+const FILE_OPEN_TOTAL_TIMEOUT_MS = 20000;
+const FILE_OPEN_CONCURRENCY = 6;
 
 const importButton = document.getElementById("callImport");
 const fileInput = document.getElementById("callFiles");
 let currentHandle = null;
+let loading = false;
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -54,6 +60,28 @@ async function removeHandle() {
   db.close();
 }
 
+function timeoutError(code, message) {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
+}
+
+function withTimeout(promise, timeoutMs, code, message) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(timeoutError(code, message)), Math.max(1, timeoutMs));
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function ensureReadPermission(handle) {
   if (!handle) return false;
   try {
@@ -70,13 +98,86 @@ async function ensureReadPermission(handle) {
   }
 }
 
-async function readFolderFiles(handle) {
-  const files = [];
-  for await (const entry of handle.values()) {
-    if (entry.kind !== "file") continue;
-    try { files.push(await entry.getFile()); } catch {}
+function directoryIterator(handle) {
+  if (typeof handle?.values === "function") return handle.values()[Symbol.asyncIterator]();
+  if (typeof handle?.entries === "function") return handle.entries()[Symbol.asyncIterator]();
+  throw timeoutError("DIRECTORY_ITERATOR_UNSUPPORTED", "폴더 목록 읽기를 지원하지 않는 브라우저입니다.");
+}
+
+async function scanFolderEntries(handle) {
+  const iterator = directoryIterator(handle);
+  const entries = [];
+  const deadline = Date.now() + FOLDER_SCAN_TIMEOUT_MS;
+  let scannedCount = 0;
+
+  while (true) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw timeoutError("FOLDER_SCAN_TIMEOUT", "폴더 목록 확인 시간이 초과됐습니다.");
+    const step = await withTimeout(
+      iterator.next(),
+      remaining,
+      "FOLDER_SCAN_TIMEOUT",
+      "폴더 목록 확인 시간이 초과됐습니다.",
+    );
+    if (step.done) break;
+    const raw = step.value;
+    const entry = Array.isArray(raw) ? raw[1] : raw;
+    scannedCount += 1;
+    if (entry?.kind === "file") entries.push(entry);
   }
-  return selectRecentAudioFiles(files, MAX_FOLDER_FILES);
+
+  const rankedAll = rankAudioFileHandles(entries, Math.max(1, entries.length));
+  return {
+    ranked: rankedAll.slice(0, MAX_FOLDER_FILES),
+    totalAudioCount: rankedAll.length,
+    scannedCount,
+    newestName: rankedAll[0]?.name || "",
+  };
+}
+
+async function materializeFiles(ranked = []) {
+  if (!ranked.length) return { files: [], failedCount: 0 };
+  const deadline = Date.now() + FILE_OPEN_TOTAL_TIMEOUT_MS;
+  const files = new Array(ranked.length).fill(null);
+  let cursor = 0;
+  let failedCount = 0;
+
+  async function worker() {
+    while (true) {
+      const index = cursor++;
+      if (index >= ranked.length) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        failedCount += ranked.length - index;
+        cursor = ranked.length;
+        return;
+      }
+      try {
+        files[index] = await withTimeout(
+          ranked[index].entry.getFile(),
+          Math.min(FILE_OPEN_TIMEOUT_MS, remaining),
+          "FILE_OPEN_TIMEOUT",
+          "녹음파일 열기 시간이 초과됐습니다.",
+        );
+      } catch {
+        failedCount += 1;
+      }
+    }
+  }
+
+  await Promise.all(Array.from(
+    { length: Math.min(FILE_OPEN_CONCURRENCY, ranked.length) },
+    () => worker(),
+  ));
+
+  return { files: files.filter(Boolean), failedCount };
+}
+
+async function readFolderFiles(handle, onIndexed = null) {
+  const scan = await scanFolderEntries(handle);
+  onIndexed?.(scan);
+  const opened = await materializeFiles(scan.ranked);
+  return { ...scan, ...opened };
 }
 
 function handoffFiles(files) {
@@ -147,6 +248,15 @@ function setStatus(message, error = false) {
   ui.status.classList.toggle("error", error);
 }
 
+function setBusy(busy) {
+  loading = busy;
+  if (!ui) return;
+  ui.primary.disabled = busy;
+  ui.change.disabled = busy;
+  ui.forget.disabled = busy;
+  ui.primary.classList.toggle("loading", busy);
+}
+
 function updateUi(handle = null) {
   if (!ui) return;
   const hasHandle = Boolean(handle);
@@ -156,48 +266,93 @@ function updateUi(handle = null) {
   ui.primary.textContent = hasHandle ? "최근 녹음 불러오기" : "📁 녹음 폴더 연결하기";
   ui.note.textContent = hasHandle
     ? `이 폴더의 최근 오디오 최대 ${MAX_FOLDER_FILES}개를 이 기기에서만 읽습니다. 원본 파일은 이동하거나 삭제하지 않습니다.`
-    : "폴더 연결 화면에서는 파일이 보이지 않는 것이 정상입니다. TPhoneCallRecords에서 ‘이 폴더 사용’을 누르면 됩니다.";
+    : "폴더 연결 화면에서는 파일이 보이지 않는 것이 정상입니다. TPhoneCallRecords에서 ‘이 폴더 사용’ → ‘허용’을 누르면 됩니다.";
+}
+
+function folderNameNote(handle) {
+  const name = String(handle?.name || "");
+  if (!name) return "폴더명이 확인되지 않았습니다.";
+  if (name === EXPECTED_FOLDER_NAME) return `폴더명 ${EXPECTED_FOLDER_NAME} 확인됨`;
+  return `연결 폴더명: ${name} · 이 기기에서 실제 녹음 폴더가 맞는지 확인 필요`;
+}
+
+function pickerInstruction() {
+  const edgeAndroid = /\bEdgA\//i.test(navigator.userAgent || "");
+  if (edgeAndroid) {
+    return "TPhoneCallRecords에서 ‘이 폴더 사용’ → ‘허용’까지 누르세요. 허용 뒤에도 폴더 화면이 남으면 뒤로가기를 누르지 말고 홈으로 나갔다가 업무수첩으로 돌아오세요.";
+  }
+  return "TPhoneCallRecords까지 들어간 뒤 ‘이 폴더 사용’ → ‘허용’을 누르세요. 파일이 안 보이는 것이 정상입니다.";
 }
 
 async function loadFromHandle(handle, { afterConnect = false } = {}) {
+  if (loading) return false;
   if (!(await ensureReadPermission(handle))) {
     setStatus("폴더 읽기 권한이 없습니다. ‘폴더 변경’으로 다시 연결하거나 기존 가져오기를 사용하세요.", true);
     return false;
   }
-  setStatus(afterConnect ? "폴더 연결 완료 · 녹음파일을 불러오는 중입니다…" : "연결된 폴더에서 녹음파일을 확인 중입니다…");
+
+  setBusy(true);
+  setStatus(afterConnect
+    ? `✓ ${folderNameNote(handle)} · 파일 이름을 빠르게 확인 중입니다…`
+    : `✓ ${folderNameNote(handle)} · 파일 이름을 빠르게 확인 중입니다…`);
+
   try {
-    const files = await readFolderFiles(handle);
-    if (!files.length) {
-      setStatus("✓ 폴더는 연결됐지만 지원되는 녹음파일을 찾지 못했습니다. 폴더가 TPhoneCallRecords가 맞는지 확인하세요.", true);
+    const result = await readFolderFiles(handle, (scan) => {
+      if (!scan.totalAudioCount) {
+        setStatus(`✓ ${folderNameNote(handle)} · 파일 ${scan.scannedCount}개를 확인했지만 지원되는 오디오를 찾지 못했습니다.`, true);
+        return;
+      }
+      const targetCount = Math.min(scan.totalAudioCount, MAX_FOLDER_FILES);
+      setStatus(`✓ ${folderNameNote(handle)} · 오디오 ${scan.totalAudioCount}건 발견 · 최근 ${targetCount}건만 여는 중입니다…`);
+    });
+
+    if (!result.totalAudioCount) {
+      setStatus(`✓ 폴더 연결은 됐지만 오디오 파일이 0건입니다. ${folderNameNote(handle)}.`, true);
       return false;
     }
-    if (!handoffFiles(files)) {
-      setStatus("✓ 폴더는 연결됐지만 이 브라우저에서 파일 목록 전달이 제한됐습니다. 기존 ‘통화녹음 가져오기’를 사용할 수 있습니다.", true);
+    if (!result.files.length) {
+      setStatus(`✓ 오디오 ${result.totalAudioCount}건은 찾았지만 Edge가 파일을 열지 못했습니다. 기존 ‘통화녹음 가져오기’를 사용하거나 다시 시도해 주세요.`, true);
       return false;
     }
-    setStatus(`✓ ${handle.name || "녹음 폴더"} 연결됨 · 최근 녹음 ${files.length}건을 불러왔습니다.`);
+    if (!handoffFiles(result.files)) {
+      setStatus(`✓ 오디오 ${result.totalAudioCount}건은 찾았지만 이 브라우저가 앱 목록으로 전달하지 못했습니다. 기존 ‘통화녹음 가져오기’를 사용하세요.`, true);
+      return false;
+    }
+
+    const skipped = result.failedCount ? ` · 열기 실패 ${result.failedCount}건` : "";
+    const newest = result.newestName ? ` · 최신 ${result.newestName}` : "";
+    setStatus(`✓ ${handle.name || "녹음 폴더"} · 오디오 ${result.totalAudioCount}건 확인 · 최근 ${result.files.length}건 불러옴${skipped}${newest}`);
     return true;
-  } catch {
-    setStatus("✓ 폴더 연결은 유지됐지만 파일을 읽지 못했습니다. ‘최근 녹음 불러오기’를 다시 눌러 보세요.", true);
+  } catch (error) {
+    if (error?.code === "FOLDER_SCAN_TIMEOUT") {
+      setStatus("✓ 폴더 연결은 유지됐지만 목록 확인이 20초를 넘어 중단했습니다. 녹음이 아주 많거나 Edge 폴더 읽기가 지연된 상태입니다. 다시 시도하거나 기존 가져오기를 사용하세요.", true);
+    } else if (error?.code === "DIRECTORY_ITERATOR_UNSUPPORTED") {
+      setStatus("✓ 폴더 연결은 됐지만 이 Edge 버전은 폴더 내부 목록 읽기를 지원하지 않습니다. 기존 ‘통화녹음 가져오기’를 사용하세요.", true);
+    } else {
+      setStatus(`✓ 폴더 연결은 유지됐지만 파일 목록을 읽지 못했습니다${error?.message ? ` · ${error.message}` : ""}.`, true);
+    }
     return false;
+  } finally {
+    setBusy(false);
   }
 }
 
 async function chooseFolderAndLoad() {
-  if (typeof window.showDirectoryPicker !== "function") return;
+  if (typeof window.showDirectoryPicker !== "function" || loading) return;
   try {
-    setStatus("TPhoneCallRecords까지 들어간 뒤 아래 ‘이 폴더 사용’을 누르세요. 파일이 안 보이는 것이 정상입니다.");
+    setStatus(pickerInstruction());
     const handle = await window.showDirectoryPicker({ id: PICKER_ID, mode: "read" });
     await saveHandle(handle);
     currentHandle = handle;
     updateUi(currentHandle);
-    setStatus(`✓ ${handle.name || "녹음 폴더"} 연결됨`);
+    setStatus(`✓ ${folderNameNote(handle)} · 연결 정보를 이 기기에 저장했습니다.`);
+    try { window.focus?.(); } catch {}
     await loadFromHandle(handle, { afterConnect: true });
   } catch (error) {
     if (error?.name === "AbortError") {
       setStatus(currentHandle
         ? `기존 ${currentHandle.name || "녹음 폴더"} 연결은 유지됩니다. 새 폴더 선택만 취소했습니다.`
-        : "폴더가 연결되지 않았습니다. TPhoneCallRecords에서 ‘이 폴더 사용’을 눌러야 연결됩니다.", !currentHandle);
+        : "폴더가 연결되지 않았습니다. TPhoneCallRecords에서 ‘이 폴더 사용’ → ‘허용’까지 눌러야 연결됩니다.", !currentHandle);
     } else {
       setStatus("폴더 연결에 실패했습니다. 기존 가져오기 방식은 계속 사용할 수 있습니다.", true);
     }
@@ -216,7 +371,7 @@ async function initialize() {
 
   try { currentHandle = await loadHandle(); } catch { currentHandle = null; }
   updateUi(currentHandle);
-  if (currentHandle) setStatus(`✓ ${currentHandle.name || "녹음 폴더"} 연결 정보가 저장되어 있습니다.`);
+  if (currentHandle) setStatus(`✓ ${folderNameNote(currentHandle)} · 연결 정보가 저장되어 있습니다.`);
 
   ui.primary.addEventListener("click", () => currentHandle ? loadFromHandle(currentHandle) : chooseFolderAndLoad());
   ui.change.addEventListener("click", chooseFolderAndLoad);
