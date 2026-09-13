@@ -80,6 +80,18 @@ test("checkpoint set/clear는 원본 Job을 변경하지 않는다", () => {
   assert.equal(cleared.checkpoints.transcript, undefined);
 });
 
+test("terminal Job의 checkpoint/attempt 변경을 차단한다", () => {
+  const completed = normalizeProcessingJob({
+    ...base,
+    status: "completed",
+    userId: "u",
+    workspaceId: "w",
+    finishedAt: "2026-09-13T00:03:00Z",
+  });
+  assert.throws(() => setProcessingCheckpoint(completed, "late", true), (e) => e?.code === "PROCESSING_JOB_TERMINAL_IMMUTABLE");
+  assert.throws(() => incrementProcessingAttempt(completed), (e) => e?.code === "PROCESSING_JOB_TERMINAL_IMMUTABLE");
+});
+
 test("attemptCount는 명시적 helper로만 증가시킨다", () => {
   const job = normalizeProcessingJob(base, { workspaceContext });
   const next = incrementProcessingAttempt(job, "2026-09-13T00:01:00Z");
@@ -90,6 +102,17 @@ test("attemptCount는 명시적 helper로만 증가시킨다", () => {
 test("잘못된 kind/stage를 차단한다", () => {
   assert.throws(() => normalizeProcessingJob({ ...base, kind: "bad kind" }, { workspaceContext }), (e) => e?.code === "PROCESSING_JOB_KIND_INVALID");
   assert.throws(() => normalizeProcessingJob({ ...base, status: "processing", stage: "bad stage" }, { workspaceContext }), (e) => e?.code === "PROCESSING_JOB_STAGE_INVALID");
+});
+
+test("식별자와 idempotencyKey 길이 초과를 조용히 자르지 않는다", () => {
+  assert.throws(
+    () => normalizeProcessingJob({ ...base, jobId: "j".repeat(201) }, { workspaceContext }),
+    (e) => e?.code === "PROCESSING_JOB_ID_INVALID",
+  );
+  assert.throws(
+    () => normalizeProcessingJob({ ...base, idempotencyKey: "k".repeat(501) }, { workspaceContext }),
+    (e) => e?.code === "PROCESSING_JOB_IDEMPOTENCY_KEY_INVALID",
+  );
 });
 
 test("잘못된 상태변경 시각을 조용히 현재시각으로 바꾸지 않는다", () => {
