@@ -98,6 +98,15 @@ export function normalizeRetentionDeleteState(raw = {}, context = {}) {
   if (deleteStatus === "none" && (deleteRequestedAt || deleteCompletedAt || deleteErrorCode || deleteErrorMessage)) {
     throw retentionError("DELETE_STATE_INCONSISTENT", "none 삭제 상태에는 삭제 진행 정보가 있을 수 없습니다.");
   }
+  if (deleteStatus === "requested" && (deleteCompletedAt || deleteErrorCode || deleteErrorMessage)) {
+    throw retentionError("DELETE_STATE_INCONSISTENT", "requested 상태에는 완료/실패 정보가 있을 수 없습니다.");
+  }
+  if (deleteStatus === "completed" && (deleteErrorCode || deleteErrorMessage)) {
+    throw retentionError("DELETE_STATE_INCONSISTENT", "completed 상태에는 실패 정보가 있을 수 없습니다.");
+  }
+  if (deleteStatus === "failed" && deleteCompletedAt) {
+    throw retentionError("DELETE_STATE_INCONSISTENT", "failed 상태에는 deleteCompletedAt이 있을 수 없습니다.");
+  }
 
   const metadata = source.metadata === undefined || source.metadata === null ? {} : source.metadata;
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
@@ -126,7 +135,8 @@ export function normalizeRetentionDeleteState(raw = {}, context = {}) {
 }
 
 export function isRetentionExpired(stateInput, at = new Date()) {
-  const state = normalizeRetentionDeleteState(stateInput);
-  if (!state.expiresAt) return false;
-  return date(at, "RETENTION_OBSERVED_AT_INVALID") >= new Date(state.expiresAt);
+  const source = stateInput && typeof stateInput === "object" && !Array.isArray(stateInput) ? stateInput : {};
+  const expiresAt = optionalDate(source.expiresAt ?? source.expires_at, "RETENTION_EXPIRES_AT_INVALID");
+  if (!expiresAt) return false;
+  return date(at, "RETENTION_OBSERVED_AT_INVALID") >= new Date(expiresAt);
 }
