@@ -48,6 +48,18 @@
           <button id="scanPreviewEdit" type="button">다시 조정</button>
           <button id="scanPreviewRemove" class="danger" type="button">첨부 취소</button>
         </div>
+        <div class="scan-ocr-box">
+          <button id="scanOcrRead" class="scan-ocr-read" type="button">🔎 문서 내용 읽기</button>
+          <p id="scanOcrStatus" class="scan-ocr-status">스캔 이미지를 휴대폰에서 읽습니다. OCR API 비용은 없습니다.</p>
+          <div id="scanOcrResult" class="scan-ocr-result" hidden>
+            <label for="scanOcrText">읽은 내용 · 저장 전 수정 가능</label>
+            <textarea id="scanOcrText" rows="6" spellcheck="false"></textarea>
+            <div class="scan-ocr-actions">
+              <button id="scanOcrUse" type="button">업무 내용에 넣기</button>
+              <button id="scanOcrClear" type="button">OCR 지우기</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <button id="clear" class="clear" type="button">입력 지우기</button>
@@ -134,7 +146,7 @@
       </details>
     </section>
 
-    <footer>v1.7.2 · 녹음 우선 · 브리핑 2.0 · 업무명 수정 · 직접 입력 · 문서 스캔 · 카카오 브리핑 · AI API 없음</footer>
+    <footer>v1.8.0 · 녹음 우선 · 브리핑 2.0 · 직접 입력 · 문서 스캔 · 무료 로컬 OCR · 카카오 브리핑</footer>
   </main>
 
   <dialog id="scannerDialog" class="scanner-dialog" aria-labelledby="scannerTitle">
@@ -182,6 +194,7 @@
   <script src="/inference-guard.js" defer></script>
   <script src="/scanner-core.js" defer></script>
   <script src="/scanner.js" defer></script>
+  <script src="/scanner-ocr.js" defer></script>
   <script src="/scanner-save-bridge.js" defer></script>
   <script src="/quick-save.js" defer></script>
   <script src="/manual-input.js" defer></script>
