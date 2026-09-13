@@ -140,18 +140,13 @@ async function materializeFiles(ranked = []) {
   const deadline = Date.now() + FILE_OPEN_TOTAL_TIMEOUT_MS;
   const files = new Array(ranked.length).fill(null);
   let cursor = 0;
-  let failedCount = 0;
 
   async function worker() {
     while (true) {
       const index = cursor++;
       if (index >= ranked.length) return;
       const remaining = deadline - Date.now();
-      if (remaining <= 0) {
-        failedCount += ranked.length - index;
-        cursor = ranked.length;
-        return;
-      }
+      if (remaining <= 0) return;
       try {
         files[index] = await withTimeout(
           ranked[index].entry.getFile(),
@@ -160,7 +155,7 @@ async function materializeFiles(ranked = []) {
           "녹음파일 열기 시간이 초과됐습니다.",
         );
       } catch {
-        failedCount += 1;
+        // 일부 파일 실패는 나머지 최근 파일을 계속 불러온다.
       }
     }
   }
@@ -170,7 +165,8 @@ async function materializeFiles(ranked = []) {
     () => worker(),
   ));
 
-  return { files: files.filter(Boolean), failedCount };
+  const opened = files.filter(Boolean);
+  return { files: opened, failedCount: ranked.length - opened.length };
 }
 
 async function readFolderFiles(handle, onIndexed = null) {
@@ -284,7 +280,7 @@ function pickerInstruction() {
   return "TPhoneCallRecords까지 들어간 뒤 ‘이 폴더 사용’ → ‘허용’을 누르세요. 파일이 안 보이는 것이 정상입니다.";
 }
 
-async function loadFromHandle(handle, { afterConnect = false } = {}) {
+async function loadFromHandle(handle) {
   if (loading) return false;
   if (!(await ensureReadPermission(handle))) {
     setStatus("폴더 읽기 권한이 없습니다. ‘폴더 변경’으로 다시 연결하거나 기존 가져오기를 사용하세요.", true);
@@ -292,9 +288,7 @@ async function loadFromHandle(handle, { afterConnect = false } = {}) {
   }
 
   setBusy(true);
-  setStatus(afterConnect
-    ? `✓ ${folderNameNote(handle)} · 파일 이름을 빠르게 확인 중입니다…`
-    : `✓ ${folderNameNote(handle)} · 파일 이름을 빠르게 확인 중입니다…`);
+  setStatus(`✓ ${folderNameNote(handle)} · 파일 이름을 빠르게 확인 중입니다…`);
 
   try {
     const result = await readFolderFiles(handle, (scan) => {
@@ -347,7 +341,7 @@ async function chooseFolderAndLoad() {
     updateUi(currentHandle);
     setStatus(`✓ ${folderNameNote(handle)} · 연결 정보를 이 기기에 저장했습니다.`);
     try { window.focus?.(); } catch {}
-    await loadFromHandle(handle, { afterConnect: true });
+    await loadFromHandle(handle);
   } catch (error) {
     if (error?.name === "AbortError") {
       setStatus(currentHandle
@@ -364,7 +358,7 @@ async function initialize() {
   if (typeof window.showDirectoryPicker !== "function" || !("indexedDB" in window)) {
     updateUi(null);
     ui.primary.disabled = true;
-    ui.primary.textContent = "📁 폴더 바로가기 미지원";
+    ui.primary.hidden = true;
     ui.note.textContent = "현재 브라우저에서는 폴더 기억 기능을 지원하지 않습니다. 기존 ‘통화녹음 가져오기’를 사용하세요.";
     return;
   }
