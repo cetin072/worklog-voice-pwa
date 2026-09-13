@@ -1,6 +1,7 @@
 export const ADAPTER_ENVELOPE_SCHEMA_VERSION = "v1";
 
 const TOKEN_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
+const ADAPTER_BRAND = Symbol("platform-adapter-v1");
 
 function adapterError(code, message) {
   const error = new Error(message);
@@ -37,10 +38,21 @@ function plainObject(value) {
 function freezeUsage(value) {
   if (value === null || value === undefined) return null;
   if (Array.isArray(value)) {
-    return Object.freeze(value.map((item) => Object.freeze(plainObject(item) ? { ...item } : { value: item })));
+    if (!value.every(plainObject)) {
+      throw adapterError("ADAPTER_USAGE_INVALID", "normalized usage 배열에는 객체만 허용됩니다.");
+    }
+    return Object.freeze(value.map((item) => Object.freeze({ ...item })));
   }
   if (!plainObject(value)) {
-    throw adapterError("ADAPTER_USAGE_INVALID", "normalized usage는 객체 또는 배열이어야 합니다.");
+    throw adapterError("ADAPTER_USAGE_INVALID", "normalized usage는 객체 또는 객체 배열이어야 합니다.");
+  }
+  return Object.freeze({ ...value });
+}
+
+function freezeMetadata(value) {
+  if (value === null || value === undefined) return Object.freeze({});
+  if (!plainObject(value)) {
+    throw adapterError("ADAPTER_METADATA_INVALID", "normalized metadata는 객체여야 합니다.");
   }
   return Object.freeze({ ...value });
 }
@@ -60,7 +72,6 @@ export function normalizeAdapterEnvelope(raw = {}, identityInput = {}) {
   if (!plainObject(source.result)) {
     throw adapterError("ADAPTER_RESULT_REQUIRED", "normalized adapter 결과에는 result 객체가 필요합니다.");
   }
-  const metadata = plainObject(source.metadata) ? { ...source.metadata } : {};
 
   return Object.freeze({
     schemaVersion: ADAPTER_ENVELOPE_SCHEMA_VERSION,
@@ -76,25 +87,28 @@ export function normalizeAdapterEnvelope(raw = {}, identityInput = {}) {
     ),
     result: Object.freeze({ ...source.result }),
     usage: freezeUsage(source.usage),
-    metadata: Object.freeze(metadata),
+    metadata: freezeMetadata(source.metadata),
   });
 }
 
 export function createConfiguredAdapter(config = {}) {
   const identity = normalizeAdapterIdentity(config);
-  if (typeof config.run !== "function") {
+  const run = config.run;
+  const normalize = config.normalize;
+  if (typeof run !== "function") {
     throw adapterError("ADAPTER_RUN_REQUIRED", "configured adapter에는 run 함수가 필요합니다.");
   }
-  if (typeof config.normalize !== "function") {
+  if (typeof normalize !== "function") {
     throw adapterError("ADAPTER_NORMALIZE_REQUIRED", "configured adapter에는 normalize 함수가 필요합니다.");
   }
 
   return Object.freeze({
+    [ADAPTER_BRAND]: true,
     ...identity,
     configured: true,
     async invoke(input = {}, context = {}) {
-      const raw = await config.run(input, context);
-      const normalized = await config.normalize(raw, Object.freeze({ ...context, adapter: identity }));
+      const raw = await run(input, context);
+      const normalized = await normalize(raw, Object.freeze({ ...context, adapter: identity }));
       return normalizeAdapterEnvelope(normalized, identity);
     },
   });
@@ -103,6 +117,7 @@ export function createConfiguredAdapter(config = {}) {
 export function createUnconfiguredAdapter(identityInput = {}) {
   const identity = normalizeAdapterIdentity(identityInput);
   return Object.freeze({
+    [ADAPTER_BRAND]: true,
     ...identity,
     configured: false,
     async invoke() {
@@ -115,8 +130,8 @@ export function createUnconfiguredAdapter(identityInput = {}) {
 }
 
 export async function invokeAdapter(adapter, input = {}, context = {}) {
-  if (!adapter || typeof adapter !== "object" || typeof adapter.invoke !== "function") {
-    throw adapterError("ADAPTER_INVALID", "호출 가능한 adapter가 필요합니다.");
+  if (!adapter || typeof adapter !== "object" || adapter[ADAPTER_BRAND] !== true || typeof adapter.invoke !== "function") {
+    throw adapterError("ADAPTER_INVALID", "Platform Adapter Boundary로 생성된 adapter가 필요합니다.");
   }
   if (adapter.configured !== true) {
     throw adapterError("ADAPTER_NOT_CONFIGURED", "연결된 adapter가 필요합니다.");
