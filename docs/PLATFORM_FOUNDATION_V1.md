@@ -262,8 +262,175 @@ PDF 생성 성공과 OCR, Notion 첨부, 업무 연결 성공은 같은 성공�
 
 ---
 
+# Decision 02 — 사용자 / Workspace / 데이터 소유권 모델
+
+- 상태: **확정**
+- 확정일: 2026-09-13
+- 변경 원칙: 별도의 중대한 기술·사업·보안상 대안이 생기지 않는 한 기본 플랫폼 원칙으로 유지한다.
+
+## 1. User와 Workspace를 분리한다
+
+업무수첩의 **User는 사람**, **Workspace는 업무 데이터가 소속되는 업무공간**이다.
+
+한 User는 여러 Workspace에 참여할 수 있고, 하나의 Workspace에는 여러 User가 참여할 수 있다.
+
+예:
+
+- User: 한 사람의 업무수첩 계정
+- Personal Workspace: 개인 업무공간
+- Organization/Project Workspace: 회사·팀·프로젝트 업무공간
+
+Google Workspace와 유사하게 `사람`과 `업무공간`을 분리하되, 업무수첩 Workspace는 업무수첩 내부 데이터의 소유권·권한·비용·협업 경계를 정의하는 논리적 공간이다.
+
+## 2. 모든 사용자는 Personal Workspace 하나를 기본으로 가진다
+
+회원가입 또는 정식 사용자 생성 시 Personal Workspace 하나를 자동 생성하는 방향을 기본값으로 한다.
+
+사용자 UX에서는 이를 반드시 `Workspace`라는 기술용어로 노출할 필요는 없으며 `내 업무`처럼 단순하게 표현할 수 있다.
+
+초기에는 Personal Workspace를 여러 개 만드는 기능을 기본으로 제공하지 않는다.
+
+추가 Workspace는 조직·팀·프로젝트 등 명확한 공동 업무공간 용도로 확장한다.
+
+## 3. 업무 데이터의 기본 소유 단위는 Workspace다
+
+업무수첩의 핵심 업무 데이터는 원칙적으로 `workspace_id`를 가진다.
+
+대상 예:
+
+- 업무/할 일
+- 일정
+- 고객/CRM
+- 통화 및 통화 보고서
+- 회의 및 회의록
+- 문서 메타데이터
+- 확정된 업무 연결 정보
+- Usage/Cost 집계
+
+데이터가 어느 Workspace 소속인지와 누가 만들었는지는 별도 개념으로 관리한다.
+
+예:
+
+- `workspace_id`: 데이터가 소속된 업무공간
+- `created_by_user_id`: 생성한 사용자
+- `assigned_user_id`: 담당 사용자
+
+필요한 도메인에만 추가 사용자 관계를 둔다.
+
+## 4. 개인 데이터와 조직 데이터를 구분한다
+
+Personal Workspace의 업무 데이터는 해당 개인 업무공간 소유로 본다.
+
+Organization/Project Workspace에서 생성된 업무 데이터는 생성자의 개인 소유가 아니라 해당 Workspace 소유로 본다.
+
+예를 들어 조직 Workspace에서 한 사용자가 통화 보고서를 만들었다면:
+
+- 생성자: 해당 User
+- 업무상 데이터 소유: 해당 Workspace
+
+멤버가 조직을 떠나거나 계정을 해지하더라도 조직 Workspace의 업무 데이터가 함께 삭제되어서는 안 된다.
+
+따라서 `User 탈퇴/멤버 제거`와 `Workspace 삭제`는 서로 다른 작업으로 취급한다.
+
+## 5. Device Original과 Workspace 업무결과의 소유권을 구분한다
+
+Decision 01의 Local-first 원칙을 유지한다.
+
+조직 Workspace에서 통화 분석을 수행했더라도 사용자의 휴대폰에 존재하는 원본 통화녹음·사진 등 Device Original은 기본적으로 사용자 기기 원본이다.
+
+반면 사용자가 조직 업무를 위해 확정·공유한 업무 결과는 Workspace 데이터가 될 수 있다.
+
+예:
+
+`사용자 휴대폰 원본 통화녹음 → 통화 분석 → 조직 Workspace 통화 보고서 / 업무 / 일정 / CRM 연결`
+
+원본 음성 자체를 조직 클라우드에 장기 보관하려면 별도 Workspace 정책과 사용자 고지를 필요로 한다.
+
+## 6. Membership과 최소 권한 모델
+
+Workspace 멤버십은 별도 관계로 관리한다.
+
+V1 최소 역할은 다음 두 가지를 기본으로 한다.
+
+- `owner`: Workspace 소유 및 멤버/설정/삭제 등 중요 관리권한
+- `member`: 일반 업무 사용권한
+
+`admin`, `viewer` 등 세분화된 역할은 실제 요구가 생길 때 추가한다.
+
+권한 모델은 처음부터 확장 가능하게 설계하되, 현재 단계에서 과도한 역할 체계를 만들지 않는다.
+
+## 7. Usage / Cost는 Workspace와 User를 함께 기록한다
+
+사용량과 비용은 `workspace_id`와 `user_id`를 함께 기록하는 것을 기본으로 한다.
+
+이렇게 해야 다음 집계가 모두 가능하다.
+
+- 전체 서비스 비용
+- Workspace별 비용
+- 사용자별 비용
+- Workspace 안의 사용자별 비용
+- 기능/Provider별 비용
+
+한 User가 Personal Workspace와 조직 Workspace 양쪽에서 유료 기능을 사용하더라도 비용을 정확히 분리할 수 있어야 한다.
+
+## 8. CRM과 담당자도 소유와 담당을 분리한다
+
+고객/CRM 데이터는 Workspace 소유를 기본으로 한다.
+
+고객 담당자는 별도 User 관계로 기록한다.
+
+예:
+
+- `customers.workspace_id`: 고객 데이터의 업무공간 소유권
+- `assigned_user_id`: 현재 담당자
+
+담당자가 바뀌어도 고객 데이터 자체의 소유권이 이동하거나 사라지지 않는다.
+
+업무와 일정도 같은 원칙으로 `소속 Workspace`, `생성자`, `담당자`를 구분한다.
+
+## 9. Workspace별 정책 확장을 허용한다
+
+개인과 조직은 데이터 보관·동기화 요구가 다를 수 있으므로 향후 Workspace 단위 정책을 지원할 수 있게 한다.
+
+예:
+
+- 원본 음성 Cloud Backup 허용 여부
+- 녹취록 Cloud Sync 여부
+- 보고서 Cloud Sync 여부
+- 보관기간
+- 외부 Calendar/Notion 연동 정책
+
+구체적인 정책 필드와 기본값은 필요성이 확정될 때 설계한다. V1에서 미리 과도하게 구현하지 않는다.
+
+## 10. 최소 개념 모델
+
+플랫폼은 최소한 다음 관계를 수용할 수 있어야 한다.
+
+```text
+User
+ ├─ Personal Workspace (기본 1개)
+ └─ Membership ──> Organization / Project Workspace
+
+Workspace
+ ├─ Members
+ ├─ Tasks
+ ├─ Schedules
+ ├─ Customers / CRM
+ ├─ Calls / Meetings
+ ├─ Documents
+ └─ Usage / Cost
+```
+
+구현 시 실제 테이블 이름은 별도 기술설계에서 정하지만, 제품 계약은 위 관계를 유지한다.
+
+## 11. 한 줄 기준
+
+> **User는 사람이고 Workspace는 업무공간이다. 업무 데이터의 기본 소유 단위는 Workspace이며, 생성자·담당자 User와 원본 기기 소유권은 별도로 관리한다.**
+
+---
+
 # 다음 결정 예정
 
-## Decision 02 — 사용자 / Workspace / 데이터 소유권 모델
+## Decision 03 — 모듈 공통 결과 계약과 Candidate → Confirmed 흐름
 
-다음 논의에서는 개인 사용자, 복수 기기, 향후 조직/팀 사용자를 함께 수용할 사용자·Workspace·권한 모델을 확정한다.
+다음 논의에서는 통화·회의·메일·캡처 등 서로 다른 모듈이 발견한 업무·일정·연락처를 제각각 다른 형식으로 만들지 않도록 공통 Result/Candidate 계약과 사용자 확인 원칙을 확정한다.
