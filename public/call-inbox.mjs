@@ -2,6 +2,7 @@ import {
   isSupportedAudioFilename,
   parseCallRecordingFilename,
 } from "./call-recording-parser.mjs";
+import { buildCallSelectionItems } from "./call-selection-event.mjs";
 
 const importButton = document.getElementById("callImport");
 const fileInput = document.getElementById("callFiles");
@@ -162,6 +163,7 @@ function createMeta(entry) {
 
 function resetSelectionFeedback() {
   summary.hidden = true;
+  delete summary.dataset.selectionPayloadReady;
   status.textContent = "";
 }
 
@@ -351,6 +353,7 @@ function importFiles(fileList) {
   showSelectedOnly = false;
   render();
   summary.hidden = true;
+  delete summary.dataset.selectionPayloadReady;
   const notes = [];
   if (added) notes.push(`${added}건을 불러왔습니다.`);
   if (duplicate) notes.push(`중복 ${duplicate}건은 제외했습니다.`);
@@ -367,6 +370,15 @@ function selectedDurationSummary(selected) {
   return loaded.length === selected.length
     ? `총 녹음 길이 ${formatted}`
     : `확인된 녹음 길이 ${formatted} · ${selected.length - loaded.length}건 확인 중`;
+}
+
+function announceSelectionReady(selected) {
+  const items = buildCallSelectionItems(selected);
+  if (!items.length) return;
+  summary.dataset.selectionPayloadReady = "true";
+  window.dispatchEvent(new CustomEvent("worklog:call-selection-ready", {
+    detail: { items, source: "call-inbox-selection" },
+  }));
 }
 
 function showSelectionSummary(options = {}) {
@@ -401,6 +413,7 @@ function showSelectionSummary(options = {}) {
   note.textContent = "현재 V1.1에서는 선택 확인까지만 로컬에서 처리합니다. STT 연결 전이라 녹음파일은 서버로 전송되지 않습니다.";
   summary.append(note);
   summary.hidden = false;
+  announceSelectionReady(selected);
   status.textContent = `선택 ${selected.length}건이 분석 준비 상태입니다.`;
   if (options.scroll !== false) summary.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -429,6 +442,7 @@ clearButton?.addEventListener("click", () => {
   durationQueue.length = 0;
   showSelectedOnly = false;
   summary.hidden = true;
+  delete summary.dataset.selectionPayloadReady;
   status.textContent = "통화 목록을 비웠습니다. 원본 녹음파일은 삭제되지 않습니다.";
   render();
 });
