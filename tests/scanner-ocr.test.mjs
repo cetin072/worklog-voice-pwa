@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const index=fs.readFileSync("public/index.html","utf8");
 const ocr=fs.readFileSync("public/scanner-ocr.js","utf8");
+const scanner=fs.readFileSync("public/scanner.js","utf8");
 const sw=fs.readFileSync("public/sw.js","utf8");
 const build=fs.readFileSync("scripts/prepare-ocr-assets.mjs","utf8");
 const pkg=JSON.parse(fs.readFileSync("package.json","utf8"));
@@ -60,8 +61,13 @@ test("build copies complete local OCR runtime",()=>{
   assert.ok(fs.existsSync("public/vendor/tessdata/eng.traineddata.gz"));
 });
 
-test("OCR insertion preserves review and respects worklog text limit",()=>{
-  assert.match(ocr,/combined\.length>1800/);
-  assert.match(ocr,/업무 내용 저장 한도/);
-  assert.match(ocr,/dispatchEvent\(new Event\("input"/);
+test("user-facing OCR insertion replaces recovered text unless append is explicitly chosen",()=>{
+  assert.match(scanner,/업무 내용으로 바꾸기/);
+  assert.match(scanner,/scanOcrAppend/);
+  assert.match(scanner,/기존 내용에 추가/);
+  assert.match(scanner,/event\.stopImmediatePropagation\(\)/);
+  assert.match(scanner,/finishOcrInsert\(ocr,/);
+  assert.match(scanner,/\[문서 내용\]/);
+  assert.match(scanner,/slice\(0,1800\)/);
+  assert.match(scanner,/dispatchEvent\(new Event\("input"/);
 });
