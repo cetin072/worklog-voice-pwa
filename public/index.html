@@ -93,16 +93,16 @@
     <section id="callInboxCard" class="card call-inbox-card">
       <div class="call-inbox-head">
         <div>
-          <p class="eyebrow">통화녹음 V1.2</p>
+          <p class="eyebrow">통화녹음 V1.3</p>
           <h2>📞 중요한 통화 고르기</h2>
         </div>
       </div>
-      <p class="call-inbox-copy">연결한 통화녹음 폴더에서는 오늘을 포함한 최근 3일 통화를 기본으로 불러옵니다. 더 이전 통화는 기간을 선택하고, 필요하면 파일을 직접 골라 가져올 수 있습니다.</p>
-      <button id="callImport" class="call-import" type="button">파일 직접 선택</button>
-      <input id="callFiles" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac,.3gp" multiple hidden>
+      <p class="call-inbox-copy">통화녹음 파일을 여러 개 고르면 연락처명·번호·통화시각을 읽어 목록으로 정리합니다. 폴더 자동읽기가 안정적인 환경에서는 최근 3일 통화를 빠르게 불러오고, Edge Android에서는 검증된 파일 선택 방식을 기본으로 사용합니다.</p>
+      <button id="callImport" class="call-import" type="button">통화녹음 파일 선택</button>
+      <input id="callFiles" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac,.3gp,.mp4,.ogg,.opus" multiple hidden>
       <p class="call-privacy">이 단계에서는 녹음파일을 서버나 AI로 보내지 않습니다. 선택 목록과 중요 연락처 표시는 이 기기 안에서만 처리합니다.</p>
 
-      <div id="callInboxEmpty" class="call-inbox-empty">최근 3일 통화를 불러오거나 필요한 기간을 선택해 보세요. 파일명에 저장된 연락처 이름·번호·통화시각을 우선 표시합니다.</div>
+      <div id="callInboxEmpty" class="call-inbox-empty">필요한 통화녹음을 여러 개 선택해 보세요. 파일명에 저장된 연락처 이름·번호·통화시각을 우선 표시합니다.</div>
       <div id="callInboxToolbar" class="call-inbox-toolbar" hidden>
         <p id="callInboxCount" class="call-inbox-count">불러온 통화 0건 · 선택 0건</p>
         <div class="call-inbox-tools">
@@ -156,7 +156,7 @@
       <details><summary>추가 정보</summary><div class="detailsGrid"><label><span>금액</span><input id="amount" type="number" inputmode="numeric" min="0"></label><label><span>담당자</span><input id="assignee" type="text"></label><label><span>기한</span><input id="dueDate" type="date"></label><label class="wide"><span>후속조치</span><input id="followUp" type="text"></label></div></details>
     </section>
 
-    <footer>v1.12.0 · 최근 3일 통화 · 기간 선택 · 메인 접기 · 사용량 원가 대시보드 · 유료 API 잠금</footer>
+    <footer>v1.13.0 · 통화녹음 직접 선택 기본 · 메인 접기 · 사용량 원가 대시보드 · 유료 API 잠금</footer>
   </main>
 
   <script src="/auth.js?v=20260912-2" defer></script>
