@@ -17,7 +17,7 @@ export function recordingTimestampFromFilename(filename, fallbackDate = new Date
   return parsed ? parsed.getTime() : 0;
 }
 
-export function rankAudioFileHandles(entries = [], limit = 150, fallbackDate = new Date()) {
+export function rankAudioFileHandles(entries = [], limit = Number.POSITIVE_INFINITY, fallbackDate = new Date()) {
   const max = Number.isFinite(Number(limit))
     ? Math.max(1, Math.floor(Number(limit)))
     : Number.POSITIVE_INFINITY;
@@ -96,10 +96,33 @@ export function selectAudioHandlesInRange(entries = [], range = {}, fallbackDate
   };
 }
 
-export function selectRecentAudioFiles(files = [], limit = 150) {
-  const max = Math.max(1, Math.floor(Number(limit) || 150));
-  return [...files]
+export function selectedFileTimestamp(file = {}) {
+  const fallback = Number(file.lastModified || 0);
+  const fallbackDate = fallback > 0 ? new Date(fallback) : new Date();
+  const fromName = recordingTimestampFromFilename(file.name, fallbackDate);
+  if (fromName > 0) return { timestampMs: fromName, source: "filename" };
+  if (fallback > 0) return { timestampMs: fallback, source: "lastModified" };
+  return { timestampMs: 0, source: "unknown" };
+}
+
+export function selectAudioFilesInRange(files = [], range = {}) {
+  const startMs = Number.isFinite(Number(range.startMs)) ? Number(range.startMs) : Number.NEGATIVE_INFINITY;
+  const endMs = Number.isFinite(Number(range.endMs)) ? Number(range.endMs) : Number.POSITIVE_INFINITY;
+  const all = [...files]
     .filter(isAudioCandidate)
-    .sort((a, b) => Number(b.lastModified || 0) - Number(a.lastModified || 0))
-    .slice(0, max);
+    .map((file) => {
+      const parsed = selectedFileTimestamp(file);
+      return { file, ...parsed };
+    });
+  const matched = all
+    .filter((item) => item.timestampMs >= startMs && item.timestampMs <= endMs)
+    .sort((a, b) => b.timestampMs - a.timestampMs);
+  return {
+    files: matched.map((item) => item.file),
+    totalAudioCount: all.length,
+    matchedCount: matched.length,
+    undatedCount: all.filter((item) => item.timestampMs <= 0).length,
+    fallbackDateCount: all.filter((item) => item.source === "lastModified").length,
+    newestName: matched[0]?.file?.name || "",
+  };
 }
