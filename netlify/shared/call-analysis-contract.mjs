@@ -1,4 +1,4 @@
-export const CALL_ANALYSIS_CONTRACT_VERSION = "v1";
+export const CALL_ANALYSIS_CONTRACT_VERSION = "v2";
 
 export const CALL_ANALYSIS_ACTION_TYPES = Object.freeze([
   "task",
@@ -7,8 +7,20 @@ export const CALL_ANALYSIS_ACTION_TYPES = Object.freeze([
   "decision",
 ]);
 
-// 공급자별 Structured Output/JSON Schema 기능에 맞게 변환해 쓸 수 있는
-// 업무수첩 내부 표준 스키마. 이 객체 자체는 외부 API를 호출하지 않는다.
+export const CALL_REPORT_SECTION_KEYS = Object.freeze([
+  "discussionPoints",
+  "counterpartRequests",
+  "userCommitments",
+  "decisions",
+  "openQuestions",
+]);
+
+const reportListSchema = Object.freeze({
+  type: "array",
+  maxItems: 20,
+  items: { type: "string" },
+});
+
 export const CALL_ANALYSIS_JSON_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
@@ -19,6 +31,28 @@ export const CALL_ANALYSIS_JSON_SCHEMA = Object.freeze({
       type: "array",
       maxItems: 20,
       items: { type: "string" },
+    },
+    report: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        headline: { type: "string" },
+        overview: { type: "string" },
+        discussionPoints: reportListSchema,
+        counterpartRequests: reportListSchema,
+        userCommitments: reportListSchema,
+        decisions: reportListSchema,
+        openQuestions: reportListSchema,
+      },
+      required: [
+        "headline",
+        "overview",
+        "discussionPoints",
+        "counterpartRequests",
+        "userCommitments",
+        "decisions",
+        "openQuestions",
+      ],
     },
     actions: {
       type: "array",
@@ -53,15 +87,19 @@ export const CALL_ANALYSIS_JSON_SCHEMA = Object.freeze({
       },
     },
   },
-  required: ["summary", "keyPoints", "actions", "contacts"],
+  required: ["summary", "keyPoints", "report", "actions", "contacts"],
 });
 
 export function buildCallAnalysisInstruction(context = {}) {
   const contact = String(context.contactName || "").trim();
   const occurredAt = String(context.occurredAt || "").trim();
   return [
-    "한국어 통화/회의 녹취록을 업무수첩용 구조화 데이터로 분석한다.",
+    "한국어 통화/회의 녹취록을 업무수첩용 구조화 데이터로 한 번에 분석한다.",
+    "같은 분석 결과에서 통화 보고서와 할 일·일정·후속조치·결정사항을 함께 만든다. 보고서용 별도 분석을 전제로 하지 않는다.",
     "사실을 만들지 말고 녹취록에서 확인되는 내용만 사용한다.",
+    "report.headline은 한 줄 요약, report.overview는 통화 전체 개요로 작성한다.",
+    "report.discussionPoints에는 주요 논의사항, counterpartRequests에는 상대방 요청사항, userCommitments에는 사용자가 약속한 사항만 넣는다.",
+    "report.decisions에는 통화에서 실제 합의·결정된 내용만, openQuestions에는 추가 확인이 필요한 불확실한 사항만 넣는다.",
     "상대방의 할 일과 사용자의 할 일을 구분하고, 불확실하면 confidence를 낮춘다.",
     "일정은 녹취록에 실제로 언급된 표현을 dueText에 보존한다.",
     "dueStart를 제시할 때는 날짜만 있으면 YYYY-MM-DD, 시간이 있으면 ISO 8601(+09:00)로 쓴다.",
