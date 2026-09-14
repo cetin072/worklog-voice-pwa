@@ -132,11 +132,12 @@ test("같은 eventKey에 서로 다른 usage가 충돌하면 조용히 덮어쓰
   );
 });
 
-test("provider payload가 다른 소유권을 주장해도 Call Job 소유권을 사용한다", () => {
+test("provider payload가 소유권/eventKey를 주장해도 Call Job + Platform identity를 사용한다", () => {
   const [event] = normalizeCallUsageEvents({
     usage: {
       service: "ai",
-      eventKey: "legacy-ai-event",
+      eventKey: "provider-event-key",
+      id: "provider-legacy-id",
       userId: "provider-user",
       workspaceId: "provider-workspace",
       requestId: "provider-request",
@@ -149,7 +150,7 @@ test("provider payload가 다른 소유권을 주장해도 Call Job 소유권을
   assert.equal(event.workspaceId, "workspace-1");
   assert.equal(event.requestId, "req-call-1");
   assert.equal(event.jobId, "job-call-1");
-  assert.equal(event.eventKey, "legacy-ai-event");
+  assert.equal(event.eventKey, "req-call-1:ai:call_summary");
 });
 
 test("통화가 아닌 Processing Job은 Usage Adapter에서 차단한다", () => {
