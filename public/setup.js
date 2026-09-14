@@ -7,13 +7,13 @@
   const alreadyConnected=document.getElementById("alreadyConnected");
   let completed=false;
 
+  if(window.WorklogAuth?.hasPersonal?.() && alreadyConnected){
+    alreadyConnected.classList.add("show");
+  }
+
   function show(message,kind=""){
     result.textContent=message;
     result.className=`setup-result ${kind}`.trim();
-  }
-
-  if(window.WorklogAuth?.hasPersonal?.() && alreadyConnected){
-    alreadyConnected.classList.add("show");
   }
 
   connectButton.addEventListener("click",async()=>{
@@ -31,14 +31,14 @@
       return;
     }
     if(!organization){
-      show("3번에 주로 사용할 회사·기관 이름을 적어 주세요. 개인용이면 ‘개인’이라고 적으면 됩니다.","error");
+      show("기본 기관명을 입력해 주세요. 회사 업무면 회사·기관 이름, 개인용이면 ‘개인’이라고 입력하면 됩니다.","error");
       organizationInput.focus();
       return;
     }
 
     connectButton.disabled=true;
     connectButton.textContent="Notion 연결 중…";
-    show("업무 저장 공간을 만드는 중입니다. 화면을 닫지 말고 잠시 기다려 주세요.");
+    show("📒 업무수첩 상위 페이지와 그 안의 업무 기록 DB를 만드는 중입니다. 잠시만 기다려 주세요.");
 
     try{
       const res=await fetch("/api/setup",{
@@ -47,7 +47,7 @@
         body:JSON.stringify({token,organization})
       });
       const data=await res.json().catch(()=>({}));
-      if(!res.ok) throw new Error(data.error || "Notion 연결에 실패했습니다. 토큰과 Notion API 권한을 확인한 뒤 다시 시도해 주세요.");
+      if(!res.ok) throw new Error(data.error || "Notion 자동 설정에 실패했습니다.");
 
       window.WorklogAuth.savePersonal({
         token,
@@ -58,13 +58,13 @@
 
       tokenInput.value="";
       completed=true;
-      show("✓ 내 Notion 연결이 완료되었습니다.","success");
+      show("✓ Notion 연결 완료. 📒 업무수첩 아래에 업무 기록 DB를 만들었습니다.","success");
       if(completeNote) completeNote.classList.add("show");
-      if(alreadyConnected) alreadyConnected.classList.remove("show");
+      if(alreadyConnected) alreadyConnected.classList.add("show");
       connectButton.textContent="업무수첩 시작";
       connectButton.disabled=false;
     }catch(error){
-      show(error?.message || "Notion 연결에 실패했습니다. 토큰과 Notion API 권한을 확인한 뒤 다시 시도해 주세요.","error");
+      show(`${error?.message || "Notion 연결에 실패했습니다."} 토큰·워크스페이스·Notion API 권한을 확인한 뒤 다시 시도해 주세요.`,"error");
       connectButton.disabled=false;
       connectButton.textContent="4. 연결하고 업무수첩 만들기";
     }
