@@ -181,3 +181,9 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 - public RPC는 `authenticated`에만 실행 권한을 주며, 실제 권한 상승 함수는 `private` schema와 고정 `search_path`에 둔다.
 - Browser는 `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`만 읽는다. service role 또는 secret key는 브라우저·Netlify 응답에 포함하지 않는다.
 - WorkRecord의 Supabase 저장은 Repository/Dual-write 단계의 책임이며, Auth bootstrap 단계에서 기존 Notion 저장 경로를 대체하지 않는다.
+
+## 10. Internal Repository boundary (#127)
+
+- `WorkRecordRepository`, `ScheduleRepository`, `SourceRefRepository`, `CandidateRepository`는 canonical domain input과 `Workspace Context`를 받고, snake_case Supabase row는 Repository 내부에서만 만든다.
+- `SupabaseDataCoreRestClient`는 publishable key와 호출자의 user JWT만 사용한다. service role/secret key를 요구하거나 보관하지 않는다.
+- Repository는 저장 adapter 실패를 성공으로 바꾸지 않는다. 실제 worklog의 Notion 분리와 Dual-write는 이 경계 위의 다음 단계다.
