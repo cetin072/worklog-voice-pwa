@@ -11,6 +11,7 @@ import { createSupabaseDataCoreRestClient } from "../netlify/shared/data-core/su
 import { createSupabaseWorkspaceContextResolver } from "../netlify/shared/platform/supabase-workspace-context.mjs";
 import { createWorklogDataCoreBriefingReader } from "../netlify/shared/worklog-data-core-briefing-reader.mjs";
 import { createWorklogDataCoreBriefingStatus } from "../netlify/shared/worklog-data-core-briefing-status.mjs";
+import { createWorklogDataCoreScheduleReader } from "../netlify/shared/worklog-data-core-schedule-reader.mjs";
 
 const workspaceContext = { userId: "user-1", workspaceId: "workspace-1", role: "owner" };
 
@@ -125,4 +126,33 @@ test("Data Core Briefing 상태 변경은 반환 행이 없으면 권한 없음 
   const recordId = "22222222-2222-4222-8222-222222222222";
   const writer = createWorklogDataCoreBriefingStatus({ client: { update: async () => [] } });
   await assert.rejects(() => writer.updateStatus({ recordId, status: "진행중" }, workspaceContext), (error) => error?.code === "WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN");
+});
+
+test("Data Core Schedule reader는 검증된 Workspace의 오늘·14일 이내 일정만 Briefing 형식으로 읽는다", async () => {
+  const calls = [];
+  const reader = createWorklogDataCoreScheduleReader({
+    client: { select: async (table, query) => {
+      calls.push({ table, query });
+      return [
+        { id: "schedule-1", title: "오늘 계약 검토", starts_at: "2026-09-15T03:00:00Z", all_day: false, status: "confirmed", location: "사무실" },
+        { id: "schedule-2", title: "현장 방문", starts_at: "2026-09-18T00:00:00Z", all_day: true, status: "tentative", location: null },
+        { id: "schedule-3", title: "", starts_at: "2026-09-20T00:00:00Z", all_day: false, status: "confirmed", location: null },
+        { id: "schedule-4", title: "다음 달 일정", starts_at: "2026-10-01T00:00:00Z", all_day: false, status: "confirmed", location: null },
+      ];
+    } },
+  });
+  const result = await reader.listForBriefing(workspaceContext, "2026-09-15");
+  assert.equal(calls[0].table, "schedules");
+  assert.equal(calls[0].query.workspace_id, "eq.workspace-1");
+  assert.equal(calls[0].query.status, "in.(confirmed,tentative)");
+  assert.equal(calls[0].query.starts_at, "gte.2026-09-15T00:00:00+09:00");
+  assert.equal(calls[0].query.and, "(starts_at.lt.2026-09-30T00:00:00+09:00)");
+  assert.deepEqual(result.today, [{ scheduleId: "schedule-1", title: "오늘 계약 검토", startsAt: "2026-09-15T03:00:00Z", dateKey: "2026-09-15", allDay: false, status: "확정", location: "사무실" }]);
+  assert.deepEqual(result.upcoming, [{ scheduleId: "schedule-2", title: "현장 방문", startsAt: "2026-09-18T00:00:00Z", dateKey: "2026-09-18", allDay: true, status: "임시", location: "" }]);
+  assert.equal(result.total, 2);
+});
+
+test("Data Core Schedule reader는 잘못된 브리핑 기준일을 차단한다", async () => {
+  const reader = createWorklogDataCoreScheduleReader({ client: { select: async () => [] } });
+  await assert.rejects(() => reader.listForBriefing(workspaceContext, "tomorrow"), (error) => error?.code === "WORKLOG_DATA_CORE_SCHEDULE_TODAY_INVALID");
 });

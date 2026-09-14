@@ -191,6 +191,32 @@
     return `<section class="briefing-v2-section briefing-v2-${kind}" data-section="${kind}"><div class="briefing-v2-section-head"><h3>${label} <span>${items.length}</span></h3></div><ul class="briefing-list briefing-v2-list">${items.map((item,index)=>taskHtml(kind,item,index,canUpdate)).join("")}</ul>${extra ? `<button class="briefing-v2-more-toggle" type="button" data-section-toggle="${kind}" aria-expanded="false">${extra}개 더 보기</button>` : ""}</section>`;
   }
 
+  function scheduleWhen(item){
+    const day=mmdd(item?.dateKey);
+    if(!day) return "";
+    if(item?.allDay) return `${day} 종일`;
+    const startsAt=new Date(String(item?.startsAt || ""));
+    if(Number.isNaN(startsAt.getTime())) return day;
+    const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(startsAt);
+    const get=(type)=>parts.find(part=>part.type===type)?.value || "";
+    return get("hour") && get("minute") ? `${day} ${Number(get("hour"))}:${get("minute")}` : day;
+  }
+
+  function scheduleHtml(item){
+    const when=scheduleWhen(item);
+    const detail=[item?.status,item?.location].filter(Boolean).join(" · ");
+    return `<li><span class="briefing-date">${escapeHtml(when)}</span><div><strong>${escapeHtml(item?.title)}</strong>${detail ? `<div class="briefing-sub"><small>${escapeHtml(detail)}</small></div>` : ""}</div></li>`;
+  }
+
+  function scheduleSectionHtml(schedules,enabled){
+    if(!enabled) return "";
+    const today=Array.isArray(schedules?.today) ? schedules.today : [];
+    const upcoming=Array.isArray(schedules?.upcoming) ? schedules.upcoming : [];
+    const total=Number(schedules?.total || 0);
+    const list=(items,empty)=>items.length ? items.map(scheduleHtml).join("") : `<li class="briefing-empty">${empty}</li>`;
+    return `<section class="briefing-v2-section briefing-v2-schedules"><div class="briefing-v2-section-head"><h3>📅 일정 <span>${total}</span></h3></div><p class="label">오늘</p><ul class="briefing-list briefing-v2-list">${list(today,"오늘 확정 일정이 없습니다.")}</ul><p class="label">14일 이내</p><ul class="briefing-list briefing-v2-list">${list(upcoming,"다가오는 일정이 없습니다.")}</ul></section>`;
+  }
+
   function render(data){
     const structure=data?.structure || {};
     const counts=data?.counts || {};
@@ -198,7 +224,7 @@
     const canUpdate=data?.canUpdate!==false;
     renderedMode=String(data?.mode || "");
 
-    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 <b>${Number(counts.today || 0)}</b></span><span class="is-waiting">대기 <b>${Number(counts.waiting || 0)}</b></span><span class="is-followup">후속 <b>${Number(counts.followUp || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘",structure.today,canUpdate)}${sectionHtml("waiting","🟡 기다리는 것",structure.waiting,canUpdate)}${sectionHtml("followUp","🔵 후속조치 필요",structure.followUp,canUpdate)}${Number(counts.other || 0)>0 ? `<p class="briefing-v2-other">그 외 진행중 <strong>${Number(counts.other || 0)}건</strong></p>` : ""}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
+    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 <b>${Number(counts.today || 0)}</b></span><span class="is-waiting">대기 <b>${Number(counts.waiting || 0)}</b></span><span class="is-followup">후속 <b>${Number(counts.followUp || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘",structure.today,canUpdate)}${sectionHtml("waiting","🟡 기다리는 것",structure.waiting,canUpdate)}${sectionHtml("followUp","🔵 후속조치 필요",structure.followUp,canUpdate)}${scheduleSectionHtml(data?.schedules,data?.scheduleEnabled===true)}${Number(counts.other || 0)>0 ? `<p class="briefing-v2-other">그 외 진행중 <strong>${Number(counts.other || 0)}건</strong></p>` : ""}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
 
     root.hidden=false;
     hideLegacy();
