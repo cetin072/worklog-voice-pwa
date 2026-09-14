@@ -14,6 +14,9 @@ async function get(pathname, options = {}) {
   return { response, text, url };
 }
 
+// Deploy Preview intentionally does not receive the Production Notion token.
+// The safe contract is therefore: route works, response is valid, and owner mode
+// reports "configured: false" instead of leaking/using Production credentials.
 const health = await get('/api/worklog');
 if (!health.response.ok) {
   throw new Error(`UAR_ENV_WORKLOG_HEALTH_HTTP_${health.response.status}`);
@@ -24,13 +27,34 @@ try {
 } catch {
   throw new Error('UAR_ENV_WORKLOG_HEALTH_INVALID_JSON');
 }
-if (healthJson?.ok !== true || healthJson?.configured !== true) {
-  throw new Error(`UAR_ENV_WORKLOG_NOT_CONFIGURED:${JSON.stringify({ ok: healthJson?.ok, configured: healthJson?.configured, mode: healthJson?.mode })}`);
+if (healthJson?.ok !== true || healthJson?.mode !== 'owner') {
+  throw new Error(`UAR_ENV_WORKLOG_HEALTH_CONTRACT_BAD:${JSON.stringify({ ok: healthJson?.ok, mode: healthJson?.mode })}`);
+}
+if (healthJson?.configured !== false) {
+  throw new Error(`UAR_ENV_PREVIEW_PRODUCTION_SECRET_BOUNDARY_BROKEN:${JSON.stringify({ configured: healthJson?.configured, mode: healthJson?.mode })}`);
 }
 
+// Briefing-v2 is expected to be present but unable to use owner Notion data in a
+// secret-isolated Preview. 401 (if an access-key gate is reached) or 500 (missing
+// Preview-only Notion token) are both safe fail-closed states; 404 means the route
+// is missing and 2xx would mean the Preview unexpectedly has owner data access.
 const briefing = await get('/api/briefing-v2');
-if (briefing.response.status === 404 || briefing.response.status >= 500) {
-  throw new Error(`UAR_ENV_BRIEFING_ROUTE_BAD_STATUS:${briefing.response.status}`);
+if (briefing.response.status === 404) {
+  throw new Error('UAR_ENV_BRIEFING_ROUTE_MISSING');
+}
+if (briefing.response.ok) {
+  throw new Error(`UAR_ENV_PREVIEW_BRIEFING_UNEXPECTED_OWNER_ACCESS:${briefing.response.status}`);
+}
+if (![401, 500].includes(briefing.response.status)) {
+  throw new Error(`UAR_ENV_BRIEFING_UNEXPECTED_STATUS:${briefing.response.status}`);
+}
+try {
+  const briefingJson = JSON.parse(briefing.text);
+  if (!String(briefingJson?.error || '').trim()) {
+    throw new Error('missing safe error');
+  }
+} catch {
+  throw new Error('UAR_ENV_BRIEFING_ERROR_RESPONSE_INVALID');
 }
 
 const manifest = await get('/manifest.webmanifest');
@@ -58,4 +82,4 @@ if (!robots.includes('noindex')) {
   throw new Error(`UAR_ENV_NOINDEX_HEADER_MISSING:${robots}`);
 }
 
-console.log(`UAR_ENVIRONMENT_PARITY_PASS preview=${base.hostname} worklog_mode=${healthJson.mode || 'unknown'} briefing_status=${briefing.response.status}`);
+console.log(`UAR_ENVIRONMENT_PARITY_PASS preview=${base.hostname} owner_secret_isolated=true briefing_status=${briefing.response.status}`);
