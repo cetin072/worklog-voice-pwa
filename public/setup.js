@@ -23,11 +23,16 @@
     }
 
     const token=String(tokenInput.value || "").trim();
-    const organization=String(organizationInput.value || "회사").trim() || "회사";
+    const organization=String(organizationInput.value || "").trim();
 
     if(!token){
       show("1번에서 만든 Notion 토큰을 먼저 붙여넣어 주세요.","error");
       tokenInput.focus();
+      return;
+    }
+    if(!organization){
+      show("3번에 주로 사용할 회사·기관 이름을 적어 주세요. 개인용이면 ‘개인’이라고 적으면 됩니다.","error");
+      organizationInput.focus();
       return;
     }
 
