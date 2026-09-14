@@ -15,15 +15,16 @@
   - 신규 Auth user trigger와 인증된 재시도 RPC migration을 추가했다.
   - Browser Auth adapter와 최소 로그인 UI를 추가했다.
   - 실제 `worklog-platform` migration apply, Auth provider/redirect 설정, RLS 실환경 QA는 아직 미검증이다.
-- Issue #127 — Internal Data Core repositories.
-  - WorkRecord/Schedule/SourceRef/Candidate repository contract와 Supabase REST adapter를 추가했다.
-  - 기존 worklog의 Notion 호출 분리와 Dual-write는 아직 시작하지 않았다.
+- Issue #129 — Notion Worklog Adapter 분리.
+  - `worklog`에서 Notion page 속성 매핑과 API 호출을 분리했다.
+  - 기존 owner/personal Notion 저장과 idempotency 동작은 유지한다.
+  - Supabase Dual-write는 아직 시작하지 않았다.
 
 ## 다음 Issue
 
 1. #125 migration을 `worklog-platform`에 적용하고 signup/retry/다른 사용자 격리/RLS Advisor를 검증한다.
-2. #127을 `goal/platform-v1`에 통합한다.
-3. Notion 직접 저장을 Adapter로 분리한 뒤 Dual-write 비교 QA를 시작한다.
+2. #129를 `goal/platform-v1`에 통합한다.
+3. Internal Data Core + Notion Dual-write와 비교 QA를 시작한다.
 
 ## Blocker
 
@@ -38,7 +39,7 @@
 
 ## 검증 결과
 
-- `npm test`: PASS (186 tests, 2026-09-14).
+- `npm test`: PASS (188 tests, 2026-09-14).
 - `node --check` 및 Netlify Function esbuild bundle check: PASS.
 - DB migration/RLS Advisor: project 연결 미구성으로 실행 전.
 - Last verified implementation commit SHA: `19a2d15a756a8393d15c0dcdca830a8d19ebc1da`.

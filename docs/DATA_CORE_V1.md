@@ -187,3 +187,9 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 - `WorkRecordRepository`, `ScheduleRepository`, `SourceRefRepository`, `CandidateRepository`는 canonical domain input과 `Workspace Context`를 받고, snake_case Supabase row는 Repository 내부에서만 만든다.
 - `SupabaseDataCoreRestClient`는 publishable key와 호출자의 user JWT만 사용한다. service role/secret key를 요구하거나 보관하지 않는다.
 - Repository는 저장 adapter 실패를 성공으로 바꾸지 않는다. 실제 worklog의 Notion 분리와 Dual-write는 이 경계 위의 다음 단계다.
+
+## 11. Notion Worklog Adapter (#129)
+
+- 기존 `worklog` HTTP function은 요청 인증, 입력 검증, schedule extraction, idempotency만 담당한다.
+- Notion page 속성 매핑과 `v1/pages` 호출은 `NotionWorklogAdapter`가 담당한다.
+- Adapter 분리는 Notion 저장을 제거하지 않는다. Dual-write 동안 기존 Notion 저장 결과와 오류 UX를 유지하기 위한 경계다.

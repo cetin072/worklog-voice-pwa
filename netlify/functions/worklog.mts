@@ -2,6 +2,7 @@ import type { Config, Context } from "@netlify/functions";
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { idempotencyHit, isValidClientRequestId, seoulDateFromRecordedAt } from "../shared/core-logic.mjs";
 import { extractScheduleFromText } from "../shared/schedule-extract.mjs";
+import { createNotionWorklogAdapter } from "../shared/notion-worklog-adapter.mjs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -15,16 +16,6 @@ function json(status:number, body:Record<string,unknown>){
     status,
     headers:{"content-type":"application/json; charset=utf-8"}
   });
-}
-function richText(v:string){
-  return { rich_text: v ? [{type:"text",text:{content:v.slice(0,2000)}}] : [] };
-}
-function title(v:string){
-  return { title:[{type:"text",text:{content:v.slice(0,160)}}] };
-}
-function makeTitle(v:string){
-  const s=v.replace(/\s+/g," ").trim();
-  return s.length<=60 ? s : `${s.slice(0,57)}…`;
 }
 function personalConnection(req:Request){
   const token=(req.headers.get("x-notion-token") || "").trim();
@@ -115,50 +106,19 @@ export default async (req:Request, _context:Context) => {
     : extractScheduleFromText(transcript,body.recordedAt || new Date());
   const cleanTranscript=String(schedule.text || transcript).trim() || transcript;
 
-  const properties:any = {
-    "업무명": title(makeTitle(cleanTranscript)),
-    "기관": {select:{name:institution}},
-    "상태": {select:{name:status}},
-    "유형": {select:{name:type}},
-    "기록일": {date:{start:seoulDateFromRecordedAt(body.recordedAt)}},
-    "내용": richText(cleanTranscript),
-    "음성원문": richText(transcript),
-    "증빙": {select:{name:type==="지출·세무" ? "미첨부" : "해당없음"}}
-  };
-
-  if(typeof body.amount==="number" && Number.isFinite(body.amount)) properties["금액"]={number:body.amount};
-  if(String(body.assignee||"").trim()) properties["담당자"]=richText(String(body.assignee).trim());
-  if(String(body.followUp||"").trim()) properties["후속조치"]=richText(String(body.followUp).trim());
-  if(schedule.dueStart) properties["기한"]={date:{start:schedule.dueStart}};
-
   try{
-    const res=await fetch("https://api.notion.com/v1/pages",{
-      method:"POST",
-      headers:{
-        "Authorization":`Bearer ${token}`,
-        "Content-Type":"application/json",
-        "Notion-Version":NOTION_VERSION
-      },
-      body:JSON.stringify({
-        parent:{type:"data_source_id",data_source_id:dataSourceId},
-        properties
-      })
+    const notion=createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION});
+    const data=await notion.create({
+      transcript, cleanTranscript, institution, status, type,
+      recordedDate:seoulDateFromRecordedAt(body.recordedAt),
+      amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
     });
-
-    const data:any=await res.json().catch(()=>({}));
-    if(!res.ok){
-      console.error("Notion worklog error",res.status,String(data?.code || data?.message || "").slice(0,300));
-      if(mode==="personal" && (res.status===401 || res.status===404)){
-        return json(401,{error:"개인 Notion 연결이 만료되었거나 DB를 찾을 수 없습니다. ‘내 Notion으로 시작하기’에서 다시 연결해주세요."});
-      }
-      return json(502,{error:"Notion 저장에 실패했습니다. 토큰과 DB 연결 권한을 확인해주세요.", notionStatus:res.status});
-    }
 
     if(idem){
       try{
         await idem.setJSON(`request:${requestId}`,{
-          pageId:String(data.id || ""),
-          url:String(data.url || ""),
+          pageId:data.pageId,
+          url:data.url,
           mode,
           createdAt:new Date().toISOString()
         });
@@ -169,14 +129,22 @@ export default async (req:Request, _context:Context) => {
 
     return json(200,{
       ok:true,
-      pageId:data.id,
+      pageId:data.pageId,
       url:data.url,
       mode,
       scheduleDetected:Boolean(schedule.matched),
       dueStart:String(schedule.dueStart || ""),
       cleanTranscript
     });
-  }catch(err){
+  }catch(err:any){
+    const notionStatus=Number(err?.notionStatus || 0);
+    if(err?.code==="NOTION_WORKLOG_WRITE_FAILED"){
+      console.error("Notion worklog error",notionStatus,String(err?.notionCode || "").slice(0,300));
+      if(mode==="personal" && (notionStatus===401 || notionStatus===404)){
+        return json(401,{error:"개인 Notion 연결이 만료되었거나 DB를 찾을 수 없습니다. ‘내 Notion으로 시작하기’에서 다시 연결해주세요."});
+      }
+      return json(502,{error:"Notion 저장에 실패했습니다. 토큰과 DB 연결 권한을 확인해주세요.", notionStatus});
+    }
     console.error(err);
     return json(502,{error:"Notion 서버에 연결하지 못했습니다."});
   }
