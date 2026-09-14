@@ -1,0 +1,172 @@
+# Data Core V1
+
+기준 Issue: #122 / 구현 Checkpoint: #123
+
+## 1. 목적
+
+업무수첩의 구조화 데이터를 Notion 필수 저장 구조에서 자체 Data Core로 전환한다.
+
+목표 상태:
+
+- `Supabase Postgres` = 업무수첩 구조화 데이터의 Source of Truth
+- `Notion` = 선택형 Integration / Sync
+- 음성·영상·사진·PDF 원본 = Local-first
+- 서버 분석이 필요한 원본 = 임시 Object Storage
+- Storage Provider = Platform Storage Boundary 뒤에 위치
+
+## 2. 전환 중 Source of Truth
+
+전환은 Big-bang으로 하지 않는다.
+
+1. 현재 production 사용자 흐름에서는 기존 Notion 저장을 유지한다.
+2. Data Core schema와 Auth/Workspace를 먼저 검증한다.
+3. Internal Repository를 추가한다.
+4. 짧은 Dual-write 기간에 Supabase와 Notion 저장 결과를 비교한다.
+5. 검증 후 Supabase를 구조화 데이터 Source of Truth로 승격한다.
+6. 그 뒤 Notion을 선택형 Adapter/Sync로 내린다.
+
+따라서 Data Core schema가 존재한다는 이유만으로 현재 `worklog.mts`의 Notion 경로를 즉시 제거하지 않는다.
+
+## 3. V1 핵심 엔티티
+
+### Workspace
+
+업무 데이터의 소유 단위다. User와 Workspace를 분리한다.
+
+- `personal | team | project`
+- V1 role: `owner | member`
+- 핵심 업무 데이터는 모두 `workspace_id`를 가진다.
+
+### WorkRecord
+
+현재 빠른 업무기록/직접입력/음성 기록이 수렴할 구조화 업무 기록이다.
+
+주요 필드:
+
+- title
+- content
+- original_text
+- record_type
+- status
+- institution
+- amount
+- follow_up
+- recorded_at
+- due_at
+
+### Schedule
+
+`일정을 놓치지 않기` 제품 가치의 중심 엔티티다.
+
+주요 필드:
+
+- title / description
+- starts_at / ends_at
+- all_day
+- timezone
+- status
+- location
+- reminder_at
+
+주요 조회는 `workspace_id + starts_at` 기준으로 최적화한다.
+
+### SourceRef
+
+업무/일정/후보가 어디에서 생겼는지 추적한다.
+
+V1 source type:
+
+- direct
+- voice
+- call
+- meeting
+- mail
+- capture
+- scan
+- notion
+- import
+- other
+
+`entity_type + entity_id`는 결과 객체를 가리키고, `source_type + source_id`는 원본 출처를 가리킨다.
+
+### Candidate
+
+AI 추출 결과는 기본적으로 확정 데이터가 아니라 Candidate다.
+
+V1 type:
+
+- task
+- schedule
+- contact
+- follow_up
+
+상태:
+
+- pending
+- confirmed
+- dismissed
+
+확정 시 실제 엔티티 ID를 연결할 수 있다. 사용자가 확인한 값은 이후 AI 재분석보다 우선한다.
+
+## 4. 보안
+
+- `public` Data API 테이블은 모두 RLS 필수.
+- `anon`은 Data Core 테이블 권한 없음.
+- `authenticated`는 명시적으로 GRANT된 최소 CRUD만 사용하며 RLS의 Workspace 격리를 받는다.
+- `service_role`/`sb_secret_*`는 브라우저/모바일 클라이언트에 노출하지 않는다.
+- RLS helper는 비노출 `private` schema에 둔다.
+- `SECURITY DEFINER` helper는 고정 `search_path`와 제한된 EXECUTE 권한을 사용한다.
+- Workspace 생성자는 owner이며, V1에서는 owner transfer를 지원하지 않는다.
+
+## 5. 미디어 저장 원칙
+
+Data Core DB에 대용량 원본 파일을 넣지 않는다.
+
+- 휴대폰 원본: Local-first
+- STT/OCR/AI 서버 처리용 파일: 임시 Object Storage
+- 처리 완료 후 Retention/Delete 정책으로 제거
+- Object Storage 공급자는 Supabase Storage로 고정하지 않는다.
+
+## 6. 비용/사용량
+
+기존 Platform Usage Event / Cost Gate를 사용해 사용자·Workspace 단위 원가 계산으로 확장한다.
+
+직접 원가 후보:
+
+- STT seconds/minutes
+- AI input/output tokens
+- Storage GB-hours
+- Egress bytes
+- Function/API calls
+
+공통 배분 원가 후보:
+
+- Supabase plan
+- Netlify plan
+- 도메인/기타 공통 인프라
+
+Billing/결제 엔진은 Data Core V1의 비범위다.
+
+## 7. #123 구현 범위
+
+현재 `worklog-platform` Supabase 프로젝트에 다음 6개 테이블을 먼저 둔다.
+
+- workspaces
+- workspace_members
+- work_records
+- schedules
+- source_refs
+- candidates
+
+Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환, Storage bucket은 후속 작은 Issue로 분리한다.
+
+## 8. 다음 순서
+
+1. Data Core schema + Workspace RLS — #123
+2. Supabase Auth + Personal Workspace bootstrap
+3. Internal WorkRecord Repository
+4. Notion/Supabase Dual-write 검증
+5. Supabase Source of Truth cutover
+6. Notion optional Integration/Sync
+7. Briefing reader를 Data Core 기준으로 전환
+8. Usage/Cost 월별 사용자 원가 집계
