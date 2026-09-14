@@ -77,8 +77,12 @@ Netlify에서 관리합니다.
 - `KAKAO_REST_API_KEY`
 - `KAKAO_CLIENT_SECRET`
 - `KAKAO_REDIRECT_URI` (선택)
+- `SUPABASE_URL` (Platform Auth를 활성화할 때)
+- `SUPABASE_PUBLISHABLE_KEY` (Platform Auth를 활성화할 때; 브라우저에 공개 가능한 publishable key)
 
 비밀값을 코드, Issue, PR, README에 넣지 않습니다.
+
+`SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`가 모두 설정되면 앱은 최소 Platform 계정 로그인과 Personal Workspace bootstrap UI를 표시합니다. 이 단계는 기존 Notion 저장 흐름을 제거하지 않으며, 실제 Data Core 저장은 후속 Repository/Dual-write 단계에서 연결합니다. service role 또는 secret key를 Netlify 공개 응답이나 브라우저에 넣지 않습니다.
 
 ## 운영 원칙
 

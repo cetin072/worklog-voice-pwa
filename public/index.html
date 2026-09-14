@@ -24,6 +24,21 @@
       <span id="health" class="badge">확인 중</span>
     </header>
 
+    <section id="platformAuthCard" class="card platform-auth-card" hidden aria-live="polite">
+      <p class="eyebrow">Platform 계정</p>
+      <h2>내 업무공간</h2>
+      <form id="platformAuthForm">
+        <label><span>이메일</span><input id="platformAuthEmail" type="email" autocomplete="email" required></label>
+        <label><span>비밀번호</span><input id="platformAuthPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <div class="platform-auth-actions">
+          <button id="platformSignIn" type="submit">로그인</button>
+          <button id="platformSignUp" type="button">가입</button>
+        </div>
+      </form>
+      <button id="platformSignOut" class="clear" type="button" hidden>로그아웃</button>
+      <p id="platformAuthStatus" class="platform-auth-status"></p>
+    </section>
+
     <section class="card voice-card">
       <button id="mic" class="mic" type="button">
         <span class="micIcon">🎙</span>
@@ -120,6 +135,8 @@
   </main>
 
   <script src="/auth.js?v=20260912-2" defer></script>
+  <script src="/platform-auth.js?v=20260914-1" defer></script>
+  <script src="/platform-auth-ui.js?v=20260914-1" defer></script>
   <script src="/onboarding.js?v=20260912-2" defer></script>
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
