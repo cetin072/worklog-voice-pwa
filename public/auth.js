@@ -104,7 +104,8 @@
   window.fetch=(input,init={})=>{
     const url=typeof input==="string" ? input : String(input?.url || "");
     const worklogRequest=url.includes("/api/worklog");
-    const shouldAttach=(hasPersonal() && (worklogRequest || url.includes("/api/briefing"))) || worklogRequest;
+    const dataCoreBriefingRequest=url.includes("/api/briefing-v2");
+    const shouldAttach=(hasPersonal() && (worklogRequest || url.includes("/api/briefing"))) || worklogRequest || dataCoreBriefingRequest;
     if(!shouldAttach) return nativeFetch(input,init);
 
     const headers=new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
@@ -112,7 +113,7 @@
       const authHeaders=getHeaders();
       Object.entries(authHeaders).forEach(([key,value])=>headers.set(key,value));
     }
-    if(worklogRequest && !headers.has("authorization")){
+    if((worklogRequest || dataCoreBriefingRequest) && !headers.has("authorization")){
       const session=window.WorklogPlatformAuth?.readSession?.();
       if(session?.access_token) headers.set("authorization",`Bearer ${session.access_token}`);
     }

@@ -208,3 +208,10 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 - 서버는 bearer token으로 최신 Supabase user와 personal Workspace를 확인한 뒤에만 사용자 JWT로 REST write를 한다. Notion token, `APP_ACCESS_KEY`, browser session의 user object는 Data Core 권한 근거가 아니다.
 - Notion 연결이 없으면 `notionSync: "not_configured"`으로 정상 완료한다. 연결돼 있지만 실패하면 Data Core result를 유지하고 `notionSync: "pending"`으로 반환한다. Data Core 실패 때는 Notion writer를 호출하지 않으므로 내부 원본 없는 Notion-only 상태를 만들지 않는다.
 - primary checkpoint는 `clientRequestId + verified userId` 범위로 보관하고, retry는 성공한 Data Core writer를 다시 호출하지 않는다. 플래그-off와 비로그인 요청은 기존 Notion 저장 경로를 유지한다.
+
+## 14. Data Core Briefing V2 read path (#135)
+
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`와 유효한 Platform bearer token이 있을 때 `briefing-v2`는 verified personal Workspace의 열린 WorkRecord만 읽는다.
+- REST query는 `workspace_id=eq.<verified workspace>`와 열린 내부 상태만 고정하고 사용자 JWT로 실행한다. RLS가 최종 Workspace 격리를 강제하며, 다른 Workspace ID를 클라이언트 입력으로 받지 않는다.
+- 기존 V2 classifier를 재사용해 화면 구조를 유지한다. 현재 단계의 Data Core 행은 read-only이며, 완료 처리·undo·빠른 정리는 Notion 상태를 잘못 수정하지 않도록 숨긴다.
+- 플래그-off 또는 Platform 세션이 없으면 기존 Notion Briefing V2 경로가 유지된다.

@@ -23,6 +23,27 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
   if (typeof fetchImpl !== "function") throw clientError("SUPABASE_DATA_CORE_FETCH_REQUIRED", "fetch 구현이 필요합니다.");
 
   return Object.freeze({
+    async select(table, query = {}) {
+      const safeTable = String(table || "");
+      if (!/^[a-z_]{1,80}$/.test(safeTable) || !query || typeof query !== "object" || Array.isArray(query)) {
+        throw clientError("SUPABASE_DATA_CORE_SELECT_INVALID", "Data Core select 대상 또는 query가 올바르지 않습니다.");
+      }
+      const params = new URLSearchParams();
+      for (const [name, value] of Object.entries(query)) {
+        if (!/^[a-z_]{1,80}$/.test(name) || typeof value !== "string" || value.length > 1000) {
+          throw clientError("SUPABASE_DATA_CORE_SELECT_INVALID", "Data Core select query가 올바르지 않습니다.");
+        }
+        params.set(name, value);
+      }
+      const response = await fetchImpl(`${origin}/rest/v1/${safeTable}?${params.toString()}`, {
+        method: "GET",
+        headers: { apikey: key, authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw clientError("SUPABASE_DATA_CORE_SELECT_FAILED", String(data?.message || data?.hint || "Data Core 조회에 실패했습니다."));
+      if (!Array.isArray(data)) throw clientError("SUPABASE_DATA_CORE_SELECT_RESPONSE_INVALID", "Data Core 조회 결과가 올바르지 않습니다.");
+      return data;
+    },
     async insert(table, row) {
       const safeTable = String(table || "");
       if (!/^[a-z_]{1,80}$/.test(safeTable)) throw clientError("SUPABASE_DATA_CORE_TABLE_INVALID", "Data Core table 이름이 올바르지 않습니다.");
