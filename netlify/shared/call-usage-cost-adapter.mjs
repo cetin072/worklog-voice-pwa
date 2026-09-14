@@ -52,8 +52,8 @@ function sameCanonicalEvent(left, right) {
 
 /**
  * Adapts usage returned by Call processors/storage into the canonical Platform
- * Usage Event V1 contract. Ownership/request identity comes from the Call
- * Processing Job rather than from provider-controlled usage payloads.
+ * Usage Event V1 contract. Ownership/request/event identity comes from the Call
+ * Processing Job and Platform rules rather than provider-controlled payloads.
  */
 export function normalizeCallUsageEvents(value = {}, context = {}) {
   const source = record(value);
@@ -71,6 +71,9 @@ export function normalizeCallUsageEvents(value = {}, context = {}) {
     );
     const event = normalizeUsageEvent({
       ...item,
+      id: undefined,
+      eventKey: undefined,
+      event_key: undefined,
       requestId: job.requestId,
       jobId: job.jobId,
       userId: job.userId,
