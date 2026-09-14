@@ -17,6 +17,7 @@
   const IS_PREVIEW_DEMO=location.hostname.startsWith("deploy-preview-") && new URLSearchParams(location.search).get("briefingDemo")==="1";
   let loading=false;
   let lastLoadedAt=0;
+  let renderedMode="";
 
   // briefing.js has already captured the original nodes. Replace the visible
   // header/error nodes so its asynchronous V1 refresh cannot overwrite V2 copy.
@@ -60,17 +61,18 @@
   }
 
   function authHeaders({ask=true}={}){
+    const session=window.WorklogPlatformAuth?.readSession?.();
+    const promptOwner=ask && !session?.access_token;
     const headers=window.WorklogAuth?.getHeaders
-      ? window.WorklogAuth.getHeaders({promptOwner:ask})
+      ? window.WorklogAuth.getHeaders({promptOwner})
       : (()=>{
           let key=localStorage.getItem("worklogAccessKey") || "";
-          if(!key && ask){
+          if(!key && promptOwner){
             key=(window.prompt("개인 접근키를 한 번 입력하세요.") || "").trim();
             if(key) localStorage.setItem("worklogAccessKey",key);
           }
           return key ? {"x-worklog-key":key} : {};
         })();
-    const session=window.WorklogPlatformAuth?.readSession?.();
     if(session?.access_token) headers.authorization=`Bearer ${session.access_token}`;
     return headers;
   }
@@ -194,6 +196,7 @@
     const counts=data?.counts || {};
     const total=Number(counts.total || 0);
     const canUpdate=data?.canUpdate!==false;
+    renderedMode=String(data?.mode || "");
 
     root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 <b>${Number(counts.today || 0)}</b></span><span class="is-waiting">대기 <b>${Number(counts.waiting || 0)}</b></span><span class="is-followup">후속 <b>${Number(counts.followUp || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘",structure.today,canUpdate)}${sectionHtml("waiting","🟡 기다리는 것",structure.waiting,canUpdate)}${sectionHtml("followUp","🔵 후속조치 필요",structure.followUp,canUpdate)}${Number(counts.other || 0)>0 ? `<p class="briefing-v2-other">그 외 진행중 <strong>${Number(counts.other || 0)}건</strong></p>` : ""}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
 
@@ -203,7 +206,7 @@
     const generated=formatGeneratedAt(data.generatedAt);
     const countLabel=data.truncated ? `미완료 ${total}건 이상` : `미완료 ${total}건`;
     meta.textContent=IS_PREVIEW_DEMO ? "예시 업무로 보는 브리핑 2.0 화면" : [generated,countLabel,data?.mode==="data_core" ? "Data Core 기준" : "Notion 최신 기준"].filter(Boolean).join(" · ");
-    if(quick) quick.hidden=!canUpdate;
+    if(quick) quick.hidden=!canUpdate || renderedMode==="data_core";
     if(data.truncated){
       error.textContent="업무가 많아 최근 500건 기준으로 정리했습니다.";
       card.classList.add("has-error");
@@ -276,11 +279,12 @@
 
   async function updateTaskStatus(pageId,status){
     const headers=authHeaders({ask:true});
-    if(!Object.keys(headers).length) throw new Error("Notion 연결 또는 개인 접근키가 필요합니다.");
-    const res=await fetch("/api/briefing",{
+    if(!Object.keys(headers).length) throw new Error("Platform 로그인 또는 Notion 연결이 필요합니다.");
+    const dataCore=renderedMode==="data_core";
+    const res=await fetch(dataCore ? "/api/briefing-v2" : "/api/briefing",{
       method:"POST",
       headers:{...headers,"content-type":"application/json"},
-      body:JSON.stringify({pageId,status}),
+      body:JSON.stringify(dataCore ? {recordId:pageId,status} : {pageId,status}),
       cache:"no-store"
     });
     const data=await res.json().catch(()=>({}));
@@ -311,7 +315,8 @@
     button.textContent="처리 중";
     try{
       const data=await updateTaskStatus(pageId,"완료");
-      if(data.previousStatus && data.previousStatus!=="완료") saveUndoState(pageId,data.previousStatus,itemTitle);
+      const previousStatus=renderedMode==="data_core" ? button.dataset.status : data.previousStatus;
+      if(previousStatus && previousStatus!=="완료") saveUndoState(pageId,previousStatus,itemTitle);
       await refreshV2({ask:false});
       showUndoNotice(pageId,itemTitle);
     }catch(err){

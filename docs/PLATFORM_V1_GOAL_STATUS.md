@@ -27,15 +27,18 @@
   - Notion은 연결된 경우에만 best-effort sync하며, 실패해도 Data Core 성공을 실패로 바꾸지 않는다.
   - 실제 `worklog-platform` migration apply, RLS/Advisor 및 Preview 실환경 QA는 아직 미검증이다.
 - Issue #135 — Data Core Briefing V2 read path.
-  - Platform 로그인 사용자는 explicit flag에서 개인 Workspace의 열린 WorkRecord를 읽는 read-only Briefing V2를 사용한다.
-  - 완료 처리·undo·빠른 브리핑 정리는 Data Core 상태 변경 Issue로 분리해 기존 Notion page ID를 잘못 수정하지 않는다.
+  - Platform 로그인 사용자는 explicit flag에서 개인 Workspace의 열린 WorkRecord를 Briefing V2로 읽는다.
   - 실제 `worklog-platform` RLS/Advisor 및 Preview 실환경 QA는 아직 미검증이다.
+- Issue #137 — Data Core Briefing V2 WorkRecord status mutation.
+  - read/mutation 두 explicit flag와 검증된 Platform bearer가 함께 있을 때만, 본인 Workspace WorkRecord의 완료와 undo를 Data Core에 기록한다.
+  - 서버는 verified Workspace + record ID 조건으로 PATCH하고 반환 한 행을 확인한다. 빠른 브리핑 재정리는 Notion 전용으로 유지한다.
+  - 실제 다른 Workspace RLS 거부, Advisor 및 Preview 실환경 QA는 아직 미검증이다.
 
 ## 다음 Issue
 
 1. #125/#131 migration을 `worklog-platform`에 적용하고 signup/retry/다른 사용자 격리/RLS Advisor를 검증한다.
 2. Deploy Preview에서 flag-off 기존 Notion 저장, flag-on dual-write, primary-without-Notion, 부분 실패 재시도를 비교 QA한다.
-3. Data Core WorkRecord 상태 변경과 Briefing V2 완료/undo를 위한 다음 작은 Issue를 분리한다.
+3. Data Core Schedule repository와 Schedule 기반 화면 경로를 다음 작은 Issue로 분리한다.
 
 ## Blocker
 
@@ -50,10 +53,10 @@
 
 ## 검증 결과
 
-- `npm test`: PASS (198 tests, 2026-09-15).
+- `npm test`: PASS (200 tests, 2026-09-15).
 - `node --check` 및 Netlify Function esbuild bundle check: PASS.
 - DB migration/RLS Advisor: project 연결 미구성으로 실행 전.
-- Last verified implementation commit SHA: `5e5cad183a7d9478ba2efb4316502ea1812d61bc` (#135 implementation; status-only follow-up commit 제외).
+- Last verified implementation commit SHA: `fb8eb5f814ff2a6dd822071ea9ade7ffdafdbd42` (#137 implementation; 문서 follow-up commit 제외).
 
 ## 알려진 debt
 
