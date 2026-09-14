@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "bootstrap": "npm ci",
   "preview": {
     "required": true,
@@ -22,11 +22,16 @@
     },
     "representative_smoke": {
       "command": "node scripts/uar-representative-smoke.mjs"
+    },
+    "visual_stability": {
+      "surface_policy": "representative",
+      "command": "node scripts/uar-visual-stability.mjs"
     }
   },
   "qa_escape_regressions": [
     "tests/client-stability.test.mjs",
     "tests/core-functions.test.mjs",
-    "tests/briefing-v2.test.mjs"
+    "tests/briefing-v2.test.mjs",
+    "scripts/uar-visual-stability.mjs"
   ]
 }
