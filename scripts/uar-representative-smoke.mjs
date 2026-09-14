@@ -44,13 +44,16 @@ for (const marker of ['id="mic"', 'id="save"', 'id="manualEntry"', 'id="text"', 
   if (!dom.includes(marker)) throw new Error(`UAR_SMOKE_CORE_CONTROL_MISSING:${marker}`);
 }
 
-if (!/id="health"[^>]*>\s*연결됨\s*</.test(dom)) {
+// Production Notion credentials are intentionally absent from Deploy Preview.
+// The real browser must therefore finish health bootstrap in the safe fallback
+// state rather than staying "확인 중", crashing, or pretending to be connected.
+if (!/id="health"[^>]*>\s*설정 필요\s*</.test(dom)) {
   const health = dom.match(/id="health"[^>]*>([^<]*)</)?.[1]?.trim() || 'missing';
-  throw new Error(`UAR_SMOKE_HEALTH_NOT_CONNECTED:${health}`);
+  throw new Error(`UAR_SMOKE_HEALTH_SAFE_STATE_MISSING:${health}`);
 }
 
 if (/Page not found|Site not found|Application Error/i.test(dom)) {
   throw new Error('UAR_SMOKE_FATAL_PAGE_ERROR_VISIBLE');
 }
 
-console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} health=연결됨`);
+console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} health=설정 필요 preview_secret_isolated=true`);
