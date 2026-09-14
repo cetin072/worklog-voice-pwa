@@ -8,7 +8,7 @@
   <title>내 Notion 연결</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
-    .setup{max-width:680px;margin:0 auto;padding:22px 16px 40px;display:grid;gap:16px}.setup h1{margin:0}.setup p{line-height:1.55}.step{display:grid;gap:8px}.step strong{font-size:1rem}.step input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d1d5db;border-radius:12px;font-size:1rem}.setup-actions{display:grid;gap:10px}.setup-actions button,.setup-actions a{display:block;text-align:center;text-decoration:none}.note{font-size:.86rem;color:#6b7280}.danger-note{font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px}.setup-result{min-height:1.4em;font-weight:700}.setup-result.error{color:#b91c1c}.setup-result.success{color:#047857}.setup-link{font-weight:700;color:#374151}.token-help{display:flex;gap:8px;flex-wrap:wrap}.token-help a{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;color:#111827;background:#fff}.mini-steps{margin:2px 0 4px;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.7}.complete-note{display:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 14px}.complete-note.show{display:block}.complete-note strong{color:#047857}.complete-note p{margin:.35rem 0 0;font-size:.88rem;color:#4b5563}
+    .setup{max-width:680px;margin:0 auto;padding:22px 16px 40px;display:grid;gap:16px}.setup h1{margin:0}.setup p{line-height:1.55}.step{display:grid;gap:8px}.step strong{font-size:1rem}.step input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d1d5db;border-radius:12px;font-size:1rem}.setup-actions{display:grid;gap:10px}.setup-actions button,.setup-actions a{display:block;text-align:center;text-decoration:none}.note{font-size:.86rem;color:#6b7280}.danger-note{font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px}.guide-note{font-size:.86rem;color:#1f2937;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}.setup-result{min-height:1.4em;font-weight:700}.setup-result.error{color:#b91c1c}.setup-result.success{color:#047857}.setup-link{font-weight:700;color:#374151}.token-help{display:flex;gap:8px;flex-wrap:wrap}.token-help a{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;color:#111827;background:#fff}.mini-steps{margin:2px 0 4px;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.7}.complete-note{display:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 14px}.complete-note.show{display:block}.complete-note strong{color:#047857}.complete-note p{margin:.35rem 0 0;font-size:.88rem;color:#4b5563}
   </style>
 </head>
 <body>
@@ -24,14 +24,17 @@
     <section class="card">
       <div class="step">
         <strong>1. Notion 토큰 만들기</strong>
+        <p class="guide-note"><b>처음이면 PC의 Notion 화면에서 진행하는 것이 가장 찾기 쉽습니다.</b><br>노션 왼쪽 아래의 내 워크스페이스 이름을 눌러 시작하세요.</p>
         <ol class="mini-steps">
-          <li>Notion Developer portal에서 <b>Personal access tokens</b> 열기</li>
-          <li><b>New token</b> 선택</li>
-          <li>사용할 workspace 선택 + <b>Notion API</b> 권한 켜기</li>
-          <li>토큰을 만들고 바로 복사하기</li>
+          <li>왼쪽 아래 <b>워크스페이스 이름</b> 클릭 → <b>설정</b></li>
+          <li>설정 창 왼쪽 메뉴에서 <b>개발자</b> 선택</li>
+          <li><b>개인 사용 권한 토큰(PAT)</b> 항목에서 <b>새 토큰</b> 선택</li>
+          <li>업무수첩에 사용할 <b>workspace</b>를 선택하고 <b>Notion API</b> 권한 켜기</li>
+          <li>토큰을 만든 뒤 표시되는 <b>ntn_...</b> 값을 바로 복사하기</li>
         </ol>
+        <p class="danger-note"><b>주의:</b> 왼쪽 메뉴의 <b>연결</b>이 아니라 <b>개발자</b>로 들어가야 합니다.</p>
         <div class="token-help">
-          <a href="https://developers.notion.com/guides/get-started/personal-access-tokens" target="_blank" rel="noopener noreferrer">Notion 공식 안내 열기</a>
+          <a href="https://developers.notion.com/guides/get-started/personal-access-tokens" target="_blank" rel="noopener noreferrer">Notion 공식 토큰 안내 보기</a>
         </div>
       </div>
     </section>
