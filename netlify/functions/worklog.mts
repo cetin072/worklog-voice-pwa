@@ -3,6 +3,10 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import { idempotencyHit, isValidClientRequestId, seoulDateFromRecordedAt } from "../shared/core-logic.mjs";
 import { extractScheduleFromText } from "../shared/schedule-extract.mjs";
 import { createNotionWorklogAdapter } from "../shared/notion-worklog-adapter.mjs";
+import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
+import { createWorklogDataCoreAdapter } from "../shared/worklog-data-core-adapter.mjs";
+import { createDualWriteCoordinator } from "../shared/dual-write-coordinator.mjs";
+import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -39,6 +43,16 @@ function idempotencyStore(production:boolean){
   return production
     ? getStore("worklog-idempotency",{consistency:"strong"})
     : getDeployStore("worklog-idempotency");
+}
+
+function dataCoreDualWriteEnabled(){
+  return String(Netlify.env.get("WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED") || "").trim().toLowerCase()==="true";
+}
+
+function bearerToken(req:Request){
+  const header=String(req.headers.get("authorization") || "");
+  const match=/^Bearer\s+(.+)$/i.exec(header);
+  return match ? match[1].trim() : "";
 }
 
 export default async (req:Request, _context:Context) => {
@@ -82,11 +96,12 @@ export default async (req:Request, _context:Context) => {
 
   const requestId=String(body.clientRequestId || "").trim();
   const idem=isValidClientRequestId(requestId) ? idempotencyStore(isProductionRequest(req.url)) : null;
+  let existing:any=null;
   if(idem){
     try{
-      const existing:any=await idem.get(`request:${requestId}`,{type:"json"});
+      existing=await idem.get(`request:${requestId}`,{type:"json"});
       const duplicate=idempotencyHit(existing,mode);
-      if(duplicate) return json(200,{ok:true,...duplicate});
+      if(duplicate && !(dataCoreDualWriteEnabled() && bearerToken(req))) return json(200,{ok:true,...duplicate});
     }catch(error){
       console.warn("Worklog idempotency read failed",String((error as any)?.message || "unknown").slice(0,120));
     }
@@ -105,14 +120,58 @@ export default async (req:Request, _context:Context) => {
     ? {text:transcript,dueStart:explicitDueDate,matched:false,hasTime:false}
     : extractScheduleFromText(transcript,body.recordedAt || new Date());
   const cleanTranscript=String(schedule.text || transcript).trim() || transcript;
+  const record={
+    clientRequestId:requestId, transcript, cleanTranscript, institution, status, type,
+    recordedAt:body.recordedAt || new Date().toISOString(),
+    recordedDate:seoulDateFromRecordedAt(body.recordedAt),
+    amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
+  };
+
+  const accessToken=bearerToken(req);
+  if(dataCoreDualWriteEnabled() && accessToken){
+    const supabaseUrl=Netlify.env.get("SUPABASE_URL");
+    const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
+    if(!supabaseUrl || !publishableKey) return json(503,{error:"Data Core dual-write 설정이 아직 준비되지 않았습니다. 원문은 그대로 유지되어 재시도할 수 있습니다."});
+    if(!requestId || !idem) return json(400,{error:"Data Core 저장에는 유효한 저장 요청 ID가 필요합니다."});
+
+    try{
+      const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
+      const workspaceContext=await resolver.resolve(accessToken);
+      const dualKey=`request:${requestId}:user:${workspaceContext.userId}`;
+      let dualExisting:any=null;
+      try{ dualExisting=await idem.get(dualKey,{type:"json"}); }
+      catch(error){ console.warn("Worklog dual-write idempotency read failed",String((error as any)?.message || "unknown").slice(0,120)); }
+
+      const prior=dualExisting || (existing?.pageId ? {notion:{pageId:existing.pageId,url:existing.url || ""}} : {});
+      if(prior.dataCore && prior.notion){
+        return json(200,{ok:true,pageId:prior.notion.pageId,url:prior.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,deduped:true,dataCoreWorkRecordId:prior.dataCore.workRecordId || ""});
+      }
+
+      const notion=createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION});
+      const dataCore=createWorklogDataCoreAdapter({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
+      const coordinator=createDualWriteCoordinator({
+        writeDataCore:()=>dataCore.persist(record,workspaceContext),
+        writeNotion:()=>notion.create(record),
+        saveProgress:async progress=>{
+          try{ await idem.setJSON(dualKey,{...progress,mode,createdAt:new Date().toISOString()}); }
+          catch(error){ console.warn("Worklog dual-write idempotency write failed",String((error as any)?.message || "unknown").slice(0,120)); }
+        }
+      });
+      const result=await coordinator.execute(record,prior);
+      if(!result.complete){
+        return json(503,{ok:false,error:"한 저장소에만 저장되었습니다. 원문은 유지되며 같은 내용을 다시 저장하면 완료되지 않은 저장소만 재시도합니다.",retryable:true,notionSaved:Boolean(result.notion),dataCoreSaved:Boolean(result.dataCore)});
+      }
+      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId});
+    }catch(err:any){
+      if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
+      console.error("Worklog dual-write error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
+      return json(502,{error:"Data Core와 Notion 저장에 실패했습니다. 원문은 유지되며 다시 저장할 수 있습니다."});
+    }
+  }
 
   try{
     const notion=createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION});
-    const data=await notion.create({
-      transcript, cleanTranscript, institution, status, type,
-      recordedDate:seoulDateFromRecordedAt(body.recordedAt),
-      amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
-    });
+    const data=await notion.create(record);
 
     if(idem){
       try{

@@ -31,3 +31,11 @@ test("Personal Workspace bootstrap migration은 사용자별 단일 공간과 �
   assert.match(sql, /grant execute on function public\.bootstrap_personal_workspace\(\) to authenticated, service_role/i);
   assert.match(sql, /after insert on auth\.users/i);
 });
+
+test("Worklog dual-write migration은 Data Core 두 엔티티의 요청 ID 수렴을 강제한다", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260914144428_data_core_worklog_idempotency.sql", import.meta.url), "utf8");
+  assert.match(sql, /alter table public\.work_records\s+add column client_request_id text/i);
+  assert.match(sql, /unique \(workspace_id, client_request_id\)/i);
+  assert.match(sql, /alter table public\.source_refs\s+add column client_request_id text/i);
+  assert.match(sql, /char_length\(client_request_id\) between 16 and 100/i);
+});

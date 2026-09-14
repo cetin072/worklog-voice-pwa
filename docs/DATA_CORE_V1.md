@@ -193,3 +193,11 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 - 기존 `worklog` HTTP function은 요청 인증, 입력 검증, schedule extraction, idempotency만 담당한다.
 - Notion page 속성 매핑과 `v1/pages` 호출은 `NotionWorklogAdapter`가 담당한다.
 - Adapter 분리는 Notion 저장을 제거하지 않는다. Dual-write 동안 기존 Notion 저장 결과와 오류 UX를 유지하기 위한 경계다.
+
+## 12. Dual-write idempotency (#131)
+
+- WorkRecord와 SourceRef는 `workspace_id + client_request_id`로 upsert 가능한 additive 고유 제약을 둔다.
+- Dual-write coordinator는 Data Core와 Notion의 부분 성공 상태를 별도로 저장해, 재시도 시 완료된 writer를 다시 호출하지 않는다.
+- 양쪽 저장이 모두 실패했을 때만 호출자 오류가 된다. 한쪽 성공은 상태를 보존해 남은 writer만 재시도할 수 있다.
+- `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED=true`일 때에만 `worklog`가 이 경로를 사용한다. Browser가 보낸 Platform bearer token은 서버에서 `/auth/v1/user`와 `bootstrap_personal_workspace` RPC로 다시 검증하며, Data Core REST에는 그 사용자 JWT와 publishable key만 전달한다.
+- 체크포인트는 `clientRequestId + verified userId` 범위로 보관한다. 한쪽만 성공하면 HTTP 오류로 원문을 유지해 같은 요청 ID 재시도가 남은 저장소만 완료한다. 플래그가 꺼져 있거나 Platform 세션이 없으면 기존 Notion 경로가 그대로 실행된다.

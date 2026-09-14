@@ -79,10 +79,11 @@ Netlify에서 관리합니다.
 - `KAKAO_REDIRECT_URI` (선택)
 - `SUPABASE_URL` (Platform Auth를 활성화할 때)
 - `SUPABASE_PUBLISHABLE_KEY` (Platform Auth를 활성화할 때; 브라우저에 공개 가능한 publishable key)
+- `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED` (선택: `true`일 때 Platform 로그인 사용자의 Quick Worklog를 Data Core와 Notion에 함께 저장)
 
 비밀값을 코드, Issue, PR, README에 넣지 않습니다.
 
-`SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`가 모두 설정되면 앱은 최소 Platform 계정 로그인과 Personal Workspace bootstrap UI를 표시합니다. 이 단계는 기존 Notion 저장 흐름을 제거하지 않으며, 실제 Data Core 저장은 후속 Repository/Dual-write 단계에서 연결합니다. service role 또는 secret key를 Netlify 공개 응답이나 브라우저에 넣지 않습니다.
+`SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`가 모두 설정되면 앱은 최소 Platform 계정 로그인과 Personal Workspace bootstrap UI를 표시합니다. `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED=true`를 추가하면 로그인 사용자의 Quick Worklog는 검증된 개인 Workspace에 Data Core와 Notion으로 함께 저장됩니다. 한쪽만 성공하면 원문을 지우지 않아 같은 저장 요청으로 남은 쪽만 다시 시도합니다. 플래그가 없거나 로그아웃 상태면 기존 Notion 저장 흐름을 유지합니다. service role 또는 secret key를 Netlify 공개 응답이나 브라우저에 넣지 않습니다.
 
 ## 운영 원칙
 

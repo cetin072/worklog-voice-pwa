@@ -8,6 +8,7 @@ import {
   toWorkRecordRow,
 } from "../netlify/shared/data-core/repositories.mjs";
 import { createSupabaseDataCoreRestClient } from "../netlify/shared/data-core/supabase-rest-client.mjs";
+import { createSupabaseWorkspaceContextResolver } from "../netlify/shared/platform/supabase-workspace-context.mjs";
 
 const workspaceContext = { userId: "user-1", workspaceId: "workspace-1", role: "owner" };
 
@@ -17,7 +18,7 @@ test("WorkRecord repository row는 Workspace/creator 소유권과 Data Core fiel
     institution: "태장", amount: 12000, followUp: "오후에 연락", recordedAt: "2026-09-14T00:00:00.000Z", dueAt: "2026-09-15T00:00:00.000Z",
   }, workspaceContext);
   assert.deepEqual(row, {
-    workspace_id: "workspace-1", created_by_user_id: "user-1", assigned_user_id: null,
+    workspace_id: "workspace-1", created_by_user_id: "user-1", client_request_id: null, assigned_user_id: null,
     title: "계약서 확인", content: "본문", original_text: "음성 원문", record_type: "task", status: "waiting",
     institution: "태장", amount: 12000, follow_up: "오후에 연락", recorded_at: "2026-09-14T00:00:00.000Z", due_at: "2026-09-15T00:00:00.000Z", metadata: {},
   });
@@ -33,6 +34,7 @@ test("Schedule은 끝 시각 역전과 Workspace Context 누락을 차단한다"
 test("SourceRef와 Candidate는 확인 가능한 출처/확정 대상만 저장한다", () => {
   const source = toSourceRefRow({ entityType: "work_record", entityId: "record-1", sourceType: "voice", sourceId: "request-1" }, workspaceContext);
   assert.equal(source.workspace_id, "workspace-1");
+  assert.equal(source.client_request_id, null);
   assert.throws(() => toCandidateRow({ candidateType: "schedule", status: "confirmed", payload: {} }, workspaceContext), (error) => error?.code === "DATA_CORE_CANDIDATE_CONFIRMATION_REQUIRED");
   const candidate = toCandidateRow({ candidateType: "schedule", status: "confirmed", payload: {}, confirmedAt: "2026-09-14T00:00:00Z", confirmedEntityType: "schedule", confirmedEntityId: "schedule-1" }, workspaceContext);
   assert.equal(candidate.confirmed_entity_id, "schedule-1");
@@ -57,8 +59,25 @@ test("Supabase REST adapter는 publishable key와 사용자 JWT만 사용하고 
   assert.deepEqual(await client.insert("work_records", { title: "업무" }), { id: "record-1" });
   assert.equal(requests[0].init.headers.authorization, "Bearer user-jwt");
   assert.equal(requests[0].init.headers.apikey, "sb_publishable_example");
+  assert.deepEqual(await client.upsert("work_records", { title: "업무" }, ["workspace_id", "client_request_id"]), { id: "record-1" });
+  assert.match(requests[1].url, /on_conflict=workspace_id%2Cclient_request_id/);
   await assert.rejects(
     () => createSupabaseDataCoreRestClient({ supabaseUrl: "https://worklog-platform.supabase.co", publishableKey: "key", accessToken: "jwt", fetchImpl: async () => ({ ok: false, json: async () => ({ message: "RLS denied" }) }) }).insert("work_records", {}),
     (error) => error?.code === "SUPABASE_DATA_CORE_INSERT_FAILED",
   );
+});
+
+test("Workspace resolver는 사용자 JWT로 본인과 Personal Workspace를 함께 확인한다", async () => {
+  const requests = [];
+  const resolver = createSupabaseWorkspaceContextResolver({
+    supabaseUrl: "https://worklog-platform.supabase.co", publishableKey: "sb_publishable_example",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return { ok: true, json: async () => url.includes("/auth/v1/user") ? { id: "user-1" } : [{ workspace_id: "workspace-1" }] };
+    },
+  });
+  assert.deepEqual(await resolver.resolve("user-jwt"), { userId: "user-1", workspaceId: "workspace-1", role: "owner" });
+  assert.equal(requests[0].init.headers.authorization, "Bearer user-jwt");
+  assert.equal(requests[1].init.method, "POST");
+  assert.equal(requests[1].init.headers.apikey, "sb_publishable_example");
 });
