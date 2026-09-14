@@ -26,17 +26,19 @@ function element(value=""){
   };
 }
 
-function loadQuickSave(touched=new Set()){
+function loadQuickSave(touched=new Set(), options={}){
   const ids=["mic","save","clear","result","hint","text","institution","status","type","amount","assignee","dueDate","followUp"];
   const elements=Object.fromEntries(ids.map(id=>[id,element()]));
   elements.institution.value="기타";
   elements.status.value="진행중";
   elements.type.value="기타";
 
+  const storage=localStorageMock();
   const window={
     mergeWithOverlap:(left,right)=>[left,right].filter(Boolean).join(" ").trim(),
     WorklogInferenceGuard:{isTouched:id=>touched.has(id)},
-    getAccessKey:()=>"test-key"
+    WorklogPlatformAuth:options.primary ? {isDataCorePrimaryEnabled:async()=>true} : undefined,
+    getAccessKey:()=>options.accessKey ?? "test-key"
   };
   const context={
     window,
@@ -44,7 +46,8 @@ function loadQuickSave(touched=new Set()){
     console,
     Event:class Event{},
     navigator:{vibrate(){}},
-    localStorage:localStorageMock(),
+    localStorage:storage,
+    fetch:options.fetch || (async()=>({ok:true,status:200,json:async()=>({})})),
     setTimeout,
     clearTimeout
   };
@@ -91,6 +94,22 @@ test("manual status and type survive split inference",()=>{
   });
   assert.equal(inferred.status,"확인필요");
   assert.equal(inferred.type,"아이디어");
+});
+
+test("primary Data Core 다중 저장은 Notion 접근키 없이 bearer 경로로 요청한다", async () => {
+  const requests=[];
+  const {api,elements}=loadQuickSave(new Set(), {
+    primary:true,
+    accessKey:"",
+    fetch:async (_url,init)=>{
+      requests.push(init);
+      return {ok:true,status:200,json:async()=>({mode:"data_core",notionSync:"not_configured"})};
+    },
+  });
+  await api.saveMultiple(["첫 업무", "둘째 업무"]);
+  assert.equal(requests.length,2);
+  assert.equal(new Headers(requests[0].headers).has("x-worklog-key"),false);
+  assert.match(elements.result.textContent,/Data Core에 저장 완료/);
 });
 
 test("worklog request id is reused after an ambiguous network failure",async()=>{

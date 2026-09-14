@@ -6,19 +6,22 @@ import { publicSupabaseAuthConfig } from "../netlify/shared/platform/supabase-au
 test("Supabase 공개 Auth 설정은 HTTPS origin과 publishable key만 노출한다", () => {
   const config = publicSupabaseAuthConfig((name) => ({
     SUPABASE_URL: "https://project.supabase.co/",
-    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_example"
+    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_example",
+    WORKLOG_DATA_CORE_PRIMARY_ENABLED: "true"
   })[name]);
 
   assert.deepEqual(config, {
     configured: true,
     supabaseUrl: "https://project.supabase.co",
-    publishableKey: "sb_publishable_example"
+    publishableKey: "sb_publishable_example",
+    dataCorePrimaryEnabled: true
   });
 });
 
 test("Supabase 공개 Auth 설정은 누락되었거나 HTTP인 값을 비활성화한다", () => {
   assert.equal(publicSupabaseAuthConfig(() => "").configured, false);
   assert.equal(publicSupabaseAuthConfig((name) => name === "SUPABASE_URL" ? "http://localhost:54321" : "sb_publishable_example").configured, false);
+  assert.equal(publicSupabaseAuthConfig((name) => ({ SUPABASE_URL: "https://project.supabase.co", SUPABASE_PUBLISHABLE_KEY: "key", WORKLOG_DATA_CORE_PRIMARY_ENABLED: "false" })[name]).dataCorePrimaryEnabled, false);
 });
 
 test("Personal Workspace bootstrap migration은 사용자별 단일 공간과 인증된 RPC 경계를 둔다", () => {

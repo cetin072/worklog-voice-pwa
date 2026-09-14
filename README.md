@@ -80,10 +80,13 @@ Netlify에서 관리합니다.
 - `SUPABASE_URL` (Platform Auth를 활성화할 때)
 - `SUPABASE_PUBLISHABLE_KEY` (Platform Auth를 활성화할 때; 브라우저에 공개 가능한 publishable key)
 - `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED` (선택: `true`일 때 Platform 로그인 사용자의 Quick Worklog를 Data Core와 Notion에 함께 저장)
+- `WORKLOG_DATA_CORE_PRIMARY_ENABLED` (선택: `true`일 때 Platform 로그인 신규 사용자는 Notion 설정 없이 Data Core에 저장)
 
 비밀값을 코드, Issue, PR, README에 넣지 않습니다.
 
 `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`가 모두 설정되면 앱은 최소 Platform 계정 로그인과 Personal Workspace bootstrap UI를 표시합니다. `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED=true`를 추가하면 로그인 사용자의 Quick Worklog는 검증된 개인 Workspace에 Data Core와 Notion으로 함께 저장됩니다. 한쪽만 성공하면 원문을 지우지 않아 같은 저장 요청으로 남은 쪽만 다시 시도합니다. 플래그가 없거나 로그아웃 상태면 기존 Notion 저장 흐름을 유지합니다. service role 또는 secret key를 Netlify 공개 응답이나 브라우저에 넣지 않습니다.
+
+`WORKLOG_DATA_CORE_PRIMARY_ENABLED=true`는 Data Core를 Quick Worklog의 성공 기준으로 바꿉니다. 로그인한 신규 사용자는 Notion token이나 운영자 접근키 없이 저장할 수 있고, Notion이 연결된 기존 사용자는 같은 요청에서 선택 동기화를 시도합니다. Notion 장애는 Data Core 저장을 실패로 바꾸지 않으며 동기화 상태가 `pending`으로 남습니다. 실제 활성화 전에는 #125/#131 migration, RLS와 Preview QA를 `worklog-platform`에서 확인해야 합니다.
 
 ## 운영 원칙
 
@@ -111,7 +114,7 @@ Netlify에서 관리합니다.
 6. `다음 업무`, `다음 건`, `그다음`으로 여러 업무가 올바르게 분리되는지 확인한다.
 7. 말이 끝나자마자 저장해도 마지막 단어가 빠지지 않는지 확인한다.
 8. 작성 중 앱을 닫았다 다시 열었을 때 임시 기록이 복구되는지 확인한다.
-9. `Notion에 저장` 후 진동/완료 표시가 나오고 실제 Notion 원장에 저장되는지 확인한다.
+9. `저장` 후 진동/완료 표시가 나오고, 현재 활성화된 저장 경로(Data Core 또는 Notion)에 기록되는지 확인한다.
 10. 카카오 연결 시 최근 자동전송 성공/실패 상태가 표시되는지 확인한다.
 
 ## 테스트

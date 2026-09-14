@@ -1,5 +1,6 @@
 (() => {
   const SESSION_KEY = "worklogSupabaseSessionV1";
+  const nativeFetch = window.fetch.bind(window);
   let cachedConfig = null;
 
   function readSession() {
@@ -20,6 +21,35 @@
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     return session;
   }
+
+  function isSameOriginWorklogRequest(input) {
+    try {
+      const rawUrl = input instanceof Request ? input.url : String(input || "");
+      const url = new URL(rawUrl, window.location.href);
+      return url.origin === window.location.origin && url.pathname === "/api/worklog";
+    } catch {
+      return false;
+    }
+  }
+
+  function installWorklogAuthFetch() {
+    window.fetch = (input, init = {}) => {
+      const session = readSession();
+      if (!session?.access_token || !isSameOriginWorklogRequest(input)) return nativeFetch(input, init);
+
+      const headers = new Headers(input instanceof Request ? input.headers : undefined);
+      const initHeaders = new Headers(init?.headers || undefined);
+      initHeaders.forEach((value, key) => headers.set(key, value));
+      if (!headers.has("authorization")) headers.set("authorization", `Bearer ${session.access_token}`);
+
+      if (input instanceof Request) {
+        return nativeFetch(new Request(input, { ...init, headers }));
+      }
+      return nativeFetch(input, { ...init, headers });
+    };
+  }
+
+  installWorklogAuthFetch();
 
   async function getConfig() {
     if (cachedConfig) return cachedConfig;
@@ -90,6 +120,11 @@
     }
   }
 
+  async function isDataCorePrimaryEnabled() {
+    const config = await getConfig();
+    return Boolean(config?.dataCorePrimaryEnabled && readSession());
+  }
+
   async function signOut() {
     const session = readSession();
     try {
@@ -106,6 +141,7 @@
     signIn,
     signOut,
     currentUser,
+    isDataCorePrimaryEnabled,
     bootstrapPersonalWorkspace
   };
 })();

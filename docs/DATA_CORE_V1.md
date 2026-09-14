@@ -201,3 +201,10 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 - 양쪽 저장이 모두 실패했을 때만 호출자 오류가 된다. 한쪽 성공은 상태를 보존해 남은 writer만 재시도할 수 있다.
 - `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED=true`일 때에만 `worklog`가 이 경로를 사용한다. Browser가 보낸 Platform bearer token은 서버에서 `/auth/v1/user`와 `bootstrap_personal_workspace` RPC로 다시 검증하며, Data Core REST에는 그 사용자 JWT와 publishable key만 전달한다.
 - 체크포인트는 `clientRequestId + verified userId` 범위로 보관한다. 한쪽만 성공하면 HTTP 오류로 원문을 유지해 같은 요청 ID 재시도가 남은 저장소만 완료한다. 플래그가 꺼져 있거나 Platform 세션이 없으면 기존 Notion 경로가 그대로 실행된다.
+
+## 13. Data Core primary Quick Worklog (#133)
+
+- `WORKLOG_DATA_CORE_PRIMARY_ENABLED=true`와 유효한 Platform bearer token이 함께 있을 때, Quick Worklog의 성공 기준은 Data Core WorkRecord + SourceRef 저장이다.
+- 서버는 bearer token으로 최신 Supabase user와 personal Workspace를 확인한 뒤에만 사용자 JWT로 REST write를 한다. Notion token, `APP_ACCESS_KEY`, browser session의 user object는 Data Core 권한 근거가 아니다.
+- Notion 연결이 없으면 `notionSync: "not_configured"`으로 정상 완료한다. 연결돼 있지만 실패하면 Data Core result를 유지하고 `notionSync: "pending"`으로 반환한다. Data Core 실패 때는 Notion writer를 호출하지 않으므로 내부 원본 없는 Notion-only 상태를 만들지 않는다.
+- primary checkpoint는 `clientRequestId + verified userId` 범위로 보관하고, retry는 성공한 Data Core writer를 다시 호출하지 않는다. 플래그-off와 비로그인 요청은 기존 Notion 저장 경로를 유지한다.

@@ -116,6 +116,10 @@ function getAccessKey(){
   return key;
 }
 
+async function dataCorePrimaryEnabled(){
+  return Boolean(await window.WorklogPlatformAuth?.isDataCorePrimaryEnabled?.());
+}
+
 function draftPayload(){
   return {
     text:els.text.value,
@@ -456,15 +460,16 @@ els.save.onclick=async()=>{
   const transcript=normalizeTranscript(els.text.value);
   if(!transcript){
     els.save.disabled=false;
-    els.save.textContent="Notion에 저장";
+    els.save.textContent="저장";
     result("먼저 업무 내용을 말하거나 입력하세요.","error");
     return;
   }
 
-  const key=getAccessKey();
-  if(!key){
+  const primary=await dataCorePrimaryEnabled();
+  const key=primary ? (localStorage.getItem("worklogAccessKey") || "") : getAccessKey();
+  if(!key && !primary){
     els.save.disabled=false;
-    els.save.textContent="Notion에 저장";
+    els.save.textContent="저장";
     result("개인 접근키가 필요합니다.","error");
     return;
   }
@@ -476,7 +481,7 @@ els.save.onclick=async()=>{
   try{
     const res=await fetch("/api/worklog",{
       method:"POST",
-      headers:{"content-type":"application/json","x-worklog-key":key},
+      headers:{"content-type":"application/json",...(key ? {"x-worklog-key":key} : {})},
       body:JSON.stringify({
         transcript,
         institution:els.institution.value,
@@ -496,7 +501,10 @@ els.save.onclick=async()=>{
     }
     if(!res.ok) throw new Error(data.error || "저장에 실패했습니다.");
 
-    result("✓ Notion에 저장 완료","success");
+    const savedMessage=data.mode==="data_core"
+      ? (data.notionSync==="pending" ? "✓ Data Core 저장 완료 · Notion 동기화 대기" : "✓ Data Core에 저장 완료")
+      : "✓ Notion에 저장 완료";
+    result(savedMessage,"success");
     playSuccessFeedback();
     els.save.textContent="✓ 저장 완료";
     persistentText="";
@@ -512,9 +520,9 @@ els.save.onclick=async()=>{
   }finally{
     els.save.disabled=false;
     if(els.save.textContent === "✓ 저장 완료"){
-      setTimeout(()=>{ els.save.textContent="Notion에 저장"; }, 1200);
+      setTimeout(()=>{ els.save.textContent="저장"; }, 1200);
     }else{
-      els.save.textContent="Notion에 저장";
+      els.save.textContent="저장";
     }
   }
 };
