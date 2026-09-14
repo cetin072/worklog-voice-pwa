@@ -23,6 +23,32 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
   if (typeof fetchImpl !== "function") throw clientError("SUPABASE_DATA_CORE_FETCH_REQUIRED", "fetch 구현이 필요합니다.");
 
   return Object.freeze({
+    async update(table, row, query = {}) {
+      const safeTable = String(table || "");
+      if (!/^[a-z_]{1,80}$/.test(safeTable) || !row || typeof row !== "object" || Array.isArray(row) || !query || typeof query !== "object" || Array.isArray(query)) {
+        throw clientError("SUPABASE_DATA_CORE_UPDATE_INVALID", "Data Core update 대상, row 또는 query가 올바르지 않습니다.");
+      }
+      const entries = Object.entries(query);
+      if (!entries.length || !Object.keys(row).length) {
+        throw clientError("SUPABASE_DATA_CORE_UPDATE_INVALID", "Data Core update row과 범위 조건이 필요합니다.");
+      }
+      const params = new URLSearchParams();
+      for (const [name, value] of entries) {
+        if (!/^[a-z_]{1,80}$/.test(name) || typeof value !== "string" || value.length > 1000) {
+          throw clientError("SUPABASE_DATA_CORE_UPDATE_INVALID", "Data Core update query가 올바르지 않습니다.");
+        }
+        params.set(name, value);
+      }
+      const response = await fetchImpl(`${origin}/rest/v1/${safeTable}?${params.toString()}`, {
+        method: "PATCH",
+        headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json", prefer: "return=representation" },
+        body: JSON.stringify(row),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw clientError("SUPABASE_DATA_CORE_UPDATE_FAILED", String(data?.message || data?.hint || "Data Core 변경에 실패했습니다."));
+      if (!Array.isArray(data)) throw clientError("SUPABASE_DATA_CORE_UPDATE_RESPONSE_INVALID", "Data Core 변경 결과가 올바르지 않습니다.");
+      return data;
+    },
     async select(table, query = {}) {
       const safeTable = String(table || "");
       if (!/^[a-z_]{1,80}$/.test(safeTable) || !query || typeof query !== "object" || Array.isArray(query)) {

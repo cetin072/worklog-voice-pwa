@@ -10,6 +10,7 @@ import {
 import { createSupabaseDataCoreRestClient } from "../netlify/shared/data-core/supabase-rest-client.mjs";
 import { createSupabaseWorkspaceContextResolver } from "../netlify/shared/platform/supabase-workspace-context.mjs";
 import { createWorklogDataCoreBriefingReader } from "../netlify/shared/worklog-data-core-briefing-reader.mjs";
+import { createWorklogDataCoreBriefingStatus } from "../netlify/shared/worklog-data-core-briefing-status.mjs";
 
 const workspaceContext = { userId: "user-1", workspaceId: "workspace-1", role: "owner" };
 
@@ -64,6 +65,10 @@ test("Supabase REST adapter는 publishable key와 사용자 JWT만 사용하고 
   assert.match(requests[1].url, /on_conflict=workspace_id%2Cclient_request_id/);
   assert.deepEqual(await client.select("work_records", { select: "id,title", workspace_id: "eq.workspace-1" }), [{ id: "record-1" }]);
   assert.match(requests[2].url, /workspace_id=eq\.workspace-1/);
+  assert.deepEqual(await client.update("work_records", { status: "completed" }, { id: "eq.record-1", workspace_id: "eq.workspace-1" }), [{ id: "record-1" }]);
+  assert.equal(requests[3].init.method, "PATCH");
+  assert.match(requests[3].url, /workspace_id=eq\.workspace-1/);
+  await assert.rejects(() => client.update("work_records", { status: "completed" }), (error) => error?.code === "SUPABASE_DATA_CORE_UPDATE_INVALID");
   await assert.rejects(
     () => createSupabaseDataCoreRestClient({ supabaseUrl: "https://worklog-platform.supabase.co", publishableKey: "key", accessToken: "jwt", fetchImpl: async () => ({ ok: false, json: async () => ({ message: "RLS denied" }) }) }).insert("work_records", {}),
     (error) => error?.code === "SUPABASE_DATA_CORE_INSERT_FAILED",
@@ -97,4 +102,27 @@ test("Data Core Briefing reader는 현재 Workspace의 열린 WorkRecord만 V2 t
   assert.equal(calls[0].table, "work_records");
   assert.equal(calls[0].query.workspace_id, "eq.workspace-1");
   assert.equal(calls[0].query.status, "in.(in_progress,waiting,needs_review)");
+});
+
+test("Data Core Briefing 상태 변경은 Workspace 조건으로 본인 WorkRecord 한 건만 갱신한다", async () => {
+  const calls = [];
+  const recordId = "11111111-1111-4111-8111-111111111111";
+  const writer = createWorklogDataCoreBriefingStatus({
+    client: { update: async (table, row, query) => {
+      calls.push({ table, row, query });
+      return [{ id: recordId, status: "completed" }];
+    } },
+  });
+  assert.deepEqual(await writer.updateStatus({ recordId, status: "완료" }, workspaceContext), { recordId, status: "완료" });
+  assert.equal(calls[0].table, "work_records");
+  assert.deepEqual(calls[0].row, { status: "completed" });
+  assert.deepEqual(calls[0].query, { id: `eq.${recordId}`, workspace_id: "eq.workspace-1" });
+  await assert.rejects(() => writer.updateStatus({ recordId: "record-1", status: "완료" }, workspaceContext), (error) => error?.code === "WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID");
+  await assert.rejects(() => writer.updateStatus({ recordId, status: "삭제" }, workspaceContext), (error) => error?.code === "WORKLOG_DATA_CORE_STATUS_INVALID");
+});
+
+test("Data Core Briefing 상태 변경은 반환 행이 없으면 권한 없음 또는 미존재로 처리한다", async () => {
+  const recordId = "22222222-2222-4222-8222-222222222222";
+  const writer = createWorklogDataCoreBriefingStatus({ client: { update: async () => [] } });
+  await assert.rejects(() => writer.updateStatus({ recordId, status: "진행중" }, workspaceContext), (error) => error?.code === "WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN");
 });
