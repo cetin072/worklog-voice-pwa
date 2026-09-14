@@ -4,7 +4,7 @@ import { sendCurrentBriefing } from "../shared/kakao.mts";
 export default async ()=>{
   try{
     const result=await sendCurrentBriefing({
-      expectedPeriod:"오후 12시 30분",
+      expectedPeriod:"오후 2시",
       slot:"afternoon",
       requireFresh:true,
       automatic:true
@@ -15,4 +15,4 @@ export default async ()=>{
   }
 };
 
-export const config:Config={schedule:"45 3 * * *"};
+export const config:Config={schedule:"15 5 * * *"};

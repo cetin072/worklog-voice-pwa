@@ -76,9 +76,10 @@ test("quick briefing ranks overdue and imminent due dates before status-only tas
 });
 
 test("quick update preserves only today's scheduled briefing period",()=>{
-  const periods=new Set(["오전 8시","오후 12시 30분","오후 6시"]);
-  assert.equal(preservedQuickBriefingPeriod({generatedDate:"2026-09-10",period:"오후 6시"},"2026-09-10",periods),"오후 6시");
-  assert.equal(preservedQuickBriefingPeriod({generatedDate:"2026-09-09",period:"오후 6시"},"2026-09-10",periods),"빠른 업데이트");
+  const periods=new Set(["오전 8시","오후 2시"]);
+  assert.equal(preservedQuickBriefingPeriod({generatedDate:"2026-09-10",period:"오후 2시"},"2026-09-10",periods),"오후 2시");
+  assert.equal(preservedQuickBriefingPeriod({generatedDate:"2026-09-09",period:"오후 2시"},"2026-09-10",periods),"빠른 업데이트");
+  assert.equal(preservedQuickBriefingPeriod({generatedDate:"2026-09-10",period:"오후 6시"},"2026-09-10",periods),"빠른 업데이트");
   assert.equal(preservedQuickBriefingPeriod({generatedDate:"2026-09-10",period:"임의"},"2026-09-10",periods),"빠른 업데이트");
 });
 
@@ -176,7 +177,7 @@ test("Kakao briefing ignores falsy schedule entries instead of emitting empty se
 
 test("Kakao long multi-section messages preserve the API limit after section separation",()=>{
   const messages=buildKakaoBriefingMessages({
-    period:"오후 12시 30분",
+    period:"오후 2시",
     top:Array.from({length:10},(_,index)=>({title:`긴 업무 ${index+1} ${"가".repeat(45)}`,institution:"태장"})),
     today:[{when:"9/10",title:"오늘 일정"}],
     upcoming:[{when:"9/12",title:"다가오는 일정"}],

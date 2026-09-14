@@ -7,7 +7,7 @@ const BRIEFING_PROJECT = "SYSTEM_DAILY_BRIEFING";
 const BRIEFING_TITLE = "[시스템] 현재 일일 브리핑";
 const EXCLUDED_PROJECTS = new Set(["SYSTEM_DAILY_BRIEFING","SYSTEM_SPLIT_SOURCE","SYSTEM_TEST"]);
 const ALLOWED_STATUSES = new Set(["완료","진행중","대기","확인필요"]);
-const SCHEDULED_PERIODS = new Set(["오전 8시","오후 12시 30분","오후 6시"]);
+const SCHEDULED_PERIODS = new Set(["오전 8시","오후 2시"]);
 
 function json(status:number, body:Record<string,unknown>){
   return new Response(JSON.stringify(body), {
