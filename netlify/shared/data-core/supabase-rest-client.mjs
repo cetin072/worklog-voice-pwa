@@ -23,6 +23,20 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
   if (typeof fetchImpl !== "function") throw clientError("SUPABASE_DATA_CORE_FETCH_REQUIRED", "fetch 구현이 필요합니다.");
 
   return Object.freeze({
+    async rpc(functionName, body = {}) {
+      const safeFunction = String(functionName || "");
+      if (!/^[a-z_]{1,80}$/.test(safeFunction) || !body || typeof body !== "object" || Array.isArray(body)) {
+        throw clientError("SUPABASE_DATA_CORE_RPC_INVALID", "Data Core RPC 이름 또는 body가 올바르지 않습니다.");
+      }
+      const response = await fetchImpl(`${origin}/rest/v1/rpc/${safeFunction}`, {
+        method: "POST",
+        headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw clientError("SUPABASE_DATA_CORE_RPC_FAILED", String(data?.message || data?.hint || "Data Core RPC 호출에 실패했습니다."));
+      return data;
+    },
     async update(table, row, query = {}) {
       const safeTable = String(table || "");
       if (!/^[a-z_]{1,80}$/.test(safeTable) || !row || typeof row !== "object" || Array.isArray(row) || !query || typeof query !== "object" || Array.isArray(query)) {
