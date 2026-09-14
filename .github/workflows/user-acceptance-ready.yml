@@ -1,0 +1,34 @@
+name: User Acceptance Ready
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: read
+
+jobs:
+  user-acceptance-ready:
+    name: User Acceptance Ready
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      UAR_CONTRACT_PATH: .github/user-acceptance-ready.json
+      UAR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify Chrome runtime
+        run: command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
+
+      - name: Run enforced UAR gate
+        run: python3 .github/scripts/user_acceptance_ready.py
