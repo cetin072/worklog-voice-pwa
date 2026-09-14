@@ -103,12 +103,19 @@
   const nativeFetch=window.fetch.bind(window);
   window.fetch=(input,init={})=>{
     const url=typeof input==="string" ? input : String(input?.url || "");
-    const shouldAttach=hasPersonal() && (url.includes("/api/worklog") || url.includes("/api/briefing"));
+    const worklogRequest=url.includes("/api/worklog");
+    const shouldAttach=(hasPersonal() && (worklogRequest || url.includes("/api/briefing"))) || worklogRequest;
     if(!shouldAttach) return nativeFetch(input,init);
 
     const headers=new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
-    const authHeaders=getHeaders();
-    Object.entries(authHeaders).forEach(([key,value])=>headers.set(key,value));
+    if(hasPersonal()){
+      const authHeaders=getHeaders();
+      Object.entries(authHeaders).forEach(([key,value])=>headers.set(key,value));
+    }
+    if(worklogRequest && !headers.has("authorization")){
+      const session=window.WorklogPlatformAuth?.readSession?.();
+      if(session?.access_token) headers.set("authorization",`Bearer ${session.access_token}`);
+    }
     return nativeFetch(input,{...init,headers});
   };
 

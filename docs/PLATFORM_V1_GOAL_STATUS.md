@@ -11,20 +11,23 @@
 
 ## 진행 중
 
-- Issue #125 — Supabase Auth + Personal Workspace bootstrap.
+- Issue #125 — Supabase Auth + Personal Workspace bootstrap (PR #126을 `goal/platform-v1`에 통합).
   - 신규 Auth user trigger와 인증된 재시도 RPC migration을 추가했다.
   - Browser Auth adapter와 최소 로그인 UI를 추가했다.
   - 실제 `worklog-platform` migration apply, Auth provider/redirect 설정, RLS 실환경 QA는 아직 미검증이다.
-- Issue #129 — Notion Worklog Adapter 분리.
+- Issue #129 — Notion Worklog Adapter 분리 (PR #130을 `goal/platform-v1`에 통합).
   - `worklog`에서 Notion page 속성 매핑과 API 호출을 분리했다.
   - 기존 owner/personal Notion 저장과 idempotency 동작은 유지한다.
-  - Supabase Dual-write는 아직 시작하지 않았다.
+- Issue #131 — Data Core + Notion Dual-write.
+  - Quick Worklog는 명시적 feature flag와 검증된 Platform bearer 세션이 있을 때만 Data Core와 Notion에 함께 저장한다.
+  - Data Core는 사용자 JWT로 개인 Workspace를 재확인하며, `clientRequestId + userId` 체크포인트와 Data Core upsert로 부분 성공 뒤의 재시도를 수렴시킨다.
+  - 실제 `worklog-platform` migration apply, RLS/Advisor 및 Preview 실환경 QA는 아직 미검증이다.
 
 ## 다음 Issue
 
-1. #125 migration을 `worklog-platform`에 적용하고 signup/retry/다른 사용자 격리/RLS Advisor를 검증한다.
-2. #129를 `goal/platform-v1`에 통합한다.
-3. Internal Data Core + Notion Dual-write와 비교 QA를 시작한다.
+1. #125/#131 migration을 `worklog-platform`에 적용하고 signup/retry/다른 사용자 격리/RLS Advisor를 검증한다.
+2. Deploy Preview에서 flag-off 기존 Notion 저장과 flag-on dual-write/부분 실패 재시도를 비교 QA한다.
+3. Notion을 선택 Integration으로 낮추는 read path와 migration 계획을 다음 작은 Issue로 분리한다.
 
 ## Blocker
 
@@ -39,12 +42,12 @@
 
 ## 검증 결과
 
-- `npm test`: PASS (188 tests, 2026-09-14).
+- `npm test`: PASS (192 tests, 2026-09-14).
 - `node --check` 및 Netlify Function esbuild bundle check: PASS.
 - DB migration/RLS Advisor: project 연결 미구성으로 실행 전.
-- Last verified implementation commit SHA: `aee5c15a88dca42f73e74038f404623147f42495`.
+- Last verified implementation commit SHA: commit 전 작업트리 (#131); commit 후 갱신 필요.
 
 ## 알려진 debt
 
-- 신규 Platform Auth 세션은 준비됐지만 WorkRecord의 Supabase 저장은 다음 Repository 단계 전까지 연결하지 않는다. 기존 Notion 저장 UX는 그대로 유지한다.
+- Dual-write는 DB migration과 `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED=true`를 모두 갖춰야 활성화된다. 그 전에는 기존 Notion 저장 UX가 그대로 유지된다.
 - 기존 Notion personal token localStorage 방식은 호환성을 위해 이번 단계에서 제거하지 않는다.

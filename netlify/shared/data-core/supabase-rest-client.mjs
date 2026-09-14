@@ -45,5 +45,21 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
       }
       return data[0];
     },
+    async upsert(table, row, conflictColumns = []) {
+      const safeTable = String(table || "");
+      const columns = Array.isArray(conflictColumns) ? conflictColumns.map(String) : [];
+      if (!/^[a-z_]{1,80}$/.test(safeTable) || !columns.length || !columns.every((column) => /^[a-z_]{1,80}$/.test(column))) {
+        throw clientError("SUPABASE_DATA_CORE_UPSERT_INVALID", "Data Core upsert 대상 또는 conflict column이 올바르지 않습니다.");
+      }
+      const response = await fetchImpl(`${origin}/rest/v1/${safeTable}?on_conflict=${encodeURIComponent(columns.join(","))}`, {
+        method: "POST",
+        headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json", prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify(row),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw clientError("SUPABASE_DATA_CORE_UPSERT_FAILED", String(data?.message || data?.hint || "Data Core upsert에 실패했습니다."));
+      if (!Array.isArray(data) || data.length !== 1) throw clientError("SUPABASE_DATA_CORE_UPSERT_RESPONSE_INVALID", "Data Core upsert 결과가 올바르지 않습니다.");
+      return data[0];
+    },
   });
 }

@@ -71,6 +71,7 @@ export function toWorkRecordRow(input = {}, contextInput = input) {
   return Object.freeze({
     workspace_id: workspaceContext.workspaceId,
     created_by_user_id: workspaceContext.userId,
+    client_request_id: optionalText(input.clientRequestId, "WORK_RECORD_CLIENT_REQUEST_ID", 100),
     assigned_user_id: optionalText(input.assignedUserId, "ASSIGNED_USER_ID", 200),
     title: text(input.title, "WORK_RECORD_TITLE", { required: true, max: 200 }),
     content: text(input.content, "WORK_RECORD_CONTENT", { max: 10000 }),
@@ -114,6 +115,7 @@ export function toSourceRefRow(input = {}, contextInput = input) {
   return Object.freeze({
     workspace_id: workspaceContext.workspaceId,
     created_by_user_id: workspaceContext.userId,
+    client_request_id: optionalText(input.clientRequestId, "SOURCE_CLIENT_REQUEST_ID", 100),
     entity_type: enumValue(input.entityType, SOURCE_ENTITY_TYPES, "SOURCE_ENTITY_TYPE"),
     entity_id: text(input.entityId, "SOURCE_ENTITY_ID", { required: true, max: 300 }),
     source_type: enumValue(input.sourceType, SOURCE_TYPES, "SOURCE_TYPE"),
@@ -161,10 +163,21 @@ function requireInsertClient(client) {
 
 export function createDataCoreRepositories(clientInput) {
   const client = requireInsertClient(clientInput);
+  const upsert = typeof client.upsert === "function" ? client.upsert.bind(client) : null;
+  const requireUpsert = (table, row, conflictColumns) => {
+    if (!upsert) throw repositoryError("DATA_CORE_REPOSITORY_UPSERT_UNAVAILABLE", "Data Core upsert client가 필요합니다.");
+    return upsert(table, row, conflictColumns);
+  };
   return Object.freeze({
-    workRecords: Object.freeze({ create: async (input, context) => client.insert("work_records", toWorkRecordRow(input, context)) }),
+    workRecords: Object.freeze({
+      create: async (input, context) => client.insert("work_records", toWorkRecordRow(input, context)),
+      upsertByRequest: async (input, context) => requireUpsert("work_records", toWorkRecordRow(input, context), ["workspace_id", "client_request_id"]),
+    }),
     schedules: Object.freeze({ create: async (input, context) => client.insert("schedules", toScheduleRow(input, context)) }),
-    sourceRefs: Object.freeze({ create: async (input, context) => client.insert("source_refs", toSourceRefRow(input, context)) }),
+    sourceRefs: Object.freeze({
+      create: async (input, context) => client.insert("source_refs", toSourceRefRow(input, context)),
+      upsertByRequest: async (input, context) => requireUpsert("source_refs", toSourceRefRow(input, context), ["workspace_id", "client_request_id"]),
+    }),
     candidates: Object.freeze({ create: async (input, context) => client.insert("candidates", toCandidateRow(input, context)) }),
   });
 }
