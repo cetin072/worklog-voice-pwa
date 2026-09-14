@@ -21,6 +21,8 @@
       </div>
     </header>
 
+    <p class="guide-note"><b>중요:</b> 연결 정보는 지금 사용하는 기기의 브라우저에 저장됩니다. <b>휴대폰에서 업무수첩을 쓸 예정이면 이 설정 화면은 그 휴대폰에서 열어두고 2~4단계를 진행하세요.</b> 1번의 Notion 토큰 만들기만 PC에서 해도 됩니다.</p>
+
     <div id="alreadyConnected" class="guide-note already-connected">
       <b>이 기기는 이미 Notion과 연결되어 있습니다.</b><br>
       업무수첩이 정상 동작 중이라면 다시 설정할 필요가 없습니다. 다시 연결하면 Notion에 새 업무 DB가 하나 더 만들어질 수 있습니다. <a href="/">업무수첩으로 돌아가기</a>
@@ -29,15 +31,15 @@
     <section class="card">
       <div class="step">
         <strong>1. Notion 토큰 만들기</strong>
-        <p class="guide-note"><b>PC의 Notion 앱 또는 웹에서 진행하는 것을 권장합니다.</b><br>휴대폰보다 설정 메뉴를 찾기 쉽습니다.</p>
+        <p class="guide-note"><b>이 단계만 PC의 Notion 앱 또는 웹에서 진행하는 것을 권장합니다.</b><br>휴대폰보다 설정 메뉴를 찾기 쉽습니다.</p>
         <ol class="mini-steps">
           <li>Notion 왼쪽 아래의 <b>워크스페이스 이름</b> 클릭 → <b>설정</b></li>
           <li>설정 창 왼쪽 메뉴를 아래로 내려 <b>개발자</b> 선택</li>
           <li><b>개인 사용 권한 토큰(PAT)</b>에서 <b>새 토큰</b> 선택</li>
           <li>토큰 이름은 <b>업무수첩</b>처럼 알아보기 쉽게 적고, 사용할 <b>워크스페이스</b>를 선택한 뒤 <b>Notion API</b> 권한 켜기</li>
-          <li>토큰을 만든 뒤 표시되는 <b>ntn_...</b> 값을 복사하고 이 화면으로 돌아오기</li>
+          <li>토큰을 만든 뒤 표시되는 <b>ntn_...</b> 값을 복사하고, 업무수첩을 사용할 기기의 아래 2번 칸에 붙여넣기</li>
         </ol>
-        <p class="danger-note"><b>헷갈리기 쉬운 점:</b> 왼쪽 메뉴의 <b>연결</b>이 아니라 <b>개발자</b>로 들어가야 합니다. 개발자 메뉴가 안 보이면 왼쪽 설정 메뉴를 아래로 스크롤하세요.</p>
+        <p class="danger-note"><b>헷갈리기 쉬운 점:</b> 왼쪽 메뉴의 <b>연결</b>이 아니라 <b>개발자</b>로 들어가야 합니다. 개발자 메뉴가 안 보이면 왼쪽 설정 메뉴를 아래로 스크롤하세요. 개발자 화면 위쪽의 <b>‘개발자 기능 활성화’ 스위치는 건드리지 않아도 됩니다.</b> 아래의 개인 사용 권한 토큰(PAT)에서 ‘새 토큰’만 누르면 됩니다.</p>
         <div class="token-help">
           <a href="https://developers.notion.com/guides/get-started/personal-access-tokens" target="_blank" rel="noopener noreferrer">Notion 공식 토큰 안내 보기</a>
         </div>
@@ -48,13 +50,13 @@
       <div class="step">
         <label for="notionToken"><strong>2. 복사한 Notion 토큰 붙여넣기</strong></label>
         <input id="notionToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ntn_...">
-        <p class="note">방금 만든 토큰 전체를 붙여넣으세요. 보통 <b>ntn_</b>으로 시작합니다. 토큰은 비밀번호와 같으므로 다른 사람에게 보내지 마세요.</p>
+        <p class="note">방금 만든 토큰 전체를 붙여넣으세요. 보통 <b>ntn_</b>으로 시작합니다. 토큰은 비밀번호와 같으므로 다른 사람에게 보내거나 메신저에 남기지 마세요.</p>
       </div>
 
       <div class="step" style="margin-top:16px">
         <label for="organization"><strong>3. 기본 기관명(회사·기관 이름)</strong></label>
-        <input id="organization" type="text" maxlength="60" value="회사" placeholder="예: 태장, 우리회사, 개인사업">
-        <p class="note">평소 업무를 가장 많이 기록할 회사나 기관 이름을 적으세요. 업무 저장 시 기본값으로 사용되고, 나중에 ‘개인’이나 ‘기타’로 바꿔 저장할 수도 있습니다.</p>
+        <input id="organization" type="text" maxlength="60" placeholder="예: 태장, 우리회사, 개인">
+        <p class="note">평소 업무를 가장 많이 기록할 회사나 기관 이름을 적으세요. 개인 업무용이면 ‘개인’이라고 적으면 됩니다. 나중에 업무를 저장할 때 ‘개인’이나 ‘기타’로 바꿔 저장할 수도 있습니다.</p>
       </div>
 
       <div class="setup-actions" style="margin-top:18px">
