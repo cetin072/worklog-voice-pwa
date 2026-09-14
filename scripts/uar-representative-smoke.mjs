@@ -1,4 +1,7 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const previewUrl = String(process.env.PREVIEW_URL || '').replace(/\/$/, '');
 if (!previewUrl) throw new Error('UAR_SMOKE_PREVIEW_URL_MISSING');
@@ -18,35 +21,96 @@ function findChrome() {
   throw new Error('UAR_SMOKE_CHROME_NOT_FOUND');
 }
 
+async function fetchPreviewHtml() {
+  const response = await fetch(`${previewUrl}/`, { cache: 'no-store', redirect: 'follow' });
+  if (!response.ok) throw new Error(`UAR_SMOKE_PREVIEW_ROOT_HTTP_${response.status}`);
+  const html = await response.text();
+  if (!html.includes('id="mic"') || !html.includes('id="text"')) {
+    throw new Error('UAR_SMOKE_PREVIEW_ROOT_CONTRACT_MISSING');
+  }
+  return html;
+}
+
+const browserStub = `<script>
+(() => {
+  const json = (body, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' }
+  }));
+  window.fetch = async (input, init = {}) => {
+    const raw = typeof input === 'string' ? input : String(input && input.url || '');
+    const method = String(init.method || 'GET').toUpperCase();
+    if (raw === '/api/worklog' && method === 'GET') {
+      return json({ ok: true, configured: false, mode: 'owner' });
+    }
+    if (raw.startsWith('/api/briefing') || raw.startsWith('/api/kakao')) {
+      return json({ error: 'Deploy Preview owner integrations are intentionally isolated.' }, 500);
+    }
+    if (raw.startsWith('/api/')) {
+      return json({ error: 'UAR smoke blocks external writes.' }, 503);
+    }
+    return json({ error: 'UAR smoke blocks network fetches.' }, 503);
+  };
+  window.prompt = () => '';
+  window.alert = () => {};
+  window.confirm = () => false;
+})();
+</script>`;
+
+let html = await fetchPreviewHtml();
+html = html.replace(/(<script\b)/i, `${browserStub}$1`);
+html = html.replace(/\b(src|href)=(["'])(\/[^"']+)\2/g, (_match, attr, quote, resource) => {
+  return `${attr}=${quote}${previewUrl}${resource}${quote}`;
+});
+
+const temp = mkdtempSync(join(tmpdir(), 'worklog-uar-'));
+const fixturePath = join(temp, 'preview-fixture.html');
+writeFileSync(fixturePath, html, 'utf8');
+
 const chrome = findChrome();
-let dom;
+let result;
 try {
-  dom = execFileSync(chrome, [
+  result = spawnSync(chrome, [
     '--headless=new',
     '--no-sandbox',
     '--disable-gpu',
     '--disable-dev-shm-usage',
     '--disable-background-networking',
-    '--virtual-time-budget=7000',
+    '--disable-component-update',
+    '--disable-sync',
+    '--disable-default-apps',
+    '--disable-extensions',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-features=PushMessaging,Notifications,BackgroundFetch,PeriodicBackgroundSync,OptimizationHints,MediaRouter',
+    '--allow-file-access-from-files',
+    '--virtual-time-budget=6000',
     '--dump-dom',
-    `${previewUrl}/`
+    `file://${fixturePath}`
   ], {
     encoding: 'utf8',
-    timeout: 45000,
+    timeout: 30000,
     maxBuffer: 8 * 1024 * 1024
   });
-} catch (error) {
-  const stderr = String(error?.stderr || '').slice(-2000);
-  throw new Error(`UAR_SMOKE_CHROME_FAILED:${stderr}`);
+} finally {
+  // Read stdout before cleanup; spawnSync keeps it in memory.
+}
+
+const dom = String(result?.stdout || '');
+const stderr = String(result?.stderr || '');
+rmSync(temp, { recursive: true, force: true });
+
+if (result?.error && !dom.trim()) {
+  throw new Error(`UAR_SMOKE_CHROME_FAILED:${String(result.error.message || result.error).slice(0, 1000)}:${stderr.slice(-1000)}`);
+}
+if (!dom.trim()) {
+  throw new Error(`UAR_SMOKE_EMPTY_DOM:${stderr.slice(-1000)}`);
 }
 
 for (const marker of ['id="mic"', 'id="save"', 'id="manualEntry"', 'id="text"', 'id="typedSave"', 'id="briefingCard"']) {
   if (!dom.includes(marker)) throw new Error(`UAR_SMOKE_CORE_CONTROL_MISSING:${marker}`);
 }
 
-// Production Notion credentials are intentionally absent from Deploy Preview.
-// The real browser must therefore finish health bootstrap in the safe fallback
-// state rather than staying "확인 중", crashing, or pretending to be connected.
 if (!/id="health"[^>]*>\s*설정 필요\s*</.test(dom)) {
   const health = dom.match(/id="health"[^>]*>([^<]*)</)?.[1]?.trim() || 'missing';
   throw new Error(`UAR_SMOKE_HEALTH_SAFE_STATE_MISSING:${health}`);
@@ -56,4 +120,10 @@ if (/Page not found|Site not found|Application Error/i.test(dom)) {
   throw new Error('UAR_SMOKE_FATAL_PAGE_ERROR_VISIBLE');
 }
 
-console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} health=설정 필요 preview_secret_isolated=true`);
+// Ensure the browser fixture really executed assets from the exact Preview,
+// rather than silently falling back to repository-local JavaScript.
+if (!dom.includes(`${previewUrl}/app.js`)) {
+  throw new Error('UAR_SMOKE_PREVIEW_ASSET_SOURCE_MISSING');
+}
+
+console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} preview_assets=true external_writes=false health=설정 필요`);
