@@ -8,60 +8,86 @@
   <title>내 Notion 연결</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
-    .setup{max-width:680px;margin:0 auto;padding:22px 16px 40px;display:grid;gap:16px}.setup h1{margin:0}.setup p{line-height:1.55}.step{display:grid;gap:8px}.step strong{font-size:1rem}.step input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d1d5db;border-radius:12px;font-size:1rem}.setup-actions{display:grid;gap:10px}.setup-actions button,.setup-actions a{display:block;text-align:center;text-decoration:none}.note{font-size:.86rem;color:#6b7280}.danger-note{font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px}.setup-result{min-height:1.4em;font-weight:700}.setup-result.error{color:#b91c1c}.setup-result.success{color:#047857}.setup-link{font-weight:700;color:#374151}.token-help{display:flex;gap:8px;flex-wrap:wrap}.token-help a{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;color:#111827;background:#fff}.mini-steps{margin:2px 0 4px;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.7}.complete-note{display:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 14px}.complete-note.show{display:block}.complete-note strong{color:#047857}.complete-note p{margin:.35rem 0 0;font-size:.88rem;color:#4b5563}
+    .setup{max-width:680px;margin:0 auto;padding:22px 16px 40px;display:grid;gap:16px}.setup h1{margin:0}.setup p{line-height:1.55}.step{display:grid;gap:8px}.step strong{font-size:1rem}.step input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d1d5db;border-radius:12px;font-size:1rem}.setup-actions{display:grid;gap:10px}.setup-actions button,.setup-actions a{display:block;text-align:center;text-decoration:none}.note{font-size:.86rem;color:#6b7280}.danger-note{font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px}.guide-note{font-size:.86rem;color:#1f2937;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}.setup-result{min-height:1.4em;font-weight:700}.setup-result.error{color:#b91c1c}.setup-result.success{color:#047857}.setup-link{font-weight:700;color:#374151}.token-help{display:flex;gap:8px;flex-wrap:wrap}.token-help a{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;color:#111827;background:#fff}.mini-steps{margin:2px 0 4px;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.7}.path-guide{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 4px}.path-guide span{padding:7px 9px;border:1px solid #d1d5db;border-radius:10px;background:#fff;font-size:.82rem;font-weight:700;color:#111827}.path-guide b{color:#9ca3af}.complete-note{display:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 14px}.complete-note.show{display:block}.complete-note strong{color:#047857}.complete-note p{margin:.35rem 0 0;font-size:.88rem;color:#4b5563}.already-connected{display:none}.already-connected.show{display:block}.structure-tree{margin:.65rem 0 0;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;font-size:.9rem;line-height:1.8;color:#374151}.structure-tree .root{font-weight:800;color:#111827}.structure-tree .child{padding-left:20px}.structure-tree .record{padding-left:40px;color:#6b7280}
   </style>
 </head>
 <body>
   <main class="setup">
     <header>
       <div>
-        <p class="eyebrow">개인용 설정</p>
+        <p class="eyebrow">처음 1회 설정</p>
         <h1>내 Notion으로 시작하기</h1>
-        <p class="note">처음 한 번만 연결하면 이후에는 앱을 열고 바로 녹음하면 됩니다.</p>
+        <p class="note">약 3분이면 끝납니다. 한 번 연결하면 다음부터는 업무수첩만 열어 바로 기록하면 됩니다.</p>
       </div>
     </header>
+
+    <p class="guide-note"><b>중요:</b> 연결 정보는 지금 사용하는 기기의 브라우저에 저장됩니다. <b>휴대폰에서 업무수첩을 쓸 예정이면 이 설정 화면은 그 휴대폰에서 열어두고 2~4단계를 진행하세요.</b> 1번의 Notion 토큰 만들기만 PC에서 해도 됩니다.</p>
+
+    <div id="alreadyConnected" class="guide-note already-connected">
+      <b>이 기기는 이미 Notion과 연결되어 있습니다.</b><br>
+      업무수첩이 정상 동작 중이라면 다시 설정할 필요가 없습니다. 다시 연결하면 Notion에 새 업무 DB가 하나 더 만들어질 수 있습니다. <a href="/">업무수첩으로 돌아가기</a>
+    </div>
 
     <section class="card">
       <div class="step">
         <strong>1. Notion 토큰 만들기</strong>
+        <p class="guide-note"><b>이 단계만 PC의 Notion 앱 또는 웹에서 진행하는 것을 권장합니다.</b><br>휴대폰보다 설정 메뉴를 찾기 쉽습니다.</p>
+        <div class="path-guide" aria-label="Notion 토큰 메뉴 경로">
+          <span>워크스페이스 이름</span><b>→</b><span>설정</span><b>→</b><span>개발자</span><b>→</b><span>개인 사용 권한 토큰(PAT)</span><b>→</b><span>새 토큰</span>
+        </div>
         <ol class="mini-steps">
-          <li>Notion Developer portal에서 <b>Personal access tokens</b> 열기</li>
-          <li><b>New token</b> 선택</li>
-          <li>사용할 workspace 선택 + <b>Notion API</b> 권한 켜기</li>
-          <li>토큰을 만들고 바로 복사하기</li>
+          <li>Notion 왼쪽 아래의 <b>워크스페이스 이름</b> 클릭 → <b>설정</b></li>
+          <li>설정 창 왼쪽 메뉴를 아래로 내려 <b>개발자</b> 선택</li>
+          <li><b>개인 사용 권한 토큰(PAT)</b>에서 <b>새 토큰</b> 선택</li>
+          <li>토큰 이름은 <b>업무수첩</b>처럼 알아보기 쉽게 적고, 사용할 <b>워크스페이스</b>를 선택한 뒤 <b>Notion API</b> 권한 켜기</li>
+          <li>토큰을 만든 뒤 표시되는 <b>ntn_...</b> 값을 복사하고, 업무수첩을 사용할 기기의 아래 2번 칸에 붙여넣기</li>
         </ol>
+        <p class="danger-note"><b>헷갈리기 쉬운 점:</b> 왼쪽 메뉴의 <b>연결</b>이 아니라 <b>개발자</b>로 들어가야 합니다. 개발자 메뉴가 안 보이면 왼쪽 설정 메뉴를 아래로 스크롤하세요. 개발자 화면 위쪽의 <b>‘개발자 기능 활성화’ 스위치는 건드리지 않아도 됩니다.</b> 아래의 개인 사용 권한 토큰(PAT)에서 ‘새 토큰’만 누르면 됩니다.</p>
         <div class="token-help">
-          <a href="https://developers.notion.com/guides/get-started/personal-access-tokens" target="_blank" rel="noopener noreferrer">Notion 공식 안내 열기</a>
+          <a href="https://developers.notion.com/guides/get-started/personal-access-tokens" target="_blank" rel="noopener noreferrer">Notion 공식 토큰 안내 보기</a>
         </div>
       </div>
     </section>
 
     <section class="card">
       <div class="step">
-        <label for="notionToken"><strong>2. 복사한 토큰 붙여넣기</strong></label>
+        <label for="notionToken"><strong>2. 복사한 Notion 토큰 붙여넣기</strong></label>
         <input id="notionToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ntn_...">
+        <p class="note">방금 만든 토큰 전체를 붙여넣으세요. 보통 <b>ntn_</b>으로 시작합니다. 토큰은 비밀번호와 같으므로 다른 사람에게 보내거나 메신저에 남기지 마세요.</p>
       </div>
 
       <div class="step" style="margin-top:16px">
-        <label for="organization"><strong>3. 기본 기관명</strong></label>
-        <input id="organization" type="text" maxlength="60" value="회사" placeholder="예: 우리회사, 개인사업">
-        <p class="note">업무를 저장할 때 기본 기관명으로 사용합니다.</p>
+        <label for="organization"><strong>3. 기본 기관명(회사·기관 이름)</strong></label>
+        <input id="organization" type="text" maxlength="60" placeholder="예: 태장, 우리회사, 개인">
+        <p class="note">평소 업무를 가장 많이 기록할 회사나 기관 이름을 적으세요. 개인 업무용이면 ‘개인’이라고 적으면 됩니다. 나중에 업무를 저장할 때 ‘개인’이나 ‘기타’로 바꿔 저장할 수도 있습니다.</p>
       </div>
 
       <div class="setup-actions" style="margin-top:18px">
-        <button id="connect" class="save" type="button">4. 내 Notion 자동 설정</button>
+        <p class="guide-note"><b>이 버튼을 누르면</b> Notion 사이드바에 <b>📒 업무수첩</b> 상위 페이지 하나를 만들고, 실제 업무 DB는 그 안의 하위 항목으로 만듭니다. 관련 항목이 사이드바에 따로 흩어지지 않도록 구성합니다.</p>
+        <button id="connect" class="save" type="button">4. 연결하고 업무수첩 만들기</button>
         <p id="setupResult" class="setup-result" aria-live="polite"></p>
         <div id="completeNote" class="complete-note">
-          <strong>설정 끝</strong>
-          <p>아래 ‘업무수첩 시작’을 누른 뒤 Chrome 메뉴에서 ‘홈 화면에 추가’를 하면 다음부터 앱처럼 바로 사용할 수 있습니다.</p>
+          <strong>연결 완료 — 이제 설치만 하면 됩니다.</strong>
+          <p>아래 ‘업무수첩 시작’을 누른 뒤 홈 화면에 추가하세요.</p>
+          <p><b>Android Chrome:</b> 오른쪽 위 ⋮ → ‘앱 설치’ 또는 ‘홈 화면에 추가’</p>
+          <p><b>iPhone Safari:</b> 공유 버튼 → ‘홈 화면에 추가’</p>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <strong>자동으로 만들어지는 것</strong>
-      <p class="note">🎙 업무비서 페이지 · 🎙 업무 통합 기록 DB · 추후 ChatGPT 브리핑용 시스템 기록</p>
-      <p class="danger-note">지인 테스트용입니다. Notion 토큰은 이 기기의 브라우저에 저장되며 Notion 작업 시 이 앱의 Netlify Function을 통해 전달됩니다. 개인 휴대폰·개인 PC에서만 사용하고 공용 PC에서는 사용하지 마세요.</p>
+      <strong>Notion에는 이렇게 정리됩니다</strong>
+      <div class="structure-tree" aria-label="Notion 업무수첩 페이지 구조">
+        <div class="root">📒 업무수첩 <span class="note">— 사이드바의 최상위 페이지</span></div>
+        <div class="child">└─ 🎙 업무 통합 기록 <span class="note">— 실제 업무가 저장되는 하위 DB</span></div>
+        <div class="record">└─ [시스템] 현재 일일 브리핑 <span class="note">— DB 안의 내부 기록</span></div>
+      </div>
+      <p class="note">앞으로 회의·녹음 등 Notion에 별도 항목이 필요한 모듈도 같은 ‘📒 업무수첩’ 아래에 모으는 구조를 기준으로 합니다.</p>
+    </section>
+
+    <section class="card">
+      <strong>보안 안내</strong>
+      <p class="danger-note">Notion 토큰은 Notion에 접근하는 열쇠입니다. 이 기기의 브라우저에 저장되어 업무를 Notion에 저장할 때 사용됩니다. 개인 휴대폰·개인 PC에서만 사용하고, 토큰을 메신저나 다른 사람에게 보내지 마세요.</p>
     </section>
 
     <a class="setup-link" href="/">← 업무수첩 화면으로</a>

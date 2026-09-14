@@ -64,13 +64,13 @@ export default async (req:Request,_context:Context)=>{
     const root=await notionRequest(token,"https://api.notion.com/v1/pages",{
       method:"POST",
       body:JSON.stringify({
-        icon:{type:"emoji",emoji:"🎙️"},
+        icon:{type:"emoji",emoji:"📒"},
         markdown:[
-          "# 업무비서",
+          "# 업무수첩",
           "",
-          "음성으로 업무를 기록하고 정리하기 위한 개인 업무 공간입니다.",
+          "업무수첩에서 사용하는 Notion 항목을 한곳에 모아 관리하는 상위 페이지입니다.",
           "",
-          "아래 업무 통합 기록은 업무기록 앱이 자동으로 사용합니다."
+          "아래 하위 항목은 업무수첩이 자동으로 사용합니다."
         ].join("\n")
       })
     });
