@@ -4,3 +4,4 @@ node_modules/
 .env.*
 access-key.txt
 deploy-log.txt
+supabase/.temp/

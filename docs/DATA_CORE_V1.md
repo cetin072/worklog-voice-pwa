@@ -170,3 +170,14 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 6. Notion optional Integration/Sync
 7. Briefing reader를 Data Core 기준으로 전환
 8. Usage/Cost 월별 사용자 원가 집계
+
+## 9. Auth 및 Personal Workspace bootstrap (#125)
+
+새 사용자는 Supabase Auth의 영구 사용자여야 하며, Auth 성공 직후 개인 Workspace와 owner membership을 확보한다.
+
+- 신규 Auth user는 DB trigger가 `personal` Workspace와 `owner` membership을 생성한다.
+- 로그인 후에는 `public.bootstrap_personal_workspace()` RPC를 다시 호출할 수 있다. RPC는 인자를 받아 다른 사용자를 지정하지 않고 `auth.uid()`만 사용한다.
+- `workspaces(owner_user_id) where kind = 'personal'` 부분 고유 인덱스와 `workspace_members` 복합 PK가 재호출·동시 호출을 한 Workspace와 한 owner membership으로 수렴시킨다.
+- public RPC는 `authenticated`에만 실행 권한을 주며, 실제 권한 상승 함수는 `private` schema와 고정 `search_path`에 둔다.
+- Browser는 `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`만 읽는다. service role 또는 secret key는 브라우저·Netlify 응답에 포함하지 않는다.
+- WorkRecord의 Supabase 저장은 Repository/Dual-write 단계의 책임이며, Auth bootstrap 단계에서 기존 Notion 저장 경로를 대체하지 않는다.
