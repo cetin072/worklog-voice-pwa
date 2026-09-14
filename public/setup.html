@@ -8,7 +8,7 @@
   <title>내 Notion 연결</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
-    .setup{max-width:680px;margin:0 auto;padding:22px 16px 40px;display:grid;gap:16px}.setup h1{margin:0}.setup p{line-height:1.55}.step{display:grid;gap:8px}.step strong{font-size:1rem}.step input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d1d5db;border-radius:12px;font-size:1rem}.setup-actions{display:grid;gap:10px}.setup-actions button,.setup-actions a{display:block;text-align:center;text-decoration:none}.note{font-size:.86rem;color:#6b7280}.danger-note{font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px}.guide-note{font-size:.86rem;color:#1f2937;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}.setup-result{min-height:1.4em;font-weight:700}.setup-result.error{color:#b91c1c}.setup-result.success{color:#047857}.setup-link{font-weight:700;color:#374151}.token-help{display:flex;gap:8px;flex-wrap:wrap}.token-help a{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;color:#111827;background:#fff}.mini-steps{margin:2px 0 4px;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.7}.path-guide{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 4px}.path-guide span{padding:7px 9px;border:1px solid #d1d5db;border-radius:10px;background:#fff;font-size:.82rem;font-weight:700;color:#111827}.path-guide b{color:#9ca3af}.complete-note{display:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 14px}.complete-note.show{display:block}.complete-note strong{color:#047857}.complete-note p{margin:.35rem 0 0;font-size:.88rem;color:#4b5563}.already-connected{display:none}.already-connected.show{display:block}.created-list{margin:.35rem 0 0;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.65}
+    .setup{max-width:680px;margin:0 auto;padding:22px 16px 40px;display:grid;gap:16px}.setup h1{margin:0}.setup p{line-height:1.55}.step{display:grid;gap:8px}.step strong{font-size:1rem}.step input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d1d5db;border-radius:12px;font-size:1rem}.setup-actions{display:grid;gap:10px}.setup-actions button,.setup-actions a{display:block;text-align:center;text-decoration:none}.note{font-size:.86rem;color:#6b7280}.danger-note{font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px}.guide-note{font-size:.86rem;color:#1f2937;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}.setup-result{min-height:1.4em;font-weight:700}.setup-result.error{color:#b91c1c}.setup-result.success{color:#047857}.setup-link{font-weight:700;color:#374151}.token-help{display:flex;gap:8px;flex-wrap:wrap}.token-help a{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;color:#111827;background:#fff}.mini-steps{margin:2px 0 4px;padding-left:22px;font-size:.9rem;color:#4b5563;line-height:1.7}.path-guide{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 4px}.path-guide span{padding:7px 9px;border:1px solid #d1d5db;border-radius:10px;background:#fff;font-size:.82rem;font-weight:700;color:#111827}.path-guide b{color:#9ca3af}.complete-note{display:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 14px}.complete-note.show{display:block}.complete-note strong{color:#047857}.complete-note p{margin:.35rem 0 0;font-size:.88rem;color:#4b5563}.already-connected{display:none}.already-connected.show{display:block}.structure-tree{margin:.65rem 0 0;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;font-size:.9rem;line-height:1.8;color:#374151}.structure-tree .root{font-weight:800;color:#111827}.structure-tree .child{padding-left:20px}.structure-tree .record{padding-left:40px;color:#6b7280}
   </style>
 </head>
 <body>
@@ -63,7 +63,7 @@
       </div>
 
       <div class="setup-actions" style="margin-top:18px">
-        <p class="guide-note"><b>이 버튼을 누르면</b> Notion에 업무수첩 전용 페이지와 업무 저장 DB를 새로 만듭니다. 기존 Notion 문서는 수정하지 않습니다.</p>
+        <p class="guide-note"><b>이 버튼을 누르면</b> Notion 사이드바에 <b>📒 업무수첩</b> 상위 페이지 하나를 만들고, 실제 업무 DB는 그 안의 하위 항목으로 만듭니다. 관련 항목이 사이드바에 따로 흩어지지 않도록 구성합니다.</p>
         <button id="connect" class="save" type="button">4. 연결하고 업무수첩 만들기</button>
         <p id="setupResult" class="setup-result" aria-live="polite"></p>
         <div id="completeNote" class="complete-note">
@@ -76,12 +76,13 @@
     </section>
 
     <section class="card">
-      <strong>Notion에 자동으로 만들어지는 항목</strong>
-      <ul class="created-list">
-        <li><b>🎙 업무비서</b> — 업무수첩 전용 상위 페이지</li>
-        <li><b>🎙 업무 통합 기록</b> — 말하거나 입력한 실제 업무가 저장되는 DB</li>
-        <li><b>일일 브리핑용 시스템 기록</b> — 오늘 할 일과 진행 업무를 보여주기 위한 내부 기록</li>
-      </ul>
+      <strong>Notion에는 이렇게 정리됩니다</strong>
+      <div class="structure-tree" aria-label="Notion 업무수첩 페이지 구조">
+        <div class="root">📒 업무수첩 <span class="note">— 사이드바의 최상위 페이지</span></div>
+        <div class="child">└─ 🎙 업무 통합 기록 <span class="note">— 실제 업무가 저장되는 하위 DB</span></div>
+        <div class="record">└─ [시스템] 현재 일일 브리핑 <span class="note">— DB 안의 내부 기록</span></div>
+      </div>
+      <p class="note">앞으로 회의·녹음 등 Notion에 별도 항목이 필요한 모듈도 같은 ‘📒 업무수첩’ 아래에 모으는 구조를 기준으로 합니다.</p>
     </section>
 
     <section class="card">
