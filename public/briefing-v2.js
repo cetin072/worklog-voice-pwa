@@ -60,15 +60,19 @@
   }
 
   function authHeaders({ask=true}={}){
-    if(window.WorklogAuth?.getHeaders){
-      return window.WorklogAuth.getHeaders({promptOwner:ask});
-    }
-    let key=localStorage.getItem("worklogAccessKey") || "";
-    if(!key && ask){
-      key=(window.prompt("개인 접근키를 한 번 입력하세요.") || "").trim();
-      if(key) localStorage.setItem("worklogAccessKey",key);
-    }
-    return key ? {"x-worklog-key":key} : {};
+    const headers=window.WorklogAuth?.getHeaders
+      ? window.WorklogAuth.getHeaders({promptOwner:ask})
+      : (()=>{
+          let key=localStorage.getItem("worklogAccessKey") || "";
+          if(!key && ask){
+            key=(window.prompt("개인 접근키를 한 번 입력하세요.") || "").trim();
+            if(key) localStorage.setItem("worklogAccessKey",key);
+          }
+          return key ? {"x-worklog-key":key} : {};
+        })();
+    const session=window.WorklogPlatformAuth?.readSession?.();
+    if(session?.access_token) headers.authorization=`Bearer ${session.access_token}`;
+    return headers;
   }
 
   function escapeHtml(value){
@@ -135,6 +139,7 @@
     legacyTop.hidden=false;
     legacyMore?.removeAttribute("hidden");
     root.hidden=true;
+    if(quick) quick.hidden=false;
     syncLegacyHeader();
   }
 
@@ -161,7 +166,7 @@
     return pieces.join(" · ");
   }
 
-  function taskHtml(kind,item,index){
+  function taskHtml(kind,item,index,canUpdate){
     const institution=item.institution
       ? `<span class="briefing-tag">${escapeHtml(institutionLabel(item.institution))}</span>`
       : "";
@@ -170,31 +175,35 @@
       ? `<small class="briefing-v2-follow">↳ ${escapeHtml(item.followUp)}</small>`
       : "";
     const hidden=index>=MAX_VISIBLE ? " hidden" : "";
-    const action=IS_PREVIEW_DEMO
+    const action=!canUpdate
+      ? `<small class="briefing-v2-read-only">Data Core</small>`
+      : IS_PREVIEW_DEMO
       ? `<button class="briefing-complete briefing-v2-complete" type="button" disabled>완료</button>`
       : `<button class="briefing-complete briefing-v2-complete" type="button" data-page-id="${escapeHtml(item.pageId)}" data-status="${escapeHtml(item.status)}" data-title="${escapeHtml(item.title)}">완료</button>`;
     return `<li${hidden}><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>${follow}</div>${action}</li>`;
   }
 
-  function sectionHtml(kind,label,items){
+  function sectionHtml(kind,label,items,canUpdate){
     if(!Array.isArray(items) || !items.length) return "";
     const extra=Math.max(0,items.length-MAX_VISIBLE);
-    return `<section class="briefing-v2-section briefing-v2-${kind}" data-section="${kind}"><div class="briefing-v2-section-head"><h3>${label} <span>${items.length}</span></h3></div><ul class="briefing-list briefing-v2-list">${items.map((item,index)=>taskHtml(kind,item,index)).join("")}</ul>${extra ? `<button class="briefing-v2-more-toggle" type="button" data-section-toggle="${kind}" aria-expanded="false">${extra}개 더 보기</button>` : ""}</section>`;
+    return `<section class="briefing-v2-section briefing-v2-${kind}" data-section="${kind}"><div class="briefing-v2-section-head"><h3>${label} <span>${items.length}</span></h3></div><ul class="briefing-list briefing-v2-list">${items.map((item,index)=>taskHtml(kind,item,index,canUpdate)).join("")}</ul>${extra ? `<button class="briefing-v2-more-toggle" type="button" data-section-toggle="${kind}" aria-expanded="false">${extra}개 더 보기</button>` : ""}</section>`;
   }
 
   function render(data){
     const structure=data?.structure || {};
     const counts=data?.counts || {};
     const total=Number(counts.total || 0);
+    const canUpdate=data?.canUpdate!==false;
 
-    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 <b>${Number(counts.today || 0)}</b></span><span class="is-waiting">대기 <b>${Number(counts.waiting || 0)}</b></span><span class="is-followup">후속 <b>${Number(counts.followUp || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue)}${sectionHtml("today","🟠 오늘",structure.today)}${sectionHtml("waiting","🟡 기다리는 것",structure.waiting)}${sectionHtml("followUp","🔵 후속조치 필요",structure.followUp)}${Number(counts.other || 0)>0 ? `<p class="briefing-v2-other">그 외 진행중 <strong>${Number(counts.other || 0)}건</strong></p>` : ""}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
+    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 <b>${Number(counts.today || 0)}</b></span><span class="is-waiting">대기 <b>${Number(counts.waiting || 0)}</b></span><span class="is-followup">후속 <b>${Number(counts.followUp || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘",structure.today,canUpdate)}${sectionHtml("waiting","🟡 기다리는 것",structure.waiting,canUpdate)}${sectionHtml("followUp","🔵 후속조치 필요",structure.followUp,canUpdate)}${Number(counts.other || 0)>0 ? `<p class="briefing-v2-other">그 외 진행중 <strong>${Number(counts.other || 0)}건</strong></p>` : ""}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
 
     root.hidden=false;
     hideLegacy();
     title.textContent=IS_PREVIEW_DEMO ? "오늘 업무 상황 · 화면 미리보기" : "오늘 업무 상황";
     const generated=formatGeneratedAt(data.generatedAt);
     const countLabel=data.truncated ? `미완료 ${total}건 이상` : `미완료 ${total}건`;
-    meta.textContent=IS_PREVIEW_DEMO ? "예시 업무로 보는 브리핑 2.0 화면" : [generated,countLabel,"Notion 최신 기준"].filter(Boolean).join(" · ");
+    meta.textContent=IS_PREVIEW_DEMO ? "예시 업무로 보는 브리핑 2.0 화면" : [generated,countLabel,data?.mode==="data_core" ? "Data Core 기준" : "Notion 최신 기준"].filter(Boolean).join(" · ");
+    if(quick) quick.hidden=!canUpdate;
     if(data.truncated){
       error.textContent="업무가 많아 최근 500건 기준으로 정리했습니다.";
       card.classList.add("has-error");

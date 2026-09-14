@@ -9,6 +9,7 @@ import {
 } from "../netlify/shared/data-core/repositories.mjs";
 import { createSupabaseDataCoreRestClient } from "../netlify/shared/data-core/supabase-rest-client.mjs";
 import { createSupabaseWorkspaceContextResolver } from "../netlify/shared/platform/supabase-workspace-context.mjs";
+import { createWorklogDataCoreBriefingReader } from "../netlify/shared/worklog-data-core-briefing-reader.mjs";
 
 const workspaceContext = { userId: "user-1", workspaceId: "workspace-1", role: "owner" };
 
@@ -61,6 +62,8 @@ test("Supabase REST adapter는 publishable key와 사용자 JWT만 사용하고 
   assert.equal(requests[0].init.headers.apikey, "sb_publishable_example");
   assert.deepEqual(await client.upsert("work_records", { title: "업무" }, ["workspace_id", "client_request_id"]), { id: "record-1" });
   assert.match(requests[1].url, /on_conflict=workspace_id%2Cclient_request_id/);
+  assert.deepEqual(await client.select("work_records", { select: "id,title", workspace_id: "eq.workspace-1" }), [{ id: "record-1" }]);
+  assert.match(requests[2].url, /workspace_id=eq\.workspace-1/);
   await assert.rejects(
     () => createSupabaseDataCoreRestClient({ supabaseUrl: "https://worklog-platform.supabase.co", publishableKey: "key", accessToken: "jwt", fetchImpl: async () => ({ ok: false, json: async () => ({ message: "RLS denied" }) }) }).insert("work_records", {}),
     (error) => error?.code === "SUPABASE_DATA_CORE_INSERT_FAILED",
@@ -80,4 +83,18 @@ test("Workspace resolver는 사용자 JWT로 본인과 Personal Workspace를 함
   assert.equal(requests[0].init.headers.authorization, "Bearer user-jwt");
   assert.equal(requests[1].init.method, "POST");
   assert.equal(requests[1].init.headers.apikey, "sb_publishable_example");
+});
+
+test("Data Core Briefing reader는 현재 Workspace의 열린 WorkRecord만 V2 task로 매핑한다", async () => {
+  const calls = [];
+  const reader = createWorklogDataCoreBriefingReader({
+    client: { select: async (table, query) => {
+      calls.push({ table, query });
+      return [{ id: "record-1", title: "계약서 확인", institution: "태장", status: "needs_review", follow_up: "오후 회신", due_at: "2026-09-15T00:00:00+09:00", updated_at: "2026-09-14T01:00:00Z", metadata: {} }];
+    } },
+  });
+  assert.deepEqual(await reader.listOpenTasks(workspaceContext), [{ pageId: "record-1", title: "계약서 확인", institution: "태장", status: "확인필요", project: "", dueKey: "2026-09-15", followUp: "오후 회신", editedAt: "2026-09-14T01:00:00Z" }]);
+  assert.equal(calls[0].table, "work_records");
+  assert.equal(calls[0].query.workspace_id, "eq.workspace-1");
+  assert.equal(calls[0].query.status, "in.(in_progress,waiting,needs_review)");
 });

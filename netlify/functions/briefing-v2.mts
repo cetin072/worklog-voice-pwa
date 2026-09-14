@@ -1,5 +1,8 @@
 import type { Config, Context } from "@netlify/functions";
 import { briefingV2Counts, classifyBriefingTasks } from "../shared/briefing-v2.mjs";
+import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
+import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
+import { createWorklogDataCoreBriefingReader } from "../shared/worklog-data-core-briefing-reader.mjs";
 
 const NOTION_VERSION="2026-03-11";
 const DEFAULT_DATA_SOURCE_ID="e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -50,6 +53,15 @@ function seoulDate(input:Date|string|number=new Date()){
 function seoulIsoNow(){
   const shifted=new Date(Date.now()+9*60*60*1000).toISOString();
   return `${shifted.slice(0,-1)}+09:00`;
+}
+
+function dataCoreBriefingReadEnabled(){
+  return String(Netlify.env.get("WORKLOG_DATA_CORE_BRIEFING_ENABLED") || "").trim().toLowerCase()==="true";
+}
+
+function bearerToken(req:Request){
+  const match=/^Bearer\s+(.+)$/i.exec(String(req.headers.get("authorization") || ""));
+  return match ? match[1].trim() : "";
 }
 
 function personalConnection(req:Request){
@@ -134,6 +146,26 @@ function taskFromPage(page:any){
 
 export default async (req:Request,_context:Context)=>{
   if(req.method!=="GET") return json(405,{error:"허용되지 않은 요청입니다."});
+
+  const accessToken=bearerToken(req);
+  if(dataCoreBriefingReadEnabled() && accessToken){
+    const supabaseUrl=Netlify.env.get("SUPABASE_URL");
+    const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
+    if(!supabaseUrl || !publishableKey) return json(503,{error:"Data Core 브리핑 설정이 아직 준비되지 않았습니다."});
+    try{
+      const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
+      const workspaceContext=await resolver.resolve(accessToken);
+      const reader=createWorklogDataCoreBriefingReader({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
+      const tasks=await reader.listOpenTasks(workspaceContext);
+      const today=seoulDate();
+      const structure=classifyBriefingTasks(tasks,today);
+      return json(200,{ok:true,ready:true,generatedAt:seoulIsoNow(),today,mode:"data_core",truncated:false,canUpdate:false,counts:briefingV2Counts(structure),structure});
+    }catch(error:any){
+      if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 브리핑을 열어주세요."});
+      console.error("Data Core briefing v2 error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));
+      return json(502,{error:"Data Core 업무 상황을 불러오지 못했습니다."});
+    }
+  }
 
   const connection:any=resolveConnection(req);
   if(connection.error) return json(connection.status || 400,{error:connection.error});
