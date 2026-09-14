@@ -48,8 +48,7 @@
     const runs=status?.lastRuns || {};
     const entries=[
       ["오전",runs.morning],
-      ["오후",runs.afternoon],
-      ["저녁",runs.evening]
+      ["오후",runs.afternoon]
     ].filter(([,run])=>run?.attemptedAt);
     entries.sort((a,b)=>Date.parse(b[1].attemptedAt)-Date.parse(a[1].attemptedAt));
     return entries[0] || null;
@@ -57,7 +56,7 @@
 
   function automaticStatusText(){
     const latest=latestRun();
-    if(!latest) return {text:"연결됨 · 하루 3회 브리핑 자동 전송",error:false};
+    if(!latest) return {text:"연결됨 · 하루 2회 브리핑 자동 전송",error:false};
     const [label,run]=latest;
     const when=formatRunTime(run.attemptedAt);
     if(run.status==="sent"){
@@ -101,7 +100,7 @@
     }else{
       button.disabled=busy;
       button.textContent=busy ? "연결 준비 중…" : "카카오 연결";
-      text="한 번 연결하면 오전 8시·오후 12시 30분·오후 6시 브리핑도 자동 전송됩니다.";
+      text="한 번 연결하면 오전 8시·오후 2시 브리핑도 자동 전송됩니다.";
     }
 
     if(notice){
@@ -193,7 +192,7 @@
   const params=new URLSearchParams(window.location.search);
   const kakaoResult=params.get("kakao");
   if(kakaoResult){
-    if(kakaoResult==="connected") notice={message:"카카오 연결 완료 · 하루 3회 자동 전송이 켜졌습니다.",isError:false};
+    if(kakaoResult==="connected") notice={message:"카카오 연결 완료 · 하루 2회 자동 전송이 켜졌습니다.",isError:false};
     else notice={message:"카카오 연결에 실패했습니다. 다시 시도해주세요.",isError:true};
     params.delete("kakao");
     const next=`${window.location.pathname}${params.toString() ? `?${params}` : ""}${window.location.hash}`;
