@@ -83,6 +83,7 @@ Netlify에서 관리합니다.
 - `WORKLOG_DATA_CORE_PRIMARY_ENABLED` (선택: `true`일 때 Platform 로그인 신규 사용자는 Notion 설정 없이 Data Core에 저장)
 - `WORKLOG_DATA_CORE_BRIEFING_ENABLED` (선택: `true`일 때 Platform 로그인 사용자의 Briefing V2를 Data Core에서 읽기)
 - `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED` (선택: Briefing read flag도 `true`일 때 Data Core WorkRecord의 완료/실행 취소를 허용)
+- `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED` (선택: Briefing read flag도 `true`일 때 오늘과 14일 이내 Data Core Schedule을 표시)
 
 비밀값을 코드, Issue, PR, README에 넣지 않습니다.
 
@@ -91,6 +92,8 @@ Netlify에서 관리합니다.
 `WORKLOG_DATA_CORE_PRIMARY_ENABLED=true`는 Data Core를 Quick Worklog의 성공 기준으로 바꿉니다. 로그인한 신규 사용자는 Notion token이나 운영자 접근키 없이 저장할 수 있고, Notion이 연결된 기존 사용자는 같은 요청에서 선택 동기화를 시도합니다. Notion 장애는 Data Core 저장을 실패로 바꾸지 않으며 동기화 상태가 `pending`으로 남습니다. 실제 활성화 전에는 #125/#131 migration, RLS와 Preview QA를 `worklog-platform`에서 확인해야 합니다.
 
 `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`는 로그인한 사용자의 Briefing V2를 개인 Workspace의 Data Core WorkRecord로 읽습니다. 기본값은 읽기 전용입니다. `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED=true`도 함께 설정하면 본인 Workspace의 WorkRecord만 완료하거나 실행 취소할 수 있으며, 빠른 브리핑 재정리는 Notion 전용으로 유지합니다. 실제 활성화 전에는 `worklog-platform`에서 RLS와 Preview QA를 확인해야 합니다.
+
+`WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED=true`를 Briefing read flag와 함께 설정하면 같은 검증된 개인 Workspace의 `confirmed`·`tentative` Schedule을 오늘과 다음 14일 구역으로 읽습니다. 이 단계는 표시 전용이며, Schedule 생성·수정·Google Calendar 동기화는 포함하지 않습니다.
 
 ## 운영 원칙
 

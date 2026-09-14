@@ -222,3 +222,10 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 - 서버는 user JWT로 최신 user와 personal Workspace를 다시 확인하고, `PATCH work_records`에 `id=eq.<record id>`와 `workspace_id=eq.<verified workspace>`를 함께 고정한다. 반환된 정확히 한 행만 성공으로 인정하므로, 미존재·타 Workspace·RLS 거부는 모두 성공처럼 처리하지 않는다.
 - 허용 상태는 기존 lifecycle인 `완료`, `진행중`, `대기`, `확인필요`뿐이다. 완료 후 undo는 화면에 저장된 기존 상태만 이 범위에서 복원한다. 빠른 브리핑 재정리는 Data Core에서 제공하지 않는다.
 - REST client는 빈 범위 조건 또는 빈 update row를 거부한다. 실제 Workspace 격리 보장은 배포된 RLS가 최종 책임이므로, project 연결 뒤 다른 사용자 Workspace의 실제 거부 QA가 필요하다.
+
+## 16. Data Core Schedule Briefing V2 read path (#139)
+
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`, `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED=true`, 유효한 Platform bearer token이 모두 있을 때만 Briefing V2가 Schedule을 읽는다. 둘 중 하나라도 없으면 기존 Briefing 경로와 화면을 유지한다.
+- 서버는 user JWT로 최신 user와 personal Workspace를 다시 확인한 뒤 `schedules`를 `workspace_id=eq.<verified workspace>`, `status=in.(confirmed,tentative)`, 서울 기준 오늘부터 15일째 자정 전까지로 조회한다. 클라이언트는 Workspace ID나 조회 범위를 지정하지 않는다.
+- 결과는 오늘과 다음 14일 이내로 구분해 표시한다. 완료/취소 일정은 제외하며, 이 Issue는 Schedule 생성·수정·삭제·외부 Calendar sync를 추가하지 않는다.
+- 실제 Workspace 격리는 배포된 RLS가 최종 책임이므로, project 연결 뒤 다른 사용자 Workspace의 실제 거부 및 Preview QA가 필요하다.

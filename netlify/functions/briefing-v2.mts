@@ -4,6 +4,7 @@ import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-r
 import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
 import { createWorklogDataCoreBriefingReader } from "../shared/worklog-data-core-briefing-reader.mjs";
 import { createWorklogDataCoreBriefingStatus } from "../shared/worklog-data-core-briefing-status.mjs";
+import { createWorklogDataCoreScheduleReader } from "../shared/worklog-data-core-schedule-reader.mjs";
 
 const NOTION_VERSION="2026-03-11";
 const DEFAULT_DATA_SOURCE_ID="e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -62,6 +63,10 @@ function dataCoreBriefingReadEnabled(){
 
 function dataCoreBriefingMutationEnabled(){
   return String(Netlify.env.get("WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED") || "").trim().toLowerCase()==="true";
+}
+
+function dataCoreScheduleBriefingEnabled(){
+  return String(Netlify.env.get("WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED") || "").trim().toLowerCase()==="true";
 }
 
 function bearerToken(req:Request){
@@ -182,11 +187,15 @@ export default async (req:Request,_context:Context)=>{
     try{
       const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
       const workspaceContext=await resolver.resolve(accessToken);
-      const reader=createWorklogDataCoreBriefingReader({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
+      const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
+      const reader=createWorklogDataCoreBriefingReader({client});
       const tasks=await reader.listOpenTasks(workspaceContext);
       const today=seoulDate();
       const structure=classifyBriefingTasks(tasks,today);
-      return json(200,{ok:true,ready:true,generatedAt:seoulIsoNow(),today,mode:"data_core",truncated:false,canUpdate:dataCoreBriefingMutationEnabled(),counts:briefingV2Counts(structure),structure});
+      const schedules=dataCoreScheduleBriefingEnabled()
+        ? await createWorklogDataCoreScheduleReader({client}).listForBriefing(workspaceContext,today)
+        : {today:[],upcoming:[],total:0};
+      return json(200,{ok:true,ready:true,generatedAt:seoulIsoNow(),today,mode:"data_core",truncated:false,canUpdate:dataCoreBriefingMutationEnabled(),scheduleEnabled:dataCoreScheduleBriefingEnabled(),schedules,counts:briefingV2Counts(structure),structure});
     }catch(error:any){
       if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 브리핑을 열어주세요."});
       console.error("Data Core briefing v2 error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));

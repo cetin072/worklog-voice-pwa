@@ -33,12 +33,15 @@
   - read/mutation 두 explicit flag와 검증된 Platform bearer가 함께 있을 때만, 본인 Workspace WorkRecord의 완료와 undo를 Data Core에 기록한다.
   - 서버는 verified Workspace + record ID 조건으로 PATCH하고 반환 한 행을 확인한다. 빠른 브리핑 재정리는 Notion 전용으로 유지한다.
   - 실제 다른 Workspace RLS 거부, Advisor 및 Preview 실환경 QA는 아직 미검증이다.
+- Issue #139 — Data Core Schedule Briefing V2 read path.
+  - read/schedule 두 explicit flag와 검증된 Platform bearer가 함께 있을 때만 본인 Workspace의 `confirmed`/`tentative` Schedule을 오늘과 14일 이내 구역으로 읽는다.
+  - 일정 생성·수정·삭제나 외부 Calendar sync는 포함하지 않으며, 실제 다른 Workspace RLS 거부·Advisor·Preview QA는 아직 미검증이다.
 
 ## 다음 Issue
 
 1. #125/#131 migration을 `worklog-platform`에 적용하고 signup/retry/다른 사용자 격리/RLS Advisor를 검증한다.
 2. Deploy Preview에서 flag-off 기존 Notion 저장, flag-on dual-write, primary-without-Notion, 부분 실패 재시도를 비교 QA한다.
-3. Data Core Schedule repository와 Schedule 기반 화면 경로를 다음 작은 Issue로 분리한다.
+3. Data Core Schedule 생성과 명시 입력/음성 추출 결과의 Schedule 확정 경계를 다음 작은 Issue로 분리한다.
 
 ## Blocker
 
@@ -53,10 +56,10 @@
 
 ## 검증 결과
 
-- `npm test`: PASS (200 tests, 2026-09-15).
+- `npm test`: PASS (202 tests, 2026-09-15).
 - `node --check` 및 Netlify Function esbuild bundle check: PASS.
 - DB migration/RLS Advisor: project 연결 미구성으로 실행 전.
-- Last verified implementation commit SHA: `fb8eb5f814ff2a6dd822071ea9ade7ffdafdbd42` (#137 implementation; 문서 follow-up commit 제외).
+- Last verified implementation commit SHA: `dd49a9e9aeb217cdbd1412bb7256321a6a05d71a` (#139 implementation; 문서 follow-up commit 제외).
 
 ## 알려진 debt
 
