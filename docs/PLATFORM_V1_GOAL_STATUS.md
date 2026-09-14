@@ -42,7 +42,7 @@
 - `npm test`: PASS (188 tests, 2026-09-14).
 - `node --check` 및 Netlify Function esbuild bundle check: PASS.
 - DB migration/RLS Advisor: project 연결 미구성으로 실행 전.
-- Last verified implementation commit SHA: `19a2d15a756a8393d15c0dcdca830a8d19ebc1da`.
+- Last verified implementation commit SHA: `aee5c15a88dca42f73e74038f404623147f42495`.
 
 ## 알려진 debt
 
