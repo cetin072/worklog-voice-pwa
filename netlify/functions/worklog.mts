@@ -7,6 +7,7 @@ import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-r
 import { createWorklogDataCoreAdapter } from "../shared/worklog-data-core-adapter.mjs";
 import { createDualWriteCoordinator } from "../shared/dual-write-coordinator.mjs";
 import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
+import { createWorklogPrimarySave } from "../shared/worklog-primary-save.mjs";
 
 const NOTION_VERSION = "2026-03-11";
 const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -49,6 +50,10 @@ function dataCoreDualWriteEnabled(){
   return String(Netlify.env.get("WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED") || "").trim().toLowerCase()==="true";
 }
 
+function dataCorePrimaryEnabled(){
+  return String(Netlify.env.get("WORKLOG_DATA_CORE_PRIMARY_ENABLED") || "").trim().toLowerCase()==="true";
+}
+
 function bearerToken(req:Request){
   const header=String(req.headers.get("authorization") || "");
   const match=/^Bearer\s+(.+)$/i.exec(header);
@@ -60,31 +65,53 @@ export default async (req:Request, _context:Context) => {
   const envToken = Netlify.env.get("NOTION_TOKEN");
   const accessKey = Netlify.env.get("APP_ACCESS_KEY");
   const envDataSourceId = Netlify.env.get("NOTION_DATA_SOURCE_ID") || DEFAULT_DATA_SOURCE_ID;
+  const accessToken=bearerToken(req);
+  const primaryRequested=dataCorePrimaryEnabled() && Boolean(accessToken);
 
   if(req.method==="GET"){
+    if(primaryRequested){
+      return json(200,{ok:true,configured:Boolean(Netlify.env.get("SUPABASE_URL") && Netlify.env.get("SUPABASE_PUBLISHABLE_KEY")),mode:"data_core",notionConfigured:Boolean((personal && !("error" in personal)) || (envToken && accessKey))});
+    }
     if(personal && "error" in personal) return json(400,{ok:false,configured:false,error:personal.error});
     if(personal) return json(200,{ok:true,configured:true,mode:"personal"});
     return json(200,{ok:true,configured:Boolean(envToken && accessKey && envDataSourceId),mode:"owner"});
   }
 
   if(req.method!=="POST") return json(405,{error:"허용되지 않은 요청입니다."});
-  if(personal && "error" in personal) return json(400,{error:personal.error});
 
-  let token:string;
-  let dataSourceId:string;
-  let mode:"personal"|"owner";
+  let token="";
+  let dataSourceId="";
+  let mode:string="data_core";
+  let notionConfigured=false;
 
-  if(personal){
-    token=personal.token;
-    dataSourceId=personal.dataSourceId;
-    mode="personal";
+  if(primaryRequested){
+    if(personal && !("error" in personal)){
+      token=personal.token;
+      dataSourceId=personal.dataSourceId;
+      mode="personal";
+      notionConfigured=true;
+    }else if(!personal && envToken && accessKey && (req.headers.get("x-worklog-key")||"")===accessKey){
+      token=envToken;
+      dataSourceId=envDataSourceId;
+      mode="owner";
+      notionConfigured=true;
+    }
   }else{
-    if(!envToken) return json(500,{error:"NOTION_TOKEN이 설정되지 않았습니다."});
-    if(!accessKey) return json(500,{error:"APP_ACCESS_KEY가 설정되지 않았습니다."});
-    if((req.headers.get("x-worklog-key")||"")!==accessKey) return json(401,{error:"개인 접근키가 올바르지 않습니다."});
-    token=envToken;
-    dataSourceId=envDataSourceId;
-    mode="owner";
+    if(personal && "error" in personal) return json(400,{error:personal.error});
+    if(personal){
+      token=personal.token;
+      dataSourceId=personal.dataSourceId;
+      mode="personal";
+      notionConfigured=true;
+    }else{
+      if(!envToken) return json(500,{error:"NOTION_TOKEN이 설정되지 않았습니다."});
+      if(!accessKey) return json(500,{error:"APP_ACCESS_KEY가 설정되지 않았습니다."});
+      if((req.headers.get("x-worklog-key")||"")!==accessKey) return json(401,{error:"개인 접근키가 올바르지 않습니다."});
+      token=envToken;
+      dataSourceId=envDataSourceId;
+      mode="owner";
+      notionConfigured=true;
+    }
   }
 
   let body:any;
@@ -101,7 +128,7 @@ export default async (req:Request, _context:Context) => {
     try{
       existing=await idem.get(`request:${requestId}`,{type:"json"});
       const duplicate=idempotencyHit(existing,mode);
-      if(duplicate && !(dataCoreDualWriteEnabled() && bearerToken(req))) return json(200,{ok:true,...duplicate});
+      if(duplicate && !((dataCoreDualWriteEnabled() || dataCorePrimaryEnabled()) && accessToken)) return json(200,{ok:true,...duplicate});
     }catch(error){
       console.warn("Worklog idempotency read failed",String((error as any)?.message || "unknown").slice(0,120));
     }
@@ -127,7 +154,39 @@ export default async (req:Request, _context:Context) => {
     amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
   };
 
-  const accessToken=bearerToken(req);
+  if(primaryRequested){
+    const supabaseUrl=Netlify.env.get("SUPABASE_URL");
+    const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
+    if(!supabaseUrl || !publishableKey) return json(503,{error:"Data Core primary 저장 설정이 아직 준비되지 않았습니다. 원문은 그대로 유지되어 재시도할 수 있습니다."});
+    if(!requestId || !idem) return json(400,{error:"Data Core 저장에는 유효한 저장 요청 ID가 필요합니다."});
+
+    try{
+      const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
+      const workspaceContext=await resolver.resolve(accessToken);
+      const primaryKey=`request:${requestId}:user:${workspaceContext.userId}`;
+      let primaryExisting:any=null;
+      try{ primaryExisting=await idem.get(primaryKey,{type:"json"}); }
+      catch(error){ console.warn("Worklog primary idempotency read failed",String((error as any)?.message || "unknown").slice(0,120)); }
+
+      const dataCore=createWorklogDataCoreAdapter({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
+      const notion=notionConfigured ? createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION}) : null;
+      const primary=createWorklogPrimarySave({
+        writeDataCore:()=>dataCore.persist(record,workspaceContext),
+        writeNotion:notion ? ()=>notion.create(record) : null,
+        saveProgress:async progress=>{
+          try{ await idem.setJSON(primaryKey,{...progress,mode,createdAt:new Date().toISOString()}); }
+          catch(error){ console.warn("Worklog primary idempotency write failed",String((error as any)?.message || "unknown").slice(0,120)); }
+        }
+      });
+      const result=await primary.execute(record,primaryExisting || {});
+      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
+    }catch(err:any){
+      if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
+      console.error("Worklog primary error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
+      return json(502,{error:"Data Core 저장에 실패했습니다. 원문은 유지되며 다시 저장할 수 있습니다."});
+    }
+  }
+
   if(dataCoreDualWriteEnabled() && accessToken){
     const supabaseUrl=Netlify.env.get("SUPABASE_URL");
     const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");

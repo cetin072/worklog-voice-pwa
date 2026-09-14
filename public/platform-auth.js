@@ -90,6 +90,11 @@
     }
   }
 
+  async function isDataCorePrimaryEnabled() {
+    const config = await getConfig();
+    return Boolean(config?.dataCorePrimaryEnabled && readSession());
+  }
+
   async function signOut() {
     const session = readSession();
     try {
@@ -106,6 +111,7 @@
     signIn,
     signOut,
     currentUser,
+    isDataCorePrimaryEnabled,
     bootstrapPersonalWorkspace
   };
 })();

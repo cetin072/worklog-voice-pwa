@@ -22,12 +22,16 @@
   - Quick Worklog는 명시적 feature flag와 검증된 Platform bearer 세션이 있을 때만 Data Core와 Notion에 함께 저장한다.
   - Data Core는 사용자 JWT로 개인 Workspace를 재확인하며, `clientRequestId + userId` 체크포인트와 Data Core upsert로 부분 성공 뒤의 재시도를 수렴시킨다.
   - 실제 `worklog-platform` migration apply, RLS/Advisor 및 Preview 실환경 QA는 아직 미검증이다.
+- Issue #133 — Data Core primary Quick Worklog + 선택 Notion sync.
+  - 로그인한 신규 사용자는 explicit primary flag에서 Notion token/운영자 접근키 없이 Data Core에 기록할 수 있다.
+  - Notion은 연결된 경우에만 best-effort sync하며, 실패해도 Data Core 성공을 실패로 바꾸지 않는다.
+  - 실제 `worklog-platform` migration apply, RLS/Advisor 및 Preview 실환경 QA는 아직 미검증이다.
 
 ## 다음 Issue
 
 1. #125/#131 migration을 `worklog-platform`에 적용하고 signup/retry/다른 사용자 격리/RLS Advisor를 검증한다.
-2. Deploy Preview에서 flag-off 기존 Notion 저장과 flag-on dual-write/부분 실패 재시도를 비교 QA한다.
-3. Notion을 선택 Integration으로 낮추는 read path와 migration 계획을 다음 작은 Issue로 분리한다.
+2. Deploy Preview에서 flag-off 기존 Notion 저장, flag-on dual-write, primary-without-Notion, 부분 실패 재시도를 비교 QA한다.
+3. Briefing read path를 Data Core 기준으로 전환하는 다음 작은 Issue를 분리한다.
 
 ## Blocker
 
@@ -42,12 +46,12 @@
 
 ## 검증 결과
 
-- `npm test`: PASS (192 tests, 2026-09-14).
+- `npm test`: PASS (196 tests, 2026-09-15).
 - `node --check` 및 Netlify Function esbuild bundle check: PASS.
 - DB migration/RLS Advisor: project 연결 미구성으로 실행 전.
-- Last verified implementation commit SHA: `c7d7aef1e293ff2b782d3006df3712fab41f9c62` (#131 implementation; status-only follow-up commit 제외).
+- Last verified implementation commit SHA: Issue #133 commit 전 작업트리; commit 후 갱신 필요.
 
 ## 알려진 debt
 
-- Dual-write는 DB migration과 `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED=true`를 모두 갖춰야 활성화된다. 그 전에는 기존 Notion 저장 UX가 그대로 유지된다.
+- Dual-write/primary는 DB migration과 각각의 explicit flag를 모두 갖춰야 활성화된다. 그 전에는 기존 Notion 저장 UX가 그대로 유지된다.
 - 기존 Notion personal token localStorage 방식은 호환성을 위해 이번 단계에서 제거하지 않는다.

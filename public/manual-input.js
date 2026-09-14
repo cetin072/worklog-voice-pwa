@@ -15,7 +15,7 @@
       try{ text.focus({preventScroll:true}); }
       catch{ text.focus(); }
     },280);
-    if(hint) hint.textContent="직접 입력 후 아래 Notion에 저장을 누르세요.";
+    if(hint) hint.textContent="직접 입력 후 아래 저장을 누르세요.";
   });
 
   typedSave?.addEventListener("click",()=>{
