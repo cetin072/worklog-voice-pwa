@@ -100,12 +100,23 @@
     select.innerHTML=values.map((value,index)=>`<option value="${escapeHtml(value)}"${index===0 ? " selected" : ""}>${escapeHtml(value)}</option>`).join("");
   }
 
+  function sameOriginApiPath(input){
+    try{
+      const raw=typeof input==="string" ? input : String(input?.url || "");
+      const url=new URL(raw,window.location.href);
+      return url.origin===window.location.origin ? url.pathname : "";
+    }catch{
+      return "";
+    }
+  }
+
   const nativeFetch=window.fetch.bind(window);
   window.fetch=(input,init={})=>{
-    const url=typeof input==="string" ? input : String(input?.url || "");
-    const worklogRequest=url.includes("/api/worklog");
-    const dataCoreBriefingRequest=url.includes("/api/briefing-v2");
-    const shouldAttach=(hasPersonal() && (worklogRequest || url.includes("/api/briefing"))) || worklogRequest || dataCoreBriefingRequest;
+    const path=sameOriginApiPath(input);
+    const worklogRequest=path==="/api/worklog";
+    const briefingRequest=path.startsWith("/api/briefing");
+    const dataCoreBriefingRequest=path==="/api/briefing-v2";
+    const shouldAttach=(hasPersonal() && (worklogRequest || briefingRequest)) || worklogRequest || dataCoreBriefingRequest;
     if(!shouldAttach) return nativeFetch(input,init);
 
     const headers=new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
