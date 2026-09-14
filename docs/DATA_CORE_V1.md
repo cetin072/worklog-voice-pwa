@@ -213,5 +213,12 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 
 - `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`와 유효한 Platform bearer token이 있을 때 `briefing-v2`는 verified personal Workspace의 열린 WorkRecord만 읽는다.
 - REST query는 `workspace_id=eq.<verified workspace>`와 열린 내부 상태만 고정하고 사용자 JWT로 실행한다. RLS가 최종 Workspace 격리를 강제하며, 다른 Workspace ID를 클라이언트 입력으로 받지 않는다.
-- 기존 V2 classifier를 재사용해 화면 구조를 유지한다. 현재 단계의 Data Core 행은 read-only이며, 완료 처리·undo·빠른 정리는 Notion 상태를 잘못 수정하지 않도록 숨긴다.
+- 기존 V2 classifier를 재사용해 화면 구조를 유지한다. 기본 상태는 read-only이며, 상태 변경은 다음 작은 Issue의 별도 flag가 있어야 한다.
 - 플래그-off 또는 Platform 세션이 없으면 기존 Notion Briefing V2 경로가 유지된다.
+
+## 15. Data Core Briefing V2 status mutation (#137)
+
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`, `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED=true`, 유효한 Platform bearer token이 모두 있을 때만 Briefing V2에서 WorkRecord 상태를 변경한다. 어느 하나라도 없으면 기존 Notion 경로를 변경하지 않는다.
+- 서버는 user JWT로 최신 user와 personal Workspace를 다시 확인하고, `PATCH work_records`에 `id=eq.<record id>`와 `workspace_id=eq.<verified workspace>`를 함께 고정한다. 반환된 정확히 한 행만 성공으로 인정하므로, 미존재·타 Workspace·RLS 거부는 모두 성공처럼 처리하지 않는다.
+- 허용 상태는 기존 lifecycle인 `완료`, `진행중`, `대기`, `확인필요`뿐이다. 완료 후 undo는 화면에 저장된 기존 상태만 이 범위에서 복원한다. 빠른 브리핑 재정리는 Data Core에서 제공하지 않는다.
+- REST client는 빈 범위 조건 또는 빈 update row를 거부한다. 실제 Workspace 격리 보장은 배포된 RLS가 최종 책임이므로, project 연결 뒤 다른 사용자 Workspace의 실제 거부 QA가 필요하다.
