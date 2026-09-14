@@ -31,7 +31,7 @@ function millisecondsValue(milliseconds, seconds) {
   return Number(seconds) * 1000;
 }
 
-function normalizeSourceAudioRef(value = {}) {
+function normalizeSourceAudioRef(value = null) {
   if (value === null || value === undefined || value === "") return null;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw transcriptError("TRANSCRIPT_SOURCE_AUDIO_REF_INVALID", "sourceAudioRef는 객체여야 합니다.");
