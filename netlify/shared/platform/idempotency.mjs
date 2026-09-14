@@ -2,6 +2,7 @@ import { requireWorkspaceContext } from "./workspace-context.mjs";
 
 export const IDEMPOTENCY_SCHEMA_VERSION = "v1";
 export const IDEMPOTENCY_REQUIRED_CONSISTENCY = "strong";
+export const IDEMPOTENCY_DOMAIN_KEY_MAX_LENGTH = 500;
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9-]{16,100}$/;
 const SCOPE_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
@@ -42,6 +43,18 @@ function requireRequestId(value) {
   return requestId;
 }
 
+function optionalDomainKey(value) {
+  const idempotencyKey = rawText(value);
+  if (!idempotencyKey) return "";
+  if (idempotencyKey.length > IDEMPOTENCY_DOMAIN_KEY_MAX_LENGTH) {
+    throw idempotencyError(
+      "IDEMPOTENCY_DOMAIN_KEY_TOO_LONG",
+      `idempotencyKey는 ${IDEMPOTENCY_DOMAIN_KEY_MAX_LENGTH}자를 초과할 수 없습니다.`,
+    );
+  }
+  return idempotencyKey;
+}
+
 function optionalOwner(source) {
   if (!source.workspaceContext) return { userId: "", workspaceId: "" };
   const context = requireWorkspaceContext(source.workspaceContext);
@@ -51,12 +64,14 @@ function optionalOwner(source) {
 export function normalizeIdempotencyContext(input = {}) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const owner = optionalOwner(source);
+  const idempotencyKey = optionalDomainKey(source.idempotencyKey);
   return Object.freeze({
     schemaVersion: IDEMPOTENCY_SCHEMA_VERSION,
     scope: normalizeIdempotencyScope(source.scope),
     requestId: requireRequestId(source.requestId ?? source.clientRequestId),
     userId: owner.userId,
     workspaceId: owner.workspaceId,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
   });
 }
 
@@ -69,6 +84,9 @@ export function buildIdempotencyKey(input = {}) {
   const owner = context.workspaceId
     ? `workspace:${keyPart(context.workspaceId)}:user:${keyPart(context.userId)}`
     : "legacy";
+  if (context.idempotencyKey) {
+    return `idem:${IDEMPOTENCY_SCHEMA_VERSION}:${keyPart(context.scope)}:${owner}:domain:${keyPart(context.idempotencyKey)}`;
+  }
   return `idem:${IDEMPOTENCY_SCHEMA_VERSION}:${keyPart(context.scope)}:${owner}:request:${context.requestId}`;
 }
 
@@ -91,6 +109,7 @@ export function normalizeCompletedIdempotencyRecord(raw = {}, context = {}) {
   const normalizedContext = normalizeIdempotencyContext({
     scope: source.scope ?? context.scope,
     requestId: source.requestId ?? source.clientRequestId ?? context.requestId ?? context.clientRequestId,
+    idempotencyKey: source.idempotencyKey ?? context.idempotencyKey,
     workspaceContext: context.workspaceContext ?? source.workspaceContext,
   });
   const result = source.result ?? context.result;
