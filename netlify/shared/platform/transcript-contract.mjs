@@ -25,6 +25,12 @@ function optionalNumber(value, code, label, { min = 0, max = Number.POSITIVE_INF
   return number;
 }
 
+function millisecondsValue(milliseconds, seconds) {
+  if (milliseconds !== null && milliseconds !== undefined && milliseconds !== "") return milliseconds;
+  if (seconds === null || seconds === undefined || seconds === "") return null;
+  return Number(seconds) * 1000;
+}
+
 function normalizeSourceAudioRef(value = {}) {
   if (value === null || value === undefined || value === "") return null;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -60,7 +66,7 @@ function normalizeSourceAudioRef(value = {}) {
   return Object.freeze({ sourceId, objectPath, localRef });
 }
 
-function normalizeSegment(value, index) {
+function normalizeSegment(value, index, inheritedSourceAudioRef = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw transcriptError("TRANSCRIPT_SEGMENT_INVALID", `segments[${index}]가 객체가 아닙니다.`);
   }
@@ -74,12 +80,12 @@ function normalizeSegment(value, index) {
   if (!text) throw transcriptError("TRANSCRIPT_SEGMENT_TEXT_REQUIRED", `segments[${index}].text가 필요합니다.`);
 
   const startMs = optionalNumber(
-    value.startMs ?? value.start_ms ?? (value.startSeconds ?? value.start) * 1000,
+    millisecondsValue(value.startMs ?? value.start_ms, value.startSeconds ?? value.start),
     "TRANSCRIPT_SEGMENT_START_INVALID",
     `segments[${index}].startMs`,
   );
   const endMs = optionalNumber(
-    value.endMs ?? value.end_ms ?? (value.endSeconds ?? value.end) * 1000,
+    millisecondsValue(value.endMs ?? value.end_ms, value.endSeconds ?? value.end),
     "TRANSCRIPT_SEGMENT_END_INVALID",
     `segments[${index}].endMs`,
   );
@@ -100,6 +106,7 @@ function normalizeSegment(value, index) {
     { min: 0, max: 1 },
   );
 
+  const segmentSourceAudioRef = value.sourceAudioRef ?? value.source_audio_ref;
   return Object.freeze({
     index,
     text,
@@ -107,7 +114,9 @@ function normalizeSegment(value, index) {
     endMs,
     speakerId: speakerId || null,
     confidence,
-    sourceAudioRef: normalizeSourceAudioRef(value.sourceAudioRef ?? value.source_audio_ref),
+    sourceAudioRef: segmentSourceAudioRef === null || segmentSourceAudioRef === undefined || segmentSourceAudioRef === ""
+      ? inheritedSourceAudioRef
+      : normalizeSourceAudioRef(segmentSourceAudioRef),
   });
 }
 
@@ -121,10 +130,11 @@ export function normalizeTranscript(raw = {}, context = {}) {
   );
   if (!text) throw transcriptError("TRANSCRIPT_TEXT_REQUIRED", "Transcript 원문이 필요합니다.");
 
+  const sourceAudioRef = normalizeSourceAudioRef(source.sourceAudioRef ?? source.source_audio_ref ?? context.sourceAudioRef);
   const rawSegments = Array.isArray(source.segments) ? source.segments : [];
-  const segments = Object.freeze(rawSegments.map((segment, index) => normalizeSegment(segment, index)));
+  const segments = Object.freeze(rawSegments.map((segment, index) => normalizeSegment(segment, index, sourceAudioRef)));
   const durationMs = optionalNumber(
-    source.durationMs ?? source.duration_ms ?? (source.durationSeconds ?? context.durationSeconds) * 1000,
+    millisecondsValue(source.durationMs ?? source.duration_ms, source.durationSeconds ?? context.durationSeconds),
     "TRANSCRIPT_DURATION_INVALID",
     "durationMs",
   );
@@ -143,7 +153,7 @@ export function normalizeTranscript(raw = {}, context = {}) {
       "providerRequestId",
     ),
     durationMs,
-    sourceAudioRef: normalizeSourceAudioRef(source.sourceAudioRef ?? source.source_audio_ref ?? context.sourceAudioRef),
+    sourceAudioRef,
     createdAt: (() => {
       const value = source.createdAt ?? source.created_at ?? context.createdAt;
       if (!value) return null;
