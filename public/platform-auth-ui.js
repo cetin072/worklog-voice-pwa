@@ -7,7 +7,11 @@
   const signIn = document.getElementById("platformSignIn");
   const signUp = document.getElementById("platformSignUp");
   const signOut = document.getElementById("platformSignOut");
-  if (!card || !form || !window.WorklogPlatformAuth) return;
+  if (!card || !form || !window.WorklogPlatformAuth) {
+    document.body.classList.remove("platform-auth-loading");
+    document.body.classList.add("platform-auth-unavailable");
+    return;
+  }
 
   function show(message, kind = "") {
     status.textContent = message;
@@ -18,19 +22,34 @@
     [signIn, signUp, signOut].forEach((button) => { if (button) button.disabled = busy; });
   }
 
+  function setAuthState(state, user = null) {
+    document.body.classList.remove("platform-auth-loading", "platform-signed-out", "platform-signed-in", "platform-auth-unavailable");
+    document.body.classList.add(state);
+    card.classList.toggle("is-authenticated", state === "platform-signed-in");
+    window.dispatchEvent(new CustomEvent("worklog:platform-auth-changed", { detail: { state, user } }));
+  }
+
   async function refresh() {
-    const config = await window.WorklogPlatformAuth.getConfig();
-    if (!config) return;
+    const config = await window.WorklogPlatformAuth.getConfig().catch(() => null);
+    if (!config) {
+      card.hidden = true;
+      setAuthState("platform-auth-unavailable");
+      return;
+    }
+
     card.hidden = false;
     const user = await window.WorklogPlatformAuth.currentUser();
     if (!user) {
       form.hidden = false;
       signOut.hidden = true;
-      show("Platform 계정으로 로그인하거나 가입하세요. 기존 Notion 연결은 그대로 유지됩니다.");
+      setAuthState("platform-signed-out");
+      show("처음이면 무료로 시작하세요. Notion 연결 없이 바로 사용할 수 있습니다.");
       return;
     }
+
     form.hidden = true;
     signOut.hidden = false;
+    setAuthState("platform-signed-in", user);
     show("개인 업무공간을 확인하는 중…");
     try {
       await window.WorklogPlatformAuth.bootstrapPersonalWorkspace();
@@ -45,7 +64,7 @@
     try {
       const result = await action(email.value, password.value);
       if (!result?.access_token) {
-        show("가입 확인 메일을 보냈습니다. 확인 후 로그인하세요.", "success");
+        show("가입 확인 메일을 보냈습니다. 메일 확인 후 로그인하세요.", "success");
         return;
       }
       await refresh();
@@ -64,5 +83,8 @@
     try { await window.WorklogPlatformAuth.signOut(); await refresh(); }
     finally { setBusy(false); }
   });
-  refresh().catch(() => {});
+  refresh().catch(() => {
+    document.body.classList.remove("platform-auth-loading");
+    document.body.classList.add("platform-auth-unavailable");
+  });
 })();
