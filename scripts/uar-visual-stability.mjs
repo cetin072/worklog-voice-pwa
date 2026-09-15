@@ -32,7 +32,7 @@ async function fetchPreviewHtml() {
   const response = await fetch(`${previewUrl}/`, { cache: 'no-store', redirect: 'follow' });
   if (!response.ok) throw new Error(`UAR_VISUAL_PREVIEW_ROOT_HTTP_${response.status}`);
   const html = await response.text();
-  for (const marker of ['id="mic"', 'id="save"', 'id="briefingCard"', 'id="entryCard"', 'id="text"']) {
+  for (const marker of ['id="mic"', 'id="save"', 'id="scannerCard"', 'id="scanGallery"', 'id="scanCamera"', 'id="briefingCard"', 'id="entryCard"', 'id="text"']) {
     if (!html.includes(marker)) throw new Error(`UAR_VISUAL_PREVIEW_CONTRACT_MISSING:${marker}`);
   }
   return html;
@@ -62,7 +62,7 @@ const browserStub = `<script>
 
 const probe = `<script>
 (() => {
-  const selectors = ['#mic','#save','#manualEntry','#briefingCard','#entryCard','#text','#typedSave'];
+  const selectors = ['#mic','#save','#manualEntry','#scannerCard','#scanGallery','#scanCamera','#briefingCard','#entryCard','#text','#typedSave'];
   const round = value => Math.round(value * 10) / 10;
   const snapshot = () => ({
     viewport: [window.innerWidth, window.innerHeight],
@@ -104,7 +104,7 @@ const probe = `<script>
           const changed = serialized.findIndex(item => item !== first);
           return finish('FAIL', 'sample_changed_at:' + changed);
         }
-        finish('PASS', 'samples:8;viewport:mobile;geometry:stable');
+        finish('PASS', 'samples:8;viewport:mobile;geometry:stable;scanner:included');
       }, 250);
     }, 1800);
   }, { once: true });
@@ -164,8 +164,8 @@ const marker = dom.match(/id="uarVisualStabilityResult"[^>]*data-result="([^"]+)
 if (!marker) throw new Error('UAR_VISUAL_RESULT_MISSING');
 if (marker[1] !== 'PASS') throw new Error(`UAR_VISUAL_STABILITY_FAILED:${marker[2]}`);
 
-if (!dom.includes(`${previewUrl}/app.js`)) {
-  throw new Error('UAR_VISUAL_PREVIEW_ASSET_SOURCE_MISSING');
+for (const asset of ['/app.js', '/scanner.js', '/scanner.css']) {
+  if (!dom.includes(`${previewUrl}${asset}`)) throw new Error(`UAR_VISUAL_PREVIEW_ASSET_SOURCE_MISSING:${asset}`);
 }
 
 console.log(`UAR_VISUAL_STABILITY_PASS chrome=${chrome} ${marker[2]} preview_assets=true external_writes=false`);
