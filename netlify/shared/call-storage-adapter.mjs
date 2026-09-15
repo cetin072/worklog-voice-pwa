@@ -85,6 +85,11 @@ export async function verifyCallPreparedAudio(storageAdapterInput, input = {}, c
     throw storageAdapterError("CALL_PREPARED_UPLOAD_REQUIRED", "검증할 preparedUpload가 필요합니다.");
   }
 
+  const requestedUploadId = rawText(preparedUpload.uploadId ?? preparedUpload.upload_id);
+  if (!requestedUploadId) {
+    throw storageAdapterError("CALL_PREPARED_UPLOAD_ID_REQUIRED", "preparedUpload.uploadId가 필요합니다.");
+  }
+
   const verified = await storageAdapter.verifyPreparedUpload(Object.freeze({
     job,
     preparedUpload,
@@ -95,8 +100,7 @@ export async function verifyCallPreparedAudio(storageAdapterInput, input = {}, c
     job,
   });
 
-  const requestedUploadId = rawText(preparedUpload.uploadId ?? preparedUpload.upload_id);
-  if (requestedUploadId && requestedUploadId !== normalized.uploadId) {
+  if (requestedUploadId !== normalized.uploadId) {
     throw storageAdapterError(
       "CALL_STORAGE_VERIFICATION_MISMATCH",
       "요청한 uploadId와 서버 검증 결과가 일치하지 않습니다.",
