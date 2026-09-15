@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/distribution.css">
   <link rel="stylesheet" href="/settings.css">
+  <link rel="stylesheet" href="/scanner.css">
   <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/briefing-edit.css">
 </head>
@@ -118,6 +119,46 @@
       <p id="result" class="result" aria-live="polite"></p>
     </section>
 
+    <section id="scannerCard" class="card scanner-card core-app-card">
+      <div class="scanner-card-head">
+        <div>
+          <p class="eyebrow">문서 도구</p>
+          <h2>📄 문서 스캔 · PDF</h2>
+        </div>
+      </div>
+      <p class="scanner-card-copy">이미 찍어둔 문서는 갤러리에서 바로 가져오세요. 사진 보정, 여러 페이지 정리, PDF 저장·공유는 이 기기에서 처리합니다.</p>
+      <div class="scanner-entry-grid">
+        <button id="scanGallery" class="scan-entry scan-entry-gallery" type="button">🖼 갤러리에서 문서 선택</button>
+        <button id="scanCamera" class="scan-entry scan-entry-camera" type="button">📷 카메라로 촬영</button>
+      </div>
+      <input id="scanGalleryInput" type="file" accept="image/*" multiple hidden>
+      <input id="scanCameraInput" type="file" accept="image/*" capture="environment" hidden>
+
+      <section id="scanPdfCard" class="scan-pdf-card" hidden>
+        <div class="scan-pdf-head">
+          <div>
+            <p class="scan-pdf-title">페이지 목록</p>
+            <p id="scanPdfMeta" class="scan-pdf-meta"></p>
+          </div>
+          <div class="scan-pdf-add">
+            <button id="scanPdfAddGallery" type="button">+ 갤러리</button>
+            <button id="scanPdfAddCamera" type="button">+ 촬영</button>
+          </div>
+        </div>
+        <div id="scanPdfPages" class="scan-pdf-pages" aria-live="polite"></div>
+        <label class="scan-pdf-name" for="scanPdfName">
+          <span>PDF 파일명</span>
+          <input id="scanPdfName" type="text" maxlength="80" autocomplete="off">
+        </label>
+        <button id="scanPdfCreate" class="scan-pdf-create" type="button">PDF 만들기</button>
+        <div class="scan-pdf-output">
+          <button id="scanPdfSave" type="button" hidden>휴대폰에 저장</button>
+          <button id="scanPdfShare" type="button" hidden>공유하기</button>
+        </div>
+        <p id="scanPdfStatus" class="scan-pdf-status">페이지를 추가하면 이 기기에서 PDF로 만들 수 있습니다.</p>
+      </section>
+    </section>
+
     <section id="briefingCard" class="card briefing-card core-app-card" aria-live="polite">
       <div class="briefing-head">
         <div>
@@ -198,8 +239,46 @@
       </details>
     </section>
 
-    <footer>업무수첩 · 음성/직접 입력 · 업무 브리핑 · 일정 관리</footer>
+    <footer>업무수첩 · 음성/직접 입력 · 문서 스캔/PDF · 업무 브리핑 · 일정 관리</footer>
   </main>
+
+  <dialog id="scannerDialog" class="scanner-dialog" aria-labelledby="scannerTitle">
+    <div class="scanner-shell">
+      <div class="scanner-head">
+        <h2 id="scannerTitle">📄 문서 페이지 보정</h2>
+        <button id="scanClose" class="scanner-close" type="button" aria-label="스캐너 닫기">×</button>
+      </div>
+      <div class="scanner-body">
+        <p id="scanStatus" class="scanner-status" aria-live="polite">문서 사진을 준비합니다.</p>
+
+        <section class="scanner-panel">
+          <div class="scanner-panel-title">
+            <strong>1. 문서 모서리</strong>
+            <button id="scanAutoCorners" class="scanner-secondary" type="button">자동으로 다시 찾기</button>
+          </div>
+          <div class="scanner-canvas-wrap">
+            <canvas id="scanEditorCanvas"></canvas>
+          </div>
+          <p class="scanner-help">흰색 원은 한 모서리씩, 파란 점은 해당 변의 두 끝을 같이 움직입니다.</p>
+        </section>
+
+        <section class="scanner-panel">
+          <div class="scanner-panel-title"><strong>2. 보정 결과</strong></div>
+          <div class="scanner-canvas-wrap scanner-result-wrap">
+            <canvas id="scanResultCanvas"></canvas>
+          </div>
+          <div class="scanner-filter-row" role="group" aria-label="문서 보정 필터">
+            <button class="scanner-filter" type="button" data-scan-filter="color">원본</button>
+            <button class="scanner-filter active" type="button" data-scan-filter="document">문서</button>
+            <button class="scanner-filter" type="button" data-scan-filter="bw">흑백</button>
+          </div>
+        </section>
+
+        <button id="scanApply" class="scanner-apply" type="button">페이지 확정</button>
+        <p class="scanner-help">확정한 페이지는 로컬 페이지 목록에 추가됩니다. OCR이나 Notion 저장 없이도 PDF로 저장·공유할 수 있습니다.</p>
+      </div>
+    </div>
+  </dialog>
 
   <script src="/auth.js?v=20260915-1" defer></script>
   <script src="/platform-auth.js?v=20260915-1" defer></script>
@@ -209,6 +288,9 @@
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
+  <script src="/scanner-core.js" defer></script>
+  <script src="/scanner-geometry.js" defer></script>
+  <script src="/scanner.js" defer></script>
   <script src="/quick-save.js" defer></script>
   <script src="/manual-input.js" defer></script>
   <script src="/briefing-legacy-loader.js?v=20260915-1" defer></script>
