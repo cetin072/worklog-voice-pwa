@@ -33,12 +33,37 @@ test("new-user onboarding prefers Platform auth instead of forcing Notion", () =
   assert.doesNotMatch(source, /Notion 연결이 먼저 필요합니다/);
 });
 
-test("auth UI keeps new-user copy product-first and hides signed-in account card", () => {
+test("Google is the primary sign-in action while email remains available", () => {
+  const html = read("public/index.html");
+  const googleIndex = html.indexOf('id="platformGoogleSignIn"');
+  const emailIndex = html.indexOf('id="platformAuthForm"');
+  assert.ok(googleIndex > -1, "Google sign-in button missing");
+  assert.ok(emailIndex > googleIndex, "Google sign-in should appear before email form");
+  assert.match(html, /Google로 시작/);
+  assert.match(html, /또는 이메일로/);
+  assert.match(html, /id="platformSignIn"/);
+  assert.match(html, /id="platformSignUp"/);
+});
+
+test("Google OAuth uses Supabase authorize and only persists Supabase session tokens", () => {
+  const source = read("public/platform-auth.js");
+  assert.match(source, /\/auth\/v1\/authorize/);
+  assert.match(source, /searchParams\.set\("provider", "google"\)/);
+  assert.match(source, /searchParams\.set\("redirect_to", redirectTo\)/);
+  assert.match(source, /params\.get\("access_token"\)/);
+  assert.match(source, /params\.get\("refresh_token"\)/);
+  assert.match(source, /grant_type=refresh_token/);
+  assert.doesNotMatch(source, /provider_token/);
+  assert.doesNotMatch(source, /provider_refresh_token/);
+});
+
+test("auth UI wires Google sign-in and hides signed-in account card", () => {
   const source = read("public/platform-auth-ui.js");
+  assert.match(source, /platformGoogleSignIn/);
+  assert.match(source, /signInWithGoogle/);
   assert.match(source, /platform-signed-out/);
   assert.match(source, /platform-signed-in/);
   assert.match(source, /worklog:platform-auth-changed/);
-  assert.match(source, /가입하면 개인 업무공간이 바로 준비됩니다/);
   assert.match(source, /card\.hidden = true;\n    setAuthState\("platform-signed-in", user\)/);
   assert.doesNotMatch(source, /Notion 연결 없이 바로 사용할 수 있습니다/);
 });
@@ -61,9 +86,9 @@ test("legacy briefing loads only for legacy users without a Platform session", (
   assert.match(loader, /briefing\.js/);
 });
 
-test("service worker caches new distribution and settings assets", () => {
+test("service worker caches Google auth distribution assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v30/);
+  assert.match(source, /worklog-v31/);
   for (const asset of ["/distribution.css", "/settings.css", "/settings.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }
