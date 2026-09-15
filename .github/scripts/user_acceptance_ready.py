@@ -13,6 +13,7 @@ REQUIRED_CHECKS = [
     "role_ui_contract",
     "preview_runtime",
     "representative_smoke",
+    "visual_stability",
 ]
 
 
@@ -28,8 +29,8 @@ def load_contract(path: pathlib.Path) -> dict:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         fail(f"UAR contract is invalid JSON: {exc}")
-    if data.get("version") != 1:
-        fail("UAR contract version must be 1")
+    if data.get("version") != 2:
+        fail("UAR contract version must be 2")
     checks = data.get("checks")
     if not isinstance(checks, dict):
         fail("UAR contract must contain a checks object")
@@ -43,6 +44,9 @@ def load_contract(path: pathlib.Path) -> dict:
     role = checks["role_ui_contract"]
     if role.get("fixture_policy") != "minimal":
         fail('role_ui_contract.fixture_policy must be "minimal"')
+    stability = checks["visual_stability"]
+    if stability.get("surface_policy") not in {"representative", "all-critical"}:
+        fail('visual_stability.surface_policy must be "representative" or "all-critical"')
     preview = data.get("preview", {})
     if not isinstance(preview, dict):
         fail("preview must be an object")
@@ -133,7 +137,7 @@ def main() -> None:
     env["PREVIEW_URL"] = preview_url
     env["EXPECTED_HEAD_SHA"] = env.get("UAR_HEAD_SHA", "")
 
-    for name in ("environment_parity", "preview_runtime", "representative_smoke"):
+    for name in ("environment_parity", "preview_runtime", "representative_smoke", "visual_stability"):
         run_command(name, contract["checks"][name]["command"], env)
 
     print("\nUSER_ACCEPTANCE_READY=PASS")
