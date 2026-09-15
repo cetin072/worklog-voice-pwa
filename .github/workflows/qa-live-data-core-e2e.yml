@@ -1,0 +1,155 @@
+name: Temporary Data Core Live E2E
+
+on:
+  push:
+    branches:
+      - goal/production-data-core-cutover
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Run no-Notion authenticated E2E against PR 194 Preview
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const base = 'https://deploy-preview-194--worklog-voice-pwa.netlify.app';
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+          async function fetchJson(url, init = {}) {
+            const res = await fetch(url, init);
+            const text = await res.text();
+            let body = {};
+            try { body = text ? JSON.parse(text) : {}; } catch {}
+            if (!res.ok) throw new Error(`${init.method || 'GET'} ${url} -> ${res.status}: ${text.slice(0,240)}`);
+            return body;
+          }
+          function assert(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+
+          let config;
+          for (let i = 0; i < 36; i++) {
+            try {
+              config = await fetchJson(`${base}/api/supabase-auth-config`);
+              if (config?.configured && config?.dataCorePrimaryEnabled) break;
+            } catch {}
+            await sleep(5000);
+          }
+          assert(config?.configured === true, 'Preview Supabase config is not ready');
+          assert(config?.dataCorePrimaryEnabled === true, 'Preview Data Core primary flag is not ready');
+          assert(config?.dataCoreBriefingEnabled === true, 'Preview briefing flag is not ready');
+          assert(config?.dataCoreBriefingMutationEnabled === true, 'Preview briefing mutation flag is not ready');
+          assert(config?.dataCoreScheduleBriefingEnabled === true, 'Preview schedule briefing flag is not ready');
+          assert(typeof config?.supabaseUrl === 'string' && config.supabaseUrl.startsWith('https://'), 'Invalid Supabase URL');
+          assert(typeof config?.supabasePublishableKey === 'string' && config.supabasePublishableKey.startsWith('sb_publishable_'), 'Invalid publishable key');
+          console.log('QA_CONFIG_PASS');
+
+          const suffix = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+          const email = `qa-cutover-live-${suffix}@example.com`;
+          const password = `Qa!${crypto.randomBytes(24).toString('base64url')}`;
+          const signup = await fetchJson(`${config.supabaseUrl}/auth/v1/signup`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'apikey': config.supabasePublishableKey
+            },
+            body: JSON.stringify({ email, password })
+          });
+          const token = String(signup?.access_token || '');
+          const userId = String(signup?.user?.id || '');
+          console.log(`QA_SIGNUP_USER_ID=${userId || 'none'}`);
+          assert(userId, 'Signup did not create a user');
+          assert(token.length > 40, 'Signup created user but no access token was issued (email confirmation may be required)');
+          console.log('QA_AUTH_PASS');
+
+          const authHeaders = { Authorization: `Bearer ${token}` };
+          const restHeaders = { ...authHeaders, apikey: config.supabasePublishableKey };
+          let workspaceRows = [];
+          for (let i = 0; i < 12; i++) {
+            workspaceRows = await fetchJson(`${config.supabaseUrl}/rest/v1/workspaces?select=id,created_by_user_id&created_by_user_id=eq.${encodeURIComponent(userId)}`, { headers: restHeaders });
+            if (Array.isArray(workspaceRows) && workspaceRows.length === 1) break;
+            await sleep(1000);
+          }
+          assert(Array.isArray(workspaceRows) && workspaceRows.length === 1, 'Personal Workspace bootstrap did not produce exactly one workspace');
+          const workspaceId = String(workspaceRows[0].id || '');
+          const memberRows = await fetchJson(`${config.supabaseUrl}/rest/v1/workspace_members?select=user_id,role&workspace_id=eq.${encodeURIComponent(workspaceId)}&user_id=eq.${encodeURIComponent(userId)}`, { headers: restHeaders });
+          assert(Array.isArray(memberRows) && memberRows.length === 1 && memberRows[0].role === 'owner', 'Personal Workspace owner membership missing');
+          console.log('QA_WORKSPACE_PASS');
+
+          const scheduleRows = await fetchJson(`${config.supabaseUrl}/rest/v1/schedules`, {
+            method: 'POST',
+            headers: { ...restHeaders, 'content-type': 'application/json', Prefer: 'return=representation' },
+            body: JSON.stringify({
+              workspace_id: workspaceId,
+              created_by_user_id: userId,
+              title: 'QA Cutover Schedule',
+              description: 'temporary live E2E fixture',
+              starts_at: '2026-09-16T10:00:00+09:00',
+              all_day: false,
+              status: 'confirmed',
+              location: 'QA',
+              metadata: { qa: 'production-cutover-live-e2e' }
+            })
+          });
+          assert(Array.isArray(scheduleRows) && scheduleRows.length === 1, 'Authenticated Schedule insert failed');
+          console.log('QA_SCHEDULE_WRITE_PASS');
+
+          const health = await fetchJson(`${base}/api/worklog`, { headers: authHeaders });
+          assert(health?.ok === true && health?.mode === 'data_core' && health?.configured === true, 'Authenticated Data Core worklog health failed');
+          console.log('QA_WORKLOG_HEALTH_PASS');
+
+          const requestId = `qa-live-${suffix}`.replace(/[^A-Za-z0-9-]/g, '-').slice(0, 100);
+          const payload = {
+            clientRequestId: requestId,
+            transcript: 'QA production cutover live E2E 업무',
+            institution: '기타',
+            status: '진행중',
+            type: '할 일',
+            followUp: 'temporary qa fixture'
+          };
+          const first = await fetchJson(`${base}/api/worklog`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'content-type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          assert(first?.ok === true && first?.mode === 'data_core', 'First Data Core worklog save failed');
+          const recordId = String(first?.dataCoreWorkRecordId || '');
+          assert(/^[0-9a-f-]{36}$/i.test(recordId), 'Missing Data Core WorkRecord id');
+          assert(first?.notionSync === 'not_configured', 'Notion-free save unexpectedly attempted Notion sync');
+
+          const second = await fetchJson(`${base}/api/worklog`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'content-type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          assert(String(second?.dataCoreWorkRecordId || '') === recordId, 'Retry did not dedupe to the same WorkRecord');
+          console.log('QA_WORKLOG_IDEMPOTENCY_PASS');
+
+          let briefing = await fetchJson(`${base}/api/briefing-v2`, { headers: authHeaders });
+          assert(briefing?.ok === true && briefing?.mode === 'data_core', 'Data Core briefing read failed');
+          assert(JSON.stringify(briefing).includes(recordId), 'Saved WorkRecord is missing from briefing');
+          assert(JSON.stringify(briefing?.schedules || {}).includes('QA Cutover Schedule'), 'Schedule is missing from briefing');
+          console.log('QA_BRIEFING_SCHEDULE_PASS');
+
+          const completed = await fetchJson(`${base}/api/briefing-v2`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'content-type': 'application/json' },
+            body: JSON.stringify({ recordId, status: '완료' })
+          });
+          assert(completed?.ok === true && completed?.status === '완료', 'Complete mutation failed');
+          briefing = await fetchJson(`${base}/api/briefing-v2`, { headers: authHeaders });
+          assert(!JSON.stringify(briefing).includes(recordId), 'Completed WorkRecord still appears in open briefing');
+
+          const undone = await fetchJson(`${base}/api/briefing-v2`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'content-type': 'application/json' },
+            body: JSON.stringify({ recordId, status: '진행중' })
+          });
+          assert(undone?.ok === true && undone?.status === '진행중', 'Undo mutation failed');
+          briefing = await fetchJson(`${base}/api/briefing-v2`, { headers: authHeaders });
+          assert(JSON.stringify(briefing).includes(recordId), 'Undo WorkRecord did not return to briefing');
+          console.log('QA_BRIEFING_MUTATION_PASS');
+          console.log('QA_NOTION_FREE_AUTHENTICATED_E2E_PASS');
+          NODE
