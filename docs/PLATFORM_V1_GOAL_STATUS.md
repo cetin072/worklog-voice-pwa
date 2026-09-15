@@ -11,11 +11,12 @@
 
 - 확인 시각: 2026-09-15 KST
 - 최신 `main`: `dfa1de963d1c785ae7f8204ab3d4981f63218b75`
-- 최신 `goal/platform-v1` / PR #171 HEAD: `77e696b21a9dd7d2d0452d8d4b772ec060ebcb85`
+- 최신 `goal/platform-v1` / PR #171 검증 HEAD: `c43375ae72a84c300106dec071ae81af870f1b22`
+- main 대비: behind 0 / ahead 79 (latest main 동기화 완료).
 - PR #171: Draft, mergeable `CLEAN`; main 병합은 사용자 승인 전 금지.
-- `npm test`: PASS (233/233).
-- GitHub UAR v2: PASS (exact PR HEAD).
-- Netlify exact Deploy Preview: READY / success (exact PR HEAD, `deploy-preview-171--worklog-voice-pwa.netlify.app`).
+- `npm test`: PASS (242/242).
+- GitHub UAR v2: PASS (exact PR verification HEAD).
+- Netlify exact Deploy Preview: READY / success (exact PR verification HEAD, `deploy-preview-171--worklog-voice-pwa.netlify.app`).
 - Deploy Preview 공개 Auth config 확인: **BLOCKED**. `GET /api/supabase-auth-config`가 `configured:false` 및 Data Core flags 모두 `false`를 반환했다.
 - 따라서 flag-on 신규 사용자, Notion-free WorkRecord save/retry, Briefing mutation, Schedule, 실제 RLS 격리와 기존 Notion Preview 회귀 Gate는 아직 실행할 수 없으며 PASS로 기록하지 않는다.
 
