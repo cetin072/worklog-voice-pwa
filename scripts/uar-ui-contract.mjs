@@ -14,7 +14,6 @@ const requiredIds = [
   'clear',
   'briefingCard',
   'briefingQuickUpdate',
-  'kakaoBriefingAction',
   'entryCard',
   'text',
   'typedSave',
@@ -47,8 +46,7 @@ const requiredScripts = [
   '/briefing-legacy-loader.js',
   '/briefing-v2.js',
   '/briefing-v2-expand-state.js',
-  '/briefing-edit.js',
-  '/kakao.js'
+  '/briefing-edit.js'
 ];
 
 const scriptSources = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(match => match[1]);

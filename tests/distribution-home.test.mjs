@@ -27,6 +27,23 @@ test("distribution home routes settings to a standalone page", () => {
   assert.match(settings, /id="settingsLogout"/);
 });
 
+test("settings explains the platform and roadmap before functional options", () => {
+  const html = read("public/settings.html");
+  const about = html.indexOf('id="settingsPlatformAbout"');
+  const display = html.indexOf("화면 표시");
+  assert.ok(about >= 0 && about < display, "platform roadmap should appear before settings controls");
+  assert.match(html, /업무수첩 플랫폼/);
+  assert.match(html, /현재 기본 기능/);
+  assert.match(html, /현재 제공/);
+  assert.match(html, /다음 단계/);
+  assert.match(html, /확장 예정/);
+  assert.match(html, /카카오 알림/);
+  assert.match(html, /PDF/);
+  assert.match(html, /통화 녹음 가져오기·요약/);
+  assert.match(html, /회의 녹음·회의록/);
+  assert.match(html, /개발 순서와 구성은 안정성 및 우선순위에 따라 조정될 수 있습니다/);
+});
+
 test("settings prioritizes display options before connections, share and logout", () => {
   const html = read("public/settings.html");
   const display = html.indexOf("화면 표시");
@@ -114,6 +131,16 @@ test("auth UI wires Google sign-in and hides signed-in account card", () => {
   assert.doesNotMatch(source, /Notion 연결 없이 바로 사용할 수 있습니다/);
 });
 
+test("legacy Kakao connection UI stays hidden until multi-user delivery is ready", () => {
+  const html = read("public/index.html");
+  const contract = read("scripts/uar-ui-contract.mjs");
+  assert.doesNotMatch(html, /id="kakaoDelivery"/);
+  assert.doesNotMatch(html, /id="kakaoBriefingAction"/);
+  assert.doesNotMatch(html, /<script[^>]+src="\/kakao\.js"/);
+  assert.doesNotMatch(contract, /kakaoBriefingAction/);
+  assert.doesNotMatch(contract, /['"]\/kakao\.js['"]/);
+});
+
 test("settings owns logout after Platform sign-in", () => {
   const html = read("public/settings.html");
   const source = read("public/settings.js");
@@ -135,8 +162,9 @@ test("legacy briefing loads only for legacy users without a Platform session", (
 
 test("service worker caches Google auth and standalone settings assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v32/);
+  assert.match(source, /worklog-v33/);
   for (const asset of ["/settings.html", "/distribution.css", "/settings.css", "/settings.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }
+  assert.ok(!source.includes('"/kakao.js"'), "legacy Kakao UI asset should not be precached");
 });
