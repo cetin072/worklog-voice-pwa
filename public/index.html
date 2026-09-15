@@ -92,7 +92,12 @@
     <section id="platformAuthCard" class="card platform-auth-card" hidden aria-live="polite">
       <p class="eyebrow">바로 시작하기</p>
       <h2>내 업무공간</h2>
-      <p class="platform-auth-lead">처음이면 이메일과 비밀번호를 입력한 뒤 <strong>무료로 시작</strong>을 누르세요.</p>
+      <p class="platform-auth-lead">Google 계정으로 가장 빠르게 시작할 수 있습니다.</p>
+      <button id="platformGoogleSignIn" class="platform-google-signin" type="button">
+        <span class="platform-google-mark" aria-hidden="true">G</span>
+        <span>Google로 시작</span>
+      </button>
+      <div class="platform-auth-divider" aria-hidden="true"><span>또는 이메일로</span></div>
       <form id="platformAuthForm">
         <label><span>이메일</span><input id="platformAuthEmail" type="email" autocomplete="email" placeholder="name@example.com" required></label>
         <label><span>비밀번호</span><input id="platformAuthPassword" type="password" autocomplete="current-password" minlength="8" placeholder="8자 이상" required></label>
@@ -202,10 +207,10 @@
   </main>
 
   <script src="/auth.js?v=20260915-1" defer></script>
-  <script src="/platform-auth.js?v=20260915-1" defer></script>
-  <script src="/platform-auth-ui.js?v=20260915-2" defer></script>
+  <script src="/platform-auth.js?v=20260915-3" defer></script>
+  <script src="/platform-auth-ui.js?v=20260915-4" defer></script>
   <script src="/onboarding.js?v=20260915-1" defer></script>
-  <script src="/settings.js?v=20260915-1" defer></script>
+  <script src="/settings.js?v=20260915-2" defer></script>
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
