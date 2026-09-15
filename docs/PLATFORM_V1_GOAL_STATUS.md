@@ -19,8 +19,10 @@
 - Data Core Briefing WorkRecord read/status mutation — `goal/platform-v1` 통합, 실제 RLS mutation QA 완료.
 - Data Core Schedule briefing read — `goal/platform-v1` 통합, 실제 범위/RLS QA 완료.
 - ScheduleCandidate → Schedule atomic confirmation — PR #148, `goal/platform-v1` 통합 및 실제 DB QA 완료.
-- 최신 main UAR v2 visual stability QA Gate — PR #158로 `goal/platform-v1` 동기화.
+- UAR v2 visual stability QA Gate — `main` 및 `goal/platform-v1` 동기화.
 - Data Core Usage Ledger V1 — PR #159, `goal/platform-v1` 통합 및 실제 DB/RLS/monthly rollup QA 완료.
+- Shared Infrastructure Cost Allocation V1 — PR #161, `goal/platform-v1` 통합 및 실제 DB/RLS/recalculation QA 완료.
+- Common Transcript V1 + Call STT Adapter — PR #156 `main` 반영, PR #162로 `goal/platform-v1` 동기화.
 
 ## 실제 Supabase 적용 상태
 
@@ -53,47 +55,43 @@
 - 테스트 데이터 rollback 후 잔존 없음
 - Security Advisor lint 0
 
-## 현재 진행 중 — Issue #160
+## 현재 진행 중 — Issue #163
 
-Shared Infrastructure Cost Allocation V1:
+Trusted Data Core Writer V1:
 
-- `shared_cost_pools` 월별 공통비 원본
-- `shared_cost_allocations` 사용자·Workspace별 파생 배분
-- V1 allocation method: `equal_active_user`
-- active pair: 해당 월 WorkRecord/Schedule/SourceRef/Candidate/Usage 중 하나 이상 활동한 user+workspace
-- `recalculate_shared_cost_allocations(month)` service_role 전용 security-invoker RPC
-- `user_monthly_cost` read model:
-  - direct_cost_krw
-  - allocated_shared_cost_krw
-  - total_cost_krw
-- authenticated는 자기 allocation/월 총원가만 조회
-- 공통비 pool 원본과 재계산은 trusted server/admin 전용
-
-실제 DB migration, RLS, 재계산, 2 active + 1 inactive fixture 검증은 완료했다. GitHub migration/contract/test/doc을 PR로 고정하는 단계다.
+- 최신 Supabase key 기준 사용:
+  - public = `SUPABASE_PUBLISHABLE_KEY`
+  - server-only = `SUPABASE_SECRET_KEY` (`sb_secret_...`)
+- server admin REST는 secret을 `apikey` header에만 사용하고 Bearer JWT처럼 전송하지 않는다.
+- public `/api/supabase-auth-config`는 secret을 읽거나 반환하지 않는다.
+- Platform Usage Event → `usage_events` authoritative writer 준비
+- 같은 `(workspace,event_key)` + 동일 payload retry는 기존 row로 수렴
+- 같은 event key + 다른 usage/cost payload는 fail-closed conflict
+- trusted Shared Cost pool upsert / month recalculation adapter 준비
+- 실제 Production secret은 아직 설정하지 않는다.
 
 ## 병렬 모듈 진행
 
 - PR #153 — Call Usage/Cost Platform Pilot (Draft, main 미병합)
-- Issue #151 / PR #156 — Call·Meeting 공통 Transcript V1 + Call STT Adapter Pilot (Draft, main 미병합)
+- Issue #151 / PR #156 — Common Transcript V1 + Call STT Adapter는 `main` 반영 완료.
 - 실제 유료 STT/AI 호출은 아직 하지 않는다.
 
 ## 다음 순서
 
-1. #160 Shared Cost Allocation PR 검증 → `goal/platform-v1` 통합
-2. trusted server Usage writer / shared-cost admin writer의 Production credential 경계 설계
-3. Data Core 전체 flag-on Deploy Preview 통합 QA
-4. 신규 사용자 Notion 없이 가입→기록→브리핑→일정 동작 확인
-5. 기존 Notion 사용자 호환/선택형 Sync 경로 최종 점검
-6. Gate A/B 충족 여부 감사
-7. `goal/platform-v1 → main` Major Gate PR 생성
-8. 사용자 명시 승인 후에만 main 병합
+1. #163 Trusted Writer tests/Preview 검증 → `goal/platform-v1` 통합
+2. Data Core 전체 flag-on Deploy Preview 통합 QA
+3. 신규 사용자 Notion 없이 가입→기록→브리핑→일정 동작 확인
+4. 기존 Notion 사용자 호환/선택형 Sync 경로 최종 점검
+5. Gate A/B 충족 여부 감사
+6. `goal/platform-v1 → main` Major Gate PR 생성
+7. 사용자 명시 승인 후에만 main 병합
 
 ## 승인 필요사항
 
 - `main` 병합
 - destructive migration / 대량 데이터 변경
 - 실제 유료 STT/AI 호출 또는 새 유료 Provider 활성화
-- Production secret/service role 설정 변경
+- Production `SUPABASE_SECRET_KEY` 설정/교체 등 secret 변경
 
 그 외 additive schema, test, adapter, docs, `goal/platform-v1` 내부 통합은 계속 진행한다.
 
@@ -101,5 +99,5 @@ Shared Infrastructure Cost Allocation V1:
 
 - 기존 Notion personal token localStorage 방식은 호환성을 위해 아직 유지한다.
 - Data Core 기능은 명시적 feature flag/인증 게이트를 사용하며 Production cutover 전 통합 Preview QA가 필요하다.
-- Usage Ledger authoritative write와 shared-cost pool 입력은 trusted server credential 경계가 필요하며 아직 Production secret에 연결하지 않았다.
+- Trusted writer는 코드 경계만 준비하고 실제 Production secret에는 아직 연결하지 않았다.
 - 실제 Supabase/Netlify 청구서 자동 수집과 가격/마진 계산은 후속 단계다.
