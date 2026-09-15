@@ -95,8 +95,14 @@
       <section class="settings-section">
         <h2>알림</h2>
         <p id="settingsNotificationGuide" class="settings-note">이 기기에서 업무수첩 알림을 사용할 수 있는지 확인하는 중입니다.</p>
-        <button id="settingsNotificationTest" class="settings-action" type="button">알림 켜기 및 테스트</button>
+        <button id="settingsNotificationTest" class="settings-action" type="button">알림 시작하기</button>
         <p id="settingsNotificationStatus" class="settings-status" aria-live="polite"></p>
+        <div id="settingsNotificationConfirm" hidden>
+          <p class="settings-note settings-future-note">방금 ‘업무수첩 알림 테스트’가 보였나요?</p>
+          <button id="settingsNotificationSeen" class="settings-action" type="button">알림이 왔어요</button>
+          <button id="settingsNotificationMissing" class="settings-action" type="button">알림이 안 왔어요</button>
+        </div>
+        <p id="settingsNotificationHelp" class="settings-note settings-future-note" hidden></p>
       </section>
 
       <section class="settings-section">
@@ -126,6 +132,6 @@
   <script src="/auth.js?v=20260915-1" defer></script>
   <script src="/platform-auth.js?v=20260915-3" defer></script>
   <script src="/notifications.js?v=20260916-1" defer></script>
-  <script src="/settings.js?v=20260916-2" defer></script>
+  <script src="/settings.js?v=20260916-3" defer></script>
 </body>
 </html>
