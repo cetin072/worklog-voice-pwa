@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192-v3.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192-v3.png">
+  <title>설정 · 업무수첩</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/settings.css">
+</head>
+<body class="settings-page-body">
+  <main class="app settings-page" id="settingsPage">
+    <header class="settings-page-header">
+      <div>
+        <p class="eyebrow">업무수첩</p>
+        <h1>⚙ 설정</h1>
+      </div>
+      <a class="settings-close" href="/">완료</a>
+    </header>
+
+    <section class="card settings-card settings-page-card" aria-live="polite">
+      <section class="settings-section settings-section-first">
+        <h2>화면 표시</h2>
+        <label class="settings-toggle-row" for="settingsBriefingExpanded">
+          <span>
+            <strong>업무 브리핑 목록 기본 펼치기</strong>
+            <small>켜면 지난 것·오늘·대기·후속조치 목록을 처음부터 펼쳐서 봅니다.</small>
+          </span>
+          <input id="settingsBriefingExpanded" type="checkbox">
+        </label>
+        <label class="settings-toggle-row" for="settingsEntryDetailsExpanded">
+          <span>
+            <strong>직접 입력 추가 정보 기본 펼치기</strong>
+            <small>금액·담당자·기한·후속조치 입력칸을 처음부터 열어둡니다.</small>
+          </span>
+          <input id="settingsEntryDetailsExpanded" type="checkbox">
+        </label>
+        <p class="settings-note settings-future-note">앞으로 회의 녹음, 통화 녹음 가져오기, 스캔 등 기능이 늘어나면 기능별 표시 옵션도 이 영역에 모읍니다.</p>
+      </section>
+
+      <section class="settings-section">
+        <h2>Notion 연결 <span class="settings-optional">선택</span></h2>
+        <p class="settings-note">Notion 기록도 함께 쓰고 싶다면 연결할 수 있습니다. 업무수첩 자체 기록은 Notion 연결 없이도 사용할 수 있습니다.</p>
+        <a class="settings-link settings-primary-link" href="/setup.html">Notion 연결 설정</a>
+      </section>
+
+      <section class="settings-section">
+        <h2>앱 설치</h2>
+        <p id="settingsInstallGuide" class="settings-note">이 기기에서 설치 가능한 방식을 확인하는 중입니다.</p>
+        <button id="settingsInstallAction" class="settings-action" type="button">홈 화면에 앱 설치</button>
+        <p id="settingsInstallStatus" class="settings-status" aria-live="polite"></p>
+      </section>
+
+      <section class="settings-section">
+        <h2>내 계정</h2>
+        <p id="settingsAccountState" class="settings-account-state">계정 상태를 확인하는 중입니다.</p>
+        <p class="settings-note">로그인 정보는 이 기기에 저장되어 앱을 다시 열어도 이어서 사용합니다. 보안상 세션이 만료된 경우에는 다시 로그인이 필요할 수 있습니다.</p>
+        <a id="settingsLoginLink" class="settings-link" href="/" hidden>로그인 화면으로 이동</a>
+      </section>
+
+      <section class="settings-section settings-secondary-section">
+        <h2>업무수첩 공유</h2>
+        <p class="settings-note">다른 사람이 업무수첩을 시작할 수 있도록 앱 링크를 공유합니다. 내 업무 기록이나 계정 정보는 공유되지 않습니다.</p>
+        <button id="settingsShare" class="settings-action" type="button">업무수첩 링크 공유</button>
+        <p id="settingsShareStatus" class="settings-status"></p>
+      </section>
+
+      <section id="settingsLogoutSection" class="settings-section settings-danger-section" hidden>
+        <h2>로그아웃</h2>
+        <p class="settings-note">평소에는 로그아웃할 필요가 없습니다. 이 기기에서 계정 사용을 끝낼 때만 로그아웃하세요.</p>
+        <button id="settingsLogout" class="settings-action settings-danger-action" type="button">로그아웃</button>
+      </section>
+    </section>
+
+    <footer>설정은 이 기기에 저장됩니다.</footer>
+  </main>
+
+  <script src="/auth.js?v=20260915-1" defer></script>
+  <script src="/platform-auth.js?v=20260915-3" defer></script>
+  <script src="/settings.js?v=20260915-3" defer></script>
+</body>
+</html>
