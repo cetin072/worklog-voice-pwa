@@ -33,13 +33,22 @@ test("new-user onboarding prefers Platform auth instead of forcing Notion", () =
   assert.doesNotMatch(source, /Notion 연결이 먼저 필요합니다/);
 });
 
-test("auth UI keeps new-user copy product-first", () => {
+test("auth UI keeps new-user copy product-first and hides signed-in account card", () => {
   const source = read("public/platform-auth-ui.js");
   assert.match(source, /platform-signed-out/);
   assert.match(source, /platform-signed-in/);
   assert.match(source, /worklog:platform-auth-changed/);
   assert.match(source, /가입하면 개인 업무공간이 바로 준비됩니다/);
+  assert.match(source, /card\.hidden = true;\n    setAuthState\("platform-signed-in", user\)/);
   assert.doesNotMatch(source, /Notion 연결 없이 바로 사용할 수 있습니다/);
+});
+
+test("settings owns logout after Platform sign-in", () => {
+  const source = read("public/settings.js");
+  assert.match(source, /accountAction\.textContent = "로그아웃"/);
+  assert.match(source, /accountAction\.dataset\.action = "logout"/);
+  assert.match(source, /WorklogPlatformAuth\?\.signOut/);
+  assert.doesNotMatch(source, /내 업무공간으로 돌아가기/);
 });
 
 test("legacy briefing loads only for legacy users without a Platform session", () => {
@@ -54,7 +63,7 @@ test("legacy briefing loads only for legacy users without a Platform session", (
 
 test("service worker caches new distribution and settings assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v29/);
+  assert.match(source, /worklog-v30/);
   for (const asset of ["/distribution.css", "/settings.css", "/settings.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }

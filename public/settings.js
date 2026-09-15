@@ -40,11 +40,12 @@
     if (!session) {
       const legacyMode = window.WorklogAuth?.mode?.() || "unset";
       if (legacyMode !== "unset") {
-        accountState.textContent = "기존 Notion 연결로 사용 중입니다. 새 Platform 계정은 선택해서 연결할 수 있습니다.";
+        accountState.textContent = "기존 Notion 연결로 사용 중입니다. 업무수첩 계정은 필요할 때 시작할 수 있습니다.";
       } else {
-        accountState.textContent = "아직 로그인하지 않았습니다. 새 사용자는 Notion 없이 업무수첩 계정으로 바로 시작할 수 있습니다.";
+        accountState.textContent = "아직 로그인하지 않았습니다.";
       }
       accountAction.textContent = "로그인 · 무료로 시작";
+      accountAction.dataset.action = "login";
       accountAction.hidden = false;
       return;
     }
@@ -52,7 +53,8 @@
     accountState.textContent = user?.email
       ? `${user.email} 계정으로 사용 중입니다.`
       : "업무수첩 계정으로 로그인되어 있습니다.";
-    accountAction.textContent = "내 업무공간으로 돌아가기";
+    accountAction.textContent = "로그아웃";
+    accountAction.dataset.action = "logout";
     accountAction.hidden = false;
   }
 
@@ -69,12 +71,18 @@
   openButton.addEventListener("click", openSettings);
   closeButton.addEventListener("click", closeSettings);
 
-  accountAction?.addEventListener("click", () => {
-    closeSettings();
-    if (document.body.classList.contains("platform-signed-in")) {
-      document.querySelector(".voice-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  accountAction?.addEventListener("click", async () => {
+    if (accountAction.dataset.action === "logout") {
+      accountAction.disabled = true;
+      try {
+        await window.WorklogPlatformAuth?.signOut?.();
+        window.location.reload();
+      } finally {
+        accountAction.disabled = false;
+      }
       return;
     }
+    closeSettings();
     authCard?.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => authEmail?.focus(), 350);
   });

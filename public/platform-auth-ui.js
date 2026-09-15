@@ -41,11 +41,11 @@
       return;
     }
 
-    card.hidden = false;
     const user = await window.WorklogPlatformAuth.currentUser();
     if (!user) {
+      card.hidden = false;
       form.hidden = false;
-      signOut.hidden = true;
+      if (signOut) signOut.hidden = true;
       if (legacyMode() !== "unset") {
         setAuthState("platform-legacy-user");
         show("기존 연결 설정으로 사용 중입니다. 새 계정은 필요할 때 시작할 수 있습니다.");
@@ -57,14 +57,13 @@
     }
 
     form.hidden = true;
-    signOut.hidden = false;
+    if (signOut) signOut.hidden = true;
+    card.hidden = true;
     setAuthState("platform-signed-in", user);
-    show("개인 업무공간을 확인하는 중…");
     try {
       await window.WorklogPlatformAuth.bootstrapPersonalWorkspace();
-      show(`${user.email || "로그인한 사용자"}의 개인 업무공간이 준비되었습니다.`, "success");
     } catch (error) {
-      show(error.message || "개인 업무공간 준비에 실패했습니다.", "error");
+      console.error("개인 업무공간 준비 실패", error);
     }
   }
 
@@ -87,7 +86,7 @@
   signIn.addEventListener("click", () => authenticate(window.WorklogPlatformAuth.signIn));
   signUp.addEventListener("click", () => authenticate(window.WorklogPlatformAuth.signUp));
   form.addEventListener("submit", (event) => { event.preventDefault(); signIn.click(); });
-  signOut.addEventListener("click", async () => {
+  signOut?.addEventListener("click", async () => {
     setBusy(true);
     try { await window.WorklogPlatformAuth.signOut(); await refresh(); }
     finally { setBusy(false); }
