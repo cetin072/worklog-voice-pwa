@@ -1,0 +1,31 @@
+name: Temporary Production Data Core Activation Smoke
+
+on:
+  push:
+    branches:
+      - ops/production-data-core-activation-smoke
+
+jobs:
+  runtime-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Production Data Core public runtime config
+        shell: bash
+        run: |
+          node <<'NODE'
+          const url = 'https://worklog-voice-pwa.netlify.app/api/supabase-auth-config';
+          const res = await fetch(url, { headers: { 'cache-control': 'no-cache' } });
+          const text = await res.text();
+          console.log(`HTTP=${res.status}`);
+          console.log(text);
+          if (!res.ok) process.exit(1);
+          const body = JSON.parse(text);
+          if (body.configured !== true) throw new Error('Production Supabase config is not active');
+          if (body.dataCorePrimaryEnabled !== true) throw new Error('Production Data Core primary is not active');
+          if (!String(body.supabaseUrl || '').startsWith('https://')) throw new Error('Missing Supabase URL');
+          if (!String(body.publishableKey || '').startsWith('sb_publishable_')) throw new Error('Missing publishable key');
+          const serialized = JSON.stringify(body);
+          if (/sb_secret_|service_role|SUPABASE_SECRET_KEY/i.test(serialized)) throw new Error('Privileged secret marker exposed');
+          console.log('PRODUCTION_DATA_CORE_PUBLIC_CONFIG_PASS');
+          NODE
