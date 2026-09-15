@@ -24,12 +24,6 @@
 
     <section class="card settings-card settings-page-card" aria-live="polite">
       <section class="settings-section settings-section-first">
-        <h2>Notion 연결 <span class="settings-optional">선택</span></h2>
-        <p class="settings-note">Notion 기록도 함께 쓰고 싶다면 연결할 수 있습니다. 업무수첩 자체 기록은 Notion 연결 없이도 사용할 수 있습니다.</p>
-        <a class="settings-link settings-primary-link" href="/setup.html">Notion 연결 설정</a>
-      </section>
-
-      <section class="settings-section">
         <h2>화면 표시</h2>
         <label class="settings-toggle-row" for="settingsBriefingExpanded">
           <span>
@@ -49,8 +43,16 @@
       </section>
 
       <section class="settings-section">
+        <h2>Notion 연결 <span class="settings-optional">선택</span></h2>
+        <p class="settings-note">Notion 기록도 함께 쓰고 싶다면 연결할 수 있습니다. 업무수첩 자체 기록은 Notion 연결 없이도 사용할 수 있습니다.</p>
+        <a class="settings-link settings-primary-link" href="/setup.html">Notion 연결 설정</a>
+      </section>
+
+      <section class="settings-section">
         <h2>앱 설치</h2>
-        <p id="settingsInstallGuide" class="settings-note">브라우저 메뉴에서 홈 화면에 추가하면 일반 앱처럼 바로 열 수 있습니다.</p>
+        <p id="settingsInstallGuide" class="settings-note">이 기기에서 설치 가능한 방식을 확인하는 중입니다.</p>
+        <button id="settingsInstallAction" class="settings-action" type="button">홈 화면에 앱 설치</button>
+        <p id="settingsInstallStatus" class="settings-status" aria-live="polite"></p>
       </section>
 
       <section class="settings-section">
@@ -79,6 +81,6 @@
 
   <script src="/auth.js?v=20260915-1" defer></script>
   <script src="/platform-auth.js?v=20260915-1" defer></script>
-  <script src="/settings.js?v=20260915-2" defer></script>
+  <script src="/settings.js?v=20260915-3" defer></script>
 </body>
 </html>
