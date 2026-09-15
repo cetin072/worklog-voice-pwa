@@ -85,10 +85,23 @@ test("iPhone browser requires Home Screen install before notification permission
   assert.equal(calls.shown.length, 0);
 });
 
-test("settings exposes explicit notification test control", () => {
+test("settings exposes notification start and visible-delivery confirmation controls", () => {
   const html = fs.readFileSync("public/settings.html", "utf8");
   assert.match(html, /id="settingsNotificationTest"/);
+  assert.match(html, />알림 시작하기</);
+  assert.match(html, /id="settingsNotificationConfirm"/);
+  assert.match(html, /id="settingsNotificationSeen"/);
+  assert.match(html, /id="settingsNotificationMissing"/);
+  assert.match(html, /id="settingsNotificationHelp"/);
   assert.match(html, /\/notifications\.js\?v=/);
+});
+
+test("settings does not claim visible delivery before user confirmation and guides blocked Android browser notifications", () => {
+  const settings = fs.readFileSync("public/settings.js", "utf8");
+  assert.match(settings, /테스트 알림을 전송했습니다\. 실제로 보였는지 아래에서 확인해주세요/);
+  assert.match(settings, /알림이 안 왔어요/);
+  assert.match(settings, /휴대폰 설정 → 앱 →/);
+  assert.match(settings, /EdgA\|EdgiOS\|Edg\\\//);
 });
 
 test("service worker is push-ready and opens the app on notification click", () => {
