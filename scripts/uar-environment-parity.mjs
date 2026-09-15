@@ -7,11 +7,22 @@ if (!base.hostname.includes('deploy-preview-')) {
   throw new Error(`UAR_ENV_NOT_DEPLOY_PREVIEW:${base.hostname}`);
 }
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 async function get(pathname, options = {}) {
   const url = new URL(pathname, `${previewUrl}/`).toString();
-  const response = await fetch(url, { redirect: 'follow', cache: 'no-store', ...options });
-  const text = await response.text();
-  return { response, text, url };
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(url, { redirect: 'follow', cache: 'no-store', ...options });
+      const text = await response.text();
+      return { response, text, url };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await sleep(400 * attempt);
+    }
+  }
+  throw new Error(`UAR_ENV_NETWORK_RETRY_EXHAUSTED:${pathname}:${String(lastError?.cause?.code || lastError?.message || lastError)}`);
 }
 
 // Deploy Preview intentionally does not receive the Production Notion token.
