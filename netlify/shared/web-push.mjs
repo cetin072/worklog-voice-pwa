@@ -75,10 +75,16 @@ function validateVapid(publicKey, privateKey, subject) {
   } catch {
     throw pushError("WEB_PUSH_VAPID_SUBJECT_INVALID", "VAPID subject가 올바르지 않습니다.");
   }
-  if (!['https:', 'mailto:'].includes(subjectUrl.protocol)) {
+  if (!["https:", "mailto:"].includes(subjectUrl.protocol)) {
     throw pushError("WEB_PUSH_VAPID_SUBJECT_INVALID", "VAPID subject는 HTTPS 또는 mailto URI여야 합니다.");
   }
   return { publicRaw, privateRaw, subject: subjectUrl.toString() };
+}
+
+function generateServerPrivateKey() {
+  const ecdh = createECDH("prime256v1");
+  ecdh.generateKeys();
+  return ecdh.getPrivateKey();
 }
 
 export function deriveWebPushKeys({ clientPublic, authSecret, serverPrivate, salt }) {
@@ -91,7 +97,11 @@ export function deriveWebPushKeys({ clientPublic, authSecret, serverPrivate, sal
   }
 
   const ecdh = createECDH("prime256v1");
-  ecdh.setPrivateKey(privateRaw);
+  try {
+    ecdh.setPrivateKey(privateRaw);
+  } catch {
+    throw pushError("WEB_PUSH_SERVER_KEY_INVALID", "Web Push 일회용 서버 키가 올바르지 않습니다.");
+  }
   const serverPublic = ecdh.getPublicKey(null, "uncompressed");
   let sharedSecret;
   try {
@@ -109,7 +119,7 @@ export function deriveWebPushKeys({ clientPublic, authSecret, serverPrivate, sal
   return Object.freeze({ serverPublic, cek, nonce });
 }
 
-export function encryptWebPushPayload({ subscription, payload, salt = randomBytes(16), serverPrivate = randomBytes(32) }) {
+export function encryptWebPushPayload({ subscription, payload, salt = randomBytes(16), serverPrivate = null }) {
   const { clientPublic, authSecret } = validateSubscription(subscription);
   const plain = Buffer.from(String(payload ?? ""), "utf8");
   if (plain.length > 3993) {
@@ -117,11 +127,12 @@ export function encryptWebPushPayload({ subscription, payload, salt = randomByte
   }
   const saltRaw = Buffer.from(salt);
   if (saltRaw.length !== 16) throw pushError("WEB_PUSH_SALT_INVALID", "Web Push salt가 올바르지 않습니다.");
+  const privateRaw = serverPrivate ? Buffer.from(serverPrivate) : generateServerPrivateKey();
 
   const { serverPublic, cek, nonce } = deriveWebPushKeys({
     clientPublic,
     authSecret,
-    serverPrivate,
+    serverPrivate: privateRaw,
     salt: saltRaw,
   });
 
