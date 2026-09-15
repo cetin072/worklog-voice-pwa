@@ -206,12 +206,45 @@
     return Object.freeze({ ok: true, ...result, subscriptionId: connected.subscriptionId });
   }
 
+  async function scheduleClosedAppServerPushTest() {
+    const session = authSession();
+    if (!session) {
+      const error = new Error("로그인 후 서버 알림을 테스트할 수 있습니다.");
+      error.code = "login_required";
+      throw error;
+    }
+    const connected = await ensureServerPushSubscription();
+    if (!connected.subscriptionId) {
+      const error = new Error("서버 알림 구독 ID를 확인하지 못했습니다.");
+      error.code = "subscription_id_missing";
+      throw error;
+    }
+    const response = await fetch("/api/push-test-closed", {
+      method: "POST",
+      cache: "no-store",
+      keepalive: true,
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ subscriptionId: connected.subscriptionId }),
+    });
+    if (!response.ok && response.status !== 202) {
+      const error = new Error("앱 종료 테스트를 예약하지 못했습니다.");
+      error.code = "closed_app_test_failed";
+      error.status = response.status;
+      throw error;
+    }
+    return Object.freeze({ ok: true, scheduled: true, delaySeconds: 8, subscriptionId: connected.subscriptionId });
+  }
+
   window.WorklogNotifications = Object.freeze({
     getStatus,
     ensureServiceWorker,
     showTestNotification,
     ensureServerPushSubscription,
     sendServerTestPush,
+    scheduleClosedAppServerPushTest,
   });
 
   if ("serviceWorker" in navigator) {
