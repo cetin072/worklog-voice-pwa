@@ -61,10 +61,23 @@ test("legacy briefing loads only for legacy users without a Platform session", (
   assert.match(loader, /briefing\.js/);
 });
 
-test("service worker caches new distribution and settings assets", () => {
+test("service worker caches distribution, settings, and scanner assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v30/);
-  for (const asset of ["/distribution.css", "/settings.css", "/settings.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
+  assert.match(source, /worklog-v31/);
+  for (const asset of [
+    "/distribution.css",
+    "/settings.css",
+    "/settings.js",
+    "/platform-auth.js",
+    "/platform-auth-ui.js",
+    "/onboarding.js",
+    "/briefing-legacy-loader.js",
+    "/scanner.css",
+    "/scanner-core.js",
+    "/scanner-geometry.js",
+    "/scanner.js",
+    "/scanner-pdf.js"
+  ]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }
 });
