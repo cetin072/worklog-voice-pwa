@@ -20,6 +20,7 @@
 - Data Core Schedule briefing read — `goal/platform-v1` 통합, 실제 범위/RLS QA 완료.
 - ScheduleCandidate → Schedule atomic confirmation — PR #148, `goal/platform-v1` 통합 및 실제 DB QA 완료.
 - 최신 main UAR v2 visual stability QA Gate — PR #158로 `goal/platform-v1` 동기화.
+- Data Core Usage Ledger V1 — PR #159, `goal/platform-v1` 통합 및 실제 DB/RLS/monthly rollup QA 완료.
 
 ## 실제 Supabase 적용 상태
 
@@ -30,6 +31,8 @@
 3. `data_core_worklog_idempotency`
 4. `confirm_schedule_candidate`
 5. `data_core_usage_ledger_v1`
+6. `shared_cost_allocation_v1`
+7. `shared_cost_pool_explicit_deny_policy`
 
 검증 완료:
 
@@ -41,24 +44,32 @@
 - Usage Ledger 본인 조회 / 타 사용자 차단
 - 일반 authenticated usage mutation 차단
 - 월 direct cost rollup
-- 테스트 데이터 rollback 후 잔존 0건
-- Security Advisor: blocking lint 0
+- shared cost pool 일반 사용자 접근 차단
+- shared allocation 본인 조회 / 타 사용자 차단
+- equal_active_user 50:50 배분 fixture
+- shared allocation 재계산 idempotent
+- `user_monthly_cost = direct + allocated shared` 계산
+- inactive user 미배분
+- 테스트 데이터 rollback 후 잔존 없음
+- Security Advisor lint 0
 
-## 현재 진행 중 — Issue #149
+## 현재 진행 중 — Issue #160
 
-Data Core Usage Ledger V1:
+Shared Infrastructure Cost Allocation V1:
 
-- `usage_events` 중앙 직접원가 원장
-- `(workspace_id, event_key)` idempotency
-- user/workspace/request/job/feature/service/provider/model 귀속
-- STT audio seconds / AI tokens / image / storage bytes / API calls
-- native cost / estimated KRW / actual KRW / pricing version
-- `usage_monthly_direct_cost` 월별 사용자·Workspace 직접원가 read model
-- authenticated: 본인 SELECT만 허용
-- anon: 접근 불가
-- mutation: trusted server writer 전용
+- `shared_cost_pools` 월별 공통비 원본
+- `shared_cost_allocations` 사용자·Workspace별 파생 배분
+- V1 allocation method: `equal_active_user`
+- active pair: 해당 월 WorkRecord/Schedule/SourceRef/Candidate/Usage 중 하나 이상 활동한 user+workspace
+- `recalculate_shared_cost_allocations(month)` service_role 전용 security-invoker RPC
+- `user_monthly_cost` read model:
+  - direct_cost_krw
+  - allocated_shared_cost_krw
+  - total_cost_krw
+- authenticated는 자기 allocation/월 총원가만 조회
+- 공통비 pool 원본과 재계산은 trusted server/admin 전용
 
-DB migration/RLS/rollup 검증은 완료했다. 현재 GitHub migration/adapter/test를 PR로 고정하는 단계다.
+실제 DB migration, RLS, 재계산, 2 active + 1 inactive fixture 검증은 완료했다. GitHub migration/contract/test/doc을 PR로 고정하는 단계다.
 
 ## 병렬 모듈 진행
 
@@ -68,10 +79,10 @@ DB migration/RLS/rollup 검증은 완료했다. 현재 GitHub migration/adapter/
 
 ## 다음 순서
 
-1. #149 Usage Ledger PR 검증 → `goal/platform-v1` 통합
-2. 공통 고정비 배분 V1: Supabase/Netlify/domain 등 shared cost와 direct cost 분리
-3. trusted server Usage writer 연결 준비
-4. Data Core 전체 flag-on Deploy Preview 통합 QA
+1. #160 Shared Cost Allocation PR 검증 → `goal/platform-v1` 통합
+2. trusted server Usage writer / shared-cost admin writer의 Production credential 경계 설계
+3. Data Core 전체 flag-on Deploy Preview 통합 QA
+4. 신규 사용자 Notion 없이 가입→기록→브리핑→일정 동작 확인
 5. 기존 Notion 사용자 호환/선택형 Sync 경로 최종 점검
 6. Gate A/B 충족 여부 감사
 7. `goal/platform-v1 → main` Major Gate PR 생성
@@ -90,5 +101,5 @@ DB migration/RLS/rollup 검증은 완료했다. 현재 GitHub migration/adapter/
 
 - 기존 Notion personal token localStorage 방식은 호환성을 위해 아직 유지한다.
 - Data Core 기능은 명시적 feature flag/인증 게이트를 사용하며 Production cutover 전 통합 Preview QA가 필요하다.
-- Usage Ledger의 authoritative write는 일반 사용자 JWT가 아니라 trusted server credential 경계에서만 연결해야 한다.
-- shared infrastructure cost allocation은 직접원가와 분리된 다음 Issue에서 구현한다.
+- Usage Ledger authoritative write와 shared-cost pool 입력은 trusted server credential 경계가 필요하며 아직 Production secret에 연결하지 않았다.
+- 실제 Supabase/Netlify 청구서 자동 수집과 가격/마진 계산은 후속 단계다.
