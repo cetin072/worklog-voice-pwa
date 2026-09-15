@@ -42,3 +42,10 @@ test("Worklog dual-write migration은 Data Core 두 엔티티의 요청 ID 수�
   assert.match(sql, /alter table public\.source_refs\s+add column client_request_id text/i);
   assert.match(sql, /char_length\(client_request_id\) between 16 and 100/i);
 });
+
+test("WorkRecord 상태 mutation은 workspace member가 아니라 creator 본인으로 제한된다", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260915011501_restrict_work_record_mutations_to_creator.sql", import.meta.url), "utf8");
+  assert.match(sql, /drop policy if exists work_records_update_member/i);
+  assert.match(sql, /create policy work_records_update_creator/i);
+  assert.match(sql, /created_by_user_id = \(select auth\.uid\(\)\)/i);
+});

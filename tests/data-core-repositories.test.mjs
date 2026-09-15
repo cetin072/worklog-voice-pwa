@@ -105,7 +105,7 @@ test("Data Core Briefing reader는 현재 Workspace의 열린 WorkRecord만 V2 t
   assert.equal(calls[0].query.status, "in.(in_progress,waiting,needs_review)");
 });
 
-test("Data Core Briefing 상태 변경은 Workspace 조건으로 본인 WorkRecord 한 건만 갱신한다", async () => {
+test("Data Core Briefing 상태 변경은 Workspace와 creator 조건으로 본인 WorkRecord 한 건만 갱신한다", async () => {
   const calls = [];
   const recordId = "11111111-1111-4111-8111-111111111111";
   const writer = createWorklogDataCoreBriefingStatus({
@@ -117,7 +117,11 @@ test("Data Core Briefing 상태 변경은 Workspace 조건으로 본인 WorkReco
   assert.deepEqual(await writer.updateStatus({ recordId, status: "완료" }, workspaceContext), { recordId, status: "완료" });
   assert.equal(calls[0].table, "work_records");
   assert.deepEqual(calls[0].row, { status: "completed" });
-  assert.deepEqual(calls[0].query, { id: `eq.${recordId}`, workspace_id: "eq.workspace-1" });
+  assert.deepEqual(calls[0].query, {
+    id: `eq.${recordId}`,
+    workspace_id: "eq.workspace-1",
+    created_by_user_id: "eq.user-1",
+  });
   await assert.rejects(() => writer.updateStatus({ recordId: "record-1", status: "완료" }, workspaceContext), (error) => error?.code === "WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID");
   await assert.rejects(() => writer.updateStatus({ recordId, status: "삭제" }, workspaceContext), (error) => error?.code === "WORKLOG_DATA_CORE_STATUS_INVALID");
 });

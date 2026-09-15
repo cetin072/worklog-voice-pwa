@@ -21,6 +21,12 @@
 
 필요한 다음 조치(Production 변경 금지): Netlify `deploy-preview` context에 이미 승인된 `worklog-platform`의 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` 및 네 개의 `WORKLOG_DATA_CORE_*` flag를 적용한 뒤, PR #171 exact HEAD Preview를 재배포하고 이 Gate를 재실행한다. `SUPABASE_SECRET_KEY` 및 유료 provider secret은 Preview에도 설정하지 않는다.
 
+### 추가 RLS hardening (검증 중)
+
+- 감사에서 같은 Workspace의 다른 member가 WorkRecord 상태를 수정할 수 있는 가능성을 발견했다.
+- `20260915011501_restrict_work_record_mutations_to_creator.sql`은 WorkRecord update RLS를 creator-only로 강화하며, Briefing mutation 요청도 `created_by_user_id` predicate를 함께 사용한다.
+- 로컬 `npm test`: PASS (233/233). 이 migration은 아직 remote에 적용하지 않았으므로, exact Preview QA 전에 `worklog-platform` migration history 및 Security Advisor로 실제 적용을 확인해야 한다.
+
 ## 완료 Milestone
 
 - Platform Foundation V1 공통 계약: Workspace, Processing Job/Runner, Retry, Idempotency, Usage/Cost, Storage, Adapter, Permission, Sync, Retention/Delete, Audit — `main` 반영.
