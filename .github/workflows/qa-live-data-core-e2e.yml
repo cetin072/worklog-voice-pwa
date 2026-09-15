@@ -1,0 +1,17 @@
+name: Temporary Data Core Live E2E
+
+on:
+  push:
+    branches:
+      - goal/production-data-core-cutover
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run no-Notion authenticated E2E against PR 194 Preview
+        env:
+          QA_PREVIEW_BASE: https://deploy-preview-194--worklog-voice-pwa.netlify.app
+        run: node scripts/qa-live-data-core-e2e.mjs
