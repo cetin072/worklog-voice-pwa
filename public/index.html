@@ -104,6 +104,7 @@
         </div>
         <div class="briefing-actions">
           <button id="briefingQuickUpdate" class="briefing-quick" type="button">브리핑 다시 정리</button>
+          <button id="briefingCardToggle" class="briefing-card-toggle" type="button" aria-expanded="true" aria-controls="briefingCard">접기</button>
         </div>
       </div>
       <p id="briefingMeta" class="briefing-meta">내 업무와 일정을 불러옵니다.</p>
@@ -125,51 +126,37 @@
     </section>
 
     <section id="entryCard" class="card core-app-card">
-      <label class="label" for="text">업무 내용</label>
-      <textarea id="text" rows="5" placeholder="말하거나 직접 입력하세요. 예: 계좌 개설 서류 확인해야 함."></textarea>
+      <label class="label" for="text">직접 입력</label>
+      <textarea id="text" rows="5" placeholder="업무 내용을 적어주세요. 예: 계좌 개설 서류 확인해야 함."></textarea>
       <button id="typedSave" class="save typed-save" type="button">저장</button>
 
-      <div class="grid">
-        <label><span>기관</span>
-          <select id="institution">
-            <option value="태장">태장</option>
-            <option value="미래여성가족진흥원">미래여성가족진흥원</option>
-            <option value="기타" selected>기타</option>
-          </select>
-        </label>
-
-        <label><span>상태</span>
-          <select id="status">
-            <option value="완료">완료</option>
-            <option value="진행중" selected>진행중</option>
-            <option value="대기">대기</option>
-            <option value="확인필요">확인필요</option>
-          </select>
-        </label>
-
-        <label><span>유형</span>
-          <select id="type">
-            <option value="완료업무">완료업무</option>
-            <option value="할 일">할 일</option>
-            <option value="회의·통화">회의·통화</option>
-            <option value="지출·세무">지출·세무</option>
-            <option value="지시·위임">지시·위임</option>
-            <option value="아이디어">아이디어</option>
-            <option value="문제·확인">문제·확인</option>
-            <option value="기타" selected>기타</option>
-          </select>
-        </label>
+      <div id="entryCompatibilityFields" hidden aria-hidden="true">
+        <select id="institution" tabindex="-1">
+          <option value="태장">태장</option>
+          <option value="미래여성가족진흥원">미래여성가족진흥원</option>
+          <option value="기타" selected>기타</option>
+        </select>
+        <select id="status" tabindex="-1">
+          <option value="완료">완료</option>
+          <option value="진행중" selected>진행중</option>
+          <option value="대기">대기</option>
+          <option value="확인필요">확인필요</option>
+        </select>
+        <select id="type" tabindex="-1">
+          <option value="완료업무">완료업무</option>
+          <option value="할 일">할 일</option>
+          <option value="회의·통화">회의·통화</option>
+          <option value="지출·세무">지출·세무</option>
+          <option value="지시·위임">지시·위임</option>
+          <option value="아이디어">아이디어</option>
+          <option value="문제·확인">문제·확인</option>
+          <option value="기타" selected>기타</option>
+        </select>
+        <input id="amount" type="hidden" value="">
+        <input id="assignee" type="hidden" value="">
+        <input id="dueDate" type="hidden" value="">
+        <input id="followUp" type="hidden" value="">
       </div>
-
-      <details id="entryExtraDetails">
-        <summary>추가 정보</summary>
-        <div class="detailsGrid">
-          <label><span>금액</span><input id="amount" type="number" inputmode="numeric" min="0"></label>
-          <label><span>담당자</span><input id="assignee" type="text"></label>
-          <label><span>기한</span><input id="dueDate" type="date"></label>
-          <label class="wide"><span>후속조치</span><input id="followUp" type="text"></label>
-        </div>
-      </details>
     </section>
 
     <footer>업무수첩 · 음성/직접 입력 · 업무 브리핑 · 일정 관리</footer>
@@ -179,7 +166,7 @@
   <script src="/platform-auth.js?v=20260915-3" defer></script>
   <script src="/platform-auth-ui.js?v=20260915-4" defer></script>
   <script src="/onboarding.js?v=20260915-1" defer></script>
-  <script src="/settings.js?v=20260915-3" defer></script>
+  <script src="/settings.js?v=20260916-1" defer></script>
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
@@ -187,7 +174,7 @@
   <script src="/manual-input.js" defer></script>
   <script src="/briefing-legacy-loader.js?v=20260915-1" defer></script>
   <script src="/briefing-v2.js" defer></script>
-  <script src="/briefing-v2-expand-state.js" defer></script>
+  <script src="/briefing-v2-expand-state.js?v=20260916-1" defer></script>
   <script src="/briefing-edit.js" defer></script>
 </body>
 </html>
