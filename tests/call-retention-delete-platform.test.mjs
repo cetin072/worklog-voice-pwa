@@ -35,11 +35,20 @@ function preparedAudio(overrides = {}) {
   };
 }
 
-test("temporary audio retention reuses verified expiry and call ownership", () => {
+function workspaceContext(overrides = {}) {
+  return {
+    userId: "user-1",
+    workspaceId: "workspace-1",
+    role: "owner",
+    ...overrides,
+  };
+}
+
+test("temporary audio retention reuses verified expiry and authorized call ownership", () => {
   const state = createCallTemporaryAudioRetention({
     job: callJob(),
     preparedAudio: preparedAudio(),
-  });
+  }, { workspaceContext: workspaceContext() });
 
   assert.equal(state.recordType, "call_audio");
   assert.equal(state.recordId, "upload-cleanup-1");
@@ -63,6 +72,7 @@ test("successful cleanup calls only canonical delete target and completes retent
     job: callJob(),
     preparedAudio: preparedAudio(),
   }, {
+    workspaceContext: workspaceContext(),
     now: "2026-09-15T00:20:00.000Z",
     completedAt: "2026-09-15T00:20:01.000Z",
   });
@@ -98,6 +108,7 @@ test("delete failure is isolated as cleanup state and retry only repeats delete"
     job: callJob(),
     preparedAudio: preparedAudio(),
   }, {
+    workspaceContext: workspaceContext(),
     now: "2026-09-15T00:20:00.000Z",
   });
 
@@ -112,6 +123,7 @@ test("delete failure is isolated as cleanup state and retry only repeats delete"
     preparedAudio: preparedAudio(),
     retentionState: failed.retentionState,
   }, {
+    workspaceContext: workspaceContext(),
     now: "2026-09-15T00:30:00.000Z",
     completedAt: "2026-09-15T00:30:01.000Z",
   });
@@ -122,7 +134,7 @@ test("delete failure is isolated as cleanup state and retry only repeats delete"
   assert.equal(deleteCalls, 2);
 });
 
-test("ownership mismatch fails before storage delete", async () => {
+test("verified audio ownership mismatch fails before storage delete", async () => {
   let called = false;
   const storageAdapter = {
     configured: true,
@@ -132,7 +144,30 @@ test("ownership mismatch fails before storage delete", async () => {
   await assert.rejects(() => deleteCallTemporaryAudio(storageAdapter, {
     job: callJob(),
     preparedAudio: preparedAudio({ workspaceId: "workspace-other" }),
+  }, {
+    workspaceContext: workspaceContext(),
   }), (error) => error?.code === "CALL_CLEANUP_OWNERSHIP_MISMATCH");
+  assert.equal(called, false);
+});
+
+test("current workspace authorization must exist and match the Processing Job", async () => {
+  let called = false;
+  const storageAdapter = {
+    configured: true,
+    async deleteObject() { called = true; },
+  };
+
+  await assert.rejects(() => deleteCallTemporaryAudio(storageAdapter, {
+    job: callJob(),
+    preparedAudio: preparedAudio(),
+  }), (error) => error?.code === "CALL_CLEANUP_WORKSPACE_CONTEXT_REQUIRED");
+
+  await assert.rejects(() => deleteCallTemporaryAudio(storageAdapter, {
+    job: callJob(),
+    preparedAudio: preparedAudio(),
+  }, {
+    workspaceContext: workspaceContext({ workspaceId: "workspace-other" }),
+  }), (error) => error?.code === "CALL_CLEANUP_WORKSPACE_CONTEXT_MISMATCH");
   assert.equal(called, false);
 });
 
@@ -145,6 +180,8 @@ test("non-call job and unconfigured storage adapter fail closed", async () => {
   await assert.rejects(() => deleteCallTemporaryAudio(configured, {
     job: callJob({ kind: "meeting" }),
     preparedAudio: preparedAudio(),
+  }, {
+    workspaceContext: workspaceContext(),
   }), (error) => error?.code === "CALL_PROCESSING_JOB_REQUIRED");
   assert.equal(called, false);
 
@@ -155,6 +192,8 @@ test("non-call job and unconfigured storage adapter fail closed", async () => {
   await assert.rejects(() => deleteCallTemporaryAudio(unconfigured, {
     job: callJob(),
     preparedAudio: preparedAudio(),
+  }, {
+    workspaceContext: workspaceContext(),
   }), (error) => error?.code === "STORAGE_NOT_CONFIGURED");
   assert.equal(called, false);
 });
@@ -167,10 +206,12 @@ test("cleanup retry accepts only failed state for same target and owner", async 
   const noneState = createCallTemporaryAudioRetention({
     job: callJob(),
     preparedAudio: preparedAudio(),
-  });
+  }, { workspaceContext: workspaceContext() });
   await assert.rejects(() => retryCallTemporaryAudioDelete(storageAdapter, {
     job: callJob(),
     preparedAudio: preparedAudio(),
     retentionState: noneState,
+  }, {
+    workspaceContext: workspaceContext(),
   }), (error) => error?.code === "CALL_CLEANUP_RETRY_STATE_INVALID");
 });
