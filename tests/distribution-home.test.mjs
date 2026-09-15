@@ -27,12 +27,15 @@ test("distribution home routes settings to a standalone page", () => {
   assert.match(settings, /id="settingsLogout"/);
 });
 
-test("settings explains the platform and roadmap before functional options", () => {
+test("platform explanation is a compact collapsed details card before settings", () => {
   const html = read("public/settings.html");
   const about = html.indexOf('id="settingsPlatformAbout"');
   const display = html.indexOf("화면 표시");
   assert.ok(about >= 0 && about < display, "platform roadmap should appear before settings controls");
-  assert.match(html, /업무수첩 플랫폼/);
+  assert.match(html, /<details id="settingsPlatformAbout"/);
+  assert.doesNotMatch(html, /<details id="settingsPlatformAbout"[^>]*\sopen(?:\s|>)/);
+  assert.match(html, /업무수첩이란\?/);
+  assert.match(html, /자세히 알아보기/);
   assert.match(html, /현재 기본 기능/);
   assert.match(html, /현재 제공/);
   assert.match(html, /다음 단계/);
@@ -44,8 +47,11 @@ test("settings explains the platform and roadmap before functional options", () 
   assert.match(html, /개발 순서와 구성은 안정성 및 우선순위에 따라 조정될 수 있습니다/);
 });
 
-test("settings prioritizes display options before connections, share and logout", () => {
+test("settings defaults briefing open and offers only whole-card collapse", () => {
   const html = read("public/settings.html");
+  const source = read("public/settings.js");
+  const collapseState = read("public/briefing-v2-expand-state.js");
+  const briefingV2 = read("public/briefing-v2.js");
   const display = html.indexOf("화면 표시");
   const notion = html.indexOf("Notion 연결");
   const install = html.indexOf("앱 설치");
@@ -57,8 +63,34 @@ test("settings prioritizes display options before connections, share and logout"
   assert.ok(install < account);
   assert.ok(account < share);
   assert.ok(share < logout);
-  assert.match(html, /id="settingsBriefingExpanded"/);
-  assert.match(html, /id="settingsEntryDetailsExpanded"/);
+  assert.match(html, /id="settingsBriefingCollapsed"/);
+  assert.doesNotMatch(html, /settingsEntryDetailsExpanded/);
+  assert.doesNotMatch(html, /업무 브리핑 목록 기본 펼치기/);
+  assert.match(source, /briefingCollapsed:\s*false/);
+  assert.match(source, /stored\?\.briefingCollapsed === true/);
+  assert.match(collapseState, /briefingCardToggle/);
+  assert.match(collapseState, /classList\.toggle\("is-collapsed"/);
+  assert.match(collapseState, /collapsed \? "펼치기" : "접기"/);
+  assert.match(briefingV2, /const MAX_VISIBLE=3/);
+  assert.match(briefingV2, /개 더 보기/);
+});
+
+test("direct input exposes only text and save while keeping inference compatibility hidden", () => {
+  const html = read("public/index.html");
+  const start = html.indexOf('<section id="entryCard"');
+  const end = html.indexOf("<footer>", start);
+  const entry = html.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(entry, />직접 입력<\/label>/);
+  assert.match(entry, /id="text"/);
+  assert.match(entry, /id="typedSave"/);
+  assert.match(entry, /id="entryCompatibilityFields" hidden/);
+  assert.doesNotMatch(entry, /class="grid"/);
+  assert.doesNotMatch(entry, /id="entryExtraDetails"/);
+  assert.doesNotMatch(entry, />기관<\/span>/);
+  assert.doesNotMatch(entry, />상태<\/span>/);
+  assert.doesNotMatch(entry, />유형<\/span>/);
+  assert.doesNotMatch(entry, /추가 정보/);
 });
 
 test("settings exposes a platform-aware install action", () => {
@@ -72,18 +104,6 @@ test("settings exposes a platform-aware install action", () => {
   assert.match(source, /appinstalled/);
   assert.match(source, /iPhone\/iPad 설치/);
   assert.match(source, /홈 화면에 추가/);
-});
-
-test("settings preferences are persisted and applied to app details", () => {
-  const html = read("public/index.html");
-  const source = read("public/settings.js");
-  const expandState = read("public/briefing-v2-expand-state.js");
-  assert.match(html, /id="entryExtraDetails"/);
-  assert.match(source, /worklogUiPreferencesV1/);
-  assert.match(source, /entryDetailsExpanded/);
-  assert.match(source, /extraDetails\.open = prefs\.entryDetailsExpanded/);
-  assert.match(expandState, /briefingExpanded/);
-  assert.match(expandState, /prefersExpanded/);
 });
 
 test("new-user onboarding prefers Platform auth instead of forcing Notion", () => {
@@ -160,10 +180,10 @@ test("legacy briefing loads only for legacy users without a Platform session", (
   assert.match(loader, /briefing\.js/);
 });
 
-test("service worker caches Google auth and standalone settings assets", () => {
+test("service worker caches current standalone settings assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v33/);
-  for (const asset of ["/settings.html", "/distribution.css", "/settings.css", "/settings.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
+  assert.match(source, /worklog-v34/);
+  for (const asset of ["/settings.html", "/distribution.css", "/settings.css", "/settings.js", "/briefing.css", "/briefing-v2-expand-state.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }
   assert.ok(!source.includes('"/kakao.js"'), "legacy Kakao UI asset should not be precached");

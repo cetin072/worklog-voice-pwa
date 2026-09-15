@@ -2,8 +2,7 @@
   const APP_URL = "https://worklog-voice-pwa.netlify.app/";
   const PREF_KEY = "worklogUiPreferencesV1";
   const DEFAULT_PREFS = Object.freeze({
-    briefingExpanded: false,
-    entryDetailsExpanded: false,
+    briefingCollapsed: false,
   });
   let deferredInstallPrompt = null;
 
@@ -11,8 +10,7 @@
     try {
       const stored = JSON.parse(localStorage.getItem(PREF_KEY) || "{}");
       return {
-        briefingExpanded: stored?.briefingExpanded === true,
-        entryDetailsExpanded: stored?.entryDetailsExpanded === true,
+        briefingCollapsed: stored?.briefingCollapsed === true,
       };
     } catch {
       return { ...DEFAULT_PREFS };
@@ -26,11 +24,21 @@
     return value;
   }
 
+  function sanitizeLegacyDraftExtras() {
+    if (!document.getElementById("entryCompatibilityFields")) return;
+    try {
+      const raw = localStorage.getItem("worklogDraftV1");
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (!draft || typeof draft !== "object") return;
+      const next = { ...draft, amount: "", assignee: "", dueDate: "", followUp: "" };
+      localStorage.setItem("worklogDraftV1", JSON.stringify(next));
+    } catch {}
+  }
+
   function applyPagePreferences() {
-    const prefs = readPreferences();
-    const extraDetails = document.getElementById("entryExtraDetails");
-    if (extraDetails) extraDetails.open = prefs.entryDetailsExpanded;
-    return prefs;
+    sanitizeLegacyDraftExtras();
+    return readPreferences();
   }
 
   function isStandalone() {
@@ -184,17 +192,12 @@
   }
 
   function wirePreferenceControls() {
-    const briefing = document.getElementById("settingsBriefingExpanded");
-    const entry = document.getElementById("settingsEntryDetailsExpanded");
+    const briefing = document.getElementById("settingsBriefingCollapsed");
     const prefs = readPreferences();
-    if (briefing) briefing.checked = prefs.briefingExpanded;
-    if (entry) entry.checked = prefs.entryDetailsExpanded;
+    if (briefing) briefing.checked = prefs.briefingCollapsed;
 
     briefing?.addEventListener("change", () => {
-      savePreferences({ briefingExpanded: briefing.checked });
-    });
-    entry?.addEventListener("change", () => {
-      savePreferences({ entryDetailsExpanded: entry.checked });
+      savePreferences({ briefingCollapsed: briefing.checked });
     });
   }
 
