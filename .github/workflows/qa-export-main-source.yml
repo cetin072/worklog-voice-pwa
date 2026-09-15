@@ -1,0 +1,22 @@
+name: Temporary Export Main Source
+
+on:
+  push:
+    branches:
+      - ops/production-data-core-activation-smoke
+
+jobs:
+  export-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Pack exact main source
+        run: tar --exclude=.git -czf /tmp/worklog-main-source.tgz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worklog-main-source
+          path: /tmp/worklog-main-source.tgz
+          retention-days: 1
