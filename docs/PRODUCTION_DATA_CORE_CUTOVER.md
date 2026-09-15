@@ -5,7 +5,7 @@ Status: **Preparation in progress. Production activation has not been performed.
 ## Baseline
 
 - Latest `main`: `434907101aed41efe7843d10b3d03ab7ff562e95` (PR #171 merged).
-- Goal branch: `goal/production-data-core-cutover`; current baseline includes child PR #193 for Windows UAR browser-gate compatibility.
+- Goal branch: `goal/production-data-core-cutover`; current baseline includes child PR #193 for Windows UAR browser-gate compatibility and Draft Final Gate PR #194.
 - Production public runtime: `https://worklog-voice-pwa.netlify.app` returned `200` on 2026-09-15. `GET /api/supabase-auth-config` returned `configured=false` and `dataCorePrimaryEnabled=false`.
 - The production worklog health endpoint returned `200` with `ok=true`, `configured=true`, and `mode=owner`.
 - Supabase target: `worklog-platform` (`zlhdhwgabqzsuuhaiedc`). No other Supabase project is in scope.
@@ -47,9 +47,9 @@ The last recorded Supabase Security Advisor result was **0 blocking findings**. 
 
 - `npm test` on the Goal baseline: **242 passed, 0 failed**.
 - PR #171's GitHub User Acceptance Ready workflow: **success**.
-- The exact PR #171 Deploy Preview remains available at `https://deploy-preview-171--worklog-voice-pwa.netlify.app`.
-- Re-run against that Preview: UI contract, environment parity, and Preview runtime all passed. The public auth config passed the Data Core contract with no secret field.
-- Issue #192 / child PR #193 fixed Windows Chrome discovery in the browser gates. Against the same Preview, representative smoke and mobile visual-stability checks passed with external writes blocked.
+- The exact Draft Final Gate Preview is `https://deploy-preview-194--worklog-voice-pwa.netlify.app` and is READY for PR head `9bbb5363f7bee4f508948b0b69abf4205e140dcf`.
+- PR #194 GitHub User Acceptance Ready workflow passed. A direct re-run against that exact Preview passed UI contract, environment parity, Preview runtime, representative smoke, and mobile visual stability. The public auth config passed the Data Core contract with no secret field; browser gates blocked external writes.
+- Issue #192 / child PR #193 fixed Windows Chrome discovery in the browser gates while preserving the Linux lookup.
 - The existing codebase retains `setup.html`, personal Notion-token handling, Notion worklog adapter behavior, existing Quick Worklog, Briefing fallback, and access-key paths. Contract tests cover Notion adapter behavior and a Data Core primary save with no Notion configuration.
 
 ## Notion-free and Notion compatibility acceptance
@@ -103,14 +103,14 @@ Confirm the existing Notion path remains usable. Do not delete Supabase rows, dr
 
 - [x] Latest `main` baseline captured.
 - [x] Full repository tests pass.
-- [x] Exact Data Core Preview runtime, parity, UI, smoke, and visual checks pass.
+- [x] Exact Final Gate Preview runtime, parity, UI, smoke, and visual checks pass.
 - [x] Public Production endpoint confirms Data Core is OFF.
 - [x] Notion compatibility code/contract regression reviewed.
 - [x] Migration, RLS, Advisor, secret-boundary evidence recorded from the merged Platform V1 gate.
 - [x] Rollback and activation-smoke plans documented.
 - [ ] Re-read Netlify Production environment inventory and `worklog-platform` migration/Advisor state using authorized operations access immediately before activation.
 - [ ] Execute and clean up approved disposable-account Notion-free E2E and existing-Notion-user live smoke.
-- [ ] Create the final Goal-to-`main` Draft Gate PR after the remaining operational evidence is recorded.
+- [x] Final Goal-to-`main` Draft Gate PR created: #194.
 - [ ] User approval for Goal-to-`main` merge.
 - [ ] Separate user approval for Production flag activation.
 
