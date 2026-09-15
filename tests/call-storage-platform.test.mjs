@@ -111,6 +111,23 @@ test("server verified storage result is canonical instead of client supplied obj
   assert.equal(normalized.sourceAudioRef.objectPath, "tmp/calls/workspace-001/server-verified.m4a");
 });
 
+test("prepared upload requires a server-issued uploadId before verification", async () => {
+  let called = false;
+  const storageAdapter = {
+    configured: true,
+    async verifyPreparedUpload() {
+      called = true;
+      return verifiedAudio();
+    },
+  };
+
+  await assert.rejects(() => verifyCallPreparedAudio(storageAdapter, {
+    job: callJob(),
+    preparedUpload: { objectPath: "client/arbitrary/path.m4a" },
+  }), (error) => error?.code === "CALL_PREPARED_UPLOAD_ID_REQUIRED");
+  assert.equal(called, false);
+});
+
 test("unconfigured Storage adapter fails closed without verification", async () => {
   let called = false;
   const storageAdapter = {
