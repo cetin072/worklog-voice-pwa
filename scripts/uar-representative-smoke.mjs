@@ -88,7 +88,7 @@ const scannerProbe = `<script>
       const node = document.createElement('div');
       node.id = 'uarScannerSmokeResult';
       node.dataset.result = apiReady && inputContract && authContract && wiringReady ? 'PASS' : 'FAIL';
-      node.dataset.detail = `api:${apiReady};inputs:${inputContract};auth:${authContract};wiring:${wiringReady}`;
+      node.dataset.detail = 'api:' + apiReady + ';inputs:' + inputContract + ';auth:' + authContract + ';wiring:' + wiringReady;
       node.hidden = true;
       document.body.append(node);
     }, 2200);
