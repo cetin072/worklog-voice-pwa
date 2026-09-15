@@ -1,6 +1,7 @@
 import { normalizeProcessingJob } from "./platform/processing-job.mjs";
 import { normalizeStorageObjectPath } from "./platform/storage-boundary.mjs";
 import { normalizeRetentionDeleteState } from "./platform/retention-delete.mjs";
+import { requireWorkspaceContext } from "./platform/workspace-context.mjs";
 
 function cleanupError(code, message) {
   const error = new Error(message || code);
@@ -38,6 +39,24 @@ function configuredStorageAdapter(adapter) {
   return adapter;
 }
 
+function authorizedWorkspaceContext(context, job) {
+  const input = context?.workspaceContext;
+  if (!input) {
+    throw cleanupError(
+      "CALL_CLEANUP_WORKSPACE_CONTEXT_REQUIRED",
+      "임시음성 삭제에는 현재 Workspace 권한 문맥이 필요합니다.",
+    );
+  }
+  const owner = requireWorkspaceContext(input);
+  if (owner.userId !== job.userId || owner.workspaceId !== job.workspaceId) {
+    throw cleanupError(
+      "CALL_CLEANUP_WORKSPACE_CONTEXT_MISMATCH",
+      "현재 Workspace 권한 문맥이 Processing Job 소유권과 일치하지 않습니다.",
+    );
+  }
+  return owner;
+}
+
 function cleanupTarget(preparedAudioInput, job) {
   const source = preparedAudioInput && typeof preparedAudioInput === "object" && !Array.isArray(preparedAudioInput)
     ? preparedAudioInput
@@ -70,12 +89,10 @@ function cleanupTarget(preparedAudioInput, job) {
   });
 }
 
-function retentionState(job, target, fields = {}) {
+function retentionState(job, target, workspaceContext, fields = {}) {
   return normalizeRetentionDeleteState({
     recordType: "call_audio",
     recordId: target.uploadId,
-    userId: job.userId,
-    workspaceId: job.workspaceId,
     retentionPolicy: "temporary_audio",
     expiresAt: target.effectiveExpiresAt,
     deleteStatus: fields.deleteStatus || "none",
@@ -88,7 +105,7 @@ function retentionState(job, target, fields = {}) {
       requestId: job.requestId,
       cleanupAttempt: Number(fields.cleanupAttempt || 0),
     },
-  });
+  }, { workspaceContext });
 }
 
 function errorInfo(error) {
@@ -102,10 +119,11 @@ async function performDelete(storageAdapterInput, input = {}, context = {}, retr
   const storageAdapter = configuredStorageAdapter(storageAdapterInput);
   const job = callJob(input.job);
   const target = cleanupTarget(input.preparedAudio, job);
+  const workspaceContext = authorizedWorkspaceContext(context, job);
   const prior = input.retentionState || null;
 
   if (retry) {
-    const normalizedPrior = normalizeRetentionDeleteState(prior || {});
+    const normalizedPrior = normalizeRetentionDeleteState(prior || {}, { workspaceContext });
     if (normalizedPrior.recordType !== "call_audio" || normalizedPrior.recordId !== target.uploadId) {
       throw cleanupError("CALL_CLEANUP_RETRY_TARGET_MISMATCH", "재시도 Retention 대상이 verified audio와 다릅니다.");
     }
@@ -121,7 +139,7 @@ async function performDelete(storageAdapterInput, input = {}, context = {}, retr
   const attempt = retry
     ? Number(prior?.metadata?.cleanupAttempt || 1) + 1
     : 1;
-  const requested = retentionState(job, target, {
+  const requested = retentionState(job, target, workspaceContext, {
     deleteStatus: "requested",
     deleteRequestedAt: requestedAt,
     cleanupAttempt: attempt,
@@ -135,7 +153,7 @@ async function performDelete(storageAdapterInput, input = {}, context = {}, retr
       sourceAudioRef: target.sourceAudioRef,
     }));
     const completedAt = observedAt(context.completedAt ?? context.now);
-    const completed = retentionState(job, target, {
+    const completed = retentionState(job, target, workspaceContext, {
       deleteStatus: "completed",
       deleteRequestedAt: requested.deleteRequestedAt,
       deleteCompletedAt: completedAt,
@@ -144,7 +162,7 @@ async function performDelete(storageAdapterInput, input = {}, context = {}, retr
     return Object.freeze({ deleted: true, target, retentionState: completed });
   } catch (error) {
     const info = errorInfo(error);
-    const failed = retentionState(job, target, {
+    const failed = retentionState(job, target, workspaceContext, {
       deleteStatus: "failed",
       deleteRequestedAt: requested.deleteRequestedAt,
       deleteErrorCode: info.code,
@@ -155,10 +173,11 @@ async function performDelete(storageAdapterInput, input = {}, context = {}, retr
   }
 }
 
-export function createCallTemporaryAudioRetention(input = {}) {
+export function createCallTemporaryAudioRetention(input = {}, context = {}) {
   const job = callJob(input.job);
   const target = cleanupTarget(input.preparedAudio, job);
-  return retentionState(job, target);
+  const workspaceContext = authorizedWorkspaceContext(context, job);
+  return retentionState(job, target, workspaceContext);
 }
 
 export async function deleteCallTemporaryAudio(storageAdapter, input = {}, context = {}) {
