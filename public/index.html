@@ -92,7 +92,19 @@
     <section id="platformAuthCard" class="card platform-auth-card" hidden aria-live="polite">
       <p class="eyebrow">바로 시작하기</p>
       <h2>내 업무공간</h2>
-      <p class="platform-auth-lead">처음이면 이메일과 비밀번호를 입력한 뒤 <strong>무료로 시작</strong>을 누르세요.</p>
+      <p class="platform-auth-lead">Google 계정으로 가장 빠르게 시작할 수 있습니다.</p>
+      <button id="platformGoogleSignIn" class="platform-google-signin" type="button">
+        <span class="platform-google-mark" aria-hidden="true">
+          <svg viewBox="0 0 18 18" role="img" focusable="false" aria-hidden="true">
+            <path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.878 2.684-6.615z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.468-.806 5.956-2.18l-2.91-2.258c-.806.54-1.835.858-3.046.858-2.344 0-4.329-1.585-5.037-3.714H.956v2.332A9 9 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.963 10.706A5.414 5.414 0 0 1 3.682 9c0-.592.102-1.168.281-1.706V4.962H.956A9 9 0 0 0 0 9c0 1.45.347 2.824.956 4.038l3.007-2.332z"/>
+            <path fill="#EA4335" d="M9 3.58c1.321 0 2.507.454 3.44 1.346l2.581-2.582C13.464.892 11.426 0 9 0A9 9 0 0 0 .956 4.962l3.007 2.332C4.671 5.165 6.656 3.58 9 3.58z"/>
+          </svg>
+        </span>
+        <span>Google로 시작</span>
+      </button>
+      <div class="platform-auth-divider" aria-hidden="true"><span>또는 이메일로</span></div>
       <form id="platformAuthForm">
         <label><span>이메일</span><input id="platformAuthEmail" type="email" autocomplete="email" placeholder="name@example.com" required></label>
         <label><span>비밀번호</span><input id="platformAuthPassword" type="password" autocomplete="current-password" minlength="8" placeholder="8자 이상" required></label>
@@ -202,10 +214,10 @@
   </main>
 
   <script src="/auth.js?v=20260915-1" defer></script>
-  <script src="/platform-auth.js?v=20260915-1" defer></script>
-  <script src="/platform-auth-ui.js?v=20260915-2" defer></script>
+  <script src="/platform-auth.js?v=20260915-3" defer></script>
+  <script src="/platform-auth-ui.js?v=20260915-4" defer></script>
   <script src="/onboarding.js?v=20260915-1" defer></script>
-  <script src="/settings.js?v=20260915-1" defer></script>
+  <script src="/settings.js?v=20260915-2" defer></script>
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
