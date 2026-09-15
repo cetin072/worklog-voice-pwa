@@ -11,9 +11,9 @@
 
 - 확인 시각: 2026-09-15 KST
 - 최신 `main`: `dfa1de963d1c785ae7f8204ab3d4981f63218b75`
-- 최신 `goal/platform-v1` / PR #171 HEAD: `bfdea3f9b00f061c055bd742f240825f2b5b89d7`
+- 최신 `goal/platform-v1` / PR #171 HEAD: `77e696b21a9dd7d2d0452d8d4b772ec060ebcb85`
 - PR #171: Draft, mergeable `CLEAN`; main 병합은 사용자 승인 전 금지.
-- `npm test`: PASS (232/232).
+- `npm test`: PASS (233/233).
 - GitHub UAR v2: PASS (exact PR HEAD).
 - Netlify exact Deploy Preview: READY / success (exact PR HEAD, `deploy-preview-171--worklog-voice-pwa.netlify.app`).
 - Deploy Preview 공개 Auth config 확인: **BLOCKED**. `GET /api/supabase-auth-config`가 `configured:false` 및 Data Core flags 모두 `false`를 반환했다.
