@@ -1,8 +1,10 @@
 (() => {
   const CACHE_PREFIX = "worklogBriefingV2SnapshotV1:";
+  const DATA_PREFIX = "worklogBriefingV2DataV1:";
   const CACHE_MAX_AGE_MS = 36 * 60 * 60 * 1000;
   const CACHE_MAX_HTML = 600000;
   const nativeFetch = window.fetch.bind(window);
+  let bridgeAttached = false;
 
   function platformSession() {
     return window.WorklogPlatformAuth?.readSession?.() || null;
@@ -29,20 +31,22 @@
     }
   }
 
-  function cacheKey() {
+  function cacheKey(prefix = CACHE_PREFIX) {
     const subject = jwtSubject();
-    return subject ? `${CACHE_PREFIX}${subject}` : "";
+    return subject ? `${prefix}${subject}` : "";
   }
 
   function clearCurrentSnapshot() {
-    const key = cacheKey();
-    if (key) localStorage.removeItem(key);
+    const snapshotKey = cacheKey();
+    const dataKey = cacheKey(DATA_PREFIX);
+    if (snapshotKey) localStorage.removeItem(snapshotKey);
+    if (dataKey) localStorage.removeItem(dataKey);
   }
 
   function clearAllSnapshots() {
     for (let index = localStorage.length - 1; index >= 0; index -= 1) {
       const key = localStorage.key(index) || "";
-      if (key.startsWith(CACHE_PREFIX)) localStorage.removeItem(key);
+      if (key.startsWith(CACHE_PREFIX) || key.startsWith(DATA_PREFIX)) localStorage.removeItem(key);
     }
   }
 
@@ -59,6 +63,58 @@
     return ["/api/briefing-v2", "/api/briefing", "/api/worklog", "/api/worklog-edit"].includes(pathname);
   }
 
+  async function rememberBriefingResponse(response) {
+    const key = cacheKey(DATA_PREFIX);
+    if (!key || !response?.ok) return;
+    try {
+      const data = await response.clone().json();
+      if (!data?.ok || data?.mode !== "data_core" || !data?.generatedAt || !data?.structure) return;
+      localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data }));
+    } catch {}
+  }
+
+  function cachedBriefingResponse() {
+    const key = cacheKey(DATA_PREFIX);
+    if (!key) return null;
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || "null");
+      if (!stored?.savedAt || Date.now() - Number(stored.savedAt) > CACHE_MAX_AGE_MS || !stored?.data?.structure) {
+        localStorage.removeItem(key);
+        return null;
+      }
+      const data = { ...stored.data, cachedSnapshot: true };
+      window.setTimeout(() => {
+        const meta = document.getElementById("briefingMeta");
+        if (meta && !meta.textContent.includes("저장된 브리핑")) {
+          meta.textContent = `${meta.textContent} · 저장된 브리핑 · 최신화 실패`;
+        }
+      }, 0);
+      return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8", "x-worklog-cache": "stale" },
+      });
+    } catch {
+      localStorage.removeItem(key);
+      return null;
+    }
+  }
+
+  async function originalBriefingOrCache(input, init) {
+    try {
+      const response = await nativeFetch(input, init);
+      if (response.ok) {
+        await rememberBriefingResponse(response);
+        return response;
+      }
+      if (response.status < 500) return response;
+      return cachedBriefingResponse() || response;
+    } catch (error) {
+      const cached = cachedBriefingResponse();
+      if (cached) return cached;
+      throw error;
+    }
+  }
+
   window.fetch = async (input, init = {}) => {
     const details = requestDetails(input, init);
     if (details.url?.origin === window.location.origin
@@ -70,9 +126,17 @@
       const fastInput = typeof input === "string"
         ? `${fastUrl.pathname}${fastUrl.search}`
         : new Request(fastUrl.href, input);
-      const fastResponse = await nativeFetch(fastInput, init);
-      if (fastResponse.status < 500) return fastResponse;
-      return nativeFetch(input, init);
+      try {
+        const fastResponse = await nativeFetch(fastInput, init);
+        if (fastResponse.ok) {
+          await rememberBriefingResponse(fastResponse);
+          return fastResponse;
+        }
+        if ([400, 401, 403].includes(fastResponse.status)) return fastResponse;
+        return originalBriefingOrCache(input, init);
+      } catch {
+        return originalBriefingOrCache(input, init);
+      }
     }
 
     const response = await nativeFetch(input, init);
@@ -160,6 +224,7 @@
   }
 
   function attachSnapshotBridge() {
+    if (bridgeAttached) return;
     const card = document.getElementById("briefingCard");
     if (!card || !hasPlatformSession()) return;
     let rootObserver = null;
@@ -169,6 +234,7 @@
       const root = document.getElementById("briefingV2");
       const meta = document.getElementById("briefingMeta");
       if (!root || !meta) return false;
+      bridgeAttached = true;
       restoreSnapshot();
       const scheduleSave = () => {
         clearTimeout(saveTimer);
@@ -191,7 +257,10 @@
 
   window.addEventListener("worklog:platform-auth-changed", (event) => {
     const state = String(event?.detail?.state || "");
-    if (state === "platform-signed-out") clearAllSnapshots();
+    if (state === "platform-signed-out") {
+      bridgeAttached = false;
+      clearAllSnapshots();
+    }
     if (state === "platform-signed-in") window.setTimeout(attachSnapshotBridge, 0);
   });
 
