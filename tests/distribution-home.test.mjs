@@ -27,21 +27,34 @@ test("distribution home routes settings to a standalone page", () => {
   assert.match(settings, /id="settingsLogout"/);
 });
 
-test("settings prioritizes connections and display options before share and logout", () => {
+test("settings prioritizes display options before connections, share and logout", () => {
   const html = read("public/settings.html");
-  const notion = html.indexOf("Notion 연결");
   const display = html.indexOf("화면 표시");
+  const notion = html.indexOf("Notion 연결");
   const install = html.indexOf("앱 설치");
   const account = html.indexOf("내 계정");
   const share = html.indexOf("업무수첩 공유");
   const logout = html.indexOf("로그아웃");
-  assert.ok(notion >= 0 && notion < display);
-  assert.ok(display < install);
+  assert.ok(display >= 0 && display < notion);
+  assert.ok(notion < install);
   assert.ok(install < account);
   assert.ok(account < share);
   assert.ok(share < logout);
   assert.match(html, /id="settingsBriefingExpanded"/);
   assert.match(html, /id="settingsEntryDetailsExpanded"/);
+});
+
+test("settings exposes a platform-aware install action", () => {
+  const html = read("public/settings.html");
+  const source = read("public/settings.js");
+  assert.match(html, /id="settingsInstallAction"/);
+  assert.match(html, /id="settingsInstallStatus"/);
+  assert.match(source, /beforeinstallprompt/);
+  assert.match(source, /deferredInstallPrompt/);
+  assert.match(source, /\.prompt\(\)/);
+  assert.match(source, /appinstalled/);
+  assert.match(source, /iPhone\/iPad 설치/);
+  assert.match(source, /홈 화면에 추가/);
 });
 
 test("settings preferences are persisted and applied to app details", () => {
