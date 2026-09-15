@@ -18,24 +18,62 @@ async function get(pathname) {
 }
 
 const root = await get('/');
-for (const marker of ['🎙 업무수첩', 'id="mic"', 'id="save"', 'id="text"', 'id="briefingCard"']) {
+for (const marker of [
+  '🎙 업무수첩',
+  'id="mic"',
+  'id="save"',
+  'id="text"',
+  'id="briefingCard"',
+  'id="scannerCard"',
+  'id="scanGallery"',
+  'id="scanCamera"',
+  'id="scanGalleryInput"',
+  'id="scanCameraInput"',
+  'id="scanPdfCard"',
+  'id="scannerDialog"'
+]) {
   if (!root.body.includes(marker)) throw new Error(`UAR_PREVIEW_RUNTIME_ROOT_MARKER_MISSING:${marker}`);
+}
+
+const galleryTag = root.body.match(/<input id="scanGalleryInput"[^>]*>/)?.[0] || '';
+const cameraTag = root.body.match(/<input id="scanCameraInput"[^>]*>/)?.[0] || '';
+if (!/\bmultiple\b/.test(galleryTag) || /\bcapture=/.test(galleryTag)) {
+  throw new Error('UAR_PREVIEW_RUNTIME_SCANNER_GALLERY_CONTRACT_INVALID');
+}
+if (!/capture="environment"/.test(cameraTag)) {
+  throw new Error('UAR_PREVIEW_RUNTIME_SCANNER_CAMERA_CONTRACT_INVALID');
+}
+
+const scannerCardTag = root.body.match(/<section id="scannerCard"[^>]*>/)?.[0] || '';
+if (!/\bcore-app-card\b/.test(scannerCardTag)) {
+  throw new Error('UAR_PREVIEW_RUNTIME_SCANNER_AUTH_VISIBILITY_CONTRACT_MISSING');
 }
 
 const assets = [
   '/auth.js',
+  '/platform-auth.js',
+  '/platform-auth-ui.js',
   '/onboarding.js',
+  '/settings.js',
   '/request-id.js',
   '/app.js',
   '/inference-guard.js',
+  '/scanner-core.js',
+  '/scanner-geometry.js',
+  '/scanner.js',
+  '/scanner-pdf.js',
   '/quick-save.js',
   '/manual-input.js',
+  '/briefing-legacy-loader.js',
   '/briefing.js',
   '/briefing-v2.js',
   '/briefing-v2-expand-state.js',
   '/briefing-edit.js',
   '/kakao.js',
   '/styles.css',
+  '/distribution.css',
+  '/settings.css',
+  '/scanner.css',
   '/briefing.css',
   '/briefing-edit.css',
   '/manifest.webmanifest',
@@ -56,6 +94,19 @@ if (!app.body.includes('fetch("/api/worklog")')) {
 }
 if (!app.body.includes('navigator.serviceWorker.register("/sw.js")')) {
   throw new Error('UAR_PREVIEW_RUNTIME_SW_REGISTRATION_MISSING');
+}
+
+const scanner = await get('/scanner.js');
+for (const marker of ['type:"ScanDocument"', 'localOnly:true', 'persistPages', 'navigator.share', 'import("/scanner-pdf.js")']) {
+  if (!scanner.body.includes(marker)) throw new Error(`UAR_PREVIEW_RUNTIME_SCANNER_MARKER_MISSING:${marker}`);
+}
+if (scanner.body.includes('/api/worklog') || /Notion/i.test(scanner.body)) {
+  throw new Error('UAR_PREVIEW_RUNTIME_SCANNER_PLATFORM_BOUNDARY_BROKEN');
+}
+
+const sw = await get('/sw.js');
+for (const asset of ['/scanner.css', '/scanner-core.js', '/scanner-geometry.js', '/scanner.js', '/scanner-pdf.js']) {
+  if (!sw.body.includes(`"${asset}"`)) throw new Error(`UAR_PREVIEW_RUNTIME_SCANNER_OFFLINE_ASSET_MISSING:${asset}`);
 }
 
 const setup = await get('/setup.html');
@@ -91,4 +142,4 @@ if (String(process.env.GITHUB_HEAD_REF || '').trim() === 'goal/platform-v1') {
   console.log('UAR_PREVIEW_RUNTIME_DATA_CORE_CONFIG_PASS');
 }
 
-console.log(`UAR_PREVIEW_RUNTIME_PASS ${previewUrl} assets=${assets.length}`);
+console.log(`UAR_PREVIEW_RUNTIME_PASS ${previewUrl} assets=${assets.length} scanner=true`);
