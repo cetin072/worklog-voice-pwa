@@ -47,7 +47,7 @@ The last recorded Supabase Security Advisor result was **0 blocking findings**. 
 
 - `npm test` on the Goal baseline: **242 passed, 0 failed**.
 - PR #171's GitHub User Acceptance Ready workflow: **success**.
-- The exact Draft Final Gate Preview is `https://deploy-preview-194--worklog-voice-pwa.netlify.app` and is READY for PR head `9bbb5363f7bee4f508948b0b69abf4205e140dcf`.
+- The exact Draft Final Gate Preview is `https://deploy-preview-194--worklog-voice-pwa.netlify.app`. Its current Goal HEAD is the head commit shown for Draft PR #194; verify that SHA again immediately before approval so this living document never relies on a stale self-reference.
 - PR #194 GitHub User Acceptance Ready workflow passed. A direct re-run against that exact Preview passed UI contract, environment parity, Preview runtime, representative smoke, and mobile visual stability. The public auth config passed the Data Core contract with no secret field; browser gates blocked external writes.
 - Issue #192 / child PR #193 fixed Windows Chrome discovery in the browser gates while preserving the Linux lookup.
 - The existing codebase retains `setup.html`, personal Notion-token handling, Notion worklog adapter behavior, existing Quick Worklog, Briefing fallback, and access-key paths. Contract tests cover Notion adapter behavior and a Data Core primary save with no Notion configuration.
