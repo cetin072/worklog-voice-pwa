@@ -7,36 +7,49 @@
 - 장기 통합선: `goal/platform-v1`
 - 실제 Data Core 프로젝트: Supabase `worklog-platform` (`zlhdhwgabqzsuuhaiedc`)
 
-## Major Gate 현재 상태 — PR #171
+## Major Gate — PR #171
 
 - 최신 `main`: `dfa1de963d1c785ae7f8204ab3d4981f63218b75`
-- 이 문서 갱신 직전 `goal/platform-v1` / PR #171 HEAD: `136cbedaa5a9db71b1953287d9548eba9cc5f984`
-- main 대비: behind 0. 최신 main 동기화 완료.
-- PR #171: Draft, mergeable. 사용자 명시 승인 전 `main` 병합 금지.
-- 최신 정적 회귀: `npm test` PASS (242/242).
-- Netlify exact Deploy Preview build: READY / success.
-- PR #188에서 Platform Goal Preview 전용 `/api/supabase-auth-config` 실검증을 UAR에 추가했다.
+- 최종 기능/환경 Gate 검증 HEAD: `64cf497ee3773d4f695e436f018c69af22205777`
+- main 대비: behind 0 / ahead 88 (최종 기능 Gate 시점).
+- PR #171은 사용자 명시 승인 전 `main` 병합 금지.
 
-### Issue #182 — Preview Data Core flag-on
+### 최종 Gate 결과
 
-- 원인: Netlify env connector에서 신규 변수를 개별 scope 배열로 upsert했을 때 응답은 성공이었지만 실제 env 목록에 저장되지 않았다.
-- 해결: `context=deploy-preview`, `scope=all` 방식으로 다시 등록했고 실제 Netlify env 목록에서 다음 6개가 모두 Preview 전용으로 존재하는 것을 재확인했다.
-  - `SUPABASE_URL`
-  - `SUPABASE_PUBLISHABLE_KEY`
-  - `WORKLOG_DATA_CORE_PRIMARY_ENABLED=true`
-  - `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`
-  - `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED=true`
-  - `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED=true`
-- Production context에는 위 Data Core 설정을 추가하지 않았다.
-- `SUPABASE_SECRET_KEY` 및 유료 Provider secret은 Preview에도 설정하지 않았다.
-- 이 문서 commit 이후 exact-head Preview/UAR를 새로 생성하여 실제 endpoint가 `configured=true`, `dataCorePrimaryEnabled=true`인지 확인한다.
+- `npm test`: PASS — 242/242.
+- GitHub UAR v2: PASS.
+- Netlify exact Deploy Preview: PASS / READY.
+- environment parity: PASS.
+- Platform Goal Preview `/api/supabase-auth-config`: PASS.
+  - `configured=true`
+  - `dataCorePrimaryEnabled=true`
+  - HTTPS Supabase origin
+  - modern publishable key
+  - public response에 server secret/service-role field 없음
+- representative browser smoke: PASS.
+- visual stability: PASS — mobile viewport 8 samples geometry stable.
+- Netlify secret scan: no secret match.
+- Production Data Core configuration: unchanged.
+- Preview에 `SUPABASE_SECRET_KEY` 및 유료 Provider secret 미설정.
 
-### Creator-only WorkRecord mutation RLS
+## Issue #182 — Preview Data Core flag-on 해결
 
-- `restrict_work_record_mutations_to_creator` migration을 올바른 `worklog-platform`에 실제 적용했다.
-- remote migration version: `20260915023455`.
-- repo migration filename도 `20260915023455_restrict_work_record_mutations_to_creator.sql`로 정렬했다.
-- 실제 rollback fixture 결과:
+Netlify env connector에서 신규 변수를 개별 scope 배열로 upsert했을 때 실제 env 목록에 반영되지 않는 문제가 있었다. `context=deploy-preview`, `scope=all` 방식으로 재등록하여 다음 6개가 Preview 전용으로 존재하는 것을 재확인했다.
+
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `WORKLOG_DATA_CORE_PRIMARY_ENABLED=true`
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`
+- `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED=true`
+- `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED=true`
+
+새 exact-head Preview에서 UAR가 endpoint를 직접 호출하여 `UAR_PREVIEW_RUNTIME_DATA_CORE_CONFIG_PASS`를 확인했다.
+
+## Creator-only WorkRecord mutation RLS
+
+- `restrict_work_record_mutations_to_creator` migration을 올바른 `worklog-platform`에 실제 적용 완료.
+- remote/repo version: `20260915023455`.
+- 실제 rollback fixture:
   - creator update = 1
   - 같은 Workspace member SELECT = 1
   - 같은 Workspace member update = 0
@@ -45,41 +58,25 @@
 - Supabase Security Advisor: blocking lint 0.
 - Performance Advisor: 신규/저사용 DB의 unused-index INFO만 존재.
 
-## 완료 Milestone
+## Data Core 완료 범위
 
-- Platform Foundation V1 공통 계약: Workspace, Processing Job/Runner, Retry, Idempotency, Usage/Cost, Storage, Adapter, Permission, Sync, Retention/Delete, Audit — `main` 반영.
-- Data Core V1 핵심 schema + Workspace RLS — PR #124, `main` 반영.
-- Supabase Auth + Personal Workspace bootstrap — `goal/platform-v1` 통합 및 실제 DB QA 완료.
-- Internal Data Core Repository — `goal/platform-v1` 통합.
-- Notion Worklog Adapter 분리 — `goal/platform-v1` 통합.
-- Data Core + Notion Dual-write — `goal/platform-v1` 통합, 실제 idempotency/RLS DB QA 완료.
-- Data Core primary Quick Worklog — `goal/platform-v1` 통합.
-- Data Core Briefing WorkRecord read/status mutation — `goal/platform-v1` 통합.
-- Data Core Schedule briefing read — `goal/platform-v1` 통합.
-- ScheduleCandidate → Schedule atomic confirmation — PR #148, 실제 DB QA 완료.
-- Data Core Usage Ledger V1 — PR #159, 실제 DB/RLS/monthly rollup QA 완료.
-- Shared Infrastructure Cost Allocation V1 — PR #161, 실제 DB/RLS/recalculation QA 완료.
-- Trusted Data Core Writer V1 server-only boundary — PR #165, `goal/platform-v1` 통합. Production secret은 미설정.
-- Common Transcript V1 + Call STT Adapter — PR #156 `main` 반영 후 `goal/platform-v1` 동기화.
-- creator-only WorkRecord mutation RLS — 실제 `worklog-platform` 적용 및 격리 QA 완료.
-- UAR v2 exact-head Preview / browser smoke / visual stability gate 사용 중.
+- Supabase Auth + Personal Workspace bootstrap
+- Workspace / Membership RLS
+- Internal Data Core repositories
+- WorkRecord / Schedule / SourceRef / Candidate
+- Notion Worklog Adapter 분리
+- Data Core + Notion dual-write
+- Data Core primary Quick Worklog
+- Data Core Briefing read / creator-only status mutation
+- Data Core Schedule briefing read
+- ScheduleCandidate → Schedule atomic confirmation
+- Usage Ledger V1 direct cost attribution
+- Shared Infrastructure Cost Allocation V1
+- Trusted Data Core Writer V1 server-only boundary
+- migration history alignment
+- UAR v2 exact-head Preview gate
 
-## 실제 Supabase migration 상태
-
-`worklog-platform` remote history:
-
-1. `20260914161008 personal_workspace_bootstrap`
-2. `20260914161132 fix_personal_workspace_bootstrap_ambiguity`
-3. `20260914161258 data_core_worklog_idempotency`
-4. `20260914162801 confirm_schedule_candidate`
-5. `20260915000923 data_core_usage_ledger_v1`
-6. `20260915001501 shared_cost_allocation_v1`
-7. `20260915001535 shared_cost_pool_explicit_deny_policy`
-8. `20260915023455 restrict_work_record_mutations_to_creator`
-
-Repo migration version/name도 위 remote history와 정렬한다.
-
-## 이미 검증한 실제 DB 항목
+## 실제 DB 검증 완료
 
 - 신규 Auth user → Personal Workspace 1개 / owner membership 1개
 - bootstrap 재호출 idempotent
@@ -90,23 +87,39 @@ Repo migration version/name도 위 remote history와 정렬한다.
 - ScheduleCandidate 원자적 확정 및 재호출 중복방지
 - Usage Ledger 본인 조회 / 타 사용자 차단 / 일반 authenticated mutation 차단
 - 월 direct cost rollup
-- Shared Cost pool 일반 사용자 접근 차단
-- Shared allocation 본인 조회 / 타 사용자 차단
+- Shared Cost 일반 사용자 차단 / 본인 allocation 조회 / 타 사용자 차단
 - equal_active_user 배분 및 재계산 idempotency
 - `user_monthly_cost = direct + allocated shared`
 - 테스트 fixture rollback 후 잔존 없음
 - Security Advisor lint 0
 
-## 현재 최종 Gate 순서
+## 실제 Supabase migration history
 
-1. 이 문서 commit으로 PR #171 exact-head Preview 재배포.
-2. UAR에서 `/api/supabase-auth-config`가 Data Core Preview 설정을 실제 반환하는지 확인.
-3. `npm test` 242/242, environment parity, preview runtime, representative smoke, visual stability 재확인.
-4. 기존 Notion 경로 회귀가 없는지 현재 UAR/단위계약 범위에서 재확인.
-5. Issue #182를 결과와 함께 close.
-6. PR #171 body와 이 상태 문서를 최종 exact HEAD 결과로 갱신.
-7. PR #171을 Ready for Review로 전환.
-8. 사용자 명시 승인 직전에서 중단. `main` 병합은 하지 않는다.
+1. `20260914161008 personal_workspace_bootstrap`
+2. `20260914161132 fix_personal_workspace_bootstrap_ambiguity`
+3. `20260914161258 data_core_worklog_idempotency`
+4. `20260914162801 confirm_schedule_candidate`
+5. `20260915000923 data_core_usage_ledger_v1`
+6. `20260915001501 shared_cost_allocation_v1`
+7. `20260915001535 shared_cost_pool_explicit_deny_policy`
+8. `20260915023455 restrict_work_record_mutations_to_creator`
+
+Repo migration version/name과 remote history를 정렬했다.
+
+## Notion 호환성 / Notion-free 경로 검증 수준
+
+- Notion 미설정 상태의 Data Core primary save 계약 테스트: PASS.
+- Data Core primary 재시도/checkpoint 계약: PASS.
+- Notion Adapter payload/error 회귀 테스트: PASS.
+- UAR browser smoke는 외부 write를 차단한 상태로 PASS.
+- 기존 Notion 경로를 이번 Gate에서 제거하지 않는다.
+- 실제 외부 Notion write나 실제 사용자 계정으로 Preview E2E write를 실행했다고 과장하지 않는다. Production cutover/활성화는 `main` 병합 이후 별도 운영 Gate다.
+
+## 현재 결론
+
+Platform V1 코드/DB/Preview 보안 Gate는 `main` 병합 승인 요청 단계까지 도달했다. 이 문서-only 마무리 commit도 #171 exact-head UAR를 다시 통과한 뒤 PR을 Ready for Review로 전환한다.
+
+`main` 병합 후에도 Production Data Core feature flags / privileged secret 활성화는 별도 단계이며, Notion을 즉시 제거하지 않는다.
 
 ## 승인 필요사항
 
@@ -118,6 +131,5 @@ Repo migration version/name도 위 remote history와 정렬한다.
 ## 알려진 debt
 
 - 기존 Notion personal token localStorage 방식은 호환성을 위해 아직 유지한다.
-- Notion은 즉시 제거하지 않고 선택형 Integration으로 단계 전환한다.
 - Trusted writer는 코드 경계만 준비했고 Production secret에는 연결하지 않았다.
 - 실제 Supabase/Netlify 청구서 자동 수집 및 상용 요금/마진 계산은 후속 단계다.
