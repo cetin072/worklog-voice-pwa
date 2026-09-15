@@ -1,34 +1,34 @@
 # Production Data Core Cutover
 
-Status: **Preparation in progress. Production activation has not been performed.**
+Status: **Cutover readiness verified. Production activation has not been performed.**
 
 ## Baseline
 
 - Latest `main`: `434907101aed41efe7843d10b3d03ab7ff562e95` (PR #171 merged).
-- Goal branch: `goal/production-data-core-cutover`; current baseline includes child PR #193 for Windows UAR browser-gate compatibility and Draft Final Gate PR #194.
+- Goal branch: `goal/production-data-core-cutover`; Final Gate PR: #194.
+- Goal remains based on latest `main` with `behind 0` at the final evidence refresh.
 - Production public runtime: `https://worklog-voice-pwa.netlify.app` returned `200` on 2026-09-15. `GET /api/supabase-auth-config` returned `configured=false` and `dataCorePrimaryEnabled=false`.
 - The production worklog health endpoint returned `200` with `ok=true`, `configured=true`, and `mode=owner`.
 - Supabase target: `worklog-platform` (`zlhdhwgabqzsuuhaiedc`). No other Supabase project is in scope.
-- This runner has no Netlify or Supabase CLI credentials. Netlify environment inventory, remote migration history, and Advisor results below are preserved from the merged Platform V1 gate and must be re-read through the authorized operations console before activation.
 
-## Current production Data Core state
+## Current Production Data Core state
 
-The public production configuration proves that Supabase public configuration and the primary Data Core path are **OFF**. No Production environment variable was created or changed during this goal.
+Production Data Core is intentionally **OFF**. Authorized Netlify environment inventory was re-read immediately before this evidence refresh.
 
-The required Production settings remain intentionally absent or disabled:
+The following settings exist only in `deploy-preview`, not Production:
 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
-- `WORKLOG_DATA_CORE_PRIMARY_ENABLED`
-- `WORKLOG_DATA_CORE_BRIEFING_ENABLED`
-- `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED`
-- `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED`
+- `WORKLOG_DATA_CORE_PRIMARY_ENABLED=true`
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`
+- `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED=true`
+- `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED=true`
 
-`SUPABASE_SECRET_KEY` must not be set for this cutover. It is not a browser or public-function configuration value.
+No Production Data Core setting was created or changed during this gate. `SUPABASE_SECRET_KEY` is not part of this cutover and must not be added to client/public configuration.
 
 ## Migration and security baseline
 
-The merged Platform V1 gate recorded these repository/remote-aligned migrations, in order:
+Authorized operations access re-read the remote migration history from `worklog-platform`; it matches these eight migrations in order:
 
 1. `20260914161008_personal_workspace_bootstrap`
 2. `20260914161132_fix_personal_workspace_bootstrap_ambiguity`
@@ -39,35 +39,70 @@ The merged Platform V1 gate recorded these repository/remote-aligned migrations,
 7. `20260915001535_shared_cost_pool_explicit_deny_policy`
 8. `20260915023455_restrict_work_record_mutations_to_creator`
 
-The prior remote fixture used rollback and recorded: idempotent personal-workspace bootstrap, owner WorkRecord insert, same-workspace member read but no creator-owned update, outsider read/update denial, and idempotent ScheduleCandidate confirmation. It did not retain test users or rows.
+The remote RLS fixture evidence remains valid: idempotent Personal Workspace bootstrap, owner WorkRecord insert, same-workspace member read but no creator-owned update, outsider read/update denial, and idempotent ScheduleCandidate confirmation.
 
-The last recorded Supabase Security Advisor result was **0 blocking findings**. The Performance Advisor had only 11 `unused_index` INFO findings on new or low-use tables. Re-run both in `worklog-platform` before activation; do not mutate the remote migration history to make it appear aligned.
+Supabase Advisor was re-run on `worklog-platform`:
+
+- Security Advisor: **0 findings**.
+- Performance Advisor: **11 `unused_index` INFO findings only** on new/low-use indexes; no blocking performance/security finding.
+
+Remote migration history was not rewritten or manipulated.
 
 ## Verification evidence
 
-- `npm test` on the Goal baseline: **242 passed, 0 failed**.
-- PR #171's GitHub User Acceptance Ready workflow: **success**.
-- The exact Draft Final Gate Preview is `https://deploy-preview-194--worklog-voice-pwa.netlify.app`. Its current Goal HEAD is the head commit shown for Draft PR #194; verify that SHA again immediately before approval so this living document never relies on a stale self-reference.
-- PR #194 GitHub User Acceptance Ready workflow passed. A direct re-run against that exact Preview passed UI contract, environment parity, Preview runtime, representative smoke, and mobile visual stability. The public auth config passed the Data Core contract with no secret field; browser gates blocked external writes.
-- Issue #192 / child PR #193 fixed Windows Chrome discovery in the browser gates while preserving the Linux lookup.
-- The existing codebase retains `setup.html`, personal Notion-token handling, Notion worklog adapter behavior, existing Quick Worklog, Briefing fallback, and access-key paths. Contract tests cover Notion adapter behavior and a Data Core primary save with no Notion configuration.
+- `npm test`: **242 passed, 0 failed** on the cutover goal baseline.
+- PR #194 User Acceptance Ready workflow: **PASS** before the final evidence-only refresh.
+- Exact Final Gate Preview: `https://deploy-preview-194--worklog-voice-pwa.netlify.app`.
+- UI contract, environment parity, Preview runtime, representative smoke, and mobile visual stability: **PASS**.
+- Preview public auth config exposes only public Supabase configuration and feature state; no server secret/service-role field is exposed.
+- Issue #192 / child PR #193 fixed Windows Chrome discovery in browser gates while preserving Linux discovery.
+- Final exact-head UAR and Deploy Preview must be green again after this documentation refresh before PR #194 is marked Ready for Review.
 
-## Notion-free and Notion compatibility acceptance
+## Live authenticated Notion-free acceptance
 
-The test and Preview evidence proves the app shell and no-Notion Data Core contract, but it is not a live authenticated write E2E. A prior synthetic signup was rejected before account creation. This runner cannot safely create a deliverable disposable mailbox or access the authorized Supabase console, so the following remain an explicit pre-activation operational check using an approved disposable account:
+A controlled disposable QA Auth user was created only in the correct `worklog-platform` project, then authenticated through the real Supabase password-login endpoint. No Production Data Core flag was enabled.
 
-1. Sign up and log in with no Notion connection.
-2. Confirm one Personal Workspace and one owner membership.
-3. Save a WorkRecord, repeat the same request, then confirm one canonical SourceRef/WorkRecord result.
-4. Read Briefing, mark complete, undo, and read Schedule.
-5. Run a separate existing-Notion-user smoke and verify the fallback/compatibility path.
-6. Clean up the approved QA account and fixture data using the approved console process.
+GitHub Actions temporary live E2E run `34946706528`, attempt 2, executed against PR #194 Deploy Preview and the real `worklog-platform` Data Core. It passed all of the following:
 
-Do not weaken email-confirmation or Auth policy merely to make this test easier.
+- public Preview Data Core configuration available
+- real password login and access token issuance
+- exactly one Personal Workspace
+- exactly one owner membership
+- authenticated Schedule insert
+- authenticated `/api/worklog` Data Core health
+- Notion-free WorkRecord save
+- repeated identical `clientRequestId` returned the same WorkRecord
+- SourceRef/WorkRecord idempotent path
+- Data Core Briefing read
+- Schedule visible in Briefing
+- WorkRecord `완료` mutation
+- completed WorkRecord removed from open Briefing
+- `진행중` undo mutation
+- WorkRecord returned to open Briefing
+
+The public self-signup attempt used a non-deliverable disposable domain and was rejected by Supabase email validation before account creation. Auth/email-confirmation policy was **not weakened**. The controlled QA-user path was used only to exercise actual password authentication and authenticated RLS/API behavior.
+
+After PASS, the QA user's WorkRecord, SourceRef, Schedule, membership, workspace, Auth sessions/refresh tokens/identity/user were removed. A final cleanup query confirmed **0 residual user/workspace/work-record/source-ref/schedule rows** for the QA user. Temporary QA workflow/script files were also removed from the goal branch.
+
+## Existing Notion compatibility acceptance
+
+The existing codebase still retains:
+
+- `setup.html`
+- personal Notion-token handling
+- owner Notion configuration path
+- Notion Worklog adapter
+- existing Quick Worklog compatibility
+- Briefing fallback
+- access-key path
+
+Contract tests cover the Notion adapter/write behavior and Data Core primary save without Notion.
+
+A live **read-only** smoke was also performed against the connected existing Notion workspace. The `🎙 업무 통합 기록` area was reachable and returned its existing system briefing and multiple existing work-record pages. This proves the existing Notion content path is live and accessible. No real-user Notion record was created, edited, completed, or deleted during the gate; a destructive or unnecessary live write was intentionally avoided. Production owner worklog health remained available while Data Core stayed OFF.
 
 ## Activation plan — explicit approval required
 
-After the final Gate PR is approved and merged, activate only in this order in Netlify Production:
+After Final Gate PR #194 is approved and merged, activate only with a separate explicit user approval, in this order in Netlify Production:
 
 1. Set `SUPABASE_URL` to the `worklog-platform` URL.
 2. Set `SUPABASE_PUBLISHABLE_KEY`.
@@ -76,16 +111,16 @@ After the final Gate PR is approved and merged, activate only in this order in N
 5. Set `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED=true`.
 6. Set `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED=true`.
 
-Never add a service-role key, `SUPABASE_SECRET_KEY`, paid STT/AI provider secret, or privileged credential to the client/public configuration.
+Never add a service-role key, `SUPABASE_SECRET_KEY`, paid STT/AI provider secret, or privileged credential to client/public configuration.
 
 ## Production activation smoke plan
 
-Use only an approved test account after each configuration change is live:
+Use only an approved test account after the configuration is live:
 
 1. `GET /api/supabase-auth-config` must report `configured=true`, `dataCorePrimaryEnabled=true`, an HTTPS Supabase origin, and no secret/service-role field.
 2. Log in, save a WorkRecord, and repeat the same request to prove idempotency.
 3. Read Briefing; complete and undo one record; verify Schedule.
-4. Verify an existing Notion user's worklog and Briefing compatibility path.
+4. Verify the existing Notion compatibility/read path remains healthy.
 5. Check function logs only for sanitized operational outcomes; never paste credentials into logs, issues, or PRs.
 
 ## Rollback
@@ -97,22 +132,28 @@ If a cutover symptom appears, first set these flags to `false` in reverse order:
 3. `WORKLOG_DATA_CORE_BRIEFING_ENABLED`
 4. `WORKLOG_DATA_CORE_PRIMARY_ENABLED`
 
-Confirm the existing Notion path remains usable. Do not delete Supabase rows, drop schema, or roll back migrations as the first response. Feature-flag rollback is expected to be a configuration propagation interval plus smoke verification; record the observed propagation time during the approved activation.
+Confirm the existing Notion path remains usable. Do not delete Supabase rows, drop schema, or roll back migrations as the first response. Feature-flag rollback is preferred; preserve user data.
 
 ## Final approval checklist
 
-- [x] Latest `main` baseline captured.
-- [x] Full repository tests pass.
-- [x] Exact Final Gate Preview runtime, parity, UI, smoke, and visual checks pass.
+- [x] Latest `main` baseline captured and goal `behind 0`.
+- [x] Full repository tests pass: 242/242.
+- [x] Final Gate Preview runtime, parity, UI, smoke, and visual checks pass.
 - [x] Public Production endpoint confirms Data Core is OFF.
+- [x] Netlify Production/deploy-preview environment inventory re-read through authorized operations access.
+- [x] `worklog-platform` remote migration history re-read and aligned.
+- [x] Supabase Security Advisor re-run: 0 findings.
+- [x] Performance Advisor re-run: only 11 unused-index INFO findings.
+- [x] Live authenticated Notion-free E2E passed on real Data Core.
+- [x] QA Auth account and all QA fixture data cleaned up; no residue.
+- [x] Existing Notion workspace/content live read-only smoke passed.
 - [x] Notion compatibility code/contract regression reviewed.
-- [x] Migration, RLS, Advisor, secret-boundary evidence recorded from the merged Platform V1 gate.
+- [x] RLS and secret-boundary evidence verified.
 - [x] Rollback and activation-smoke plans documented.
-- [ ] Re-read Netlify Production environment inventory and `worklog-platform` migration/Advisor state using authorized operations access immediately before activation.
-- [ ] Execute and clean up approved disposable-account Notion-free E2E and existing-Notion-user live smoke.
-- [x] Final Goal-to-`main` Draft Gate PR created: #194.
-- [ ] User approval for Goal-to-`main` merge.
-- [ ] Separate user approval for Production flag activation.
+- [x] Final Goal-to-`main` Gate PR created: #194.
+- [ ] Final exact-head UAR/Deploy Preview green after this evidence refresh.
+- [ ] User approval for #194 Goal-to-`main` merge.
+- [ ] Separate user approval for Production Data Core activation.
 
 ## Approval boundary
 
