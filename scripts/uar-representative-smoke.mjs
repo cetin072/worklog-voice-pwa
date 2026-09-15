@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,8 +32,8 @@ async function fetchPreviewHtml() {
   const response = await fetch(`${previewUrl}/`, { cache: 'no-store', redirect: 'follow' });
   if (!response.ok) throw new Error(`UAR_SMOKE_PREVIEW_ROOT_HTTP_${response.status}`);
   const html = await response.text();
-  if (!html.includes('id="mic"') || !html.includes('id="text"')) {
-    throw new Error('UAR_SMOKE_PREVIEW_ROOT_CONTRACT_MISSING');
+  for (const marker of ['id="mic"', 'id="text"', 'id="scannerCard"', 'id="scanGallery"', 'id="scanCamera"']) {
+    if (!html.includes(marker)) throw new Error(`UAR_SMOKE_PREVIEW_ROOT_CONTRACT_MISSING:${marker}`);
   }
   return html;
 }
@@ -58,14 +58,46 @@ const browserStub = `<script>
     }
     return json({ error: 'UAR smoke blocks network fetches.' }, 503);
   };
+  HTMLInputElement.prototype.click = function () {
+    this.dataset.uarClickCount = String(Number(this.dataset.uarClickCount || 0) + 1);
+  };
   window.prompt = () => '';
   window.alert = () => {};
   window.confirm = () => false;
 })();
 </script>`;
 
+const scannerProbe = `<script>
+(() => {
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      const gallery = document.getElementById('scanGallery');
+      const camera = document.getElementById('scanCamera');
+      const addGallery = document.getElementById('scanPdfAddGallery');
+      const addCamera = document.getElementById('scanPdfAddCamera');
+      const galleryInput = document.getElementById('scanGalleryInput');
+      const cameraInput = document.getElementById('scanCameraInput');
+      gallery?.click();
+      camera?.click();
+      addGallery?.click();
+      addCamera?.click();
+      const apiReady = Boolean(window.WorklogScanner && typeof window.WorklogScanner.pageCount === 'function' && typeof window.WorklogScanner.getDocument === 'function');
+      const inputContract = Boolean(galleryInput?.multiple && !galleryInput?.hasAttribute('capture') && cameraInput?.getAttribute('capture') === 'environment');
+      const authContract = Boolean(document.getElementById('scannerCard')?.classList.contains('core-app-card'));
+      const wiringReady = Number(galleryInput?.dataset.uarClickCount || 0) === 2 && Number(cameraInput?.dataset.uarClickCount || 0) === 2;
+      const node = document.createElement('div');
+      node.id = 'uarScannerSmokeResult';
+      node.dataset.result = apiReady && inputContract && authContract && wiringReady ? 'PASS' : 'FAIL';
+      node.dataset.detail = `api:${apiReady};inputs:${inputContract};auth:${authContract};wiring:${wiringReady}`;
+      node.hidden = true;
+      document.body.append(node);
+    }, 2200);
+  }, { once: true });
+})();
+</script>`;
+
 let html = await fetchPreviewHtml();
-html = html.replace(/(<script\b)/i, `${browserStub}$1`);
+html = html.replace(/(<script\b)/i, `${browserStub}${scannerProbe}$1`);
 html = html.replace(/\b(src|href)=(["'])(\/[^"']+)\2/g, (_match, attr, quote, resource) => {
   return `${attr}=${quote}${previewUrl}${resource}${quote}`;
 });
@@ -91,7 +123,7 @@ try {
     '--no-default-browser-check',
     '--disable-features=PushMessaging,Notifications,BackgroundFetch,PeriodicBackgroundSync,OptimizationHints,MediaRouter',
     '--allow-file-access-from-files',
-    '--virtual-time-budget=6000',
+    '--virtual-time-budget=6500',
     '--dump-dom',
     `file://${fixturePath}`
   ], {
@@ -114,9 +146,25 @@ if (!dom.trim()) {
   throw new Error(`UAR_SMOKE_EMPTY_DOM:${stderr.slice(-1000)}`);
 }
 
-for (const marker of ['id="mic"', 'id="save"', 'id="manualEntry"', 'id="text"', 'id="typedSave"', 'id="briefingCard"']) {
+for (const marker of [
+  'id="mic"',
+  'id="save"',
+  'id="manualEntry"',
+  'id="text"',
+  'id="typedSave"',
+  'id="briefingCard"',
+  'id="scannerCard"',
+  'id="scanGallery"',
+  'id="scanCamera"',
+  'id="scanPdfCard"',
+  'id="scannerDialog"'
+]) {
   if (!dom.includes(marker)) throw new Error(`UAR_SMOKE_CORE_CONTROL_MISSING:${marker}`);
 }
+
+const scannerMarker = dom.match(/id="uarScannerSmokeResult"[^>]*data-result="([^"]+)"[^>]*data-detail="([^"]*)"/);
+if (!scannerMarker) throw new Error('UAR_SMOKE_SCANNER_RESULT_MISSING');
+if (scannerMarker[1] !== 'PASS') throw new Error(`UAR_SMOKE_SCANNER_FAILED:${scannerMarker[2]}`);
 
 if (!/id="health"[^>]*>\s*설정 필요\s*</.test(dom)) {
   const health = dom.match(/id="health"[^>]*>([^<]*)</)?.[1]?.trim() || 'missing';
@@ -127,10 +175,8 @@ if (/Page not found|Site not found|Application Error/i.test(dom)) {
   throw new Error('UAR_SMOKE_FATAL_PAGE_ERROR_VISIBLE');
 }
 
-// Ensure the browser fixture really executed assets from the exact Preview,
-// rather than silently falling back to repository-local JavaScript.
-if (!dom.includes(`${previewUrl}/app.js`)) {
-  throw new Error('UAR_SMOKE_PREVIEW_ASSET_SOURCE_MISSING');
+for (const asset of ['/app.js', '/scanner-core.js', '/scanner-geometry.js', '/scanner.js']) {
+  if (!dom.includes(`${previewUrl}${asset}`)) throw new Error(`UAR_SMOKE_PREVIEW_ASSET_SOURCE_MISSING:${asset}`);
 }
 
-console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} preview_assets=true external_writes=false health=설정 필요`);
+console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} preview_assets=true external_writes=false scanner=${scannerMarker[2]} health=설정 필요`);
