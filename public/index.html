@@ -39,43 +39,9 @@
       </div>
       <div class="header-actions">
         <span id="health" class="badge">확인 중</span>
-        <button id="settingsOpen" class="settings-open" type="button" aria-controls="settingsCard" aria-label="설정 열기">⚙</button>
+        <a id="settingsOpen" class="settings-open" href="/settings.html" aria-label="설정 열기">⚙</a>
       </div>
     </header>
-
-    <section id="settingsCard" class="card settings-card" hidden aria-live="polite">
-      <div class="settings-head">
-        <div>
-          <p class="eyebrow">업무수첩 설정</p>
-          <h2>⚙ 설정</h2>
-        </div>
-        <button id="settingsClose" class="settings-close" type="button">닫기</button>
-      </div>
-
-      <section class="settings-section settings-section-first">
-        <h3>내 계정</h3>
-        <p id="settingsAccountState" class="settings-account-state">계정 상태를 확인하는 중입니다.</p>
-        <button id="settingsAccountAction" class="settings-action" type="button">로그인 화면 보기</button>
-      </section>
-
-      <section class="settings-section">
-        <h3>휴대폰에 설치</h3>
-        <p id="settingsInstallGuide" class="settings-note">브라우저 메뉴에서 홈 화면에 추가하면 일반 앱처럼 바로 열 수 있습니다.</p>
-      </section>
-
-      <section class="settings-section">
-        <h3>업무수첩 공유</h3>
-        <p class="settings-note">아래 버튼으로 지금 사용하는 업무수첩 링크를 다른 사람에게 바로 보낼 수 있습니다.</p>
-        <button id="settingsShare" class="settings-action" type="button">업무수첩 링크 공유</button>
-        <p id="settingsShareStatus" class="settings-status"></p>
-      </section>
-
-      <section class="settings-section">
-        <h3>Notion 연결 <span class="settings-optional">선택</span></h3>
-        <p class="settings-note">Notion 기록도 함께 쓰고 싶다면 여기에서 연결할 수 있습니다.</p>
-        <a class="settings-link" href="/setup.html">Notion 연결 설정 열기</a>
-      </section>
-    </section>
 
     <section id="welcomeCard" class="card welcome-card" aria-labelledby="welcomeTitle">
       <div class="welcome-icon" aria-hidden="true">🎙</div>
@@ -187,7 +153,7 @@
         </label>
       </div>
 
-      <details>
+      <details id="entryExtraDetails">
         <summary>추가 정보</summary>
         <div class="detailsGrid">
           <label><span>금액</span><input id="amount" type="number" inputmode="numeric" min="0"></label>
@@ -205,7 +171,7 @@
   <script src="/platform-auth.js?v=20260915-1" defer></script>
   <script src="/platform-auth-ui.js?v=20260915-2" defer></script>
   <script src="/onboarding.js?v=20260915-1" defer></script>
-  <script src="/settings.js?v=20260915-1" defer></script>
+  <script src="/settings.js?v=20260915-2" defer></script>
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
