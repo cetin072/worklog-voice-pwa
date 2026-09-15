@@ -63,4 +63,32 @@ if (!setup.body.includes('Notion') || !setup.body.includes('업무수첩')) {
   throw new Error('UAR_PREVIEW_RUNTIME_SETUP_SURFACE_MISSING');
 }
 
+if (String(process.env.GITHUB_HEAD_REF || '').trim() === 'goal/platform-v1') {
+  const authConfig = await get('/api/supabase-auth-config');
+  let config;
+  try {
+    config = JSON.parse(authConfig.body);
+  } catch {
+    throw new Error('UAR_PREVIEW_RUNTIME_DATA_CORE_CONFIG_INVALID_JSON');
+  }
+  if (config?.configured !== true) {
+    throw new Error('UAR_PREVIEW_RUNTIME_DATA_CORE_NOT_CONFIGURED');
+  }
+  if (config?.dataCorePrimaryEnabled !== true) {
+    throw new Error('UAR_PREVIEW_RUNTIME_DATA_CORE_PRIMARY_DISABLED');
+  }
+  if (!/^https:\/\//.test(String(config?.supabaseUrl || ''))) {
+    throw new Error('UAR_PREVIEW_RUNTIME_DATA_CORE_URL_INVALID');
+  }
+  if (!String(config?.publishableKey || '').startsWith('sb_publishable_')) {
+    throw new Error('UAR_PREVIEW_RUNTIME_DATA_CORE_PUBLISHABLE_KEY_INVALID');
+  }
+  for (const forbidden of ['secret', 'serviceRole', 'service_role', 'serviceRoleKey', 'service_role_key']) {
+    if (Object.prototype.hasOwnProperty.call(config, forbidden)) {
+      throw new Error(`UAR_PREVIEW_RUNTIME_SECRET_FIELD_EXPOSED:${forbidden}`);
+    }
+  }
+  console.log('UAR_PREVIEW_RUNTIME_DATA_CORE_CONFIG_PASS');
+}
+
 console.log(`UAR_PREVIEW_RUNTIME_PASS ${previewUrl} assets=${assets.length}`);
