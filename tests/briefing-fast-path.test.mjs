@@ -65,6 +65,12 @@ test("briefing RPC is security-invoker, auth-scoped, and not public", () => {
   assert.match(migration, /grant execute on function public\.get_my_briefing_source\(\) to authenticated, service_role/i);
 });
 
+test("briefing open-work query has a partial workspace/update index", () => {
+  assert.match(migration, /work_records_open_workspace_updated_at_idx/);
+  assert.match(migration, /on public\.work_records \(workspace_id, updated_at desc\)/i);
+  assert.match(migration, /where status in \('in_progress', 'waiting', 'needs_review'\)/i);
+});
+
 test("fast endpoint prefers one-RPC source and keeps rollout fallback", () => {
   assert.match(fastFunction, /createWorklogDataCoreBriefingSource/);
   assert.match(fastFunction, /source\.fastPath/);
