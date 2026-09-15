@@ -1,8 +1,9 @@
 -- Issue #215: collapse the authenticated Data Core briefing read into one RPC.
 -- Keep classification rules in application code; this RPC only returns source rows.
 
-create index if not exists work_records_workspace_status_updated_at_idx
-on public.work_records (workspace_id, status, updated_at desc);
+create index if not exists work_records_open_workspace_updated_at_idx
+on public.work_records (workspace_id, updated_at desc)
+where status in ('in_progress', 'waiting', 'needs_review');
 
 create or replace function public.get_my_briefing_source()
 returns table (
