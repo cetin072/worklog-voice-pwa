@@ -7,6 +7,20 @@
 - 장기 통합선: `goal/platform-v1`
 - 실제 Data Core 프로젝트: Supabase `worklog-platform` (`zlhdhwgabqzsuuhaiedc`)
 
+## Major Gate 현재 검증 상태 — PR #171
+
+- 확인 시각: 2026-09-15 KST
+- 최신 `main`: `dfa1de963d1c785ae7f8204ab3d4981f63218b75`
+- 최신 `goal/platform-v1` / PR #171 HEAD: `bfdea3f9b00f061c055bd742f240825f2b5b89d7`
+- PR #171: Draft, mergeable `CLEAN`; main 병합은 사용자 승인 전 금지.
+- `npm test`: PASS (232/232).
+- GitHub UAR v2: PASS (exact PR HEAD).
+- Netlify exact Deploy Preview: READY / success (exact PR HEAD, `deploy-preview-171--worklog-voice-pwa.netlify.app`).
+- Deploy Preview 공개 Auth config 확인: **BLOCKED**. `GET /api/supabase-auth-config`가 `configured:false` 및 Data Core flags 모두 `false`를 반환했다.
+- 따라서 flag-on 신규 사용자, Notion-free WorkRecord save/retry, Briefing mutation, Schedule, 실제 RLS 격리와 기존 Notion Preview 회귀 Gate는 아직 실행할 수 없으며 PASS로 기록하지 않는다.
+
+필요한 다음 조치(Production 변경 금지): Netlify `deploy-preview` context에 이미 승인된 `worklog-platform`의 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` 및 네 개의 `WORKLOG_DATA_CORE_*` flag를 적용한 뒤, PR #171 exact HEAD Preview를 재배포하고 이 Gate를 재실행한다. `SUPABASE_SECRET_KEY` 및 유료 provider secret은 Preview에도 설정하지 않는다.
+
 ## 완료 Milestone
 
 - Platform Foundation V1 공통 계약: Workspace, Processing Job/Runner, Retry, Idempotency, Usage/Cost, Storage, Adapter, Permission, Sync, Retention/Delete, Audit — `main` 반영.
