@@ -53,6 +53,27 @@
     return /Android/i.test(navigator.userAgent || "");
   }
 
+  function browserLabel() {
+    const ua = navigator.userAgent || "";
+    if (/EdgA|EdgiOS|Edg\//i.test(ua)) return "Edge";
+    if (/SamsungBrowser/i.test(ua)) return "Samsung Internet";
+    if (/CriOS|Chrome\//i.test(ua)) return "Chrome";
+    if (/FxiOS|Firefox\//i.test(ua)) return "Firefox";
+    if (/Safari/i.test(ua)) return "Safari";
+    return "브라우저";
+  }
+
+  function notificationHelpText() {
+    const browser = browserLabel();
+    if (isAndroid()) {
+      return `웹 알림 권한은 켜졌지만 ${browser} 자체 알림이 휴대폰에서 차단되어 있을 수 있습니다. 휴대폰 설정 → 앱 → ${browser} → 알림 → ‘알림 허용’을 켠 뒤 ‘테스트 알림 다시 보내기’를 눌러주세요.`;
+    }
+    if (isIos()) {
+      return "웹 알림 권한은 켜졌지만 iPhone/iPad의 앱 알림이 꺼져 있을 수 있습니다. 설정 → 알림에서 업무수첩 알림을 허용한 뒤 다시 테스트해 주세요.";
+    }
+    return `${browser} 또는 운영체제의 알림 설정에서 업무수첩 알림이 허용되어 있는지 확인한 뒤 다시 테스트해 주세요.`;
+  }
+
   function updateInstallUi() {
     const installGuide = document.getElementById("settingsInstallGuide");
     const installAction = document.getElementById("settingsInstallAction");
@@ -184,7 +205,7 @@
     }
 
     if (state.permission === "denied") {
-      guide.textContent = "이 기기에서 알림이 차단되어 있습니다. 브라우저 또는 기기 설정에서 업무수첩 알림을 허용한 뒤 다시 열어주세요.";
+      guide.textContent = "업무수첩 웹 알림 권한이 차단되어 있습니다. 브라우저의 사이트 권한에서 알림을 허용한 뒤 다시 열어주세요.";
       action.textContent = "알림이 차단됨";
       action.disabled = true;
       return;
@@ -192,18 +213,22 @@
 
     action.disabled = false;
     if (state.permission === "granted") {
-      guide.textContent = "이 기기의 알림 권한이 켜져 있습니다. 버튼을 눌러 실제 알림 표시를 확인할 수 있습니다.";
-      action.textContent = "테스트 알림 보내기";
+      guide.textContent = "웹 알림 권한이 켜져 있습니다. 테스트를 보내 실제 휴대폰에 표시되는지 확인해보세요.";
+      action.textContent = "테스트 알림 다시 보내기";
       return;
     }
 
-    guide.textContent = "버튼을 누를 때만 알림 권한을 요청합니다. 허용하면 바로 테스트 알림을 한 번 보냅니다.";
-    action.textContent = "알림 켜기 및 테스트";
+    guide.textContent = "‘알림 시작하기’를 누르면 브라우저의 기본 알림 허용창이 열립니다. 허용하면 테스트 알림까지 바로 보냅니다.";
+    action.textContent = "알림 시작하기";
   }
 
   function wireNotificationTest() {
     const action = document.getElementById("settingsNotificationTest");
     const status = document.getElementById("settingsNotificationStatus");
+    const confirm = document.getElementById("settingsNotificationConfirm");
+    const seen = document.getElementById("settingsNotificationSeen");
+    const missing = document.getElementById("settingsNotificationMissing");
+    const help = document.getElementById("settingsNotificationHelp");
     if (!action) return;
 
     action.addEventListener("click", async () => {
@@ -215,18 +240,41 @@
 
       action.disabled = true;
       if (status) status.textContent = "";
+      if (confirm) confirm.hidden = true;
+      if (help) help.hidden = true;
       try {
         const result = await notifications.showTestNotification();
         if (status) {
-          if (result.ok) status.textContent = "테스트 알림을 보냈습니다. 잠금화면 또는 알림센터에서도 확인해보세요.";
-          else if (result.code === "ios_install_required") status.textContent = "먼저 업무수첩을 홈 화면에 설치하고 홈 화면 아이콘으로 열어주세요.";
-          else if (result.code === "denied") status.textContent = "알림 권한이 차단되었습니다. 브라우저 또는 기기 설정에서 알림을 허용해주세요.";
-          else status.textContent = "이 기기에서는 현재 업무수첩 알림을 사용할 수 없습니다.";
+          if (result.ok) {
+            status.textContent = "테스트 알림을 전송했습니다. 실제로 보였는지 아래에서 확인해주세요.";
+            if (confirm) confirm.hidden = false;
+          } else if (result.code === "ios_install_required") {
+            status.textContent = "먼저 업무수첩을 홈 화면에 설치하고 홈 화면 아이콘으로 열어주세요.";
+          } else if (result.code === "denied") {
+            status.textContent = "업무수첩 웹 알림 권한이 차단되었습니다. 브라우저의 사이트 권한에서 알림을 허용해주세요.";
+          } else {
+            status.textContent = "이 기기에서는 현재 업무수첩 알림을 사용할 수 없습니다.";
+          }
         }
       } catch {
-        if (status) status.textContent = "테스트 알림을 표시하지 못했습니다. 앱을 다시 연 뒤 한 번 더 시도해주세요.";
+        if (status) status.textContent = "테스트 알림을 전송하지 못했습니다. 앱을 다시 연 뒤 한 번 더 시도해주세요.";
       } finally {
         updateNotificationUi();
+      }
+    });
+
+    seen?.addEventListener("click", () => {
+      if (confirm) confirm.hidden = true;
+      if (help) help.hidden = true;
+      if (status) status.textContent = "알림 확인이 완료되었습니다. 이 기기에서 업무수첩 알림을 받을 수 있습니다.";
+    });
+
+    missing?.addEventListener("click", () => {
+      if (confirm) confirm.hidden = true;
+      if (status) status.textContent = "알림 전송은 됐지만 휴대폰에 표시되지 않았습니다.";
+      if (help) {
+        help.textContent = notificationHelpText();
+        help.hidden = false;
       }
     });
 
