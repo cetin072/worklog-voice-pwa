@@ -5,41 +5,108 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#111827">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="업무를 음성이나 직접 입력으로 기록하고 Notion 업무 통합 기록에 저장">
+  <meta name="description" content="말하거나 입력하면 업무와 일정을 놓치지 않게 정리해주는 개인 업무수첩">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="업무수첩">
+  <meta property="og:title" content="업무수첩 · 말하면 기록되고 일정까지 한눈에">
+  <meta property="og:description" content="음성이나 직접 입력으로 업무를 기록하고, 오늘 할 일과 다가오는 일정을 한눈에 확인하세요.">
+  <meta property="og:url" content="https://worklog-voice-pwa.netlify.app/">
+  <meta property="og:image" content="https://worklog-voice-pwa.netlify.app/icons/icon-512-v3.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="업무수첩 앱 아이콘">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="업무수첩">
+  <meta name="twitter:description" content="말하거나 입력하면 업무와 일정을 놓치지 않게 정리해주는 개인 업무수첩">
+  <meta name="twitter:image" content="https://worklog-voice-pwa.netlify.app/icons/icon-512-v3.png">
+  <link rel="canonical" href="https://worklog-voice-pwa.netlify.app/">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192-v3.png">
   <link rel="apple-touch-icon" href="/icons/icon-192-v3.png">
   <title>업무수첩</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/distribution.css">
+  <link rel="stylesheet" href="/settings.css">
   <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/briefing-edit.css">
 </head>
-<body>
+<body class="platform-auth-loading">
   <main class="app">
     <header>
       <div>
-        <p class="eyebrow">업무 통합 기록</p>
+        <p class="eyebrow">나의 개인 업무공간</p>
         <h1>🎙 업무수첩</h1>
       </div>
-      <span id="health" class="badge">확인 중</span>
+      <div class="header-actions">
+        <span id="health" class="badge">확인 중</span>
+        <button id="settingsOpen" class="settings-open" type="button" aria-controls="settingsCard" aria-label="설정 열기">⚙</button>
+      </div>
     </header>
 
+    <section id="settingsCard" class="card settings-card" hidden aria-live="polite">
+      <div class="settings-head">
+        <div>
+          <p class="eyebrow">업무수첩 설정</p>
+          <h2>⚙ 설정</h2>
+        </div>
+        <button id="settingsClose" class="settings-close" type="button">닫기</button>
+      </div>
+
+      <section class="settings-section settings-section-first">
+        <h3>내 계정</h3>
+        <p id="settingsAccountState" class="settings-account-state">계정 상태를 확인하는 중입니다.</p>
+        <button id="settingsAccountAction" class="settings-action" type="button">로그인 화면 보기</button>
+      </section>
+
+      <section class="settings-section">
+        <h3>휴대폰에 설치</h3>
+        <p id="settingsInstallGuide" class="settings-note">브라우저 메뉴에서 홈 화면에 추가하면 일반 앱처럼 바로 열 수 있습니다.</p>
+      </section>
+
+      <section class="settings-section">
+        <h3>업무수첩 공유</h3>
+        <p class="settings-note">아래 버튼으로 지금 사용하는 업무수첩 링크를 다른 사람에게 바로 보낼 수 있습니다.</p>
+        <button id="settingsShare" class="settings-action" type="button">업무수첩 링크 공유</button>
+        <p id="settingsShareStatus" class="settings-status"></p>
+      </section>
+
+      <section class="settings-section">
+        <h3>Notion 연결 <span class="settings-optional">선택</span></h3>
+        <p class="settings-note">새 사용자는 Notion 없이 바로 사용할 수 있습니다. 기존 Notion 기록을 함께 쓰고 싶은 경우에만 연결하세요.</p>
+        <a class="settings-link" href="/setup.html">Notion 연결 설정 열기</a>
+      </section>
+    </section>
+
+    <section id="welcomeCard" class="card welcome-card" aria-labelledby="welcomeTitle">
+      <div class="welcome-icon" aria-hidden="true">🎙</div>
+      <p class="eyebrow welcome-eyebrow">말하면 기록되고, 일정까지 한눈에</p>
+      <h2 id="welcomeTitle">업무를 놓치지 않는<br>개인 업무수첩</h2>
+      <p class="welcome-copy">복잡한 설정 없이 계정만 만들면 바로 시작할 수 있습니다. Notion 연결은 필요하지 않습니다.</p>
+      <div class="welcome-benefits" aria-label="주요 기능">
+        <span>🎙 말하거나 직접 입력</span>
+        <span>✅ 업무 상태 한눈에 정리</span>
+        <span>📅 오늘·다가오는 일정 확인</span>
+      </div>
+    </section>
+
     <section id="platformAuthCard" class="card platform-auth-card" hidden aria-live="polite">
-      <p class="eyebrow">Platform 계정</p>
+      <p class="eyebrow">바로 시작하기</p>
       <h2>내 업무공간</h2>
+      <p class="platform-auth-lead">처음이면 이메일과 비밀번호를 입력한 뒤 <strong>무료로 시작</strong>을 누르세요.</p>
       <form id="platformAuthForm">
-        <label><span>이메일</span><input id="platformAuthEmail" type="email" autocomplete="email" required></label>
-        <label><span>비밀번호</span><input id="platformAuthPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <label><span>이메일</span><input id="platformAuthEmail" type="email" autocomplete="email" placeholder="name@example.com" required></label>
+        <label><span>비밀번호</span><input id="platformAuthPassword" type="password" autocomplete="current-password" minlength="8" placeholder="8자 이상" required></label>
         <div class="platform-auth-actions">
           <button id="platformSignIn" type="submit">로그인</button>
-          <button id="platformSignUp" type="button">가입</button>
+          <button id="platformSignUp" type="button">무료로 시작</button>
         </div>
       </form>
       <button id="platformSignOut" class="clear" type="button" hidden>로그아웃</button>
       <p id="platformAuthStatus" class="platform-auth-status"></p>
+      <p class="platform-auth-footnote">가입하면 개인 업무공간이 자동으로 만들어집니다.</p>
     </section>
 
-    <section class="card voice-card">
+    <section class="card voice-card core-app-card">
       <button id="mic" class="mic" type="button">
         <span class="micIcon">🎙</span>
         <span id="micText">말하기</span>
@@ -51,7 +118,7 @@
       <p id="result" class="result" aria-live="polite"></p>
     </section>
 
-    <section id="briefingCard" class="card briefing-card" aria-live="polite">
+    <section id="briefingCard" class="card briefing-card core-app-card" aria-live="polite">
       <div class="briefing-head">
         <div>
           <p class="eyebrow">오늘 브리핑</p>
@@ -61,7 +128,7 @@
           <button id="briefingQuickUpdate" class="briefing-quick" type="button">브리핑 다시 정리</button>
         </div>
       </div>
-      <p id="briefingMeta" class="briefing-meta">Notion 최신 업무를 불러옵니다.</p>
+      <p id="briefingMeta" class="briefing-meta">내 업무와 일정을 불러옵니다.</p>
       <ol id="briefingTop" class="briefing-list">
         <li class="briefing-empty">브리핑을 불러오는 중입니다.</li>
       </ol>
@@ -83,7 +150,7 @@
       </div>
     </section>
 
-    <section id="entryCard" class="card">
+    <section id="entryCard" class="card core-app-card">
       <label class="label" for="text">업무 내용</label>
       <textarea id="text" rows="5" placeholder="말하거나 직접 입력하세요. 예: 계좌 개설 서류 확인해야 함."></textarea>
       <button id="typedSave" class="save typed-save" type="button">저장</button>
@@ -131,13 +198,14 @@
       </details>
     </section>
 
-    <footer>v1.6.2 · 녹음 우선 · 브리핑 2.0 · 업무명 수정 · 직접 입력 · 카카오 브리핑 · AI API 없음</footer>
+    <footer>업무수첩 · 음성/직접 입력 · 업무 브리핑 · 일정 관리</footer>
   </main>
 
-  <script src="/auth.js?v=20260912-2" defer></script>
-  <script src="/platform-auth.js?v=20260914-1" defer></script>
-  <script src="/platform-auth-ui.js?v=20260914-1" defer></script>
-  <script src="/onboarding.js?v=20260912-2" defer></script>
+  <script src="/auth.js?v=20260915-1" defer></script>
+  <script src="/platform-auth.js?v=20260915-1" defer></script>
+  <script src="/platform-auth-ui.js?v=20260915-1" defer></script>
+  <script src="/onboarding.js?v=20260915-1" defer></script>
+  <script src="/settings.js?v=20260915-1" defer></script>
   <script src="/request-id.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/inference-guard.js" defer></script>
