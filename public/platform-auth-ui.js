@@ -4,6 +4,7 @@
   const email = document.getElementById("platformAuthEmail");
   const password = document.getElementById("platformAuthPassword");
   const status = document.getElementById("platformAuthStatus");
+  const googleSignIn = document.getElementById("platformGoogleSignIn");
   const signIn = document.getElementById("platformSignIn");
   const signUp = document.getElementById("platformSignUp");
   const signOut = document.getElementById("platformSignOut");
@@ -19,7 +20,7 @@
   }
 
   function setBusy(busy) {
-    [signIn, signUp, signOut].forEach((button) => { if (button) button.disabled = busy; });
+    [googleSignIn, signIn, signUp, signOut].forEach((button) => { if (button) button.disabled = busy; });
   }
 
   function setAuthState(state, user = null) {
@@ -34,6 +35,7 @@
   }
 
   async function refresh() {
+    const oauthError = window.WorklogPlatformAuth.takeOAuthError?.() || "";
     const config = await window.WorklogPlatformAuth.getConfig().catch(() => null);
     if (!config) {
       card.hidden = true;
@@ -48,11 +50,11 @@
       if (signOut) signOut.hidden = true;
       if (legacyMode() !== "unset") {
         setAuthState("platform-legacy-user");
-        show("기존 연결 설정으로 사용 중입니다. 새 계정은 필요할 때 시작할 수 있습니다.");
+        show(oauthError ? `Google 로그인에 실패했습니다. ${oauthError}` : "기존 연결 설정으로 사용 중입니다. 새 계정은 필요할 때 시작할 수 있습니다.", oauthError ? "error" : "");
         return;
       }
       setAuthState("platform-signed-out");
-      show("처음이면 무료로 시작하세요. 가입하면 개인 업무공간이 바로 준비됩니다.");
+      show(oauthError ? `Google 로그인에 실패했습니다. ${oauthError}` : "Google로 시작하거나 이메일 계정으로 로그인하세요.", oauthError ? "error" : "");
       return;
     }
 
@@ -83,6 +85,15 @@
     }
   }
 
+  googleSignIn?.addEventListener("click", async () => {
+    setBusy(true);
+    try {
+      await window.WorklogPlatformAuth.signInWithGoogle();
+    } catch (error) {
+      show(error.message || "Google 로그인을 시작하지 못했습니다.", "error");
+      setBusy(false);
+    }
+  });
   signIn.addEventListener("click", () => authenticate(window.WorklogPlatformAuth.signIn));
   signUp.addEventListener("click", () => authenticate(window.WorklogPlatformAuth.signUp));
   form.addEventListener("submit", (event) => { event.preventDefault(); signIn.click(); });
