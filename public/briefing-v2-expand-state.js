@@ -3,15 +3,29 @@
   if(!root) return;
 
   const MAX_VISIBLE=3;
+  const PREF_KEY="worklogUiPreferencesV1";
   const expandedSections=new Set();
+  const collapsedSections=new Set();
+
+  function prefersExpanded(){
+    try{
+      return JSON.parse(localStorage.getItem(PREF_KEY) || "{}")?.briefingExpanded===true;
+    }catch{
+      return false;
+    }
+  }
 
   function applyExpandedState(){
+    const expandByDefault=prefersExpanded();
     root.querySelectorAll(".briefing-v2-section").forEach(section=>{
       const kind=section.dataset.section || "";
-      if(!kind || !expandedSections.has(kind)) return;
+      if(!kind) return;
 
       const toggle=section.querySelector(".briefing-v2-more-toggle");
       if(!toggle) return;
+
+      const shouldExpand=expandedSections.has(kind) || (expandByDefault && !collapsedSections.has(kind));
+      if(!shouldExpand) return;
 
       const rows=[...section.querySelectorAll(".briefing-v2-list > li")];
       rows.forEach((row,index)=>{
@@ -29,8 +43,19 @@
     const kind=button.dataset.sectionToggle || "";
     if(!kind) return;
 
-    if(button.getAttribute("aria-expanded")==="true") expandedSections.add(kind);
-    else expandedSections.delete(kind);
+    if(button.getAttribute("aria-expanded")==="true"){
+      expandedSections.add(kind);
+      collapsedSections.delete(kind);
+    }else{
+      expandedSections.delete(kind);
+      collapsedSections.add(kind);
+    }
+  });
+
+  window.addEventListener("worklog:ui-preferences-changed",()=>{
+    expandedSections.clear();
+    collapsedSections.clear();
+    applyExpandedState();
   });
 
   const observer=new MutationObserver(()=>applyExpandedState());
