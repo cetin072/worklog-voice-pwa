@@ -62,11 +62,6 @@
     if (signOut) signOut.hidden = true;
     card.hidden = true;
     setAuthState("platform-signed-in", user);
-    try {
-      await window.WorklogPlatformAuth.bootstrapPersonalWorkspace();
-    } catch (error) {
-      console.error("개인 업무공간 준비 실패", error);
-    }
   }
 
   async function authenticate(action) {
