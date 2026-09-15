@@ -106,6 +106,7 @@
       deferredInstallPrompt = null;
       if (installStatus) installStatus.textContent = "업무수첩 설치가 완료되었습니다.";
       updateInstallUi();
+      updateNotificationUi();
     });
 
     installAction.addEventListener("click", async () => {
@@ -152,6 +153,84 @@
     });
 
     updateInstallUi();
+  }
+
+  function updateNotificationUi() {
+    const guide = document.getElementById("settingsNotificationGuide");
+    const action = document.getElementById("settingsNotificationTest");
+    if (!guide || !action) return;
+
+    const notifications = window.WorklogNotifications;
+    if (!notifications) {
+      guide.textContent = "알림 기능을 불러오지 못했습니다. 페이지를 다시 열어주세요.";
+      action.textContent = "알림 사용 불가";
+      action.disabled = true;
+      return;
+    }
+
+    const state = notifications.getStatus();
+    if (!state.supported) {
+      guide.textContent = "이 브라우저에서는 업무수첩 알림을 지원하지 않습니다.";
+      action.textContent = "알림 사용 불가";
+      action.disabled = true;
+      return;
+    }
+
+    if (state.requiresInstall) {
+      guide.textContent = "iPhone/iPad에서 알림을 받으려면 먼저 업무수첩을 홈 화면에 설치한 뒤, 홈 화면 아이콘으로 앱을 열어주세요.";
+      action.textContent = "설치 후 알림 켜기";
+      action.disabled = true;
+      return;
+    }
+
+    if (state.permission === "denied") {
+      guide.textContent = "이 기기에서 알림이 차단되어 있습니다. 브라우저 또는 기기 설정에서 업무수첩 알림을 허용한 뒤 다시 열어주세요.";
+      action.textContent = "알림이 차단됨";
+      action.disabled = true;
+      return;
+    }
+
+    action.disabled = false;
+    if (state.permission === "granted") {
+      guide.textContent = "이 기기의 알림 권한이 켜져 있습니다. 버튼을 눌러 실제 알림 표시를 확인할 수 있습니다.";
+      action.textContent = "테스트 알림 보내기";
+      return;
+    }
+
+    guide.textContent = "버튼을 누를 때만 알림 권한을 요청합니다. 허용하면 바로 테스트 알림을 한 번 보냅니다.";
+    action.textContent = "알림 켜기 및 테스트";
+  }
+
+  function wireNotificationTest() {
+    const action = document.getElementById("settingsNotificationTest");
+    const status = document.getElementById("settingsNotificationStatus");
+    if (!action) return;
+
+    action.addEventListener("click", async () => {
+      const notifications = window.WorklogNotifications;
+      if (!notifications) {
+        if (status) status.textContent = "알림 기능을 불러오지 못했습니다. 페이지를 다시 열어주세요.";
+        return;
+      }
+
+      action.disabled = true;
+      if (status) status.textContent = "";
+      try {
+        const result = await notifications.showTestNotification();
+        if (status) {
+          if (result.ok) status.textContent = "테스트 알림을 보냈습니다. 잠금화면 또는 알림센터에서도 확인해보세요.";
+          else if (result.code === "ios_install_required") status.textContent = "먼저 업무수첩을 홈 화면에 설치하고 홈 화면 아이콘으로 열어주세요.";
+          else if (result.code === "denied") status.textContent = "알림 권한이 차단되었습니다. 브라우저 또는 기기 설정에서 알림을 허용해주세요.";
+          else status.textContent = "이 기기에서는 현재 업무수첩 알림을 사용할 수 없습니다.";
+        }
+      } catch {
+        if (status) status.textContent = "테스트 알림을 표시하지 못했습니다. 앱을 다시 연 뒤 한 번 더 시도해주세요.";
+      } finally {
+        updateNotificationUi();
+      }
+    });
+
+    updateNotificationUi();
   }
 
   async function refreshAccount() {
@@ -242,6 +321,7 @@
   applyPagePreferences();
   wirePreferenceControls();
   wireInstall();
+  wireNotificationTest();
   wireShare();
   wireLogout();
   refreshAccount().catch(() => {});
