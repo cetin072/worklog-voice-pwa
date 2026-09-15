@@ -84,7 +84,12 @@ test("client routing uses fast endpoint only for signed-in GET and keeps SWR sna
   assert.match(loader, /details\.url\.pathname === "\/api\/briefing-v2"/);
   assert.match(loader, /new URL\("\/api\/briefing-fast"/);
   assert.match(loader, /worklogBriefingV2SnapshotV1:/);
+  assert.match(loader, /worklogBriefingV2DataV1:/);
   assert.match(loader, /저장된 브리핑 · 업데이트 중/);
+  assert.match(loader, /저장된 브리핑 · 최신화 실패/);
+  assert.match(loader, /cachedBriefingResponse\(\)/);
+  assert.match(loader, /let bridgeAttached = false/);
+  assert.match(loader, /if \(bridgeAttached\) return/);
   assert.match(loader, /CACHE_MAX_AGE_MS = 36 \* 60 \* 60 \* 1000/);
   assert.match(loader, /clearCurrentSnapshot\(\)/);
 });
