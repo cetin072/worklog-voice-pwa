@@ -44,7 +44,7 @@ const requiredScripts = [
   '/inference-guard.js',
   '/quick-save.js',
   '/manual-input.js',
-  '/briefing.js',
+  '/briefing-legacy-loader.js',
   '/briefing-v2.js',
   '/briefing-v2-expand-state.js',
   '/briefing-edit.js',
@@ -57,6 +57,13 @@ for (const expected of requiredScripts) {
   if (!source) throw new Error(`UAR_UI_CONTRACT_MISSING_SCRIPT:${expected}`);
   const localPath = path.join(root, 'public', expected.replace(/^\//, ''));
   if (!fs.existsSync(localPath)) throw new Error(`UAR_UI_CONTRACT_SCRIPT_FILE_MISSING:${expected}`);
+}
+
+const legacyLoaderPath = path.join(root, 'public', 'briefing-legacy-loader.js');
+const legacyBriefingPath = path.join(root, 'public', 'briefing.js');
+const legacyLoader = fs.readFileSync(legacyLoaderPath, 'utf8');
+if (!fs.existsSync(legacyBriefingPath) || !legacyLoader.includes('/briefing.js')) {
+  throw new Error('UAR_UI_CONTRACT_LEGACY_BRIEFING_BOUNDARY_MISSING');
 }
 
 if (!html.includes('rel="manifest"') || !html.includes('/manifest.webmanifest')) {

@@ -48,11 +48,11 @@
       signOut.hidden = true;
       if (legacyMode() !== "unset") {
         setAuthState("platform-legacy-user");
-        show("기존 Notion 연결로 사용 중입니다. Platform 계정은 선택해서 시작할 수 있습니다.");
+        show("기존 연결 설정으로 사용 중입니다. 새 계정은 필요할 때 시작할 수 있습니다.");
         return;
       }
       setAuthState("platform-signed-out");
-      show("처음이면 무료로 시작하세요. Notion 연결 없이 바로 사용할 수 있습니다.");
+      show("처음이면 무료로 시작하세요. 가입하면 개인 업무공간이 바로 준비됩니다.");
       return;
     }
 
