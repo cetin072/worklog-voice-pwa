@@ -279,11 +279,17 @@ with check (
   and created_by_user_id = (select auth.uid())
 );
 
-create policy work_records_update_member
+create policy work_records_update_creator
 on public.work_records for update
 to authenticated
-using ((select private.can_access_workspace(workspace_id)))
-with check ((select private.can_access_workspace(workspace_id)));
+using (
+  (select private.can_access_workspace(workspace_id))
+  and created_by_user_id = (select auth.uid())
+)
+with check (
+  (select private.can_access_workspace(workspace_id))
+  and created_by_user_id = (select auth.uid())
+);
 
 create policy work_records_delete_member
 on public.work_records for delete

@@ -80,7 +80,7 @@
 - 카카오톡/문자 캡처에서 추출
 
 ## 현재 상태
-**PARTIAL.** main에는 음성 입력의 날짜·시간 구조화와 브리핑의 일정성 정보 표시가 있다. 그러나 업무수첩 자체의 독립 일정 저장소·화면·계약은 아직 완성되지 않았다.
+**PARTIAL.** main에는 음성 입력의 날짜·시간 구조화와 브리핑의 일정성 정보 표시가 있다. Data Core branch에서는 explicit flag 아래 verified Workspace의 `confirmed`/`tentative` Schedule을 Briefing V2에서 읽기 시작했다. 그러나 직접 일정 생성·수정 화면과 Candidate 확정 경계는 아직 완성되지 않았다.
 
 ## 목표 핵심 흐름
 `직접 일정 입력 또는 ScheduleCandidate → 확인/수정 → 업무수첩 Schedule 저장 → 브리핑/알림 → 선택적 Google Calendar 전송`

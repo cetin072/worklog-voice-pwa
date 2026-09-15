@@ -170,3 +170,62 @@ Auth UI, Personal Workspace 자동 bootstrap, Dual-write, Notion Adapter 전환,
 6. Notion optional Integration/Sync
 7. Briefing reader를 Data Core 기준으로 전환
 8. Usage/Cost 월별 사용자 원가 집계
+
+## 9. Auth 및 Personal Workspace bootstrap (#125)
+
+새 사용자는 Supabase Auth의 영구 사용자여야 하며, Auth 성공 직후 개인 Workspace와 owner membership을 확보한다.
+
+- 신규 Auth user는 DB trigger가 `personal` Workspace와 `owner` membership을 생성한다.
+- 로그인 후에는 `public.bootstrap_personal_workspace()` RPC를 다시 호출할 수 있다. RPC는 인자를 받아 다른 사용자를 지정하지 않고 `auth.uid()`만 사용한다.
+- `workspaces(owner_user_id) where kind = 'personal'` 부분 고유 인덱스와 `workspace_members` 복합 PK가 재호출·동시 호출을 한 Workspace와 한 owner membership으로 수렴시킨다.
+- public RPC는 `authenticated`에만 실행 권한을 주며, 실제 권한 상승 함수는 `private` schema와 고정 `search_path`에 둔다.
+- Browser는 `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`만 읽는다. service role 또는 secret key는 브라우저·Netlify 응답에 포함하지 않는다.
+- WorkRecord의 Supabase 저장은 Repository/Dual-write 단계의 책임이며, Auth bootstrap 단계에서 기존 Notion 저장 경로를 대체하지 않는다.
+
+## 10. Internal Repository boundary (#127)
+
+- `WorkRecordRepository`, `ScheduleRepository`, `SourceRefRepository`, `CandidateRepository`는 canonical domain input과 `Workspace Context`를 받고, snake_case Supabase row는 Repository 내부에서만 만든다.
+- `SupabaseDataCoreRestClient`는 publishable key와 호출자의 user JWT만 사용한다. service role/secret key를 요구하거나 보관하지 않는다.
+- Repository는 저장 adapter 실패를 성공으로 바꾸지 않는다. 실제 worklog의 Notion 분리와 Dual-write는 이 경계 위의 다음 단계다.
+
+## 11. Notion Worklog Adapter (#129)
+
+- 기존 `worklog` HTTP function은 요청 인증, 입력 검증, schedule extraction, idempotency만 담당한다.
+- Notion page 속성 매핑과 `v1/pages` 호출은 `NotionWorklogAdapter`가 담당한다.
+- Adapter 분리는 Notion 저장을 제거하지 않는다. Dual-write 동안 기존 Notion 저장 결과와 오류 UX를 유지하기 위한 경계다.
+
+## 12. Dual-write idempotency (#131)
+
+- WorkRecord와 SourceRef는 `workspace_id + client_request_id`로 upsert 가능한 additive 고유 제약을 둔다.
+- Dual-write coordinator는 Data Core와 Notion의 부분 성공 상태를 별도로 저장해, 재시도 시 완료된 writer를 다시 호출하지 않는다.
+- 양쪽 저장이 모두 실패했을 때만 호출자 오류가 된다. 한쪽 성공은 상태를 보존해 남은 writer만 재시도할 수 있다.
+- `WORKLOG_DATA_CORE_DUAL_WRITE_ENABLED=true`일 때에만 `worklog`가 이 경로를 사용한다. Browser가 보낸 Platform bearer token은 서버에서 `/auth/v1/user`와 `bootstrap_personal_workspace` RPC로 다시 검증하며, Data Core REST에는 그 사용자 JWT와 publishable key만 전달한다.
+- 체크포인트는 `clientRequestId + verified userId` 범위로 보관한다. 한쪽만 성공하면 HTTP 오류로 원문을 유지해 같은 요청 ID 재시도가 남은 저장소만 완료한다. 플래그가 꺼져 있거나 Platform 세션이 없으면 기존 Notion 경로가 그대로 실행된다.
+
+## 13. Data Core primary Quick Worklog (#133)
+
+- `WORKLOG_DATA_CORE_PRIMARY_ENABLED=true`와 유효한 Platform bearer token이 함께 있을 때, Quick Worklog의 성공 기준은 Data Core WorkRecord + SourceRef 저장이다.
+- 서버는 bearer token으로 최신 Supabase user와 personal Workspace를 확인한 뒤에만 사용자 JWT로 REST write를 한다. Notion token, `APP_ACCESS_KEY`, browser session의 user object는 Data Core 권한 근거가 아니다.
+- Notion 연결이 없으면 `notionSync: "not_configured"`으로 정상 완료한다. 연결돼 있지만 실패하면 Data Core result를 유지하고 `notionSync: "pending"`으로 반환한다. Data Core 실패 때는 Notion writer를 호출하지 않으므로 내부 원본 없는 Notion-only 상태를 만들지 않는다.
+- primary checkpoint는 `clientRequestId + verified userId` 범위로 보관하고, retry는 성공한 Data Core writer를 다시 호출하지 않는다. 플래그-off와 비로그인 요청은 기존 Notion 저장 경로를 유지한다.
+
+## 14. Data Core Briefing V2 read path (#135)
+
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`와 유효한 Platform bearer token이 있을 때 `briefing-v2`는 verified personal Workspace의 열린 WorkRecord만 읽는다.
+- REST query는 `workspace_id=eq.<verified workspace>`와 열린 내부 상태만 고정하고 사용자 JWT로 실행한다. RLS가 최종 Workspace 격리를 강제하며, 다른 Workspace ID를 클라이언트 입력으로 받지 않는다.
+- 기존 V2 classifier를 재사용해 화면 구조를 유지한다. 기본 상태는 read-only이며, 상태 변경은 다음 작은 Issue의 별도 flag가 있어야 한다.
+- 플래그-off 또는 Platform 세션이 없으면 기존 Notion Briefing V2 경로가 유지된다.
+
+## 15. Data Core Briefing V2 status mutation (#137)
+
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`, `WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED=true`, 유효한 Platform bearer token이 모두 있을 때만 Briefing V2에서 WorkRecord 상태를 변경한다. 어느 하나라도 없으면 기존 Notion 경로를 변경하지 않는다.
+- 서버는 user JWT로 최신 user와 personal Workspace를 다시 확인하고, `PATCH work_records`에 `id=eq.<record id>`와 `workspace_id=eq.<verified workspace>`를 함께 고정한다. 반환된 정확히 한 행만 성공으로 인정하므로, 미존재·타 Workspace·RLS 거부는 모두 성공처럼 처리하지 않는다.
+- 허용 상태는 기존 lifecycle인 `완료`, `진행중`, `대기`, `확인필요`뿐이다. 완료 후 undo는 화면에 저장된 기존 상태만 이 범위에서 복원한다. 빠른 브리핑 재정리는 Data Core에서 제공하지 않는다.
+- REST client는 빈 범위 조건 또는 빈 update row를 거부한다. 실제 Workspace 격리 보장은 배포된 RLS가 최종 책임이므로, project 연결 뒤 다른 사용자 Workspace의 실제 거부 QA가 필요하다.
+
+## 16. Data Core Schedule Briefing V2 read path (#139)
+
+- `WORKLOG_DATA_CORE_BRIEFING_ENABLED=true`, `WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED=true`, 유효한 Platform bearer token이 모두 있을 때만 Briefing V2가 Schedule을 읽는다. 둘 중 하나라도 없으면 기존 Briefing 경로와 화면을 유지한다.
+- 서버는 user JWT로 최신 user와 personal Workspace를 다시 확인한 뒤 `schedules`를 `workspace_id=eq.<verified workspace>`, `status=in.(confirmed,tentative)`, 서울 기준 오늘부터 15일째 자정 전까지로 조회한다. 클라이언트는 Workspace ID나 조회 범위를 지정하지 않는다.
+- 결과는 오늘과 다음 14일 이내로 구분해 표시한다. 완료/취소 일정은 제외하며, 이 Issue는 Schedule 생성·수정·삭제·외부 Calendar sync를 추가하지 않는다.
+- 실제 Workspace 격리는 배포된 RLS가 최종 책임이므로, project 연결 뒤 다른 사용자 Workspace의 실제 거부 및 Preview QA가 필요하다.

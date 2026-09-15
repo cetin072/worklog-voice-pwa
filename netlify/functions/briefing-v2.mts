@@ -1,5 +1,10 @@
 import type { Config, Context } from "@netlify/functions";
 import { briefingV2Counts, classifyBriefingTasks } from "../shared/briefing-v2.mjs";
+import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
+import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
+import { createWorklogDataCoreBriefingReader } from "../shared/worklog-data-core-briefing-reader.mjs";
+import { createWorklogDataCoreBriefingStatus } from "../shared/worklog-data-core-briefing-status.mjs";
+import { createWorklogDataCoreScheduleReader } from "../shared/worklog-data-core-schedule-reader.mjs";
 
 const NOTION_VERSION="2026-03-11";
 const DEFAULT_DATA_SOURCE_ID="e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -50,6 +55,23 @@ function seoulDate(input:Date|string|number=new Date()){
 function seoulIsoNow(){
   const shifted=new Date(Date.now()+9*60*60*1000).toISOString();
   return `${shifted.slice(0,-1)}+09:00`;
+}
+
+function dataCoreBriefingReadEnabled(){
+  return String(Netlify.env.get("WORKLOG_DATA_CORE_BRIEFING_ENABLED") || "").trim().toLowerCase()==="true";
+}
+
+function dataCoreBriefingMutationEnabled(){
+  return String(Netlify.env.get("WORKLOG_DATA_CORE_BRIEFING_MUTATION_ENABLED") || "").trim().toLowerCase()==="true";
+}
+
+function dataCoreScheduleBriefingEnabled(){
+  return String(Netlify.env.get("WORKLOG_DATA_CORE_SCHEDULE_BRIEFING_ENABLED") || "").trim().toLowerCase()==="true";
+}
+
+function bearerToken(req:Request){
+  const match=/^Bearer\s+(.+)$/i.exec(String(req.headers.get("authorization") || ""));
+  return match ? match[1].trim() : "";
 }
 
 function personalConnection(req:Request){
@@ -133,7 +155,53 @@ function taskFromPage(page:any){
 }
 
 export default async (req:Request,_context:Context)=>{
-  if(req.method!=="GET") return json(405,{error:"허용되지 않은 요청입니다."});
+  if(!["GET","POST"].includes(req.method)) return json(405,{error:"허용되지 않은 요청입니다."});
+
+  const accessToken=bearerToken(req);
+  if(req.method==="POST"){
+    if(!(dataCoreBriefingReadEnabled() && dataCoreBriefingMutationEnabled() && accessToken)) return json(405,{error:"Data Core 브리핑 상태 변경이 활성화되지 않았습니다."});
+    const supabaseUrl=Netlify.env.get("SUPABASE_URL");
+    const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
+    if(!supabaseUrl || !publishableKey) return json(503,{error:"Data Core 브리핑 설정이 아직 준비되지 않았습니다."});
+    let body:any;
+    try{ body=await req.json(); }catch{ return json(400,{error:"요청 형식이 올바르지 않습니다."}); }
+    try{
+      const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
+      const workspaceContext=await resolver.resolve(accessToken);
+      const statusWriter=createWorklogDataCoreBriefingStatus({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
+      const result=await statusWriter.updateStatus({recordId:body.recordId,status:body.status},workspaceContext);
+      return json(200,{ok:true,mode:"data_core",...result});
+    }catch(error:any){
+      if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 상태를 변경해주세요."});
+      if(error?.code==="WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_STATUS_INVALID") return json(400,{error:error.message});
+      if(error?.code==="WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN") return json(404,{error:error.message});
+      console.error("Data Core briefing status error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));
+      return json(502,{error:"Data Core 업무 상태를 변경하지 못했습니다."});
+    }
+  }
+
+  if(dataCoreBriefingReadEnabled() && accessToken){
+    const supabaseUrl=Netlify.env.get("SUPABASE_URL");
+    const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
+    if(!supabaseUrl || !publishableKey) return json(503,{error:"Data Core 브리핑 설정이 아직 준비되지 않았습니다."});
+    try{
+      const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
+      const workspaceContext=await resolver.resolve(accessToken);
+      const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
+      const reader=createWorklogDataCoreBriefingReader({client});
+      const tasks=await reader.listOpenTasks(workspaceContext);
+      const today=seoulDate();
+      const structure=classifyBriefingTasks(tasks,today);
+      const schedules=dataCoreScheduleBriefingEnabled()
+        ? await createWorklogDataCoreScheduleReader({client}).listForBriefing(workspaceContext,today)
+        : {today:[],upcoming:[],total:0};
+      return json(200,{ok:true,ready:true,generatedAt:seoulIsoNow(),today,mode:"data_core",truncated:false,canUpdate:dataCoreBriefingMutationEnabled(),scheduleEnabled:dataCoreScheduleBriefingEnabled(),schedules,counts:briefingV2Counts(structure),structure});
+    }catch(error:any){
+      if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 브리핑을 열어주세요."});
+      console.error("Data Core briefing v2 error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));
+      return json(502,{error:"Data Core 업무 상황을 불러오지 못했습니다."});
+    }
+  }
 
   const connection:any=resolveConnection(req);
   if(connection.error) return json(connection.status || 400,{error:connection.error});
@@ -164,5 +232,5 @@ export default async (req:Request,_context:Context)=>{
 
 export const config:Config={
   path:"/api/briefing-v2",
-  method:["GET"]
+  method:["GET","POST"]
 };

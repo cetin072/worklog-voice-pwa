@@ -100,7 +100,7 @@
     const inferred = inferFields(segment, fallback);
     const response = await fetch("/api/worklog", {
       method: "POST",
-      headers: {"content-type": "application/json", "x-worklog-key": key},
+      headers: {"content-type": "application/json", ...(key ? {"x-worklog-key": key} : {})},
       body: JSON.stringify({
         transcript: segment,
         institution: inferred.institution,
@@ -115,7 +115,7 @@
     });
 
     const data = await response.json().catch(() => ({}));
-    if (response.status === 401) {
+    if (response.status === 401 && key) {
       localStorage.removeItem("worklogAccessKey");
       throw new Error("개인 접근키가 맞지 않습니다. 다시 저장하면 새로 입력할 수 있습니다.");
     }
@@ -146,8 +146,9 @@
       throw new Error("저장 설정을 불러오지 못했습니다.");
     }
 
-    const key = getAccessKey();
-    if (!key) throw new Error("개인 접근키가 필요합니다.");
+    const primary = Boolean(await window.WorklogPlatformAuth?.isDataCorePrimaryEnabled?.());
+    const key = primary ? (localStorage.getItem("worklogAccessKey") || "") : getAccessKey();
+    if (!key && !primary) throw new Error("개인 접근키가 필요합니다.");
 
     const fallback = {
       institution: institution?.value || "기타",
@@ -156,10 +157,12 @@
     };
 
     let savedCount = 0;
+    let notionPending = false;
     for (let i = 0; i < items.length; i++) {
       try {
         save.textContent = `${i + 1}/${items.length} 저장 중…`;
-        await postItem(items[i], key, fallback);
+        const saved = await postItem(items[i], key, fallback);
+        notionPending = notionPending || (saved.mode === "data_core" && saved.notionSync === "pending");
         savedCount += 1;
       } catch (error) {
         preserveRemaining(items.slice(i));
@@ -168,7 +171,9 @@
     }
 
     if (typeof baseClearClick === "function") await baseClearClick.call(clear);
-    result.textContent = `✓ ${savedCount}건 Notion에 저장 완료`;
+    result.textContent = primary
+      ? (notionPending ? `✓ ${savedCount}건 Data Core 저장 완료 · Notion 동기화 대기` : `✓ ${savedCount}건 Data Core에 저장 완료`)
+      : `✓ ${savedCount}건 Notion에 저장 완료`;
     result.className = "result success";
     save.textContent = `✓ ${savedCount}건 저장 완료`;
     if (typeof window.playSuccessFeedback === "function") window.playSuccessFeedback();
@@ -214,8 +219,8 @@
       save.disabled = false;
       mic.disabled = false;
       clear.disabled = false;
-      if (!result.classList.contains("success")) save.textContent = "Notion에 저장";
-      else setTimeout(() => { save.textContent = "Notion에 저장"; }, 1400);
+      if (!result.classList.contains("success")) save.textContent = "저장";
+      else setTimeout(() => { save.textContent = "저장"; }, 1400);
       saving = false;
     }
   }
@@ -233,5 +238,5 @@
 
   save.onclick = saveNow;
 
-  window.__worklogSplitTest = {splitWorkItems, inferFields};
+  window.__worklogSplitTest = {splitWorkItems, inferFields, saveMultiple};
 })();
