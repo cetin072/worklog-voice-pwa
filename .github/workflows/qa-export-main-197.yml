@@ -1,0 +1,22 @@
+name: Temporary Export Main 197
+
+on:
+  push:
+    branches:
+      - ops/deploy-main-197
+
+jobs:
+  export-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Pack exact main source
+        run: tar --exclude=.git -czf /tmp/worklog-main-197.tgz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worklog-main-197
+          path: /tmp/worklog-main-197.tgz
+          retention-days: 1
