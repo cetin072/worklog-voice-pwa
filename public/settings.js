@@ -38,12 +38,17 @@
     }
     const session = auth.readSession?.();
     if (!session) {
-      accountState.textContent = "아직 로그인하지 않았습니다. 새 사용자는 Notion 없이 업무수첩 계정으로 바로 시작할 수 있습니다.";
+      const legacyMode = window.WorklogAuth?.mode?.() || "unset";
+      if (legacyMode !== "unset") {
+        accountState.textContent = "기존 Notion 연결로 사용 중입니다. 새 Platform 계정은 선택해서 연결할 수 있습니다.";
+      } else {
+        accountState.textContent = "아직 로그인하지 않았습니다. 새 사용자는 Notion 없이 업무수첩 계정으로 바로 시작할 수 있습니다.";
+      }
       accountAction.textContent = "로그인 · 무료로 시작";
       accountAction.hidden = false;
       return;
     }
-    const user = await auth.currentUser?.().catch?.(() => null);
+    const user = await auth.currentUser().catch(() => null);
     accountState.textContent = user?.email
       ? `${user.email} 계정으로 사용 중입니다.`
       : "업무수첩 계정으로 로그인되어 있습니다.";

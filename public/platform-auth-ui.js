@@ -23,10 +23,14 @@
   }
 
   function setAuthState(state, user = null) {
-    document.body.classList.remove("platform-auth-loading", "platform-signed-out", "platform-signed-in", "platform-auth-unavailable");
+    document.body.classList.remove("platform-auth-loading", "platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
     document.body.classList.add(state);
     card.classList.toggle("is-authenticated", state === "platform-signed-in");
     window.dispatchEvent(new CustomEvent("worklog:platform-auth-changed", { detail: { state, user } }));
+  }
+
+  function legacyMode() {
+    return window.WorklogAuth?.mode?.() || "unset";
   }
 
   async function refresh() {
@@ -42,6 +46,11 @@
     if (!user) {
       form.hidden = false;
       signOut.hidden = true;
+      if (legacyMode() !== "unset") {
+        setAuthState("platform-legacy-user");
+        show("기존 Notion 연결로 사용 중입니다. Platform 계정은 선택해서 시작할 수 있습니다.");
+        return;
+      }
       setAuthState("platform-signed-out");
       show("처음이면 무료로 시작하세요. Notion 연결 없이 바로 사용할 수 있습니다.");
       return;
