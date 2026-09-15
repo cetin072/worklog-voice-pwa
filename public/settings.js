@@ -5,6 +5,7 @@
     briefingExpanded: false,
     entryDetailsExpanded: false,
   });
+  let deferredInstallPrompt = null;
 
   function readPreferences() {
     try {
@@ -32,26 +33,122 @@
     return prefs;
   }
 
-  function installationText() {
-    if (window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true) {
-      return "이 기기에는 이미 업무수첩이 앱처럼 설치되어 있습니다.";
+  function isStandalone() {
+    return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+  }
+
+  function isIos() {
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  }
+
+  function isAndroid() {
+    return /Android/i.test(navigator.userAgent || "");
+  }
+
+  function updateInstallUi() {
+    const installGuide = document.getElementById("settingsInstallGuide");
+    const installAction = document.getElementById("settingsInstallAction");
+    const installStatus = document.getElementById("settingsInstallStatus");
+    if (!installGuide || !installAction) return;
+
+    if (isStandalone()) {
+      installGuide.textContent = "이 기기에는 이미 업무수첩이 앱처럼 설치되어 있습니다.";
+      installAction.textContent = "설치됨";
+      installAction.disabled = true;
+      if (installStatus) installStatus.textContent = "";
+      return;
     }
-    const ua = navigator.userAgent || "";
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-      return "iPhone/iPad: Safari의 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요.";
+
+    installAction.disabled = false;
+    if (deferredInstallPrompt) {
+      installGuide.textContent = "버튼을 누르면 브라우저의 앱 설치 확인창이 열립니다. 확인하면 홈 화면에 업무수첩 아이콘이 추가됩니다.";
+      installAction.textContent = "홈 화면에 앱 설치";
+      return;
     }
-    if (/Android/i.test(ua)) {
-      return "Android: Chrome 메뉴(⋮)에서 ‘홈 화면에 추가’ 또는 ‘앱 설치’를 선택하세요.";
+
+    if (isIos()) {
+      installGuide.textContent = "iPhone/iPad는 웹사이트가 설치를 자동 완료할 수 없어서 마지막 단계는 직접 눌러야 합니다.";
+      installAction.textContent = "iPhone 설치 방법 보기";
+      return;
     }
-    return "브라우저 메뉴에서 ‘홈 화면에 추가’ 또는 ‘앱 설치’를 선택하면 일반 앱처럼 바로 열 수 있습니다.";
+
+    if (isAndroid()) {
+      installGuide.textContent = "설치 버튼이 지원되는 브라우저에서는 바로 설치 확인창을 열 수 있습니다. 아직 준비되지 않았다면 Chrome 메뉴의 ‘앱 설치’도 사용할 수 있습니다.";
+      installAction.textContent = "홈 화면에 앱 설치";
+      return;
+    }
+
+    installGuide.textContent = "지원되는 브라우저에서는 버튼으로 설치 확인창을 열 수 있습니다. 설치 버튼이 동작하지 않으면 브라우저 메뉴의 ‘앱 설치’를 사용하세요.";
+    installAction.textContent = "앱 설치";
+  }
+
+  function wireInstall() {
+    const installGuide = document.getElementById("settingsInstallGuide");
+    const installAction = document.getElementById("settingsInstallAction");
+    const installStatus = document.getElementById("settingsInstallStatus");
+    if (!installAction) return;
+
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      updateInstallUi();
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredInstallPrompt = null;
+      if (installStatus) installStatus.textContent = "업무수첩 설치가 완료되었습니다.";
+      updateInstallUi();
+    });
+
+    installAction.addEventListener("click", async () => {
+      if (isStandalone()) {
+        updateInstallUi();
+        return;
+      }
+
+      if (isIos()) {
+        if (installGuide) {
+          installGuide.textContent = "iPhone/iPad 설치: 브라우저의 공유 버튼 → ‘홈 화면에 추가’ → ‘웹 앱으로 열기’ 확인 → ‘추가’를 누르세요.";
+        }
+        if (installStatus) installStatus.textContent = "Apple 정책상 이 마지막 확인 절차는 자동화할 수 없습니다.";
+        return;
+      }
+
+      if (!deferredInstallPrompt) {
+        if (installStatus) {
+          installStatus.textContent = isAndroid()
+            ? "현재 브라우저가 설치 확인창을 아직 제공하지 않았습니다. Chrome 메뉴(⋮)의 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 사용해 주세요."
+            : "현재 브라우저에서는 자동 설치 확인창을 열 수 없습니다. 브라우저 메뉴의 ‘앱 설치’를 사용해 주세요.";
+        }
+        return;
+      }
+
+      installAction.disabled = true;
+      try {
+        const promptEvent = deferredInstallPrompt;
+        deferredInstallPrompt = null;
+        const result = await promptEvent.prompt();
+        const outcome = result?.outcome || (promptEvent.userChoice ? (await promptEvent.userChoice)?.outcome : "");
+        if (installStatus) {
+          installStatus.textContent = outcome === "accepted"
+            ? "설치를 승인했습니다. 홈 화면에서 업무수첩을 열 수 있습니다."
+            : "설치를 취소했습니다. 필요할 때 다시 설치할 수 있습니다.";
+        }
+      } catch {
+        if (installStatus) installStatus.textContent = "설치 확인창을 열지 못했습니다. 브라우저 메뉴의 ‘앱 설치’를 사용해 주세요.";
+      } finally {
+        installAction.disabled = false;
+        updateInstallUi();
+      }
+    });
+
+    updateInstallUi();
   }
 
   async function refreshAccount() {
     const accountState = document.getElementById("settingsAccountState");
     const loginLink = document.getElementById("settingsLoginLink");
     const logoutSection = document.getElementById("settingsLogoutSection");
-    const installGuide = document.getElementById("settingsInstallGuide");
-    if (installGuide) installGuide.textContent = installationText();
     if (!accountState) return;
 
     const auth = window.WorklogPlatformAuth;
@@ -140,6 +237,7 @@
 
   applyPagePreferences();
   wirePreferenceControls();
+  wireInstall();
   wireShare();
   wireLogout();
   refreshAccount().catch(() => {});
