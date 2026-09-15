@@ -25,7 +25,7 @@ test("Supabase 공개 Auth 설정은 누락되었거나 HTTP인 값을 비활성
 });
 
 test("Personal Workspace bootstrap migration은 사용자별 단일 공간과 인증된 RPC 경계를 둔다", () => {
-  const sql = readFileSync(new URL("../supabase/migrations/20260914142130_personal_workspace_bootstrap.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../supabase/migrations/20260914161008_personal_workspace_bootstrap.sql", import.meta.url), "utf8");
   assert.match(sql, /create unique index workspaces_one_personal_per_owner_idx/i);
   assert.match(sql, /where kind = 'personal'/i);
   assert.match(sql, /v_user_id uuid := \(select auth\.uid\(\)\)/i);
@@ -36,7 +36,7 @@ test("Personal Workspace bootstrap migration은 사용자별 단일 공간과 �
 });
 
 test("Worklog dual-write migration은 Data Core 두 엔티티의 요청 ID 수렴을 강제한다", () => {
-  const sql = readFileSync(new URL("../supabase/migrations/20260914144428_data_core_worklog_idempotency.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../supabase/migrations/20260914161258_data_core_worklog_idempotency.sql", import.meta.url), "utf8");
   assert.match(sql, /alter table public\.work_records\s+add column client_request_id text/i);
   assert.match(sql, /unique \(workspace_id, client_request_id\)/i);
   assert.match(sql, /alter table public\.source_refs\s+add column client_request_id text/i);
