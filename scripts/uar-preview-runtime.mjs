@@ -17,6 +17,15 @@ async function get(pathname) {
   return { response, body, url };
 }
 
+async function getBytes(pathname) {
+  const url = new URL(pathname, `${previewUrl}/`).toString();
+  const response = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+  const body = await response.arrayBuffer();
+  if (!response.ok) throw new Error(`UAR_PREVIEW_RUNTIME_HTTP_${response.status}:${pathname}`);
+  if (!body.byteLength) throw new Error(`UAR_PREVIEW_RUNTIME_EMPTY_ASSET:${pathname}`);
+  return { response, body, url };
+}
+
 const root = await get('/');
 for (const marker of ['🎙 업무수첩', 'id="mic"', 'id="save"', 'id="text"', 'id="briefingCard"']) {
   if (!root.body.includes(marker)) throw new Error(`UAR_PREVIEW_RUNTIME_ROOT_MARKER_MISSING:${marker}`);
@@ -66,6 +75,29 @@ if (!setup.body.includes('Notion') || !setup.body.includes('업무수첩')) {
   throw new Error('UAR_PREVIEW_RUNTIME_SETUP_SURFACE_MISSING');
 }
 
+const capture = await get('/capture.html');
+for (const marker of ['Capture Analysis 0.1', 'id="captureInput"', 'id="captureRead"', 'id="captureText"', 'id="captureAnalyze"', 'id="captureCandidates"']) {
+  if (!capture.body.includes(marker)) throw new Error(`UAR_PREVIEW_RUNTIME_CAPTURE_MARKER_MISSING:${marker}`);
+}
+const captureInput = capture.body.match(/<input id="captureInput"[^>]*>/)?.[0] || '';
+if (!/accept="image\/\*"/.test(captureInput) || /capture=/.test(captureInput)) {
+  throw new Error('UAR_PREVIEW_RUNTIME_CAPTURE_GALLERY_CONTRACT_INVALID');
+}
+for (const asset of ['/capture.js', '/capture-ocr-core.mjs', '/capture.css', '/vendor/tesseract/tesseract.min.js', '/vendor/tesseract/worker.min.js']) {
+  const result = await get(asset);
+  if (!result.body.trim()) throw new Error(`UAR_PREVIEW_RUNTIME_EMPTY_CAPTURE_ASSET:${asset}`);
+}
+for (const asset of ['/vendor/tessdata/kor.traineddata.gz', '/vendor/tessdata/eng.traineddata.gz']) {
+  await getBytes(asset);
+}
+const captureRuntime = await get('/capture.js');
+if (!captureRuntime.body.includes('/api/capture-analyze') || !captureRuntime.body.includes('/api/worklog')) {
+  throw new Error('UAR_PREVIEW_RUNTIME_CAPTURE_PIPELINE_MISSING');
+}
+if (/FormData/.test(captureRuntime.body)) {
+  throw new Error('UAR_PREVIEW_RUNTIME_CAPTURE_IMAGE_UPLOAD_FORBIDDEN');
+}
+
 if (String(process.env.GITHUB_HEAD_REF || '').trim() === 'goal/platform-v1') {
   const authConfig = await get('/api/supabase-auth-config');
   let config;
@@ -94,4 +126,4 @@ if (String(process.env.GITHUB_HEAD_REF || '').trim() === 'goal/platform-v1') {
   console.log('UAR_PREVIEW_RUNTIME_DATA_CORE_CONFIG_PASS');
 }
 
-console.log(`UAR_PREVIEW_RUNTIME_PASS ${previewUrl} assets=${assets.length}`);
+console.log(`UAR_PREVIEW_RUNTIME_PASS ${previewUrl} assets=${assets.length} capture=true`);
