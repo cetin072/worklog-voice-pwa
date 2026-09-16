@@ -18,7 +18,7 @@ test("morning digest content includes only non-zero relevant counts", () => {
   assert.deepEqual(buildMorningPushPayload({ scheduleCount: 1 }), {
     title: "업무수첩 · 아침 브리핑",
     body: "오늘 일정 1건",
-    url: "/",
+    url: "/#briefingCard",
     tag: "worklog-morning-digest",
   });
 });
