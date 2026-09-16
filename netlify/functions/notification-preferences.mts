@@ -23,7 +23,7 @@ function requestOrigin(req:Request){
 
 async function loadState(client:any, workspace:any, origin:string){
   const preferences=await client.select("notification_preferences",{
-    select:"morning_enabled,morning_time,timezone,morning_detail_enabled",
+    select:"morning_enabled,morning_time,afternoon_enabled,afternoon_time,timezone,morning_detail_enabled",
     workspace_id:`eq.${workspace.workspaceId}`,
     user_id:`eq.${workspace.userId}`,
     limit:"1",
@@ -39,8 +39,10 @@ async function loadState(client:any, workspace:any, origin:string){
   const pref=preferences[0] || {};
   return {
     morningEnabled:Boolean(pref.morning_enabled),
+    afternoonEnabled:Boolean(pref.afternoon_enabled),
     detailEnabled:pref.morning_detail_enabled !== false,
     morningTime:"08:30",
+    afternoonTime:"16:30",
     timezone:"Asia/Seoul",
     connected:subscriptions.length>0,
   };
@@ -65,12 +67,15 @@ export default async (req:Request,_context:Context)=>{
 
     const body=await req.json().catch(()=>({}));
     const hasMorning=Object.prototype.hasOwnProperty.call(body,"morningEnabled");
+    const hasAfternoon=Object.prototype.hasOwnProperty.call(body,"afternoonEnabled");
     const hasDetail=Object.prototype.hasOwnProperty.call(body,"detailEnabled");
     if(hasMorning && typeof body?.morningEnabled!=="boolean") return json(400,{error:"MORNING_ENABLED_INVALID",message:"아침 알림 사용 여부를 확인해주세요."});
+    if(hasAfternoon && typeof body?.afternoonEnabled!=="boolean") return json(400,{error:"AFTERNOON_ENABLED_INVALID",message:"오후 알림 사용 여부를 확인해주세요."});
     if(hasDetail && typeof body?.detailEnabled!=="boolean") return json(400,{error:"DETAIL_ENABLED_INVALID",message:"알림 내용 표시 설정을 확인해주세요."});
-    if(!hasMorning && !hasDetail) return json(400,{error:"NOTIFICATION_PREFERENCE_REQUIRED",message:"변경할 알림 설정을 확인해주세요."});
+    if(!hasMorning && !hasAfternoon && !hasDetail) return json(400,{error:"NOTIFICATION_PREFERENCE_REQUIRED",message:"변경할 알림 설정을 확인해주세요."});
 
-    if(hasMorning && body.morningEnabled){
+    const enablingPush=(hasMorning && body.morningEnabled) || (hasAfternoon && body.afternoonEnabled);
+    if(enablingPush){
       const connected=await client.select("push_subscriptions",{
         select:"id",
         workspace_id:`eq.${workspace.workspaceId}`,
@@ -87,8 +92,10 @@ export default async (req:Request,_context:Context)=>{
       workspace_id:workspace.workspaceId,
       user_id:workspace.userId,
       morning_enabled:hasMorning ? body.morningEnabled : current.morningEnabled,
+      afternoon_enabled:hasAfternoon ? body.afternoonEnabled : current.afternoonEnabled,
       morning_detail_enabled:hasDetail ? body.detailEnabled : current.detailEnabled,
       morning_time:"08:30:00",
+      afternoon_time:"16:30:00",
       timezone:"Asia/Seoul",
       updated_at:new Date().toISOString(),
     },["workspace_id","user_id"]);
