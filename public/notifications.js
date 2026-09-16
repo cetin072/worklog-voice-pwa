@@ -95,6 +95,24 @@
     return Uint8Array.from(raw, (char) => char.charCodeAt(0));
   }
 
+  function applicationServerKeyBytes(value) {
+    if (!value) return null;
+    if (value instanceof ArrayBuffer) return new Uint8Array(value);
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    return null;
+  }
+
+  function subscriptionMatchesServerKey(subscription, publicKey) {
+    const current = applicationServerKeyBytes(subscription?.options?.applicationServerKey);
+    if (!current) return true;
+    const expected = base64UrlToUint8Array(publicKey);
+    if (current.byteLength !== expected.byteLength) return false;
+    for (let index = 0; index < current.byteLength; index += 1) {
+      if (current[index] !== expected[index]) return false;
+    }
+    return true;
+  }
+
   function subscriptionJson(subscription) {
     const json = subscription?.toJSON?.() || {};
     return {
@@ -159,6 +177,10 @@
 
     const registration = await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
+    if (subscription && !subscriptionMatchesServerKey(subscription, config.publicKey)) {
+      await subscription.unsubscribe();
+      subscription = null;
+    }
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
