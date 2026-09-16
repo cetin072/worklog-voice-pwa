@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { createWorklogDataCoreAdapter } from "../netlify/shared/worklog-data-core-adapter.mjs";
+import { createWorklogDataCoreAdapter, quickWorklogSchedule } from "../netlify/shared/worklog-data-core-adapter.mjs";
 
-const migration = fs.readFileSync(new URL("../supabase/migrations/20260916002515_worklog_save_fast_path.sql", import.meta.url), "utf8");
+const migration = fs.readFileSync(new URL("../supabase/migrations/20260916081800_worklog_schedule_fast_path.sql", import.meta.url), "utf8");
 const worklogFunction = fs.readFileSync(new URL("../netlify/functions/worklog.mts", import.meta.url), "utf8");
 
 function record(overrides = {}) {
@@ -22,6 +22,17 @@ function record(overrides = {}) {
   };
 }
 
+function rpcRow(overrides = {}) {
+  return [{
+    user_id: "11111111-1111-1111-1111-111111111111",
+    workspace_id: "22222222-2222-2222-2222-222222222222",
+    work_record_id: "33333333-3333-3333-3333-333333333333",
+    source_ref_id: "44444444-4444-4444-4444-444444444444",
+    schedule_id: null,
+    ...overrides,
+  }];
+}
+
 test("worklog fast adapter persists WorkRecord + SourceRef with exactly one RPC", async () => {
   const calls = [];
   const client = {
@@ -29,26 +40,71 @@ test("worklog fast adapter persists WorkRecord + SourceRef with exactly one RPC"
     upsert: async () => { throw new Error("upsert must not be called"); },
     async rpc(name, body) {
       calls.push({ name, body });
-      return [{
-        user_id: "11111111-1111-1111-1111-111111111111",
-        workspace_id: "22222222-2222-2222-2222-222222222222",
-        work_record_id: "33333333-3333-3333-3333-333333333333",
-        source_ref_id: "44444444-4444-4444-4444-444444444444",
-      }];
+      return rpcRow();
     },
   };
 
   const result = await createWorklogDataCoreAdapter({ client }).persistFast(record());
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].name, "save_my_worklog");
+  assert.equal(calls[0].name, "save_my_worklog_with_schedule");
   assert.equal(calls[0].body.p_client_request_id, "req-20260916-1234567890");
   assert.equal(calls[0].body.p_record_type, "task");
   assert.equal(calls[0].body.p_status, "waiting");
   assert.equal(calls[0].body.p_amount, 12000);
   assert.equal(calls[0].body.p_due_at, "2026-09-17T00:00:00+09:00");
+  assert.equal(calls[0].body.p_schedule_title, null);
+  assert.equal(calls[0].body.p_schedule_starts_at, null);
   assert.equal(result.fastPath, true);
   assert.equal(result.workRecordId, "33333333-3333-3333-3333-333333333333");
   assert.equal(result.sourceRefId, "44444444-4444-4444-4444-444444444444");
+  assert.equal(result.scheduleId, "");
+});
+
+test("clear timed meeting intent is saved as a confirmed Schedule in the same RPC", async () => {
+  const calls = [];
+  const client = {
+    async rpc(name, body) {
+      calls.push({ name, body });
+      return rpcRow({ schedule_id: "55555555-5555-5555-5555-555555555555" });
+    },
+  };
+  const meeting = record({
+    transcript: "내일 오후 2시에 삼현 미팅",
+    cleanTranscript: "삼현 미팅",
+    type: "회의·통화",
+    dueStart: "2026-09-17T14:00:00+09:00",
+  });
+  const result = await createWorklogDataCoreAdapter({ client }).persistFast(meeting);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.p_schedule_title, "삼현 미팅");
+  assert.equal(calls[0].body.p_schedule_starts_at, "2026-09-17T14:00:00+09:00");
+  assert.equal(result.scheduleId, "55555555-5555-5555-5555-555555555555");
+});
+
+test("timed person meeting creates a schedule even when the work type is a generic task", () => {
+  const schedule = quickWorklogSchedule(
+    { transcript: "내일 오후 2시에 김대리 만나" },
+    { title: "김대리 만나", dueAt: "2026-09-17T14:00:00+09:00", recordType: "task" }
+  );
+  assert.equal(schedule?.startsAt, "2026-09-17T14:00:00+09:00");
+});
+
+test("deadline wording stays WorkRecord due_at only and does not create a calendar Schedule", () => {
+  assert.equal(quickWorklogSchedule(
+    { transcript: "내일 오후 2시까지 견적서 보내" },
+    { title: "견적서 보내", dueAt: "2026-09-17T14:00:00+09:00", recordType: "task" }
+  ), null);
+  assert.equal(quickWorklogSchedule(
+    { transcript: "내일 오후 2시까지 회의자료 제출" },
+    { title: "회의자료 제출", dueAt: "2026-09-17T14:00:00+09:00", recordType: "meeting_call" }
+  ), null);
+});
+
+test("date-only due date never auto-creates a Schedule", () => {
+  assert.equal(quickWorklogSchedule(
+    { transcript: "내일 삼현 미팅 준비" },
+    { title: "삼현 미팅 준비", dueAt: "2026-09-17T00:00:00+09:00", recordType: "meeting_call" }
+  ), null);
 });
 
 test("worklog fast adapter fails closed on malformed RPC response", async () => {
@@ -59,21 +115,25 @@ test("worklog fast adapter fails closed on malformed RPC response", async () => 
   );
 });
 
-test("save_my_worklog RPC keeps RLS active and authenticated-only", () => {
-  assert.match(migration, /create or replace function public\.save_my_worklog\(/i);
+test("save_my_worklog_with_schedule RPC keeps RLS active and authenticated-only", () => {
+  assert.match(migration, /create or replace function public\.save_my_worklog_with_schedule\(/i);
   assert.match(migration, /security invoker/i);
   assert.doesNotMatch(migration, /security definer/i);
   assert.match(migration, /v_user_id uuid := \(select auth\.uid\(\)\)/i);
-  assert.match(migration, /revoke all on function public\.save_my_worklog[\s\S]*from public, anon/i);
-  assert.match(migration, /grant execute on function public\.save_my_worklog[\s\S]*to authenticated, service_role/i);
+  assert.match(migration, /revoke all on function public\.save_my_worklog_with_schedule[\s\S]*from public, anon/i);
+  assert.match(migration, /grant execute on function public\.save_my_worklog_with_schedule[\s\S]*to authenticated, service_role/i);
 });
 
-test("save_my_worklog RPC upserts both rows through named idempotency constraints", () => {
+test("schedule save is linked and idempotent by the same worklog request id", () => {
   assert.match(migration, /insert into public\.work_records/i);
   assert.match(migration, /on conflict on constraint work_records_workspace_client_request_id_key/i);
   assert.match(migration, /insert into public\.source_refs/i);
   assert.match(migration, /on conflict on constraint source_refs_workspace_client_request_id_key/i);
-  assert.match(migration, /v_work_record_id::text/);
+  assert.match(migration, /insert into public\.schedules/i);
+  assert.match(migration, /metadata ->> 'sourceRequestId' = v_request_id/i);
+  assert.match(migration, /'workRecordId', v_work_record_id/i);
+  assert.match(migration, /'sourceRefId', v_source_ref_id/i);
+  assert.match(migration, /'confirmed'/i);
 });
 
 test("Data Core primary save attempts fast RPC before legacy workspace resolver", () => {
