@@ -74,4 +74,4 @@ export default async (req:Request, _context:Context) => {
   }catch{}
 };
 
-export const config:Config={path:"/api/push-test-closed"};
+export const config:Config={path:"/api/push-test-closed",method:"POST",background:true};
