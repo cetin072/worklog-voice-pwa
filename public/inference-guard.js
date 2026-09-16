@@ -30,7 +30,8 @@
   const nativeFetch=window.fetch?.bind(window);
   if(typeof nativeFetch==="function"){
     window.fetch=async(input,init)=>{
-      const method=String(init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+      const requestMethod=typeof Request!=="undefined" && input instanceof Request ? input.method : "GET";
+      const method=String(init?.method || requestMethod).toUpperCase();
       const url=typeof input==="string" ? input : String(input?.url || "");
       const isWorklogPost=method==="POST" && /(?:^|\/)api\/worklog(?:$|[?#])/.test(url);
       if(!isWorklogPost || typeof init?.body!=="string") return nativeFetch(input,init);
