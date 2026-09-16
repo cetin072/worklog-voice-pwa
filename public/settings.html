@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icons/icon-192-v3.png">
   <title>설정 · 업무수첩</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/settings.css">
+  <link rel="stylesheet" href="/settings.css?v=20260916-2">
 </head>
 <body class="settings-page-body">
   <main class="app settings-page" id="settingsPage">
@@ -93,32 +93,47 @@
       </section>
 
       <section class="settings-section">
-        <h2>알림</h2>
-        <p id="settingsNotificationGuide" class="settings-note">이 기기에서 업무수첩 알림을 사용할 수 있는지 확인하는 중입니다.</p>
-        <button id="settingsNotificationTest" class="settings-action" type="button">알림 시작하기</button>
-        <p id="settingsNotificationStatus" class="settings-status" aria-live="polite"></p>
-        <div id="settingsNotificationConfirm" hidden>
-          <p class="settings-note settings-future-note">방금 ‘업무수첩 알림 테스트’가 보였나요?</p>
-          <button id="settingsNotificationSeen" class="settings-action" type="button">알림이 왔어요</button>
-          <button id="settingsNotificationMissing" class="settings-action" type="button">알림이 안 왔어요</button>
-        </div>
-        <p id="settingsNotificationHelp" class="settings-note settings-future-note" hidden></p>
-        <div class="settings-future-note">
-          <strong>서버 알림 연결 확인</strong>
-          <p class="settings-note">로그인한 사용자는 기기를 서버 Push에 연결할 수 있습니다. 테스트를 시작하면 먼저 서버 전송을 즉시 확인하고, 성공한 경우 8초 뒤 종료 상태 수신을 이어서 확인합니다.</p>
-          <button id="settingsServerPushTest" class="settings-action" type="button">서버 알림 연결 확인</button>
-          <p id="settingsServerPushStatus" class="settings-status" aria-live="polite"></p>
-        </div>
-        <div class="settings-future-note">
-          <label class="settings-toggle-row" for="settingsMorningPushEnabled">
-            <span>
-              <strong>아침 업무 알림 · 오전 8:30</strong>
-              <small>오늘 할 일, 기한 지난 일, 오늘 일정을 한 번에 묶어 알려드립니다. 모두 0건이면 알림을 보내지 않습니다.</small>
-            </span>
-            <input id="settingsMorningPushEnabled" type="checkbox" disabled>
-          </label>
-          <p id="settingsMorningPushStatus" class="settings-status" aria-live="polite">로그인 후 설정할 수 있습니다.</p>
-        </div>
+        <h2>알림 설정</h2>
+        <p class="settings-note">필요한 알림만 켜고, 잠금화면에 업무 제목을 표시할지도 선택할 수 있습니다.</p>
+
+        <label class="settings-toggle-row" for="settingsMorningPushEnabled">
+          <span>
+            <strong>아침 업무 알림 · 오전 8:30</strong>
+            <small>오늘 할 일, 기한 지난 일, 오늘 일정을 한 번에 묶어 알려드립니다. 모두 0건이면 알림을 보내지 않습니다.</small>
+          </span>
+          <input id="settingsMorningPushEnabled" type="checkbox" disabled>
+        </label>
+        <p id="settingsMorningPushStatus" class="settings-status" aria-live="polite">로그인 후 설정할 수 있습니다.</p>
+
+        <label class="settings-toggle-row" for="settingsMorningPushDetailEnabled">
+          <span>
+            <strong>업무·일정 제목 표시</strong>
+            <small>켜면 가장 가까운 일정과 우선 업무 제목을 최대 2개 표시합니다. 끄면 알림에는 건수만 표시합니다.</small>
+          </span>
+          <input id="settingsMorningPushDetailEnabled" type="checkbox" disabled>
+        </label>
+        <p id="settingsMorningPushDetailStatus" class="settings-status" aria-live="polite">로그인 후 설정할 수 있습니다.</p>
+
+        <details id="settingsNotificationDiagnostics" class="settings-future-note">
+          <summary><strong>알림 테스트·문제 해결</strong></summary>
+          <div class="settings-diagnostics-body">
+            <p id="settingsNotificationGuide" class="settings-note">이 기기에서 업무수첩 알림을 사용할 수 있는지 확인하는 중입니다.</p>
+            <button id="settingsNotificationTest" class="settings-action" type="button">알림 시작하기</button>
+            <p id="settingsNotificationStatus" class="settings-status" aria-live="polite"></p>
+            <div id="settingsNotificationConfirm" hidden>
+              <p class="settings-note settings-future-note">방금 ‘업무수첩 알림 테스트’가 보였나요?</p>
+              <button id="settingsNotificationSeen" class="settings-action" type="button">알림이 왔어요</button>
+              <button id="settingsNotificationMissing" class="settings-action" type="button">알림이 안 왔어요</button>
+            </div>
+            <p id="settingsNotificationHelp" class="settings-note settings-future-note" hidden></p>
+            <div class="settings-future-note">
+              <strong>서버 알림 연결 확인</strong>
+              <p class="settings-note">로그인한 사용자는 기기를 서버 Push에 연결할 수 있습니다. 테스트를 시작하면 먼저 서버 전송을 즉시 확인하고, 성공한 경우 8초 뒤 종료 상태 수신을 이어서 확인합니다.</p>
+              <button id="settingsServerPushTest" class="settings-action" type="button">서버 알림 연결 확인</button>
+              <p id="settingsServerPushStatus" class="settings-status" aria-live="polite"></p>
+            </div>
+          </div>
+        </details>
       </section>
 
       <section class="settings-section">
@@ -150,6 +165,6 @@
   <script src="/notifications.js?v=20260916-2" defer></script>
   <script src="/settings.js?v=20260916-3" defer></script>
   <script src="/push-settings.js?v=20260916-2" defer></script>
-  <script src="/morning-push-settings.js?v=20260916-1" defer></script>
+  <script src="/morning-push-settings.js?v=20260916-2" defer></script>
 </body>
 </html>
