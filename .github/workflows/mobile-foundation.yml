@@ -1,0 +1,38 @@
+name: Mobile Foundation
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'tests/mobile-foundation.test.mjs'
+      - '.github/workflows/mobile-foundation.yml'
+  push:
+    branches:
+      - 'feat/301-mobile-foundation-0.1'
+    paths:
+      - 'mobile/**'
+      - 'tests/mobile-foundation.test.mjs'
+      - '.github/workflows/mobile-foundation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - name: Typecheck mobile app
+        working-directory: mobile
+        run: npm run typecheck
+      - name: Run mobile foundation contract tests
+        run: node --test tests/mobile-foundation.test.mjs
