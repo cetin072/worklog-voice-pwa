@@ -90,7 +90,7 @@ test("home state loader adds search lazily without changing the core capture app
 
   assert.match(html, /id="mic"/);
   assert.match(html, /id="text"/);
-  assert.match(state, /\/search\.js\?v=20260916-1/);
+  assert.match(state, /\/search\.js\?v=20260916-2/);
   assert.match(state, /data-worklog-search/);
   assert.match(state, /document\.head\.append\(script\)/);
 });
