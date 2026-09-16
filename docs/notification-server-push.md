@@ -16,6 +16,8 @@ Deploy Preview와 production 컨텍스트는 분리한다. 실기 검수 전에�
 
 비밀키 값은 저장소, Issue, PR 본문, 로그 예시에 기록하지 않는다.
 
+실기 검수 전에는 Deploy Preview 런타임에서 공개키와 subject가 실제 노출되는지 확인하고, private key는 secret 상태를 유지한다.
+
 ## 데이터 저장
 
 `public.push_subscriptions`는 사용자와 Workspace 소유권을 함께 저장하며 RLS를 사용한다. 브라우저 Push endpoint가 404/410으로 만료되면 구독을 비활성화할 수 있다.
