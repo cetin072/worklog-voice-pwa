@@ -25,7 +25,7 @@ function hasExplicitTime(value) {
 }
 
 export function quickWorklogSchedule(record = {}, normalized = {}) {
-  if (!hasExplicitTime(normalized.dueAt)) return null;
+  if (!hasExplicitTime(record.dueStart)) return null;
   const source = String(record.transcript || "").replace(/\s+/g, " ").trim();
   if (!source) return null;
   const deadline = DEADLINE_RE.test(source);
