@@ -7,7 +7,7 @@ body.platform-auth-loading .welcome-eyebrow{order:3;max-width:260px;margin:14px 
 body.platform-auth-loading .welcome-copy,body.platform-auth-loading .welcome-benefits{display:none}
 body.platform-auth-loading header,body.platform-auth-loading footer{visibility:hidden}
 body.platform-signed-out .core-app-card{display:none}
-body.platform-signed-in .welcome-card,body.platform-session-hint .welcome-card,body.platform-legacy-user .welcome-card,body.platform-auth-unavailable .welcome-card{display:none}
+body:not(.platform-auth-loading).platform-signed-in .welcome-card,body:not(.platform-auth-loading).platform-session-hint .welcome-card,body:not(.platform-auth-loading).platform-legacy-user .welcome-card,body:not(.platform-auth-loading).platform-auth-unavailable .welcome-card{display:none}
 .header-actions{display:flex;align-items:center;gap:8px}
 .settings-open{display:inline-flex;min-width:42px;height:42px;align-items:center;justify-content:center;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#374151;font-size:19px;font-weight:800;text-decoration:none;cursor:pointer}.settings-open:active{transform:translateY(1px)}
 .welcome-card{text-align:center;padding:30px 22px 24px;background:linear-gradient(155deg,#111827 0%,#1f2937 58%,#374151 100%);color:#fff;overflow:hidden}
