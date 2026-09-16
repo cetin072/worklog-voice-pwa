@@ -1,6 +1,6 @@
 body.platform-auth-loading .core-app-card{display:none}
 body.platform-auth-loading .welcome-card{position:fixed;inset:0;z-index:2000;width:100%;min-height:100vh;min-height:100dvh;margin:0;padding:calc(30px + env(safe-area-inset-top)) 20px calc(30px + env(safe-area-inset-bottom));border-radius:0;box-shadow:none;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;color:#111827;text-align:center}
-body.platform-auth-loading .welcome-icon{display:none}
+body.platform-auth-loading .welcome-icon{order:1;width:clamp(160px,42vw,184px);height:clamp(160px,42vw,184px);flex:0 0 auto;margin:0 0 28px;border-radius:38px;display:block;background:transparent url("/icons/icon-512-v6.png") center/contain no-repeat;font-size:0;box-shadow:none}
 body.platform-auth-loading .welcome-icon::before,body.platform-auth-loading .welcome-icon::after{display:none}
 body.platform-auth-loading .welcome-card h2{order:2;margin:0;font-size:0;line-height:1}
 body.platform-auth-loading .welcome-card h2::after{content:"업무수첩";display:block;font-size:clamp(48px,13vw,58px);line-height:1.04;letter-spacing:-.055em;font-weight:900;color:#111827}

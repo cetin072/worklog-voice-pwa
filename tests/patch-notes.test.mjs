@@ -36,8 +36,8 @@ test("patch notes use the current v4 app icon and have dedicated mobile styles",
   assert.match(patchCss, /@media\(max-width:480px\)/);
 });
 
-test("service worker precaches patch notes without changing existing cache strategy name", () => {
-  assert.match(sw, /const CACHE="worklog-v38-unified-launch-splash"/);
+test("service worker precaches patch notes with the current brand cache strategy", () => {
+  assert.match(sw, /const CACHE="worklog-v39-brand-identity-v6"/);
   assert.match(sw, /"\/patch-notes\.html"/);
   assert.match(sw, /"\/patch-notes\.css"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/api\/"\)/);
