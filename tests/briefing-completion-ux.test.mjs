@@ -64,7 +64,7 @@ test("브리핑 UI 변경은 이전 Service Worker exact cache보다 네트워�
   const end = sw.indexOf('self.addEventListener("install"', start);
   const staticResponse = sw.slice(start, end);
 
-  assert.match(sw, /const CACHE="worklog-v39-briefing-inline-undo"/);
+  assert.match(sw, /const CACHE="worklog-v38-unified-launch-splash"/);
   assert.match(sw, /const FRESH_BRIEFING_PATHS=new Set\(\["\/briefing\.css","\/briefing-v2\.js"\]\)/);
   assert.match(staticResponse, /FRESH_BRIEFING_PATHS\.has\(url\.pathname\)/);
   assert.match(staticResponse, /return freshStaticResponse\(request,url,cache\)/);
