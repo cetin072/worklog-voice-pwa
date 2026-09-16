@@ -4,27 +4,44 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("startup loading state uses the existing welcome shell as a lightweight brand launch splash", () => {
+test("startup loading state uses a large white centered notebook-inspired brand launch splash", () => {
   const html = read("public/index.html");
   const css = read("public/distribution.css");
 
   assert.match(html, /class="eyebrow welcome-eyebrow">말하면 기록되고, 일정까지 한눈에<\/p>/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*position:fixed/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*inset:0/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*background:#fff/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*width:174px[^}]*height:194px/);
   assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-192-v3\.png/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*border:3px solid #111827/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-icon::before\{[^}]*repeating-linear-gradient/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*content:"업무수첩"/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*font-size:clamp\(48px,13vw,58px\)/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::before\{content:"말하면 기록되고,"\}/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::after\{content:"일정까지 한눈에"/);
   assert.match(css, /body\.platform-auth-loading \.welcome-copy,body\.platform-auth-loading \.welcome-benefits\{display:none\}/);
+  assert.match(css, /body:not\(\.platform-auth-loading\)\.platform-session-hint \.welcome-card/);
 });
 
-test("brand splash adds no startup JavaScript delay or network work", () => {
+test("brand splash remains visible for one second after first paint while initialization continues", () => {
   const source = read("public/platform-auth-ui.js");
-  const css = read("public/distribution.css");
+  const scheduleStart = source.indexOf("function scheduleBrandLaunchRelease()");
+  const scheduleEnd = source.indexOf("scheduleBrandLaunchRelease();", scheduleStart);
+  const schedule = source.slice(scheduleStart, scheduleEnd);
+  const stateStart = source.indexOf("function setAuthState");
+  const stateEnd = source.indexOf("function legacyMode", stateStart);
+  const setAuthState = source.slice(stateStart, stateEnd);
 
-  assert.doesNotMatch(source, /brandLaunchSplash|splashDelay|minimumSplash|setTimeout\s*\(/);
-  assert.doesNotMatch(css, /@import|https?:\/\//);
+  assert.match(source, /const BRAND_LAUNCH_HOLD_MS = 1000/);
+  assert.match(schedule, /requestAnimationFrame/);
+  assert.match(schedule, /setTimeout\(release, BRAND_LAUNCH_HOLD_MS\)/);
+  assert.doesNotMatch(schedule, /fetch\s*\(/);
+  assert.doesNotMatch(setAuthState, /platform-auth-loading/);
+  assert.match(source, /scheduleBrandLaunchRelease\(\);[\s\S]*applyLocalAuthHint\(\);[\s\S]*refresh\(\)\.catch/);
 });
 
-test("existing local Platform session reveals the core shell before remote auth verification", () => {
+test("existing local Platform session still prepares the core shell before remote auth verification", () => {
   const source = read("public/platform-auth-ui.js");
   const hintIndex = source.indexOf("applyLocalAuthHint();");
   const refreshIndex = source.indexOf("refresh().catch", hintIndex);

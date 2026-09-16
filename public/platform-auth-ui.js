@@ -1,4 +1,17 @@
 (() => {
+  const BRAND_LAUNCH_HOLD_MS = 1000;
+
+  function scheduleBrandLaunchRelease() {
+    const release = () => document.body.classList.remove("platform-auth-loading");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(release, BRAND_LAUNCH_HOLD_MS);
+      });
+    });
+  }
+
+  scheduleBrandLaunchRelease();
+
   const card = document.getElementById("platformAuthCard");
   const form = document.getElementById("platformAuthForm");
   const email = document.getElementById("platformAuthEmail");
@@ -9,7 +22,6 @@
   const signUp = document.getElementById("platformSignUp");
   const signOut = document.getElementById("platformSignOut");
   if (!card || !form || !window.WorklogPlatformAuth) {
-    document.body.classList.remove("platform-auth-loading");
     document.body.classList.add("platform-auth-unavailable");
     return;
   }
@@ -24,7 +36,7 @@
   }
 
   function setAuthState(state, user = null) {
-    document.body.classList.remove("platform-auth-loading", "platform-session-hint", "platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
+    document.body.classList.remove("platform-session-hint", "platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
     document.body.classList.add(state);
     card.classList.toggle("is-authenticated", state === "platform-signed-in");
     window.dispatchEvent(new CustomEvent("worklog:platform-auth-changed", { detail: { state, user } }));
@@ -40,7 +52,7 @@
       form.hidden = true;
       if (signOut) signOut.hidden = true;
       card.hidden = true;
-      document.body.classList.remove("platform-auth-loading", "platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
+      document.body.classList.remove("platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
       document.body.classList.add("platform-session-hint");
       return;
     }
@@ -123,7 +135,7 @@
 
   applyLocalAuthHint();
   refresh().catch(() => {
-    document.body.classList.remove("platform-auth-loading", "platform-session-hint");
+    document.body.classList.remove("platform-session-hint");
     document.body.classList.add("platform-auth-unavailable");
   });
 })();
