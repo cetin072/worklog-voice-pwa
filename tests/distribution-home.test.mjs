@@ -182,7 +182,7 @@ test("legacy briefing loads only for legacy users without a Platform session", (
 
 test("service worker caches current standalone settings assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v35/);
+  assert.match(source, /worklog-v36-search-static/);
   for (const asset of ["/settings.html", "/distribution.css", "/settings.css", "/notifications.js", "/settings.js", "/briefing.css", "/briefing-v2-expand-state.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }

@@ -6,6 +6,8 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 const source = read("public/search.js");
 const css = read("public/search.css");
+const html = read("public/index.html");
+const sw = read("public/sw.js");
 
 test("home search entry is a compact header action instead of an always-visible card", () => {
   assert.match(source, /id = "worklogSearchOpen"/);
@@ -42,4 +44,12 @@ test("aborted older searches cannot clear a newer search loading state", () => {
   assert.match(source, /if \(activeController !== controller\) return;\s*activeController = null;\s*setLoading\(els, false\);/s);
   assert.match(source, /function cancelActiveSearch\(els\)/);
   assert.match(source, /els\.input\.addEventListener\("search"[\s\S]*cancelActiveSearch\(els\)/);
+});
+
+test("installed PWA loads the same search assets as the home shell", () => {
+  assert.match(html, /\/search\.css\?v=20260916-3" data-worklog-search="1"/);
+  assert.match(html, /\/search\.js\?v=20260916-3" data-worklog-search="1" defer/);
+  assert.match(sw, /const CACHE="worklog-v36-search-static"/);
+  assert.match(sw, /"\/search\.css"/);
+  assert.match(sw, /"\/search\.js"/);
 });

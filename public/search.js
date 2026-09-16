@@ -4,6 +4,7 @@
   const PAGE_SIZE = 20;
   const RPC_PATH = "/rest/v1/rpc/search_my_work_records";
   const HISTORY_KEY = "worklogSearchOpen";
+  const DETAIL_SCRIPT_PATH = "/search-detail.js?v=20260916-1";
   const STATUS_LABELS = Object.freeze({
     in_progress: "진행중",
     completed: "완료",
@@ -40,6 +41,14 @@
     link.href = "/search.css?v=20260916-2";
     link.dataset.worklogSearch = "1";
     document.head.append(link);
+  }
+
+  function ensureDetailModule() {
+    if (document.querySelector('script[data-worklog-search-detail="1"]')) return;
+    const script = document.createElement("script");
+    script.src = DETAIL_SCRIPT_PATH;
+    script.dataset.worklogSearchDetail = "1";
+    document.head.append(script);
   }
 
   function createOpenButton() {
@@ -169,6 +178,14 @@
     const title = document.createElement("h3");
     title.className = "search-result-title";
     title.textContent = text(row?.title) || "제목 없는 기록";
+
+    const recordId = text(row?.work_record_id);
+    if (recordId) {
+      li.dataset.workRecordId = recordId;
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      li.setAttribute("aria-label", `${title.textContent} 상세 보기`);
+    }
 
     const match = document.createElement("span");
     match.className = "search-match";
@@ -362,6 +379,7 @@
     const open = createOpenButton();
     const screen = createScreen();
     if (!open || !screen) return;
+    ensureDetailModule();
 
     const els = {
       open,
