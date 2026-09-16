@@ -15,7 +15,8 @@ function bearerToken(req:Request){
 }
 
 function pushConfig(){
-  return vapidConfigFromEnv((name:string)=>Netlify.env.get(name));
+  const privateKey=Netlify.env.get("WEB_PUSH_VAPID_PRIVATE_KEY");
+  return vapidConfigFromEnv((name:string)=>name==="WEB_PUSH_VAPID_PRIVATE_KEY" ? privateKey : Netlify.env.get(name));
 }
 
 function uuid(value:any){
