@@ -9,7 +9,9 @@ test("distribution home exposes social preview metadata", () => {
   assert.match(html, /property="og:title"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/worklog-voice-pwa\.netlify\.app\/"/);
-  assert.match(html, /property="og:image" content="https:\/\/worklog-voice-pwa\.netlify\.app\/icons\/icon-512-v3\.png"/);
+  assert.match(html, /property="og:image" content="https:\/\/worklog-voice-pwa\.netlify\.app\/icons\/icon-512-v6\.png"/);
+  assert.match(html, /rel="icon" href="\/icons\/icon-192-v6\.png"/);
+  assert.match(html, /rel="apple-touch-icon" href="\/icons\/icon-192-v6\.png"/);
   assert.doesNotMatch(html, /Notion 업무 통합 기록에 저장/);
   assert.doesNotMatch(html, /Notion 연결은 필요하지 않습니다/);
   assert.match(html, /말하면 기록되고, 일정까지 한눈에/);
@@ -182,7 +184,7 @@ test("legacy briefing loads only for legacy users without a Platform session", (
 
 test("service worker caches current standalone settings assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v38-unified-launch-splash/);
+  assert.match(source, /worklog-v39-brand-identity-v6/);
   for (const asset of ["/settings.html", "/distribution.css", "/settings.css", "/notifications.js", "/settings.js", "/briefing.css", "/briefing-v2-expand-state.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }
