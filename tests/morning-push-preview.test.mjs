@@ -6,6 +6,7 @@ import { buildMorningPushPreviewState } from "../netlify/shared/morning-push-pre
 
 const previewFunction = readFileSync(new URL("../netlify/functions/morning-push-preview.mts", import.meta.url), "utf8");
 const settingsJs = readFileSync(new URL("../public/morning-push-settings.js", import.meta.url), "utf8");
+const notificationsJs = readFileSync(new URL("../public/notifications.js", import.meta.url), "utf8");
 
 test("live morning preview mirrors today/overdue/schedule rules and excludes system rows", () => {
   const state = buildMorningPushPreviewState({
@@ -56,10 +57,11 @@ test("preview endpoint uses current briefing source without consuming scheduled 
   assert.doesNotMatch(previewFunction, /claim_morning_notification_deliveries/);
 });
 
-test("settings diagnostics exposes a one-tap real morning message preview", () => {
+test("settings diagnostics exposes a one-tap real morning message preview through shared recovery", () => {
   assert.match(settingsJs, /settingsMorningPushPreview/);
   assert.match(settingsJs, /오늘 브리핑 알림 보내보기/);
-  assert.match(settingsJs, /\/api\/morning-push-preview/);
-  assert.match(settingsJs, /ensureServerPushSubscription\(\)/);
+  assert.match(settingsJs, /sendMorningPreviewPush/);
   assert.match(settingsJs, /중복방지 이력에는 영향을 주지 않습니다/);
+  assert.match(notificationsJs, /\/api\/morning-push-preview/);
+  assert.match(notificationsJs, /withServerPushSubscriptionRecovery/);
 });
