@@ -51,8 +51,11 @@ for (const asset of assets) {
 }
 
 const app = await get('/app.js');
-if (!app.body.includes('fetch("/api/worklog")')) {
-  throw new Error('UAR_PREVIEW_RUNTIME_WORKLOG_HEALTH_CALL_MISSING');
+if (app.body.includes('fetch("/api/worklog")')) {
+  throw new Error('UAR_PREVIEW_RUNTIME_STARTUP_WORKLOG_HEALTH_CALL_FORBIDDEN');
+}
+if (!app.body.includes('worklog:platform-auth-changed') || !app.body.includes('WorklogPlatformAuth?.readSession?.()')) {
+  throw new Error('UAR_PREVIEW_RUNTIME_LOCAL_AUTH_HEALTH_STATE_MISSING');
 }
 if (!app.body.includes('navigator.serviceWorker.register("/sw.js")')) {
   throw new Error('UAR_PREVIEW_RUNTIME_SW_REGISTRATION_MISSING');
