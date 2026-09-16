@@ -30,16 +30,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm install --no-audit --no-fund
+      - name: Check Expo dependency compatibility
+        working-directory: mobile
+        run: npx expo install --check
       - name: Typecheck mobile app
         working-directory: mobile
         run: npm run typecheck
       - name: Run mobile foundation contract tests
         run: node --test tests/mobile-foundation.test.mjs
+      - name: Upload resolved mobile lockfile for audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-package-lock-audit
+          path: mobile/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
 
   android-standalone:
     needs: typecheck
@@ -50,7 +59,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
