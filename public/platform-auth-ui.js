@@ -1,13 +1,12 @@
 (() => {
-  const BRAND_LAUNCH_MIN_MS = 420;
-  const brandLaunchStartedAt = performance.now();
+  const BRAND_LAUNCH_HOLD_MS = 1000;
 
   function scheduleBrandLaunchRelease() {
     const release = () => document.body.classList.remove("platform-auth-loading");
     window.requestAnimationFrame(() => {
-      const elapsed = performance.now() - brandLaunchStartedAt;
-      const remaining = Math.max(0, BRAND_LAUNCH_MIN_MS - elapsed);
-      window.setTimeout(() => window.requestAnimationFrame(release), remaining);
+      window.requestAnimationFrame(() => {
+        window.setTimeout(release, BRAND_LAUNCH_HOLD_MS);
+      });
     });
   }
 
