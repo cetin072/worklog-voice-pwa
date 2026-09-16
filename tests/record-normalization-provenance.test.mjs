@@ -24,7 +24,7 @@ test("legacy Notion institution is retained only as unverified structured metada
   assert.equal(result.structuredData.provenance.institution, "legacy_unverified");
   assert.equal(result.structuredData.provenance.searchAliases, "unset");
   assert.equal(result.searchAliases.includes("태장"), false);
-  assert.equal(result.reviewState, "needs_review");
+  assert.equal(result.reviewState, "unreviewed");
 });
 
 test("user-confirmed institution keeps trusted provenance and search alias", () => {
