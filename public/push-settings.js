@@ -35,7 +35,7 @@
     button.disabled = false;
     button.textContent = "앱 닫고 서버 알림 테스트";
     if (status?.dataset.ready !== "true") {
-      status.textContent = "버튼을 누르면 기기를 서버 알림에 연결하고 8초 뒤 테스트 알림을 보냅니다.";
+      status.textContent = "먼저 서버 전송을 즉시 확인한 뒤, 성공하면 8초 뒤 종료 상태 테스트를 이어서 실행합니다.";
     }
   }
 
@@ -54,7 +54,7 @@
 
     button.addEventListener("click", async () => {
       const notifications = window.WorklogNotifications;
-      if (!notifications?.scheduleClosedAppServerPushTest) {
+      if (!notifications?.sendServerTestPush || !notifications?.scheduleClosedAppServerPushTest) {
         if (status) status.textContent = "서버 알림 기능을 불러오지 못했습니다. 페이지를 다시 열어주세요.";
         return;
       }
@@ -62,13 +62,15 @@
       button.disabled = true;
       if (status) {
         status.dataset.ready = "true";
-        status.textContent = "기기 알림 연결을 확인하는 중입니다…";
+        status.textContent = "1차 서버 전송을 확인하는 중입니다…";
       }
       try {
+        await notifications.sendServerTestPush();
+        if (status) status.textContent = "1차 서버 전송 성공. 종료 상태 테스트를 예약하는 중입니다…";
         const result = await notifications.scheduleClosedAppServerPushTest();
-        if (status) status.textContent = `${result.delaySeconds || 8}초 뒤 서버 알림이 도착합니다. 지금 업무수첩을 닫고 홈 화면으로 이동하세요.`;
+        if (status) status.textContent = `1차 서버 전송 성공. ${result.delaySeconds || 8}초 뒤 두 번째 서버 알림이 도착합니다. 지금 업무수첩을 닫고 홈 화면으로 이동하세요.`;
       } catch (error) {
-        if (status) status.textContent = messageFor(error);
+        if (status) status.textContent = `서버 전송 확인 실패: ${messageFor(error)}`;
       } finally {
         button.disabled = false;
       }
