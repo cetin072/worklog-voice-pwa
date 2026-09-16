@@ -24,7 +24,7 @@
   }
 
   function setAuthState(state, user = null) {
-    document.body.classList.remove("platform-auth-loading", "platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
+    document.body.classList.remove("platform-auth-loading", "platform-session-hint", "platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
     document.body.classList.add(state);
     card.classList.toggle("is-authenticated", state === "platform-signed-in");
     window.dispatchEvent(new CustomEvent("worklog:platform-auth-changed", { detail: { state, user } }));
@@ -32,6 +32,29 @@
 
   function legacyMode() {
     return window.WorklogAuth?.mode?.() || "unset";
+  }
+
+  function applyLocalAuthHint() {
+    const session = window.WorklogPlatformAuth.readSession?.();
+    if (session?.access_token) {
+      form.hidden = true;
+      if (signOut) signOut.hidden = true;
+      card.hidden = true;
+      document.body.classList.remove("platform-auth-loading", "platform-signed-out", "platform-signed-in", "platform-legacy-user", "platform-auth-unavailable");
+      document.body.classList.add("platform-session-hint");
+      return;
+    }
+
+    card.hidden = false;
+    form.hidden = false;
+    if (signOut) signOut.hidden = true;
+    if (legacyMode() !== "unset") {
+      setAuthState("platform-legacy-user");
+      show("기존 연결 설정으로 사용 중입니다. 새 계정은 필요할 때 시작할 수 있습니다.");
+      return;
+    }
+    setAuthState("platform-signed-out");
+    show("Google로 시작하거나 이메일 계정으로 로그인하세요.");
   }
 
   async function refresh() {
@@ -97,8 +120,10 @@
     try { await window.WorklogPlatformAuth.signOut(); await refresh(); }
     finally { setBusy(false); }
   });
+
+  applyLocalAuthHint();
   refresh().catch(() => {
-    document.body.classList.remove("platform-auth-loading");
+    document.body.classList.remove("platform-auth-loading", "platform-session-hint");
     document.body.classList.add("platform-auth-unavailable");
   });
 })();
