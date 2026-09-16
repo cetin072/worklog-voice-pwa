@@ -112,5 +112,5 @@ test("signed-in auth completion repairs an initial briefing race without an infi
 
 test("main app cache-busts the repaired auth and briefing clients", () => {
   assert.match(indexSource, /platform-auth\.js\?v=20260916-2/);
-  assert.match(indexSource, /briefing-v2\.js\?v=20260916-3/);
+  assert.match(indexSource, /briefing-v2\.js\?v=20260916-4/);
 });
