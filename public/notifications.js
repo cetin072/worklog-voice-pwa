@@ -201,6 +201,49 @@
     });
   }
 
+  async function refreshServerPushSubscription() {
+    const registration = await navigator.serviceWorker.ready;
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      try {
+        await existing.unsubscribe();
+      } catch {
+        // Continue to a fresh subscribe attempt even when browser cleanup is imperfect.
+      }
+    }
+    return ensureServerPushSubscription();
+  }
+
+  function isRecoverableSubscriptionError(error) {
+    return Number(error?.status || 0) === 410
+      || Number(error?.status || 0) === 404
+      || error?.code === "SUBSCRIPTION_NOT_FOUND";
+  }
+
+  async function withServerPushSubscriptionRecovery(send) {
+    let connected = await ensureServerPushSubscription();
+    if (!connected.subscriptionId) {
+      const error = new Error("서버 알림 구독 ID를 확인하지 못했습니다.");
+      error.code = "subscription_id_missing";
+      throw error;
+    }
+
+    try {
+      const result = await send(connected.subscriptionId);
+      return Object.freeze({ result, subscriptionId: connected.subscriptionId, recovered: false });
+    } catch (error) {
+      if (!isRecoverableSubscriptionError(error)) throw error;
+      connected = await refreshServerPushSubscription();
+      if (!connected.subscriptionId) {
+        const missing = new Error("새 서버 알림 구독 ID를 확인하지 못했습니다.");
+        missing.code = "subscription_id_missing";
+        throw missing;
+      }
+      const result = await send(connected.subscriptionId);
+      return Object.freeze({ result, subscriptionId: connected.subscriptionId, recovered: true });
+    }
+  }
+
   async function sendServerTestPush() {
     const session = authSession();
     if (!session) {
@@ -208,21 +251,33 @@
       error.code = "login_required";
       throw error;
     }
-    const connected = await ensureServerPushSubscription();
-    if (!connected.subscriptionId) {
-      const error = new Error("서버 알림 구독 ID를 확인하지 못했습니다.");
-      error.code = "subscription_id_missing";
-      throw error;
-    }
-    const result = await apiJson("/api/push-test", {
+    const sent = await withServerPushSubscriptionRecovery((subscriptionId) => apiJson("/api/push-test", {
       method: "POST",
       headers: {
         authorization: `Bearer ${session.access_token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ subscriptionId: connected.subscriptionId }),
-    });
-    return Object.freeze({ ok: true, ...result, subscriptionId: connected.subscriptionId });
+      body: JSON.stringify({ subscriptionId }),
+    }));
+    return Object.freeze({ ok: true, ...sent.result, subscriptionId: sent.subscriptionId, recovered: sent.recovered });
+  }
+
+  async function sendMorningPreviewPush() {
+    const session = authSession();
+    if (!session) {
+      const error = new Error("로그인 후 오늘 브리핑 알림을 테스트할 수 있습니다.");
+      error.code = "login_required";
+      throw error;
+    }
+    const sent = await withServerPushSubscriptionRecovery((subscriptionId) => apiJson("/api/morning-push-preview", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ subscriptionId }),
+    }));
+    return Object.freeze({ ok: true, ...sent.result, subscriptionId: sent.subscriptionId, recovered: sent.recovered });
   }
 
   async function scheduleClosedAppServerPushTest() {
@@ -262,7 +317,9 @@
     ensureServiceWorker,
     showTestNotification,
     ensureServerPushSubscription,
+    refreshServerPushSubscription,
     sendServerTestPush,
+    sendMorningPreviewPush,
     scheduleClosedAppServerPushTest,
   });
 })();
