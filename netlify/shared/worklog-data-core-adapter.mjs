@@ -6,7 +6,12 @@ const STATUS_MAP = Object.freeze({ "완료": "completed", "진행중": "in_progr
 function adapterError(code, message, details = {}) { const error = new Error(message); error.code = code; Object.assign(error, details); return error; }
 function validRecordedAt(value) { const date = new Date(value || ""); return Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString(); }
 function title(value) { const text = String(value || "").replace(/\s+/g, " ").trim(); return text.length <= 200 ? text : text.slice(0, 200); }
-function dueAt(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? `${value}T00:00:00+09:00` : null; }
+function dueAt(value) {
+  const text = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00+09:00`;
+  if (/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(text)) return text;
+  return null;
+}
 function amount(value) {
   if (value === undefined || value === null || value === "") return null;
   const number = Number(value);
