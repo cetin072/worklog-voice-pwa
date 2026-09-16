@@ -40,7 +40,7 @@
     if (document.querySelector('link[data-worklog-search="1"]')) return;
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "/search.css?v=20260916-2";
+    link.href = "/search.css?v=20260916-3";
     link.dataset.worklogSearch = "1";
     document.head.append(link);
   }
@@ -122,10 +122,10 @@
       <div class="search-shell">
         <header class="search-screen-head">
           <button id="worklogSearchClose" class="search-back" type="button" aria-label="검색 닫기">←</button>
-          <div>
-            <p class="eyebrow">기록 검색</p>
-            <h2 id="searchScreenTitle">지난 업무 검색</h2>
-          </div>
+          <button id="worklogSearchFocus" class="search-title-action" type="button" aria-label="검색어 입력으로 이동" aria-controls="worklogSearchInput">
+            <span class="eyebrow">기록 검색</span>
+            <span id="searchScreenTitle" class="search-title-text">지난 업무 검색</span>
+          </button>
         </header>
         <div class="search-screen-body">
           <form id="worklogSearchForm" class="search-form" role="search">
@@ -196,6 +196,10 @@
   function clearResults(els) {
     els.results.replaceChildren();
     els.more.hidden = true;
+  }
+
+  function focusSearchInput(els) {
+    els.input.focus();
   }
 
   function createMetaItem(value) {
@@ -381,7 +385,7 @@
   function showScreen(els, { pushHistory = true } = {}) {
     if (!signedIn()) return;
     if (screenOpen) {
-      els.input.focus();
+      focusSearchInput(els);
       return;
     }
 
@@ -395,7 +399,7 @@
       window.history.pushState({ ...(window.history.state || {}), [HISTORY_KEY]: true }, "");
     }
 
-    window.requestAnimationFrame(() => els.input.focus());
+    window.requestAnimationFrame(() => focusSearchInput(els));
   }
 
   function hideScreen(els, { returnFocus = true } = {}) {
@@ -435,6 +439,7 @@
       open,
       screen,
       close: document.getElementById("worklogSearchClose"),
+      focus: document.getElementById("worklogSearchFocus"),
       form: document.getElementById("worklogSearchForm"),
       input: document.getElementById("worklogSearchInput"),
       submit: document.getElementById("worklogSearchSubmit"),
@@ -446,6 +451,7 @@
 
     els.open.addEventListener("click", () => showScreen(els));
     els.close.addEventListener("click", () => requestClose(els));
+    els.focus.addEventListener("click", () => focusSearchInput(els));
 
     els.form.addEventListener("submit", (event) => {
       event.preventDefault();
