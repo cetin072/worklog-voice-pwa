@@ -18,7 +18,7 @@
       <form id="briefingEditForm">
         <label class="briefing-edit-label" for="briefingEditInput">업무명</label>
         <input id="briefingEditInput" class="briefing-edit-input" type="text" maxlength="160" autocomplete="off">
-        <p class="briefing-edit-help">저장하면 Notion의 업무명도 함께 수정됩니다. 음성원문은 그대로 보존됩니다.</p>
+        <p class="briefing-edit-help"></p>
         <p id="briefingEditStatus" class="briefing-edit-status" aria-live="polite"></p>
         <div class="briefing-edit-actions">
           <button class="briefing-edit-cancel" type="button">취소</button>
@@ -30,10 +30,22 @@
 
   const form=backdrop.querySelector("#briefingEditForm");
   const input=backdrop.querySelector("#briefingEditInput");
+  const help=backdrop.querySelector(".briefing-edit-help");
   const status=backdrop.querySelector("#briefingEditStatus");
   const save=backdrop.querySelector(".briefing-edit-save");
 
+  function mode(){
+    const explicit=String(root.dataset.mode || "").trim();
+    if(explicit) return explicit;
+    const meta=String(document.getElementById("briefingMeta")?.textContent || "");
+    return meta.includes("Data Core 기준") ? "data_core" : "notion";
+  }
+
   function authHeaders(){
+    if(mode()==="data_core"){
+      const session=window.WorklogPlatformAuth?.readSession?.();
+      return session?.access_token ? {authorization:`Bearer ${session.access_token}`} : {};
+    }
     if(window.WorklogAuth?.getHeaders){
       return window.WorklogAuth.getHeaders({promptOwner:true});
     }
@@ -58,7 +70,11 @@
     if(!strong) return;
     currentItem=item;
     input.value=strong.textContent.trim();
-    status.textContent=IS_PREVIEW_DEMO ? "화면 미리보기에서는 실제 Notion을 수정하지 않습니다." : "";
+    const dataCore=mode()==="data_core";
+    help.textContent=dataCore
+      ? "저장하면 업무수첩의 업무명이 수정됩니다. 음성원문은 그대로 보존됩니다."
+      : "저장하면 Notion의 업무명도 함께 수정됩니다. 음성원문은 그대로 보존됩니다.";
+    status.textContent=IS_PREVIEW_DEMO ? "화면 미리보기에서는 실제 데이터를 수정하지 않습니다." : "";
     backdrop.hidden=false;
     requestAnimationFrame(()=>{
       input.focus();
@@ -123,9 +139,12 @@
       return;
     }
 
+    const editMode=mode();
     const headers=authHeaders();
     if(!Object.keys(headers).length){
-      status.textContent="Notion 연결 또는 개인 접근키가 필요합니다.";
+      status.textContent=editMode==="data_core"
+        ? "로그인 세션을 확인할 수 없습니다. 다시 로그인해주세요."
+        : "Notion 연결 또는 개인 접근키가 필요합니다.";
       return;
     }
 
@@ -142,7 +161,8 @@
       const data=await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(data.error || "업무명 수정에 실패했습니다.");
       updateVisibleTitle(item,String(data.title || nextTitle));
-      status.textContent="Notion 업무명까지 수정했습니다.";
+      status.textContent=data.mode==="data_core" ? "업무명을 수정했습니다." : "Notion 업무명까지 수정했습니다.";
+      if(data.mode==="data_core") window.dispatchEvent(new CustomEvent("worklog:record-saved",{detail:{source:"briefing-edit"}}));
       setTimeout(closeModal,450);
     }catch(error){
       status.textContent=error?.message || "업무명 수정에 실패했습니다.";
