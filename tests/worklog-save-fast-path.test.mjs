@@ -68,11 +68,11 @@ test("save_my_worklog RPC keeps RLS active and authenticated-only", () => {
   assert.match(migration, /grant execute on function public\.save_my_worklog[\s\S]*to authenticated, service_role/i);
 });
 
-test("save_my_worklog RPC upserts both rows by workspace + clientRequestId in one function", () => {
+test("save_my_worklog RPC upserts both rows through named idempotency constraints", () => {
   assert.match(migration, /insert into public\.work_records/i);
-  assert.match(migration, /on conflict \(workspace_id, client_request_id\)/i);
+  assert.match(migration, /on conflict on constraint work_records_workspace_client_request_id_key/i);
   assert.match(migration, /insert into public\.source_refs/i);
-  assert.equal((migration.match(/on conflict \(workspace_id, client_request_id\)/gi) || []).length, 2);
+  assert.match(migration, /on conflict on constraint source_refs_workspace_client_request_id_key/i);
   assert.match(migration, /v_work_record_id::text/);
 });
 
