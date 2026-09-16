@@ -120,8 +120,8 @@ test("Home UX assets and product records are wired into the app", () => {
 
   assert.match(html, /\/home-ux\.css\?v=20260916-2/);
   assert.match(html, /\/home-ux\.js\?v=20260916-3/);
-  assert.match(html, /\/briefing\.css\?v=20260916-2/);
-  assert.match(html, /\/briefing-v2\.js\?v=20260916-3/);
+  assert.match(html, /\/briefing\.css\?v=20260916-3/);
+  assert.match(html, /\/briefing-v2\.js\?v=20260916-4/);
   assert.ok(sw.includes('"/home-ux.css"'));
   assert.ok(sw.includes('"/home-ux.js"'));
   assert.match(changelog, /오늘의 브리핑/);
