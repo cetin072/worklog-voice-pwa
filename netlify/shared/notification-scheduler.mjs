@@ -37,10 +37,35 @@ function cleanClaim(row) {
   const todayCount = nonNegativeInteger(row?.today_count);
   const overdueCount = nonNegativeInteger(row?.overdue_count);
   const scheduleCount = nonNegativeInteger(row?.schedule_count);
+  const detailEnabled = row?.morning_detail_enabled !== false;
+  const primaryWorkTitle = text(row?.primary_work_title, 200);
+  const primaryWorkBucket = text(row?.primary_work_bucket, 20);
+  const primaryScheduleTitle = text(row?.primary_schedule_title, 200);
+  const primaryScheduleTime = text(row?.primary_schedule_time, 10);
   if (!deliveryId || !subscriptionId || !endpoint || !p256dh || !auth || todayCount === null || overdueCount === null || scheduleCount === null) {
     throw schedulerError("NOTIFICATION_CLAIM_INVALID", "아침 알림 전송 대상 정보가 올바르지 않습니다.");
   }
-  return Object.freeze({ deliveryId, subscriptionId, endpoint, p256dh, auth, todayCount, overdueCount, scheduleCount });
+  if (primaryWorkBucket && !["today", "overdue"].includes(primaryWorkBucket)) {
+    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "아침 알림 업무 분류가 올바르지 않습니다.");
+  }
+  if (primaryScheduleTime && primaryScheduleTime !== "종일" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(primaryScheduleTime)) {
+    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "아침 알림 일정 시각이 올바르지 않습니다.");
+  }
+  return Object.freeze({
+    deliveryId,
+    subscriptionId,
+    endpoint,
+    p256dh,
+    auth,
+    todayCount,
+    overdueCount,
+    scheduleCount,
+    detailEnabled,
+    primaryWorkTitle,
+    primaryWorkBucket,
+    primaryScheduleTitle,
+    primaryScheduleTime,
+  });
 }
 
 export function notificationSchedulerConfig(readEnv) {
