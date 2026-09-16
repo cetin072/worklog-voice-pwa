@@ -1,9 +1,8 @@
 import type { Config, Context } from "@netlify/functions";
 import { pageBelongsToDataSource } from "../shared/core-logic.mjs";
 import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
-import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
-import { normalizeWorklogTitle, validWorklogPageId } from "../shared/worklog-edit.mjs";
-import { createWorklogDataCoreTitleEditor } from "../shared/worklog-data-core-title-editor.mjs";
+import { normalizeWorklogDueInput, normalizeWorklogTitle, validWorklogPageId } from "../shared/worklog-edit.mjs";
+import { createWorklogDataCoreEditor } from "../shared/worklog-data-core-editor.mjs";
 
 const NOTION_VERSION="2026-03-11";
 const DEFAULT_DATA_SOURCE_ID="e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -11,10 +10,7 @@ const DEFAULT_DATA_SOURCE_ID="e345d19d-504f-4466-815a-912b1d6b9a3a";
 function json(status:number,body:Record<string,unknown>){
   return new Response(JSON.stringify(body),{
     status,
-    headers:{
-      "content-type":"application/json; charset=utf-8",
-      "cache-control":"no-store"
-    }
+    headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}
   });
 }
 
@@ -36,7 +32,6 @@ function resolveConnection(req:Request){
   const personal=personalConnection(req);
   if(personal && "error" in personal) return {error:personal.error,status:400 as const};
   if(personal) return personal;
-
   const token=Netlify.env.get("NOTION_TOKEN");
   const accessKey=Netlify.env.get("APP_ACCESS_KEY");
   const dataSourceId=Netlify.env.get("NOTION_DATA_SOURCE_ID") || DEFAULT_DATA_SOURCE_ID;
@@ -47,11 +42,7 @@ function resolveConnection(req:Request){
 }
 
 function notionHeaders(token:string){
-  return {
-    "Authorization":`Bearer ${token}`,
-    "Content-Type":"application/json",
-    "Notion-Version":NOTION_VERSION
-  };
+  return {"Authorization":`Bearer ${token}`,"Content-Type":"application/json","Notion-Version":NOTION_VERSION};
 }
 
 function titleValue(value:any){
@@ -64,18 +55,30 @@ function titleProperty(value:string){
   return {title:[{type:"text",text:{content:value}}]};
 }
 
+function seoulDueFields(rawValue:any,hasTimeHint?:boolean){
+  const raw=String(rawValue || "").trim();
+  if(!raw) return {dueDate:"",dueTime:""};
+  if(/^\d{4}-\d{2}-\d{2}$/.test(raw)) return {dueDate:raw,dueTime:""};
+  const parsed=new Date(raw);
+  if(Number.isNaN(parsed.getTime())) return {dueDate:"",dueTime:""};
+  const parts=new Intl.DateTimeFormat("en-CA",{
+    timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false
+  }).formatToParts(parsed);
+  const get=(type:string)=>parts.find(part=>part.type===type)?.value || "";
+  return {
+    dueDate:`${get("year")}-${get("month")}-${get("day")}`,
+    dueTime:hasTimeHint===false ? "" : `${get("hour")}:${get("minute")}`
+  };
+}
+
 async function getVerifiedPage(token:string,pageId:string,dataSourceId:string){
-  const res=await fetch(`https://api.notion.com/v1/pages/${pageId}`,{
-    method:"GET",
-    headers:notionHeaders(token)
-  });
+  const res=await fetch(`https://api.notion.com/v1/pages/${pageId}`,{method:"GET",headers:notionHeaders(token)});
   const data:any=await res.json().catch(()=>({}));
   if(!res.ok){
     const error:any=new Error(`NOTION_${res.status}`);
     error.status=res.status;
     throw error;
   }
-
   const parentId=String(data?.parent?.data_source_id || data?.parent?.database_id || "");
   if(!pageBelongsToDataSource(parentId,dataSourceId)){
     const error:any=new Error("NOTION_PAGE_OUTSIDE_DATA_SOURCE");
@@ -85,11 +88,11 @@ async function getVerifiedPage(token:string,pageId:string,dataSourceId:string){
   return data;
 }
 
-async function updateTitle(token:string,pageId:string,title:string){
+async function updateNotionWorklog(token:string,pageId:string,title:string,dueStart:string|null|undefined){
+  const properties:any={"업무명":titleProperty(title)};
+  if(dueStart!==undefined) properties["기한"]={date:dueStart ? {start:dueStart} : null};
   const res=await fetch(`https://api.notion.com/v1/pages/${pageId}`,{
-    method:"PATCH",
-    headers:notionHeaders(token),
-    body:JSON.stringify({properties:{"업무명":titleProperty(title)}})
+    method:"PATCH",headers:notionHeaders(token),body:JSON.stringify({properties})
   });
   const data:any=await res.json().catch(()=>({}));
   if(!res.ok){
@@ -101,6 +104,15 @@ async function updateTitle(token:string,pageId:string,title:string){
   return data;
 }
 
+function dataCoreErrorResponse(error:any){
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_AUTH_REQUIRED") return json(401,{error:"로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요."});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_WORKSPACE_MISSING") return json(404,{error:"개인 업무공간을 찾지 못했습니다."});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_DUE_INVALID") return json(400,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN") return json(404,{error:error.message});
+  console.error("Data Core worklog edit error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,200));
+  return json(502,{error:"업무를 수정하지 못했습니다. 잠시 후 다시 시도해주세요."});
+}
+
 export default async (req:Request,_context:Context)=>{
   if(req.method!=="POST") return json(405,{error:"허용되지 않은 요청입니다."});
 
@@ -108,64 +120,94 @@ export default async (req:Request,_context:Context)=>{
   try{ body=await req.json(); }
   catch{ return json(400,{error:"요청 형식이 올바르지 않습니다."}); }
 
+  const action=String(body.action || "update")==="read" ? "read" : "update";
   const pageId=String(body.pageId || "").trim();
-  const nextTitle=normalizeWorklogTitle(body.title);
-  if(!nextTitle) return json(400,{error:"업무명을 입력해주세요."});
-  if(nextTitle.length>160) return json(400,{error:"업무명은 160자 이하로 입력해주세요."});
-
+  const hasDueFields=Object.prototype.hasOwnProperty.call(body,"dueDate") || Object.prototype.hasOwnProperty.call(body,"dueTime");
   const accessToken=bearerToken(req);
+
   if(accessToken){
     const supabaseUrl=Netlify.env.get("SUPABASE_URL");
     const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
     if(!supabaseUrl || !publishableKey) return json(503,{error:"Data Core 편집 설정이 아직 준비되지 않았습니다."});
     try{
       const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
-      const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
-      const editor=createWorklogDataCoreTitleEditor({client});
-      const workspaceContext=await resolver.resolve(accessToken);
-      const result=await editor.updateTitle({recordId:pageId,title:nextTitle},workspaceContext);
-      return json(200,{ok:true,pageId:result.recordId,title:result.title,mode:"data_core"});
+      const editor=createWorklogDataCoreEditor({client});
+      if(action==="read"){
+        const current=await editor.readDetails({recordId:pageId});
+        const due=seoulDueFields(current.dueAt,current.dueHasTime);
+        return json(200,{ok:true,pageId:current.recordId,title:current.title,...due,mode:"data_core"});
+      }
+
+      const nextTitle=normalizeWorklogTitle(body.title);
+      if(!nextTitle) return json(400,{error:"업무명을 입력해주세요."});
+      if(nextTitle.length>160) return json(400,{error:"업무명은 160자 이하로 입력해주세요."});
+
+      let dueAt:any=null;
+      let dueHasTime=false;
+      let dueDate="";
+      let dueTime="";
+      if(hasDueFields){
+        let normalized:any;
+        try{ normalized=normalizeWorklogDueInput(body.dueDate,body.dueTime); }
+        catch(error:any){ return json(400,{error:error.message}); }
+        ({dueAt,dueHasTime,dueDate,dueTime}=normalized);
+      }else{
+        const current=await editor.readDetails({recordId:pageId});
+        dueAt=current.dueAt;
+        dueHasTime=current.dueHasTime;
+        ({dueDate,dueTime}=seoulDueFields(dueAt,dueHasTime));
+      }
+
+      const result=await editor.updateDetails({recordId:pageId,title:nextTitle,dueAt,dueHasTime});
+      return json(200,{ok:true,pageId:result.recordId,title:result.title,dueDate,dueTime,scheduleUpdated:result.scheduleUpdated,mode:"data_core"});
     }catch(error:any){
-      if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED"){
-        return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 수정해주세요."});
-      }
-      if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID"){
-        return json(400,{error:error.message});
-      }
-      if(error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN"){
-        return json(404,{error:error.message});
-      }
-      console.error("Data Core worklog edit error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));
-      return json(502,{error:"업무명을 수정하지 못했습니다."});
+      return dataCoreErrorResponse(error);
     }
   }
 
   const connection:any=resolveConnection(req);
   if(connection.error) return json(connection.status || 400,{error:connection.error});
   const {token,dataSourceId,mode}=connection;
-
   if(!validWorklogPageId(pageId)) return json(400,{error:"수정할 업무 식별자가 올바르지 않습니다."});
 
   try{
     const page=await getVerifiedPage(token,pageId,dataSourceId);
     const previousTitle=titleValue(page?.properties?.["업무명"]);
-    if(previousTitle===nextTitle){
-      return json(200,{ok:true,unchanged:true,pageId,title:nextTitle,mode});
+    const previousDue=String(page?.properties?.["기한"]?.date?.start || "");
+    if(action==="read"){
+      return json(200,{ok:true,pageId,title:previousTitle,...seoulDueFields(previousDue,previousDue.includes("T")),mode});
     }
 
-    await updateTitle(token,pageId,nextTitle);
-    return json(200,{ok:true,pageId,title:nextTitle,previousTitle,mode});
+    const nextTitle=normalizeWorklogTitle(body.title);
+    if(!nextTitle) return json(400,{error:"업무명을 입력해주세요."});
+    if(nextTitle.length>160) return json(400,{error:"업무명은 160자 이하로 입력해주세요."});
+
+    let dueStart: string|null|undefined=undefined;
+    let dueDate="";
+    let dueTime="";
+    if(hasDueFields){
+      let normalized:any;
+      try{ normalized=normalizeWorklogDueInput(body.dueDate,body.dueTime); }
+      catch(error:any){ return json(400,{error:error.message}); }
+      dueDate=normalized.dueDate;
+      dueTime=normalized.dueTime;
+      dueStart=normalized.dueAt ? (normalized.dueHasTime ? normalized.dueAt : normalized.dueDate) : null;
+    }else{
+      ({dueDate,dueTime}=seoulDueFields(previousDue,previousDue.includes("T")));
+    }
+
+    const unchangedTitle=previousTitle===nextTitle;
+    const unchangedDue=!hasDueFields || previousDue===String(dueStart || "");
+    if(unchangedTitle && unchangedDue) return json(200,{ok:true,unchanged:true,pageId,title:nextTitle,dueDate,dueTime,mode});
+
+    await updateNotionWorklog(token,pageId,nextTitle,dueStart);
+    return json(200,{ok:true,pageId,title:nextTitle,previousTitle,dueDate,dueTime,mode});
   }catch(error:any){
     if(error?.status===403) return json(403,{error:"이 업무는 현재 연결된 업무수첩에서 수정할 수 없습니다."});
-    if(mode==="personal" && (error?.status===401 || error?.status===404)){
-      return json(401,{error:"개인 Notion 연결이 만료되었거나 업무를 찾을 수 없습니다. 다시 연결해주세요."});
-    }
+    if(mode==="personal" && (error?.status===401 || error?.status===404)) return json(401,{error:"개인 Notion 연결이 만료되었거나 업무를 찾을 수 없습니다. 다시 연결해주세요."});
     console.error(error);
-    return json(502,{error:"Notion 업무명 수정에 실패했습니다."});
+    return json(502,{error:"Notion 업무 수정에 실패했습니다."});
   }
 };
 
-export const config:Config={
-  path:"/api/worklog-edit",
-  method:["POST"]
-};
+export const config:Config={path:"/api/worklog-edit",method:["POST"]};

@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { normalizeWorklogTitle, validWorklogPageId } from "../netlify/shared/worklog-edit.mjs";
-import { createWorklogDataCoreTitleEditor } from "../netlify/shared/worklog-data-core-title-editor.mjs";
+import { normalizeWorklogDueInput, normalizeWorklogTitle, validWorklogPageId } from "../netlify/shared/worklog-edit.mjs";
+import { createWorklogDataCoreEditor } from "../netlify/shared/worklog-data-core-editor.mjs";
 
-const clientSource = readFileSync(new URL("../public/briefing-edit.js", import.meta.url), "utf8");
-const endpointSource = readFileSync(new URL("../netlify/functions/worklog-edit.mts", import.meta.url), "utf8");
-const indexSource = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+const read=(path)=>readFileSync(new URL(`../${path}`,import.meta.url),"utf8");
+const clientSource=read("public/briefing-edit.js");
+const endpointSource=read("netlify/functions/worklog-edit.mts");
+const indexSource=read("public/index.html");
+const migrationSource=read("supabase/migrations/20260916143047_worklog_edit_details_v1.sql");
 
 test("normalizeWorklogTitle trims and collapses whitespace",()=>{
   assert.equal(normalizeWorklogTitle("  범한매카텍   견적\n확인  "),"범한매카텍 견적 확인");
@@ -18,62 +20,84 @@ test("validWorklogPageId accepts Notion UUID forms",()=>{
   assert.equal(validWorklogPageId("demo"),false);
 });
 
-test("Data Core title edit is scoped to record, workspace, and creator", async()=>{
+test("due edit normalizes Seoul date/time and supports date-only or clearing",()=>{
+  assert.deepEqual(normalizeWorklogDueInput("2026-09-18","14:30"),{
+    dueDate:"2026-09-18",dueTime:"14:30",dueAt:"2026-09-18T14:30:00+09:00",dueHasTime:true
+  });
+  assert.deepEqual(normalizeWorklogDueInput("2026-09-18",""),{
+    dueDate:"2026-09-18",dueTime:"",dueAt:"2026-09-18T00:00:00+09:00",dueHasTime:false
+  });
+  assert.deepEqual(normalizeWorklogDueInput("",""),{dueDate:"",dueTime:"",dueAt:null,dueHasTime:false});
+  assert.throws(()=>normalizeWorklogDueInput("","09:00"),error=>error?.code==="WORKLOG_EDIT_DUE_DATE_REQUIRED");
+  assert.throws(()=>normalizeWorklogDueInput("2026-02-30",""),error=>error?.code==="WORKLOG_EDIT_DUE_DATE_INVALID");
+  assert.throws(()=>normalizeWorklogDueInput("2026-09-18","25:00"),error=>error?.code==="WORKLOG_EDIT_DUE_TIME_INVALID");
+});
+
+test("Data Core editor reads and updates through scoped RPCs",async()=>{
   const calls=[];
   const id="12345678-1234-1234-1234-1234567890ab";
   const client={
-    async update(table,row,query){
-      calls.push({table,row,query});
-      return [{id,title:row.title}];
+    async rpc(name,body){
+      calls.push({name,body});
+      if(name==="get_my_work_record_edit") return [{record_id:id,title_value:"기존 업무",due_at_value:"2026-09-18T05:30:00+00:00",due_has_time:true}];
+      return [{record_id:id,title_value:"수정 업무",due_at_value:"2026-09-19T00:00:00+09:00",due_has_time:false,schedule_updated:true}];
     }
   };
-  const editor=createWorklogDataCoreTitleEditor({client});
-  const result=await editor.updateTitle(
-    {recordId:id,title:"  이번주   금요일 와이프 픽업  "},
-    {userId:"user-1",workspaceId:"workspace-1",role:"owner"}
-  );
-
-  assert.deepEqual(calls,[{
-    table:"work_records",
-    row:{title:"이번주 금요일 와이프 픽업"},
-    query:{
-      id:`eq.${id}`,
-      workspace_id:"eq.workspace-1",
-      creator_user_id:"eq.user-1"
-    }
-  }]);
-  assert.deepEqual(result,{recordId:id,title:"이번주 금요일 와이프 픽업"});
+  const editor=createWorklogDataCoreEditor({client});
+  const current=await editor.readDetails({recordId:id});
+  const updated=await editor.updateDetails({recordId:id,title:"  수정   업무 ",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false});
+  assert.deepEqual(calls,[
+    {name:"get_my_work_record_edit",body:{p_record_id:id}},
+    {name:"update_my_work_record_details",body:{p_record_id:id,p_title:"수정 업무",p_due_at:"2026-09-19T00:00:00+09:00",p_due_has_time:false}}
+  ]);
+  assert.deepEqual(current,{recordId:id,title:"기존 업무",dueAt:"2026-09-18T05:30:00+00:00",dueHasTime:true});
+  assert.deepEqual(updated,{recordId:id,title:"수정 업무",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false,scheduleUpdated:true});
 });
 
-test("Data Core title edit fails closed when ownership query returns no single row", async()=>{
-  const editor=createWorklogDataCoreTitleEditor({client:{update:async()=>[]}});
-  await assert.rejects(
-    ()=>editor.updateTitle(
-      {recordId:"12345678-1234-1234-1234-1234567890ab",title:"수정"},
-      {userId:"user-1",workspaceId:"workspace-1",role:"owner"}
-    ),
-    error=>error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN"
-  );
+test("Data Core editor fails closed for missing/forbidden records",async()=>{
+  const editor=createWorklogDataCoreEditor({client:{rpc:async()=>{const error=new Error("WORK_RECORD_NOT_FOUND_OR_FORBIDDEN");error.code="SUPABASE_DATA_CORE_RPC_FAILED";throw error;}}});
+  await assert.rejects(()=>editor.readDetails({recordId:"12345678-1234-1234-1234-1234567890ab"}),error=>error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN");
 });
 
-test("Platform briefing edit uses bearer auth without invoking the legacy owner prompt",()=>{
+test("Platform briefing edit loads current details and saves title date and time without legacy prompt",()=>{
   assert.match(clientSource,/mode\(\)===\"data_core\"/);
   assert.match(clientSource,/WorklogPlatformAuth\?\.readSession\?\.\(\)/);
   assert.match(clientSource,/authorization:`Bearer \$\{session\.access_token\}`/);
+  assert.match(clientSource,/action:\"read\"/);
+  assert.match(clientSource,/action:\"update\"/);
+  assert.match(clientSource,/id=\"briefingEditDate\"/);
+  assert.match(clientSource,/id=\"briefingEditTime\"/);
+  assert.match(clientSource,/dueDate:dateInput\.value/);
+  assert.match(clientSource,/dueTime:timeInput\.value/);
   assert.match(clientSource,/WorklogAuth\.getHeaders\(\{promptOwner:true\}\)/);
-  assert.match(clientSource,/data\.mode===\"data_core\" \? \"업무명을 수정했습니다\.\"/);
   assert.match(clientSource,/worklog:record-saved/);
 });
 
-test("worklog edit endpoint prefers authenticated Data Core and preserves legacy Notion fallback",()=>{
+test("worklog edit endpoint uses Data Core detail RPCs first and preserves legacy Notion fallback",()=>{
   const bearerIndex=endpointSource.indexOf("if(accessToken)");
   const legacyIndex=endpointSource.indexOf("const connection:any=resolveConnection(req)");
   assert.ok(bearerIndex>=0 && legacyIndex>bearerIndex,"Data Core bearer path must run before legacy Notion resolution");
-  assert.match(endpointSource,/createWorklogDataCoreTitleEditor/);
+  assert.match(endpointSource,/createWorklogDataCoreEditor/);
+  assert.match(endpointSource,/editor\.readDetails/);
+  assert.match(endpointSource,/editor\.updateDetails/);
+  assert.match(endpointSource,/hasDueFields/);
+  assert.match(endpointSource,/updateNotionWorklog/);
   assert.match(endpointSource,/mode:\"data_core\"/);
-  assert.match(endpointSource,/updateTitle\(token,pageId,nextTitle\)/);
 });
 
-test("main cache-busts the corrected briefing editor",()=>{
-  assert.match(indexSource,/briefing-edit\.js\?v=20260916-1/);
+test("edit RPC migration is invoker-scoped and synchronizes only linked schedules",()=>{
+  assert.match(migrationSource,/get_my_work_record_edit/);
+  assert.match(migrationSource,/update_my_work_record_details/);
+  assert.match(migrationSource,/security invoker/i);
+  assert.match(migrationSource,/wr\.created_by_user_id = v_user_id/);
+  assert.match(migrationSource,/s\.created_by_user_id = v_user_id/);
+  assert.match(migrationSource,/s\.metadata ->> 'workRecordId' = p_record_id::text/);
+  assert.match(migrationSource,/when p_due_at is null then 'cancelled'/);
+  assert.match(migrationSource,/revoke all on function public\.update_my_work_record_details[^;]+ from public/i);
+  assert.match(migrationSource,/grant execute on function public\.update_my_work_record_details[^;]+ to authenticated/i);
+});
+
+test("main cache-busts the expanded briefing editor assets",()=>{
+  assert.match(indexSource,/briefing-edit\.css\?v=20260916-2/);
+  assert.match(indexSource,/briefing-edit\.js\?v=20260916-2/);
 });
