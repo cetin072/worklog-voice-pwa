@@ -15,14 +15,25 @@
   let recordingStartedAt = 0;
   let recordingTimer = null;
 
-  function createQuickButton(id, className, icon, label) {
+  function createQuickButton(id, className, icon, visualLabel, ariaLabel) {
     const button = document.createElement("button");
     button.id = id;
     button.className = `voice-quick-action ${className}`;
     button.type = "button";
-    button.setAttribute("aria-label", label);
-    button.title = label;
-    button.textContent = icon;
+    button.setAttribute("aria-label", ariaLabel);
+    button.title = ariaLabel;
+
+    const iconNode = document.createElement("span");
+    iconNode.className = "voice-quick-icon";
+    iconNode.setAttribute("aria-hidden", "true");
+    iconNode.textContent = icon;
+
+    const labelNode = document.createElement("span");
+    labelNode.className = "voice-quick-label";
+    labelNode.setAttribute("aria-hidden", "true");
+    labelNode.textContent = visualLabel;
+
+    button.append(iconNode, labelNode);
     return button;
   }
 
@@ -59,8 +70,8 @@
     timerText.textContent = "00:00";
     timer.append(timerText);
 
-    const cancel = createQuickButton("voiceDockCancel", "is-cancel", "✕", "현재 입력 취소 및 지우기");
-    const manual = createQuickButton("voiceDockManual", "is-manual", "⌨", "직접 입력으로 이동");
+    const cancel = createQuickButton("voiceDockCancel", "is-cancel", "✕", "취소", "현재 입력 취소 및 지우기");
+    const manual = createQuickButton("voiceDockManual", "is-manual", "✏️", "메모", "메모 직접 입력으로 이동");
 
     voiceCard.insertBefore(dock, mic);
     dock.append(timer, cancel, mic, manual);
