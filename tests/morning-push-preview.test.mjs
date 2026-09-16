@@ -59,7 +59,7 @@ test("preview endpoint uses current briefing source without consuming scheduled 
 
 test("settings diagnostics exposes a one-tap real morning message preview through shared recovery", () => {
   assert.match(settingsJs, /settingsMorningPushPreview/);
-  assert.match(settingsJs, /오늘 브리핑 알림 보내보기/);
+  assert.match(settingsJs, /아침 브리핑 알림 보내보기/);
   assert.match(settingsJs, /sendMorningPreviewPush/);
   assert.match(settingsJs, /중복방지 이력에는 영향을 주지 않습니다/);
   assert.match(notificationsJs, /\/api\/morning-push-preview/);
