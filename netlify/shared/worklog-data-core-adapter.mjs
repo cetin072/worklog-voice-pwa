@@ -89,7 +89,7 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
         sourceExcerpt: normalized.sourceExcerpt,
         metadata: { source: "quick_worklog" },
       }, workspaceContext);
-      return Object.freeze({ workRecordId: String(workRecord.id), sourceRefId: String(sourceRef?.id || ""), workspaceId: workspaceContext.workspaceId, fastPath: false });
+      return Object.freeze({ workRecordId: String(workRecord.id), sourceRefId: String(sourceRef?.id || ""), workspaceId: workspaceContext.workspaceId });
     },
   });
 }
