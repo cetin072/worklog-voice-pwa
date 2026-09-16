@@ -22,6 +22,12 @@ function nonNegativeInteger(value) {
   return Number.isInteger(number) && number >= 0 ? number : null;
 }
 
+function optionalHttpStatus(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 100 && number <= 599 ? number : null;
+}
+
 function cleanClaim(row) {
   const deliveryId = text(row?.delivery_id, 80);
   const subscriptionId = text(row?.subscription_id, 80);
@@ -92,7 +98,7 @@ export function createNotificationSchedulerClient({ supabaseUrl, publishableKey,
         p_scheduler_secret: secret,
         p_delivery_id: id,
         p_success: success,
-        p_status: Number.isInteger(Number(status)) ? Number(status) : null,
+        p_status: optionalHttpStatus(status),
         p_code: code ? text(code, 80) : null,
       });
       if (data !== true) throw schedulerError("NOTIFICATION_FINISH_REJECTED", "알림 완료 기록을 반영하지 못했습니다.");
