@@ -1,7 +1,11 @@
 (() => {
   const SESSION_KEY = "worklogSupabaseSessionV1";
   const OAUTH_ERROR_KEY = "worklogOAuthErrorV1";
+  const CONFIG_CACHE_KEY = "worklogSupabasePublicConfigV1";
+  const CONFIG_FRESH_MS = 5 * 60 * 1000;
+  const CONFIG_STALE_MS = 24 * 60 * 60 * 1000;
   let cachedConfig = null;
+  let configRefreshPromise = null;
 
   function normalizeSession(session, fallbackRefreshToken = "") {
     if (!session || typeof session.access_token !== "string" || !session.access_token) return null;
@@ -16,6 +20,22 @@
     if (Number.isFinite(Number(session.expires_in))) normalized.expires_in = Number(session.expires_in);
     if (Number.isFinite(Number(session.expires_at))) normalized.expires_at = Number(session.expires_at);
     return normalized;
+  }
+
+  function normalizePublicConfig(value) {
+    if (!value || value.configured !== true) return null;
+    const key = String(value.publishableKey || "").trim();
+    if (!key || key.length > 300) return null;
+    let url;
+    try { url = new URL(String(value.supabaseUrl || "")); }
+    catch { return null; }
+    if (url.protocol !== "https:") return null;
+    return Object.freeze({
+      configured: true,
+      supabaseUrl: url.origin,
+      publishableKey: key,
+      dataCorePrimaryEnabled: value.dataCorePrimaryEnabled === true,
+    });
   }
 
   function readSession() {
@@ -36,6 +56,60 @@
     }
     localStorage.setItem(SESSION_KEY, JSON.stringify(normalized));
     return normalized;
+  }
+
+  function readConfigCache() {
+    try {
+      const value = JSON.parse(localStorage.getItem(CONFIG_CACHE_KEY) || "null");
+      const config = normalizePublicConfig(value?.config);
+      const savedAt = Number(value?.savedAt || 0);
+      if (!config || !Number.isFinite(savedAt) || savedAt <= 0) {
+        if (value) localStorage.removeItem(CONFIG_CACHE_KEY);
+        return null;
+      }
+      const age = Math.max(0, Date.now() - savedAt);
+      if (age > CONFIG_STALE_MS) {
+        localStorage.removeItem(CONFIG_CACHE_KEY);
+        return null;
+      }
+      return { config, savedAt, age };
+    } catch {
+      localStorage.removeItem(CONFIG_CACHE_KEY);
+      return null;
+    }
+  }
+
+  function saveConfigCache(config) {
+    try {
+      localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), config }));
+    } catch {}
+  }
+
+  function clearConfigCache() {
+    cachedConfig = null;
+    try { localStorage.removeItem(CONFIG_CACHE_KEY); } catch {}
+  }
+
+  async function fetchConfig() {
+    const response = await fetch("/api/supabase-auth-config", { cache: "default" });
+    const raw = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error("Platform 공개 설정을 불러오지 못했습니다.");
+    const config = normalizePublicConfig(raw);
+    if (!config) {
+      clearConfigCache();
+      return null;
+    }
+    cachedConfig = config;
+    saveConfigCache(config);
+    return config;
+  }
+
+  function refreshConfigInBackground() {
+    if (configRefreshPromise) return configRefreshPromise;
+    configRefreshPromise = fetchConfig()
+      .catch(() => cachedConfig)
+      .finally(() => { configRefreshPromise = null; });
+    return configRefreshPromise;
   }
 
   function clearOAuthFragment() {
@@ -76,11 +150,13 @@
 
   async function getConfig() {
     if (cachedConfig) return cachedConfig;
-    const response = await fetch("/api/supabase-auth-config", { cache: "no-store" });
-    const config = await response.json().catch(() => ({}));
-    if (!response.ok || !config?.configured) return null;
-    cachedConfig = config;
-    return cachedConfig;
+    const stored = readConfigCache();
+    if (stored) {
+      cachedConfig = stored.config;
+      if (stored.age > CONFIG_FRESH_MS) refreshConfigInBackground();
+      return cachedConfig;
+    }
+    return fetchConfig();
   }
 
   async function request(path, options = {}) {
