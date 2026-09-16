@@ -21,6 +21,7 @@
   let authRetryPending=false;
   let pendingCompletions=0;
   let backgroundSyncTimer=0;
+  const inlineUndoStates=new Map();
 
   const nextTitle=title.cloneNode(true);
   title.replaceWith(nextTitle);
@@ -381,18 +382,21 @@
 
   function syncOptimisticSection(section){
     if(!section) return;
-    const rows=[...section.querySelectorAll(".briefing-v2-list > li")].filter(row=>row.dataset.optimisticComplete!=="true");
+    const allRows=[...section.querySelectorAll(".briefing-v2-list > li")];
+    const rows=allRows.filter(row=>row.dataset.optimisticComplete!=="true");
+    const pendingRows=allRows.filter(row=>row.dataset.optimisticComplete==="true");
     const count=rows.length;
     writeCount(section.querySelector(".briefing-v2-section-head h3 span"),count);
     const toggle=section.querySelector(".briefing-v2-more-toggle");
     const expanded=toggle?.getAttribute("aria-expanded")==="true";
     rows.forEach((row,index)=>{ row.hidden=!expanded && index>=MAX_VISIBLE; });
+    pendingRows.forEach(row=>{ row.hidden=false; });
     if(toggle){
       const extra=Math.max(0,count-MAX_VISIBLE);
       toggle.hidden=extra===0;
       toggle.textContent=expanded ? "접기" : `${extra}개 더 보기`;
     }
-    section.hidden=count===0;
+    section.hidden=count===0 && pendingRows.length===0;
   }
 
   function beginOptimisticComplete(button){
@@ -400,9 +404,16 @@
     const section=button.closest(".briefing-v2-section");
     const kind=section?.dataset.section || "";
     if(!row || !section || !["overdue","today","upcoming","undated"].includes(kind)) return null;
+    const pageId=button.dataset.pageId || "";
+    const itemTitle=button.dataset.title || "업무";
     const hadFollowUp=!!row.querySelector(".briefing-tag.is-followup");
+    const originalHtml=row.innerHTML;
+    const originalHidden=row.hidden;
     row.dataset.optimisticComplete="true";
-    row.hidden=true;
+    row.classList.add("briefing-inline-undo-row");
+    row.hidden=false;
+    row.setAttribute("aria-label",`${itemTitle} 완료 처리 중`);
+    row.innerHTML=`<div class="briefing-inline-undo"><span>✓ 완료됨</span><button type="button" data-v2-undo="${escapeHtml(pageId)}" disabled>실행 취소</button></div>`;
     const summary=root.querySelector(`.briefing-v2-summary .is-${kind} b`);
     writeCount(summary,readCount(summary)-1);
     if(hadFollowUp){
@@ -411,12 +422,18 @@
     syncOptimisticSection(section);
     syncMetaTotal();
     syncOptimisticEmptyState();
-    return {row,section,kind,hadFollowUp};
+    return {row,section,kind,hadFollowUp,originalHtml,originalHidden,pageId,itemTitle,undoTimer:0};
   }
 
   function rollbackOptimisticComplete(state){
     if(!state?.row?.isConnected) return;
+    clearTimeout(state.undoTimer);
+    inlineUndoStates.delete(state.pageId);
     delete state.row.dataset.optimisticComplete;
+    state.row.classList.remove("briefing-inline-undo-row");
+    state.row.removeAttribute("aria-label");
+    state.row.innerHTML=state.originalHtml;
+    state.row.hidden=state.originalHidden;
     const summary=root.querySelector(`.briefing-v2-summary .is-${state.kind} b`);
     writeCount(summary,readCount(summary)+1);
     if(state.hadFollowUp){
@@ -430,8 +447,9 @@
 
   function syncV2InBackground(){
     clearTimeout(backgroundSyncTimer);
+    if(inlineUndoStates.size>0) return;
     backgroundSyncTimer=window.setTimeout(async()=>{
-      if(IS_PREVIEW_DEMO) return;
+      if(IS_PREVIEW_DEMO || inlineUndoStates.size>0) return;
       if(pendingCompletions>0){
         syncV2InBackground();
         return;
@@ -445,21 +463,21 @@
     },120);
   }
 
-  function showUndoNotice(pageId,itemTitle){
-    let bar=$("briefingV2UndoBar");
-    if(!bar){
-      bar=document.createElement("div");
-      bar.id="briefingV2UndoBar";
-      bar.className="briefing-undo-bar";
-      bar.setAttribute("role","status");
-      bar.setAttribute("aria-live","polite");
-      document.body.appendChild(bar);
-    }
-    bar.setAttribute("aria-label",`${itemTitle} 완료 처리됨. 실행 취소 가능`);
-    bar.innerHTML=`<span>완료됨</span><button type="button" data-v2-undo="${escapeHtml(pageId)}">실행 취소</button>`;
-    bar.classList.add("show");
-    clearTimeout(bar._hideTimer);
-    bar._hideTimer=setTimeout(()=>bar.classList.remove("show"),8000);
+  function activateInlineUndo(state,pageId,itemTitle){
+    if(!state?.row?.isConnected) return;
+    const undo=state.row.querySelector("[data-v2-undo]");
+    if(undo) undo.disabled=false;
+    state.row.setAttribute("aria-label",`${itemTitle} 완료 처리됨. 실행 취소 가능`);
+    inlineUndoStates.set(pageId,state);
+    clearTimeout(state.undoTimer);
+    state.undoTimer=window.setTimeout(()=>{
+      if(inlineUndoStates.get(pageId)!==state) return;
+      inlineUndoStates.delete(pageId);
+      if(state.row?.isConnected) state.row.remove();
+      syncOptimisticSection(state.section);
+      syncOptimisticEmptyState();
+      if(inlineUndoStates.size===0 && pendingCompletions===0) syncV2InBackground();
+    },8000);
   }
 
   async function completeTask(button){
@@ -469,38 +487,55 @@
     const fallbackStatus=button.dataset.status || "";
     if(!pageId) return;
     const optimisticState=beginOptimisticComplete(button);
-    button.disabled=true;
-    button.textContent="처리 중";
+    if(!optimisticState){
+      button.disabled=true;
+      button.textContent="처리 중";
+    }
     pendingCompletions+=1;
-    let saved=false;
     try{
       const data=await updateTaskStatus(pageId,"완료");
       const previousStatus=renderedMode==="data_core" ? fallbackStatus : (data.previousStatus || fallbackStatus);
       if(previousStatus && previousStatus!=="완료") saveUndoState(pageId,previousStatus,itemTitle);
-      showUndoNotice(pageId,itemTitle);
-      saved=true;
+      if(optimisticState) activateInlineUndo(optimisticState,pageId,itemTitle);
+      else syncV2InBackground();
     }catch(err){
-      rollbackOptimisticComplete(optimisticState);
+      if(optimisticState) rollbackOptimisticComplete(optimisticState);
       error.textContent=err?.message || "완료 처리에 실패했습니다.";
       card.classList.add("has-error");
-      button.disabled=false;
-      button.textContent="완료";
+      if(!optimisticState){
+        button.disabled=false;
+        button.textContent="완료";
+      }
     }finally{
       pendingCompletions=Math.max(0,pendingCompletions-1);
-      if(saved) syncV2InBackground();
     }
   }
 
   async function undoTask(pageId){
     if(IS_PREVIEW_DEMO) return;
-    const state=loadUndoStates()[pageId];
-    if(!state?.status) return;
+    const saved=loadUndoStates()[pageId];
+    if(!saved?.status) return;
+    const optimisticState=inlineUndoStates.get(pageId);
+    const undoButton=optimisticState?.row?.querySelector?.("[data-v2-undo]");
+    if(undoButton){
+      undoButton.disabled=true;
+      undoButton.textContent="되돌리는 중…";
+    }
     try{
-      await updateTaskStatus(pageId,state.status);
+      await updateTaskStatus(pageId,saved.status);
       removeUndoState(pageId);
-      $("briefingV2UndoBar")?.classList.remove("show");
-      await refreshV2({ask:false});
+      if(optimisticState?.row?.isConnected){
+        rollbackOptimisticComplete(optimisticState);
+      }else{
+        inlineUndoStates.delete(pageId);
+        await refreshV2({ask:false});
+      }
+      if(inlineUndoStates.size===0) syncV2InBackground();
     }catch(err){
+      if(undoButton){
+        undoButton.disabled=false;
+        undoButton.textContent="실행 취소";
+      }
       error.textContent=err?.message || "완료 취소에 실패했습니다.";
       card.classList.add("has-error");
     }
@@ -510,10 +545,12 @@
     const section=button.closest(".briefing-v2-section");
     if(!section) return;
     const rows=[...section.querySelectorAll(".briefing-v2-list > li")];
+    const activeRows=rows.filter(row=>row.dataset.optimisticComplete!=="true");
     const expanded=button.getAttribute("aria-expanded")==="true";
-    rows.forEach((row,index)=>{ if(index>=MAX_VISIBLE) row.hidden=expanded; });
+    activeRows.forEach((row,index)=>{ if(index>=MAX_VISIBLE) row.hidden=expanded; });
+    rows.filter(row=>row.dataset.optimisticComplete==="true").forEach(row=>{ row.hidden=false; });
     button.setAttribute("aria-expanded",String(!expanded));
-    button.textContent=expanded ? `${Math.max(0,rows.length-MAX_VISIBLE)}개 더 보기` : "접기";
+    button.textContent=expanded ? `${Math.max(0,activeRows.length-MAX_VISIBLE)}개 더 보기` : "접기";
   }
 
   async function quickUpdate(){
