@@ -1,5 +1,6 @@
-const CACHE="worklog-v35";
+const CACHE="worklog-v35-static-v2";
 const FILES=["/","/index.html","/settings.html","/setup.html","/styles.css","/distribution.css","/settings.css","/briefing.css","/briefing-edit.css","/auth.js","/platform-auth.js","/platform-auth-ui.js","/onboarding.js","/notifications.js","/settings.js","/request-id.js","/app.js","/inference-guard.js","/quick-save.js","/manual-input.js","/briefing-legacy-loader.js","/briefing.js","/briefing-v2.js","/briefing-v2-expand-state.js","/briefing-edit.js","/setup.js","/manifest.webmanifest","/icons/icon-192-v3.png","/icons/icon-512-v3.png","/icons/icon-maskable-512-v3.png"];
+const STATIC_PATHS=new Set(FILES.filter(path=>!path.endsWith(".html") && path!=="/"));
 
 function normalizeTargetUrl(value){
   try{
@@ -24,9 +25,79 @@ function readPushPayload(event){
   }
 }
 
-self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)));self.skipWaiting()});
-self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
-self.addEventListener("fetch",e=>{if(e.request.method!=="GET")return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)))});
+function isStaticRequest(request,url){
+  if(url.origin!==self.location.origin) return false;
+  if(STATIC_PATHS.has(url.pathname)) return true;
+  return ["script","style","image","font"].includes(request.destination);
+}
+
+async function cacheResponse(cache,key,response){
+  if(response?.ok) await cache.put(key,response.clone());
+  return response;
+}
+
+async function navigationResponse(request){
+  try{
+    return await fetch(request);
+  }catch{
+    return await caches.match(request) || await caches.match("/index.html") || await caches.match("/");
+  }
+}
+
+async function staticResponse(event,url){
+  const request=event.request;
+  const cache=await caches.open(CACHE);
+  const exact=await cache.match(request);
+  if(exact){
+    event.waitUntil(fetch(request).then(response=>cacheResponse(cache,request,response)).catch(()=>undefined));
+    return exact;
+  }
+
+  if(url.search){
+    try{
+      return await cacheResponse(cache,request,await fetch(request));
+    }catch{
+      return await cache.match(url.pathname);
+    }
+  }
+
+  const cached=await cache.match(url.pathname);
+  const refresh=fetch(request).then(response=>cacheResponse(cache,url.pathname,response));
+  if(cached){
+    event.waitUntil(refresh.catch(()=>undefined));
+    return cached;
+  }
+  return refresh;
+}
+
+self.addEventListener("install",event=>{
+  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)));
+  self.skipWaiting();
+});
+self.addEventListener("activate",event=>{
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));
+  self.clients.claim();
+});
+self.addEventListener("fetch",event=>{
+  const request=event.request;
+  if(request.method!=="GET") return;
+  const url=new URL(request.url);
+  if(url.origin!==self.location.origin) return;
+
+  if(url.pathname.startsWith("/api/")){
+    event.respondWith(fetch(request));
+    return;
+  }
+  if(request.mode==="navigate" || request.destination==="document"){
+    event.respondWith(navigationResponse(request));
+    return;
+  }
+  if(isStaticRequest(request,url)){
+    event.respondWith(staticResponse(event,url));
+    return;
+  }
+  event.respondWith(fetch(request).catch(()=>caches.match(request)));
+});
 
 self.addEventListener("push",event=>{
   const payload=readPushPayload(event);
