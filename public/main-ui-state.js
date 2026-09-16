@@ -37,7 +37,7 @@
     if (typeof document === "undefined") return;
     if (document.querySelector('script[data-worklog-search="1"]')) return;
     const script = document.createElement("script");
-    script.src = "/search.js?v=20260916-2";
+    script.src = "/search.js?v=20260916-4";
     script.dataset.worklogSearch = "1";
     document.head.append(script);
   }
