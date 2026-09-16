@@ -37,6 +37,7 @@ test("완료 후 재조회는 인라인 실행 취소가 사라진 뒤 blocking 
 test("실행 취소는 떠다니는 토스트가 아니라 완료한 업무 자리의 인라인 피드백이다", () => {
   const source = read("public/briefing-v2.js");
   const css = read("public/briefing.css");
+  const homeCss = read("public/home-ux.css");
 
   assert.match(source, /row\.classList\.add\("briefing-inline-undo-row"\)/);
   assert.match(source, /row\.innerHTML=`<div class="briefing-inline-undo"><span>✓ 완료됨<\/span><button[^`]+실행 취소<\/button><\/div>`/);
@@ -45,16 +46,30 @@ test("실행 취소는 떠다니는 토스트가 아니라 완료한 업무 자�
   assert.match(css, /\.briefing-list li\.briefing-inline-undo-row\{/);
   assert.match(css, /\.briefing-inline-undo\{[^}]*display:flex/);
   assert.doesNotMatch(css, /\.briefing-undo-bar\{/);
+  assert.doesNotMatch(homeCss, /\.briefing-undo-bar\{/);
   assert.doesNotMatch(source, /document\.body\.appendChild\(bar\)/);
 });
 
-test("마지막 업무를 완료해도 실행 취소 자리까지 사라지지 않고 asset은 cache-bust 된다", () => {
+test("마지막 업무를 완료해도 실행 취소 자리까지 사라지지 않는다", () => {
   const source = read("public/briefing-v2.js");
   const css = read("public/briefing.css");
-  const html = read("public/index.html");
 
   assert.match(source, /section\.hidden=count===0 && pendingRows\.length===0/);
   assert.match(css, /\.briefing-v2-section\[hidden\]\{display:none\}/);
-  assert.match(html, /briefing\.css\?v=20260916-3/);
-  assert.match(html, /briefing-v2\.js\?v=20260916-4/);
+});
+
+test("브리핑 UI 변경은 이전 Service Worker exact cache보다 네트워크를 우선한다", () => {
+  const sw = read("public/sw.js");
+  const start = sw.indexOf("async function staticResponse");
+  const end = sw.indexOf('self.addEventListener("install"', start);
+  const staticResponse = sw.slice(start, end);
+
+  assert.match(sw, /const CACHE="worklog-v39-briefing-inline-undo"/);
+  assert.match(sw, /const FRESH_BRIEFING_PATHS=new Set\(\["\/briefing\.css","\/briefing-v2\.js"\]\)/);
+  assert.match(staticResponse, /FRESH_BRIEFING_PATHS\.has\(url\.pathname\)/);
+  assert.match(staticResponse, /return freshStaticResponse\(request,url,cache\)/);
+  assert.ok(
+    staticResponse.indexOf("FRESH_BRIEFING_PATHS.has(url.pathname)") < staticResponse.indexOf("cache.match(request)"),
+    "briefing assets must bypass an old exact cache entry before cache lookup"
+  );
 });
