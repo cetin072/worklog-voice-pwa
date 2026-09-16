@@ -26,9 +26,10 @@ function fieldSource(value) {
   const source = String(value || "").trim().toLowerCase();
   return TRUSTED_FIELD_SOURCES.has(source) ? source : "unverified";
 }
-function worklogSourceType(value) {
+function worklogSourceType(value, clientRequestId = "") {
   const source = String(value || "").trim().toLowerCase();
-  return WORKLOG_SOURCE_TYPES.has(source) ? source : "direct";
+  if (WORKLOG_SOURCE_TYPES.has(source)) return source;
+  return /^capture-[A-Za-z0-9-]{8,92}$/.test(String(clientRequestId || "")) ? "capture" : "direct";
 }
 function hasExplicitTime(value) {
   return /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(String(value || ""));
@@ -53,7 +54,7 @@ function normalizedRecord(record = {}) {
   const institutionSource = fieldSource(record.institutionSource ?? record.institution_source);
   const requestedInstitution = String(record.institution || "").trim();
   const institution = TRUSTED_FIELD_SOURCES.has(institutionSource) && requestedInstitution ? requestedInstitution : null;
-  const sourceType = worklogSourceType(record.sourceType ?? record.source_type);
+  const sourceType = worklogSourceType(record.sourceType ?? record.source_type, clientRequestId);
   const source = sourceType === "capture" ? "capture" : "quick_worklog";
   return Object.freeze({
     clientRequestId,
