@@ -1,5 +1,5 @@
 (() => {
-  let current = { morningEnabled: false, detailEnabled: true, connected: false };
+  let current = { morningEnabled: false, afternoonEnabled: false, detailEnabled: true, connected: false };
 
   function session() {
     const value = window.WorklogPlatformAuth?.readSession?.();
@@ -25,6 +25,8 @@
     return {
       morningToggle: document.getElementById("settingsMorningPushEnabled"),
       morningStatus: document.getElementById("settingsMorningPushStatus"),
+      afternoonToggle: document.getElementById("settingsAfternoonPushEnabled"),
+      afternoonStatus: document.getElementById("settingsAfternoonPushStatus"),
       detailToggle: document.getElementById("settingsMorningPushDetailEnabled"),
       detailStatus: document.getElementById("settingsMorningPushDetailStatus"),
       previewButton: document.getElementById("settingsMorningPushPreview"),
@@ -59,9 +61,10 @@
   }
 
   function render(data) {
-    const { morningToggle, morningStatus, detailToggle, detailStatus, previewButton } = elements();
+    const { morningToggle, morningStatus, afternoonToggle, afternoonStatus, detailToggle, detailStatus, previewButton } = elements();
     current = {
       morningEnabled: Boolean(data?.morningEnabled),
+      afternoonEnabled: Boolean(data?.afternoonEnabled),
       detailEnabled: data?.detailEnabled !== false,
       connected: Boolean(data?.connected),
     };
@@ -69,6 +72,10 @@
     if (morningToggle) {
       morningToggle.disabled = false;
       morningToggle.checked = current.morningEnabled && current.connected;
+    }
+    if (afternoonToggle) {
+      afternoonToggle.disabled = false;
+      afternoonToggle.checked = current.afternoonEnabled && current.connected;
     }
     if (detailToggle) {
       detailToggle.disabled = false;
@@ -85,18 +92,31 @@
         morningStatus.textContent = "꺼짐 · 알림을 보내지 않습니다.";
       }
     }
+    if (afternoonStatus) {
+      if (current.afternoonEnabled && current.connected) {
+        afternoonStatus.textContent = "켜짐 · 남은 업무가 있는 날에만 오후 4:30에 보냅니다.";
+      } else if (current.afternoonEnabled && !current.connected) {
+        afternoonStatus.textContent = "오후 알림은 켜져 있지만 이 기기 연결이 없습니다. 다시 켜서 연결해주세요.";
+      } else {
+        afternoonStatus.textContent = "꺼짐 · 오후 미완료 업무 알림을 보내지 않습니다.";
+      }
+    }
     if (detailStatus) {
       detailStatus.textContent = current.detailEnabled
-        ? "가장 가까운 일정과 우선 업무 제목을 최대 2개 표시합니다."
+        ? "가장 가까운 일정과 우선 업무 제목을 표시합니다."
         : "잠금화면에는 업무 제목 없이 건수만 표시합니다.";
     }
   }
 
   function renderLoggedOut() {
-    const { morningToggle, morningStatus, detailToggle, detailStatus, previewButton, previewStatus } = elements();
+    const { morningToggle, morningStatus, afternoonToggle, afternoonStatus, detailToggle, detailStatus, previewButton, previewStatus } = elements();
     if (morningToggle) {
       morningToggle.checked = false;
       morningToggle.disabled = true;
+    }
+    if (afternoonToggle) {
+      afternoonToggle.checked = false;
+      afternoonToggle.disabled = true;
     }
     if (detailToggle) {
       detailToggle.checked = true;
@@ -104,20 +124,27 @@
     }
     if (previewButton) previewButton.disabled = true;
     if (morningStatus) morningStatus.textContent = "로그인 후 아침 업무 알림을 켤 수 있습니다.";
+    if (afternoonStatus) afternoonStatus.textContent = "로그인 후 오후 미완료 업무 알림을 켤 수 있습니다.";
     if (detailStatus) detailStatus.textContent = "로그인 후 알림 내용 표시 방식을 선택할 수 있습니다.";
     if (previewStatus) previewStatus.textContent = "로그인 후 실제 오늘 브리핑 문구를 받아볼 수 있습니다.";
   }
 
+  function setControlsDisabled(disabled) {
+    const { morningToggle, afternoonToggle, detailToggle, previewButton } = elements();
+    if (morningToggle) morningToggle.disabled = disabled;
+    if (afternoonToggle) afternoonToggle.disabled = disabled;
+    if (detailToggle) detailToggle.disabled = disabled;
+    if (previewButton) previewButton.disabled = disabled;
+  }
+
   async function load() {
-    const { morningToggle, morningStatus, detailToggle, previewButton } = elements();
+    const { morningToggle, morningStatus } = elements();
     if (!morningToggle) return;
     if (!session()) {
       renderLoggedOut();
       return;
     }
-    morningToggle.disabled = true;
-    if (detailToggle) detailToggle.disabled = true;
-    if (previewButton) previewButton.disabled = true;
+    setControlsDisabled(true);
     if (morningStatus) morningStatus.textContent = "알림 설정을 확인하는 중입니다…";
     try {
       render(await apiJson("GET"));
@@ -127,18 +154,30 @@
     }
   }
 
+  function statusForPatch(patch) {
+    const { morningStatus, afternoonStatus, detailStatus } = elements();
+    if (Object.prototype.hasOwnProperty.call(patch, "afternoonEnabled")) return afternoonStatus;
+    if (Object.prototype.hasOwnProperty.call(patch, "detailEnabled")) return detailStatus;
+    return morningStatus;
+  }
+
   async function savePatch(patch, busyMessage) {
-    const { morningToggle, morningStatus, detailToggle, detailStatus } = elements();
-    if (morningToggle) morningToggle.disabled = true;
-    if (detailToggle) detailToggle.disabled = true;
-    if (busyMessage && morningStatus) morningStatus.textContent = busyMessage;
+    const targetStatus = statusForPatch(patch);
+    setControlsDisabled(true);
+    if (busyMessage && targetStatus) targetStatus.textContent = busyMessage;
     try {
       render(await apiJson("POST", patch));
     } catch (error) {
       render(current);
-      const targetStatus = Object.prototype.hasOwnProperty.call(patch, "detailEnabled") ? detailStatus : morningStatus;
       if (targetStatus) targetStatus.textContent = String(error?.message || "알림 설정을 저장하지 못했습니다.");
     }
+  }
+
+  async function ensurePushConnection(statusNode) {
+    if (statusNode) statusNode.textContent = "이 기기를 서버 알림에 연결하는 중입니다…";
+    const notifications = window.WorklogNotifications;
+    if (!notifications?.ensureServerPushSubscription) throw new Error("서버 알림 기능을 불러오지 못했습니다.");
+    await notifications.ensureServerPushSubscription();
   }
 
   async function sendMorningPreview() {
@@ -166,19 +205,15 @@
 
   function wire() {
     ensurePreviewControls();
-    const { morningToggle, detailToggle, morningStatus, previewButton } = elements();
+    const { morningToggle, morningStatus, afternoonToggle, afternoonStatus, detailToggle, previewButton } = elements();
     if (!morningToggle) return;
 
     morningToggle.addEventListener("change", async () => {
       const desired = Boolean(morningToggle.checked);
       if (desired) {
-        morningToggle.disabled = true;
-        if (detailToggle) detailToggle.disabled = true;
+        setControlsDisabled(true);
         try {
-          if (morningStatus) morningStatus.textContent = "이 기기를 서버 알림에 연결하는 중입니다…";
-          const notifications = window.WorklogNotifications;
-          if (!notifications?.ensureServerPushSubscription) throw new Error("서버 알림 기능을 불러오지 못했습니다.");
-          await notifications.ensureServerPushSubscription();
+          await ensurePushConnection(morningStatus);
         } catch (error) {
           render(current);
           if (morningStatus) morningStatus.textContent = String(error?.message || "서버 알림 연결에 실패했습니다.");
@@ -186,6 +221,21 @@
         }
       }
       await savePatch({ morningEnabled: desired }, "아침 업무 알림 설정을 저장하는 중입니다…");
+    });
+
+    afternoonToggle?.addEventListener("change", async () => {
+      const desired = Boolean(afternoonToggle.checked);
+      if (desired) {
+        setControlsDisabled(true);
+        try {
+          await ensurePushConnection(afternoonStatus);
+        } catch (error) {
+          render(current);
+          if (afternoonStatus) afternoonStatus.textContent = String(error?.message || "서버 알림 연결에 실패했습니다.");
+          return;
+        }
+      }
+      await savePatch({ afternoonEnabled: desired }, "오후 미완료 업무 알림 설정을 저장하는 중입니다…");
     });
 
     if (detailToggle) {
