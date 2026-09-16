@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { buildMorningPushPayload } from "../shared/morning-push-content.mjs";
 import { notificationSchedulerConfig, createNotificationSchedulerClient } from "../shared/notification-scheduler.mjs";
 import { vapidConfigFromEnv } from "../shared/vapid-config.mjs";
 import { sendWebPush } from "../shared/web-push.mjs";
@@ -10,14 +11,6 @@ function appOrigin(vapidSubject:string){
   }catch{
     return "";
   }
-}
-
-function bodyFor(row:any){
-  const parts=[];
-  if(row.todayCount) parts.push(`오늘 할 일 ${row.todayCount}건`);
-  if(row.overdueCount) parts.push(`지난 업무 ${row.overdueCount}건`);
-  if(row.scheduleCount) parts.push(`오늘 일정 ${row.scheduleCount}건`);
-  return parts.join(" · ");
 }
 
 export default async ()=>{
@@ -41,15 +34,16 @@ export default async ()=>{
   let sent=0;
   let failed=0;
   for(const row of rows){
+    const payload=buildMorningPushPayload(row);
+    if(!payload){
+      try{ await client.finish({deliveryId:row.deliveryId,success:false,code:"EMPTY_DIGEST"}); }catch{}
+      failed+=1;
+      continue;
+    }
     try{
       await sendWebPush({
         subscription:{endpoint:row.endpoint,p256dh:row.p256dh,auth:row.auth},
-        payload:JSON.stringify({
-          title:"업무수첩 · 아침 브리핑",
-          body:bodyFor(row),
-          url:"/",
-          tag:"worklog-morning-digest"
-        }),
+        payload:JSON.stringify(payload),
         vapidPublicKey:vapid.publicKey,
         vapidPrivateKey:vapid.privateKey,
         vapidSubject:vapid.subject,
@@ -58,7 +52,7 @@ export default async ()=>{
       sent+=1;
     }catch(error:any){
       failed+=1;
-      const status=Number.isInteger(Number(error?.status)) ? Number(error.status) : null;
+      const status=Number.isInteger(Number(error?.status)) && Number(error.status)>=100 ? Number(error.status) : null;
       const code=String(error?.code || "WEB_PUSH_UNKNOWN").slice(0,80);
       try{
         await client.finish({deliveryId:row.deliveryId,success:false,status,code});
