@@ -167,7 +167,7 @@
     if (!root || root.hidden || !summary) return false;
 
     const overdue = summary.querySelector(".is-overdue b")?.textContent?.trim() || "0";
-    const followUp = summary.querySelector(".is-followup b")?.textContent?.trim() || "0";
+    const followUp = root.dataset.followUpCount || "0";
     const scheduleSection = root.querySelector(".briefing-v2-schedules");
     const scheduleLists = scheduleSection ? [...scheduleSection.querySelectorAll("ul.briefing-v2-list")] : [];
     const todayItems = actualItems(scheduleLists[0]);

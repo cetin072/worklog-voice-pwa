@@ -20,8 +20,6 @@
   let renderedMode="";
   let authRetryPending=false;
 
-  // briefing.js has already captured the original nodes. Replace the visible
-  // header/error nodes so its asynchronous V1 refresh cannot overwrite V2 copy.
   const nextTitle=title.cloneNode(true);
   title.replaceWith(nextTitle);
   title=nextTitle;
@@ -162,19 +160,30 @@
       if(item.daysOverdue) pieces.push(`${item.daysOverdue}일 지남`);
     }else if(kind==="today"){
       pieces.push("오늘 기한");
-    }else if(item.dueKey){
+    }else if(kind==="upcoming" && item.dueKey){
       pieces.push(`기한 ${mmdd(item.dueKey)}`);
+      if(item.daysUntil) pieces.push(`${item.daysUntil}일 후`);
+    }else if(kind==="undated"){
+      pieces.push("기한 없음");
     }
-    if(item.status) pieces.push(item.status);
     return pieces.join(" · ");
+  }
+
+  function taskBadges(item){
+    const badges=[];
+    if(item.status==="대기") badges.push('<span class="briefing-tag is-waiting">대기</span>');
+    if(item.status==="확인필요") badges.push('<span class="briefing-tag is-review">확인필요</span>');
+    if(item.followUp) badges.push('<span class="briefing-tag is-followup">후속조치</span>');
+    return badges.join("");
   }
 
   function taskHtml(kind,item,index,canUpdate){
     const institution=item.institution
       ? `<span class="briefing-tag">${escapeHtml(institutionLabel(item.institution))}</span>`
       : "";
+    const badges=taskBadges(item);
     const note=sectionNote(kind,item);
-    const follow=kind==="followUp" && item.followUp
+    const follow=item.followUp
       ? `<small class="briefing-v2-follow">↳ ${escapeHtml(item.followUp)}</small>`
       : "";
     const hidden=index>=MAX_VISIBLE ? " hidden" : "";
@@ -183,7 +192,7 @@
       : IS_PREVIEW_DEMO
       ? `<button class="briefing-complete briefing-v2-complete" type="button" disabled>완료</button>`
       : `<button class="briefing-complete briefing-v2-complete" type="button" data-page-id="${escapeHtml(item.pageId)}" data-status="${escapeHtml(item.status)}" data-title="${escapeHtml(item.title)}">완료</button>`;
-    return `<li${hidden}><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>${follow}</div>${action}</li>`;
+    return `<li${hidden}><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${badges}${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>${follow}</div>${action}</li>`;
   }
 
   function sectionHtml(kind,label,items,canUpdate){
@@ -225,7 +234,8 @@
     const canUpdate=data?.canUpdate!==false;
     renderedMode=String(data?.mode || "");
 
-    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 <b>${Number(counts.today || 0)}</b></span><span class="is-waiting">대기 <b>${Number(counts.waiting || 0)}</b></span><span class="is-followup">후속 <b>${Number(counts.followUp || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘",structure.today,canUpdate)}${sectionHtml("waiting","🟡 기다리는 것",structure.waiting,canUpdate)}${sectionHtml("followUp","🔵 후속조치 필요",structure.followUp,canUpdate)}${scheduleSectionHtml(data?.schedules,data?.scheduleEnabled===true)}${Number(counts.other || 0)>0 ? `<p class="briefing-v2-other">그 외 진행중 <strong>${Number(counts.other || 0)}건</strong></p>` : ""}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
+    root.dataset.followUpCount=String(Number(counts.followUp || 0));
+    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 것 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 할 일 <b>${Number(counts.today || 0)}</b></span><span class="is-upcoming">다가오는 업무 <b>${Number(counts.upcoming || 0)}</b></span><span class="is-undated">기한 없는 업무 <b>${Number(counts.undated || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘 할 일",structure.today,canUpdate)}${sectionHtml("upcoming","🔵 다가오는 업무",structure.upcoming,canUpdate)}${sectionHtml("undated","⚪ 기한 없는 업무",structure.undated,canUpdate)}${scheduleSectionHtml(data?.schedules,data?.scheduleEnabled===true)}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
 
     root.hidden=false;
     hideLegacy();
@@ -244,31 +254,35 @@
   }
 
   function previewDemoData(){
-    const sample=(title,status,dueKey="",extra={})=>({pageId:"demo",title,institution:"태장",status,dueKey,followUp:"",daysOverdue:0,daysUntil:0,...extra});
+    const sample=(title,status,dueKey="",extra={})=>({pageId:`demo-${title}`,title,institution:"태장",status,dueKey,followUp:"",daysOverdue:0,daysUntil:0,...extra});
     return {
       generatedAt:new Date().toISOString(),
-      counts:{overdue:4,today:3,waiting:2,followUp:2,other:5,total:16},
+      counts:{overdue:4,today:3,upcoming:4,undated:5,waiting:3,followUp:4,other:0,total:16},
       structure:{
         overdue:[
-          sample("견적서 금액 확인 후 대표 보고","진행중","2026-09-10",{daysOverdue:2}),
+          sample("견적서 금액 확인 후 대표 보고","진행중","2026-09-10",{daysOverdue:2,followUp:"대표 확인 후 거래처에 회신"}),
           sample("거래처 세금계산서 확인","확인필요","2026-09-11",{daysOverdue:1}),
           sample("지원사업 제출서류 보완","진행중","2026-09-11",{daysOverdue:1}),
           sample("계약서 수정사항 회신","대기","2026-09-11",{daysOverdue:1})
         ],
         today:[
           sample("삼현 행사 일정 최종 확인","진행중","2026-09-12"),
-          sample("대표이사 보고자료 전달","진행중","2026-09-12"),
+          sample("대표이사 보고자료 전달","진행중","2026-09-12",{followUp:"보고 후 수정사항 반영"}),
           sample("납품 수량 확정 연락","확인필요","2026-09-12")
         ],
-        waiting:[
-          sample("업체 견적 회신 대기","대기","2026-09-15"),
-          sample("취재 일정 답변 대기","대기")
+        upcoming:[
+          sample("업체 견적 회신 확인","대기","2026-09-13",{daysUntil:1}),
+          sample("취재 일정 답변 확인","대기","2026-09-15",{daysUntil:3}),
+          sample("다음 주 계약서 검토","진행중","2026-09-18",{daysUntil:6}),
+          sample("월말 비용 정리","진행중","2026-09-30",{daysUntil:18})
         ],
-        followUp:[
+        undated:[
           sample("어제 받은 계약서 검토","진행중","",{followUp:"수정할 조항 표시 후 상대방에게 회신"}),
-          sample("통화 내용 담당자에게 전달","확인필요","",{followUp:"담당자 확인 후 결과 기록"})
+          sample("통화 내용 담당자에게 전달","확인필요","",{followUp:"담당자 확인 후 결과 기록"}),
+          sample("새 거래처 자료 정리","진행중"),
+          sample("대표 요청사항 확인","진행중"),
+          sample("검토 대기 문서 정리","대기")
         ],
-        otherCount:5,
         totalOpen:16
       }
     };

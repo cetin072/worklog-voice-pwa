@@ -18,50 +18,61 @@ function task(overrides={}){
   };
 }
 
-test("기한 지난 진행중은 지난 것",()=>{
-  const result=classifyBriefingTasks([task({dueKey:"2026-09-10"})],TODAY);
-  assert.equal(result.overdue.length,1);
+test("기한 지난 업무는 상태와 무관하게 지난 것",()=>{
+  const result=classifyBriefingTasks([
+    task({dueKey:"2026-09-10"}),
+    task({status:"대기",dueKey:"2026-09-11"})
+  ],TODAY);
+  assert.equal(result.overdue.length,2);
   assert.equal(result.overdue[0].daysOverdue,2);
-  assert.equal(result.waiting.length,0);
+  assert.equal(result.upcoming.length,0);
+  assert.equal(result.undated.length,0);
 });
 
-test("기한 지난 대기도 지난 것 우선이며 기다리는 것과 중복되지 않는다",()=>{
-  const result=classifyBriefingTasks([task({status:"대기",dueKey:"2026-09-11"})],TODAY);
-  assert.equal(result.overdue.length,1);
-  assert.equal(result.waiting.length,0);
-});
-
-test("오늘 기한 확인필요는 오늘",()=>{
+test("오늘 기한 업무는 확인필요여도 오늘 할 일",()=>{
   const result=classifyBriefingTasks([task({status:"확인필요",dueKey:TODAY})],TODAY);
   assert.equal(result.today.length,1);
-  assert.equal(result.followUp.length,0);
+  assert.equal(result.undated.length,0);
 });
 
-test("미래 기한 대기는 기다리는 것",()=>{
-  const result=classifyBriefingTasks([task({status:"대기",dueKey:"2026-09-15"})],TODAY);
-  assert.equal(result.waiting.length,1);
-  assert.equal(result.waiting[0].daysUntil,3);
+test("미래 기한 업무는 상태와 무관하게 다가오는 업무",()=>{
+  const result=classifyBriefingTasks([
+    task({status:"대기",dueKey:"2026-09-15"}),
+    task({status:"확인필요",dueKey:"2026-09-20"})
+  ],TODAY);
+  assert.equal(result.upcoming.length,2);
+  assert.equal(result.upcoming[0].daysUntil,3);
 });
 
-test("기한 없는 대기도 기다리는 것",()=>{
-  const result=classifyBriefingTasks([task({status:"대기"})],TODAY);
-  assert.equal(result.waiting.length,1);
+test("기한이 없으면 상태와 무관하게 기한 없는 업무",()=>{
+  const result=classifyBriefingTasks([
+    task({status:"대기"}),
+    task({status:"확인필요"}),
+    task({followUp:"대표 보고"})
+  ],TODAY);
+  assert.equal(result.undated.length,3);
 });
 
-test("후속조치가 있는 진행중은 후속조치 필요",()=>{
-  const result=classifyBriefingTasks([task({followUp:"대표 보고"})],TODAY);
-  assert.equal(result.followUp.length,1);
-});
-
-test("후속조치가 없어도 확인필요 상태는 후속조치 필요",()=>{
-  const result=classifyBriefingTasks([task({status:"확인필요"})],TODAY);
-  assert.equal(result.followUp.length,1);
+test("대기와 후속조치는 기본 구간이 아니라 보조 집계로 남는다",()=>{
+  const result=classifyBriefingTasks([
+    task({status:"대기",dueKey:"2026-09-10",followUp:"회신 확인"}),
+    task({status:"확인필요",dueKey:TODAY}),
+    task({status:"대기",dueKey:"2026-09-20"}),
+    task({followUp:"대표 보고"})
+  ],TODAY);
+  const counts=briefingV2Counts(result);
+  assert.equal(counts.waiting,2);
+  assert.equal(counts.followUp,3);
+  assert.deepEqual(
+    [counts.overdue,counts.today,counts.upcoming,counts.undated],
+    [1,1,1,1]
+  );
 });
 
 test("완료 업무는 모든 V2 미완료 구역에서 제외",()=>{
   const result=classifyBriefingTasks([task({status:"완료",dueKey:"2026-09-01"})],TODAY);
   assert.deepEqual(briefingV2Counts(result),{
-    overdue:0,today:0,waiting:0,followUp:0,other:0,total:0
+    overdue:0,today:0,upcoming:0,undated:0,waiting:0,followUp:0,other:0,total:0
   });
 });
 
@@ -74,29 +85,38 @@ test("시스템 프로젝트는 제외",()=>{
   assert.equal(result.totalOpen,0);
 });
 
-test("분류 조건이 없는 진행중은 otherCount로 집계",()=>{
-  const result=classifyBriefingTasks([task()],TODAY);
-  assert.equal(result.otherCount,1);
-  assert.equal(result.totalOpen,1);
+test("네 기본 구간 합계는 항상 미완료 total과 일치",()=>{
+  const result=classifyBriefingTasks([
+    task({title:"지난",dueKey:"2026-09-10"}),
+    task({title:"오늘",dueKey:TODAY}),
+    task({title:"다가옴",dueKey:"2026-09-13"}),
+    task({title:"무기한"})
+  ],TODAY);
+  const counts=briefingV2Counts(result);
+  assert.equal(counts.overdue+counts.today+counts.upcoming+counts.undated,counts.total);
+  assert.equal(counts.total,4);
+  assert.equal(counts.other,0);
 });
 
-test("지난 것은 오래된 기한부터, 대기는 가까운 미래 기한부터 정렬",()=>{
+test("지난 것은 오래된 기한부터, 다가오는 업무는 가까운 기한부터 정렬",()=>{
   const result=classifyBriefingTasks([
     task({title:"지난2",dueKey:"2026-09-11"}),
     task({title:"지난1",dueKey:"2026-09-08"}),
-    task({title:"대기2",status:"대기",dueKey:"2026-09-20"}),
-    task({title:"대기1",status:"대기",dueKey:"2026-09-13"}),
-    task({title:"대기무기한",status:"대기"})
+    task({title:"다가옴2",status:"대기",dueKey:"2026-09-20"}),
+    task({title:"다가옴1",status:"진행중",dueKey:"2026-09-13"})
   ],TODAY);
   assert.deepEqual(result.overdue.map(item=>item.title),["지난1","지난2"]);
-  assert.deepEqual(result.waiting.map(item=>item.title),["대기1","대기2","대기무기한"]);
+  assert.deepEqual(result.upcoming.map(item=>item.title),["다가옴1","다가옴2"]);
 });
 
-test("하나의 업무는 한 구역에만 들어간다",()=>{
+test("하나의 업무는 네 기본 구간 중 한 곳에만 들어간다",()=>{
   const result=classifyBriefingTasks([
     task({status:"대기",dueKey:"2026-09-10",followUp:"회신 확인"}),
-    task({status:"확인필요",dueKey:TODAY,followUp:"확인"})
+    task({status:"확인필요",dueKey:TODAY,followUp:"확인"}),
+    task({status:"대기",dueKey:"2026-09-18"}),
+    task({status:"확인필요"})
   ],TODAY);
-  const counts=briefingV2Counts(result);
-  assert.deepEqual(counts,{overdue:1,today:1,waiting:0,followUp:0,other:0,total:2});
+  const primary=[...result.overdue,...result.today,...result.upcoming,...result.undated];
+  assert.equal(primary.length,4);
+  assert.equal(new Set(primary.map(item=>item.pageId+item.title+item.dueKey+item.status)).size,4);
 });
