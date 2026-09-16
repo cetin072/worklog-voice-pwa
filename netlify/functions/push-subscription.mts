@@ -2,6 +2,7 @@ import type { Config, Context } from "@netlify/functions";
 import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
 import { publicSupabaseAuthConfig } from "../shared/platform/supabase-auth-config.mjs";
 import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
+import { vapidConfigFromEnv } from "../shared/vapid-config.mjs";
 
 function json(status:number, body:Record<string,unknown>){
   return new Response(JSON.stringify(body), { status, headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"} });
@@ -13,8 +14,7 @@ function bearerToken(req:Request){
 }
 
 function pushConfig(){
-  const publicKey=String(Netlify.env.get("WEB_PUSH_VAPID_PUBLIC_KEY") || "").trim();
-  return { configured:/^[A-Za-z0-9_-]{80,100}$/.test(publicKey), publicKey };
+  return vapidConfigFromEnv((name:string)=>Netlify.env.get(name));
 }
 
 function cleanSubscription(value:any){
@@ -32,7 +32,7 @@ function cleanSubscription(value:any){
 export default async (req:Request, _context:Context) => {
   if(req.method==="GET"){
     const config=pushConfig();
-    return json(config.configured ? 200 : 503, config);
+    return json(config.configured ? 200 : 503, {configured:config.configured,publicKey:config.publicKey});
   }
   if(req.method!=="POST") return json(405,{error:"METHOD_NOT_ALLOWED"});
 
