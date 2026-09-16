@@ -20,7 +20,7 @@ export function buildMorningPushPayload(counts = {}) {
   return Object.freeze({
     title: "업무수첩 · 아침 브리핑",
     body,
-    url: "/",
+    url: "/#briefingCard",
     tag: "worklog-morning-digest",
   });
 }
