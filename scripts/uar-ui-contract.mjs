@@ -8,10 +8,10 @@ const html = fs.readFileSync(indexPath, 'utf8');
 const requiredIds = [
   'health',
   'homeBriefingCard',
-  'homeBriefingTodayCount',
   'homeBriefingOverdueCount',
-  'homeBriefingFollowUpCount',
-  'homeBriefingNextSchedule',
+  'homeBriefingTodayCount',
+  'homeBriefingUpcomingCount',
+  'homeBriefingUndatedCount',
   'homeBriefingOpen',
   'mic',
   'micText',

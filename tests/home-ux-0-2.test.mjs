@@ -15,13 +15,17 @@ test("home puts the daily briefing before capture support content", () => {
   assert.ok(entry > voice, "direct input should remain after the voice support card");
 
   for (const id of [
-    "homeBriefingTodayCount",
     "homeBriefingOverdueCount",
-    "homeBriefingFollowUpCount",
-    "homeBriefingNextSchedule",
+    "homeBriefingTodayCount",
+    "homeBriefingUpcomingCount",
+    "homeBriefingUndatedCount",
     "homeBriefingOpen",
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+
+  for (const label of ["지난 것", "오늘 할 일", "다가오는 업무", "기한 없는 업무"]) {
+    assert.match(html, new RegExp(`>${label}<`));
   }
 });
 
@@ -50,15 +54,35 @@ test("one mic CTA owns idle and recording-end labels", () => {
   assert.match(source, /MutationObserver\(syncMicState\)/);
 });
 
-test("compact briefing reuses rendered Briefing V2 and keeps follow-up as a secondary signal", () => {
+test("compact briefing reuses the exact four Briefing V2 work buckets", () => {
   const source = read("public/home-ux.js");
   assert.match(source, /getElementById\("briefingV2"\)|\$\("briefingV2"\)/);
-  assert.match(source, /\.is-overdue b/);
-  assert.match(source, /dataset\.followUpCount/);
-  assert.match(source, /\.briefing-v2-schedules/);
-  assert.doesNotMatch(source, /\.is-followup b/);
+  assert.match(source, /summaryCount\(summary, "\.is-overdue"\)/);
+  assert.match(source, /summaryCount\(summary, "\.is-today"\)/);
+  assert.match(source, /summaryCount\(summary, "\.is-upcoming"\)/);
+  assert.match(source, /summaryCount\(summary, "\.is-undated"\)/);
+  assert.doesNotMatch(source, /briefing-v2-schedules/);
+  assert.doesNotMatch(source, /dataset\.followUpCount/);
   assert.doesNotMatch(source, /fetch\s*\(/);
   assert.doesNotMatch(source, /\/api\//);
+});
+
+test("compact and full briefing use the same labels and visual bucket order", () => {
+  const html = read("public/index.html");
+  const source = read("public/briefing-v2.js");
+  const css = read("public/home-ux.css");
+  const labels = ["지난 것", "오늘 할 일", "다가오는 업무", "기한 없는 업무"];
+  let previous = -1;
+  for (const label of labels) {
+    const index = html.indexOf(`<span>${label}</span>`);
+    assert.ok(index > previous, `${label} must keep the full briefing order`);
+    previous = index;
+    assert.match(source, new RegExp(label));
+  }
+  assert.match(css, /\.home-briefing-item\.is-overdue/);
+  assert.match(css, /\.home-briefing-item\.is-today/);
+  assert.match(css, /\.home-briefing-item\.is-upcoming/);
+  assert.match(css, /\.home-briefing-item\.is-undated/);
 });
 
 test("full briefing uses one due-date axis while status and follow-up stay as task badges", () => {
@@ -94,8 +118,8 @@ test("Home UX assets and product records are wired into the app", () => {
   const changelog = read("CHANGELOG.md");
   const decisions = read("docs/PRODUCT_DECISIONS.md");
 
-  assert.match(html, /\/home-ux\.css\?v=20260916-1/);
-  assert.match(html, /\/home-ux\.js\?v=20260916-2/);
+  assert.match(html, /\/home-ux\.css\?v=20260916-2/);
+  assert.match(html, /\/home-ux\.js\?v=20260916-3/);
   assert.match(html, /\/briefing\.css\?v=20260916-2/);
   assert.match(html, /\/briefing-v2\.js\?v=20260916-3/);
   assert.ok(sw.includes('"/home-ux.css"'));
