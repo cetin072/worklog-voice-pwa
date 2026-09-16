@@ -13,6 +13,15 @@ function bearerToken(req:Request){
   return match ? match[1].trim() : "";
 }
 
+function requestOrigin(req:Request){
+  try{
+    const url=new URL(req.url);
+    return url.protocol==="https:" ? url.origin : "";
+  }catch{
+    return "";
+  }
+}
+
 function pushConfig(){
   return vapidConfigFromEnv((name:string)=>Netlify.env.get(name));
 }
@@ -38,6 +47,8 @@ export default async (req:Request, _context:Context) => {
 
   const accessToken=bearerToken(req);
   if(!accessToken) return json(401,{error:"LOGIN_REQUIRED",message:"로그인 후 서버 알림을 연결할 수 있습니다."});
+  const origin=requestOrigin(req);
+  if(!origin) return json(400,{error:"APP_ORIGIN_INVALID",message:"앱 주소를 확인하지 못했습니다."});
 
   const config=pushConfig();
   if(!config.configured) return json(503,{error:"WEB_PUSH_NOT_CONFIGURED",message:"서버 알림 설정이 아직 준비되지 않았습니다."});
@@ -57,11 +68,12 @@ export default async (req:Request, _context:Context) => {
       endpoint:subscription.endpoint,
       p256dh:subscription.p256dh,
       auth_secret:subscription.auth,
+      app_origin:origin,
       user_agent:String(req.headers.get("user-agent") || "").slice(0,500),
       disabled_at:null,
       updated_at:now,
     },["user_id","endpoint"]);
-    return json(200,{ok:true,subscriptionId:String(row.id || "")});
+    return json(200,{ok:true,subscriptionId:String(row.id || ""),appOrigin:origin});
   }catch(error:any){
     return json(400,{error:String(error?.code || "PUSH_SUBSCRIPTION_FAILED"),message:String(error?.message || "Push 구독 저장에 실패했습니다.")});
   }
