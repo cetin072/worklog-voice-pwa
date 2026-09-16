@@ -2,6 +2,7 @@ body.platform-auth-loading .core-app-card{display:none}
 body.platform-signed-out .core-app-card{display:none}
 body.platform-signed-in .welcome-card,body.platform-session-hint .welcome-card,body.platform-legacy-user .welcome-card,body.platform-auth-unavailable .welcome-card{display:none}
 .header-actions{display:flex;align-items:center;gap:8px}
+.settings-open{display:inline-flex;min-width:42px;height:42px;align-items:center;justify-content:center;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#374151;font-size:19px;font-weight:800;text-decoration:none;cursor:pointer}.settings-open:active{transform:translateY(1px)}
 .welcome-card{text-align:center;padding:30px 22px 24px;background:linear-gradient(155deg,#111827 0%,#1f2937 58%,#374151 100%);color:#fff;overflow:hidden}
 .welcome-card .eyebrow{color:#d1d5db}.welcome-icon{width:72px;height:72px;margin:0 auto 16px;border-radius:22px;display:grid;place-items:center;background:rgba(255,255,255,.12);font-size:38px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.13)}
 .welcome-eyebrow{font-weight:750}.welcome-card h2{margin:7px 0 12px;font-size:29px;line-height:1.2;letter-spacing:-.02em}.welcome-copy{max-width:480px;margin:0 auto;color:#e5e7eb;font-size:15px;line-height:1.6}.welcome-benefits{display:grid;gap:8px;margin-top:20px;text-align:left}.welcome-benefits span{display:block;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.09);font-size:14px;font-weight:700}
