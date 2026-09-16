@@ -29,6 +29,15 @@
     } catch {}
   }
 
+  function loadIntegratedSearch() {
+    if (document.querySelector('script[data-worklog-search="1"]')) return;
+    const script = document.createElement("script");
+    script.src = "/search.js?v=20260916-1";
+    script.dataset.worklogSearch = "1";
+    document.head.append(script);
+  }
+
   sanitizeLegacyDraftExtras();
+  loadIntegratedSearch();
   window.WorklogUiPreferences = Object.freeze({ read: readPreferences, save: savePreferences });
 })();
