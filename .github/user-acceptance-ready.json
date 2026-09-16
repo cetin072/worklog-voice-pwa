@@ -20,6 +20,9 @@
     "preview_runtime": {
       "command": "node scripts/uar-preview-runtime.mjs"
     },
+    "ocr_quality": {
+      "command": "node scripts/uar-ocr-quality.mjs"
+    },
     "representative_smoke": {
       "command": "node scripts/uar-representative-smoke.mjs"
     },
@@ -32,6 +35,7 @@
     "tests/client-stability.test.mjs",
     "tests/core-functions.test.mjs",
     "tests/briefing-v2.test.mjs",
+    "scripts/uar-ocr-quality.mjs",
     "scripts/uar-visual-stability.mjs"
   ]
 }
