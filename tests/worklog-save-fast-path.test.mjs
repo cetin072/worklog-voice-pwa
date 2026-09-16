@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createWorklogDataCoreAdapter, quickWorklogSchedule } from "../netlify/shared/worklog-data-core-adapter.mjs";
 
-const migration = fs.readFileSync(new URL("../supabase/migrations/20260916081800_worklog_schedule_fast_path.sql", import.meta.url), "utf8");
+const migration = fs.readFileSync(new URL("../supabase/migrations/20260916082824_worklog_schedule_fast_path.sql", import.meta.url), "utf8");
 const worklogFunction = fs.readFileSync(new URL("../netlify/functions/worklog.mts", import.meta.url), "utf8");
 
 function record(overrides = {}) {
