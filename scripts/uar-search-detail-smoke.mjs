@@ -43,12 +43,25 @@ const browserStub = `<script>
 (() => {
   window.__uarXssExecuted = false;
   const recordId = ${JSON.stringify(recordId)};
+  const fakeSession = { access_token: 'uar-access-token', refresh_token: 'uar-refresh-token' };
+  try {
+    localStorage.setItem('worklogSupabaseSessionV1', JSON.stringify(fakeSession));
+  } catch {}
+
   const json = (body, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json; charset=utf-8' }
   }));
   window.fetch = async (input, init = {}) => {
     const raw = typeof input === 'string' ? input : String(input && input.url || '');
+    if (raw.includes('/api/supabase-auth-config')) {
+      return json({
+        configured: true,
+        supabaseUrl: 'https://uar.supabase.test',
+        publishableKey: 'sb_publishable_uar',
+        dataCorePrimaryEnabled: true,
+      });
+    }
     if (raw.includes('/rest/v1/rpc/search_my_work_records')) {
       return json([{
         work_record_id: recordId,
@@ -81,35 +94,20 @@ const browserStub = `<script>
         metadata: { fieldProvenance: { institution: 'user_confirmed' } }
       }]);
     }
+    if (/\/auth\/v1\/user(?:\?|$)/.test(raw)) {
+      return json({ id: 'uar-user', email: 'uar@example.test' });
+    }
+    if (/\/auth\/v1\/token\?grant_type=refresh_token/.test(raw)) {
+      return json(fakeSession);
+    }
     if (raw.startsWith('/api/briefing') || raw.startsWith('/api/kakao')) {
       return json({ error: 'Deploy Preview owner integrations are intentionally isolated.' }, 500);
     }
     if (raw.startsWith('/api/')) {
       return json({ error: 'UAR search detail smoke blocks external writes.' }, 503);
     }
-    if (/\/auth\/v1\//.test(raw)) {
-      return json({ id: 'uar-user', email: 'uar@example.test' });
-    }
     return json({ error: 'UAR search detail smoke blocks network fetches.' }, 503);
   };
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const original = window.WorklogPlatformAuth || {};
-    const fakeSession = { access_token: 'uar-access-token', refresh_token: 'uar-refresh-token' };
-    window.WorklogPlatformAuth = {
-      ...original,
-      readSession: () => fakeSession,
-      getConfig: async () => ({
-        configured: true,
-        supabaseUrl: 'https://uar.supabase.test',
-        publishableKey: 'sb_publishable_uar',
-        dataCorePrimaryEnabled: true,
-      }),
-      refreshSession: async () => fakeSession,
-      currentUser: async () => ({ id: 'uar-user', email: 'uar@example.test' }),
-      isDataCorePrimaryEnabled: async () => true,
-    };
-  }, { once: true });
 })();
 </script>`;
 
