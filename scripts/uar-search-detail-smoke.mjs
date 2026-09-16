@@ -149,7 +149,14 @@ const interaction = `<script>
       }, 'search-screen');
       const input = document.getElementById('worklogSearchInput');
       const form = document.getElementById('worklogSearchForm');
-      if (!input || !form) throw new Error('search-form-missing');
+      const titleAction = document.getElementById('worklogSearchFocus');
+      const closeSearch = document.getElementById('worklogSearchClose');
+      if (!input || !form || !titleAction || !closeSearch) throw new Error('search-form-or-title-action-missing');
+
+      closeSearch.focus();
+      titleAction.click();
+      await waitFor(() => document.activeElement === input, 'search-title-focus');
+
       input.value = '태장';
       form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
@@ -248,4 +255,4 @@ if (!dom.includes('data-uar-search-detail="pass"') || !dom.includes('SEARCH_DETA
 }
 if (dom.includes('data-uar-search-detail="fail"')) throw new Error('UAR_SEARCH_DETAIL_FAIL_MARKER_PRESENT');
 
-console.log(`UAR_SEARCH_DETAIL_SMOKE_PASS chrome=${chrome} tap=true keyboard=true back=true escape=true rls_fetch=single-record xss=safe`);
+console.log(`UAR_SEARCH_DETAIL_SMOKE_PASS chrome=${chrome} title_touch=true tap=true keyboard=true back=true escape=true rls_fetch=single-record xss=safe`);
