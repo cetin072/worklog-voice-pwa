@@ -9,10 +9,14 @@ async function text(path) {
 test('mobile foundation pins Expo 57 and Expo Router entry', async () => {
   const pkg = JSON.parse(await text('mobile/package.json'));
   assert.equal(pkg.main, 'expo-router/entry');
-  assert.match(pkg.dependencies.expo, /^~57\./);
-  assert.match(pkg.dependencies['expo-router'], /^~57\./);
+  assert.match(pkg.dependencies.expo, /^57\./);
+  assert.match(pkg.dependencies['expo-router'], /^57\./);
+  assert.equal(pkg.dependencies['react-native'], '0.86.3');
   assert.ok(pkg.dependencies['expo-secure-store']);
   assert.ok(pkg.dependencies['@supabase/supabase-js']);
+  for (const version of Object.values({ ...pkg.dependencies, ...pkg.devDependencies })) {
+    assert.doesNotMatch(String(version), /^[~^]/, 'mobile direct dependencies must be pinned exactly');
+  }
 });
 
 test('mobile foundation keeps secrets out of the checked-in env example', async () => {
