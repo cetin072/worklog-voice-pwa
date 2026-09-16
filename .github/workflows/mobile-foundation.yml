@@ -6,20 +6,13 @@ on:
       - 'mobile/**'
       - 'tests/mobile-foundation.test.mjs'
       - '.github/workflows/mobile-foundation.yml'
-  push:
-    branches:
-      - 'feat/301-mobile-foundation-0.1'
-    paths:
-      - 'mobile/**'
-      - 'tests/mobile-foundation.test.mjs'
-      - '.github/workflows/mobile-foundation.yml'
 
 concurrency:
   group: mobile-foundation-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   typecheck:
@@ -30,9 +23,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install mobile dependencies
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install locked mobile dependencies
         working-directory: mobile
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Check Expo dependency compatibility
         working-directory: mobile
         run: npx expo install --check
@@ -41,25 +36,6 @@ jobs:
         run: npm run typecheck
       - name: Run mobile foundation contract tests
         run: node --test tests/mobile-foundation.test.mjs
-      - name: Commit resolved mobile lockfile once
-        if: github.event_name == 'push'
-        run: |
-          if [ -z "$(git status --porcelain -- mobile/package-lock.json)" ]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add mobile/package-lock.json
-          git commit -m "chore: lock mobile dependencies"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-      - name: Upload resolved mobile lockfile for audit
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-package-lock-audit
-          path: mobile/package-lock.json
-          if-no-files-found: error
-          retention-days: 1
 
   android-standalone:
     needs: typecheck
@@ -70,13 +46,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install mobile dependencies
+      - name: Install locked mobile dependencies
         working-directory: mobile
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Generate Android project
         working-directory: mobile
         env:
