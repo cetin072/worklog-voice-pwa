@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 
 test("service worker separates API, navigation, and static asset strategies", () => {
-  assert.match(source, /const CACHE="worklog-v37-brand-launch-0-4-1"/);
+  assert.match(source, /const CACHE="worklog-v38-pwa-splash-continuity"/);
   assert.match(source, /"\/morning-push-settings\.js"/);
   assert.match(source, /"\/home-ux\.css"/);
   assert.match(source, /"\/home-ux\.js"/);
