@@ -29,11 +29,7 @@ export function createWorklogDataCoreBriefingStatus({ client } = {}) {
       if (!row || String(row.record_id || "") !== id) {
         throw statusError("WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN", "변경할 업무를 찾지 못했거나 권한이 없습니다.");
       }
-      return Object.freeze({
-        recordId: id,
-        status: REVERSE_STATUS_MAP[String(row.status_value || internalStatus)] || input.status,
-        fastPath: true,
-      });
+      return Object.freeze({ recordId: id, status: REVERSE_STATUS_MAP[String(row.status_value || internalStatus)] || input.status });
     },
     async updateStatus(input = {}, contextInput) {
       const context = requireWorkspaceContext(contextInput);
