@@ -4,20 +4,23 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("startup loading state uses the existing welcome shell as a lightweight brand launch splash", () => {
+test("startup loading state uses a white centered brand launch splash", () => {
   const html = read("public/index.html");
   const css = read("public/distribution.css");
 
   assert.match(html, /class="eyebrow welcome-eyebrow">말하면 기록되고, 일정까지 한눈에<\/p>/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*position:fixed/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*inset:0/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*background:#fff/);
   assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-192-v3\.png/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*content:"업무수첩"/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*color:#111827/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow\{[^}]*font-size:24px/);
   assert.match(css, /body\.platform-auth-loading \.welcome-copy,body\.platform-auth-loading \.welcome-benefits\{display:none\}/);
   assert.match(css, /body:not\(\.platform-auth-loading\)\.platform-session-hint \.welcome-card/);
 });
 
-test("brand splash survives the first paint while app initialization continues underneath", () => {
+test("brand splash remains visible for one second after first paint while initialization continues", () => {
   const source = read("public/platform-auth-ui.js");
   const scheduleStart = source.indexOf("function scheduleBrandLaunchRelease()");
   const scheduleEnd = source.indexOf("scheduleBrandLaunchRelease();", scheduleStart);
@@ -26,9 +29,9 @@ test("brand splash survives the first paint while app initialization continues u
   const stateEnd = source.indexOf("function legacyMode", stateStart);
   const setAuthState = source.slice(stateStart, stateEnd);
 
-  assert.match(source, /const BRAND_LAUNCH_MIN_MS = 420/);
+  assert.match(source, /const BRAND_LAUNCH_HOLD_MS = 1000/);
   assert.match(schedule, /requestAnimationFrame/);
-  assert.match(schedule, /setTimeout/);
+  assert.match(schedule, /setTimeout\(release, BRAND_LAUNCH_HOLD_MS\)/);
   assert.doesNotMatch(schedule, /fetch\s*\(/);
   assert.doesNotMatch(setAuthState, /platform-auth-loading/);
   assert.match(source, /scheduleBrandLaunchRelease\(\);[\s\S]*applyLocalAuthHint\(\);[\s\S]*refresh\(\)\.catch/);
