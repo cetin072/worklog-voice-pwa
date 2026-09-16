@@ -4,6 +4,8 @@
   const PAGE_SIZE = 20;
   const RPC_PATH = "/rest/v1/rpc/search_my_work_records";
   const HISTORY_KEY = "worklogSearchOpen";
+  const DETAIL_SCRIPT_PATH = "/search-detail.js?v=20260916-2";
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const STATUS_LABELS = Object.freeze({
     in_progress: "진행중",
     completed: "완료",
@@ -32,6 +34,7 @@
   let activeController = null;
   let loading = false;
   let screenOpen = false;
+  let detailModulePromise = null;
 
   function ensureStyles() {
     if (document.querySelector('link[data-worklog-search="1"]')) return;
@@ -40,6 +43,43 @@
     link.href = "/search.css?v=20260916-2";
     link.dataset.worklogSearch = "1";
     document.head.append(link);
+  }
+
+  function ensureDetailModule() {
+    if (window.WorklogSearchDetail?.open) return Promise.resolve(window.WorklogSearchDetail);
+    if (detailModulePromise) return detailModulePromise;
+
+    detailModulePromise = new Promise((resolve, reject) => {
+      let script = document.querySelector('script[data-worklog-search-detail="1"]');
+      const loaded = () => {
+        script.dataset.loaded = "1";
+        if (window.WorklogSearchDetail?.open) resolve(window.WorklogSearchDetail);
+        else reject(new Error("기록 상세 기능을 불러오지 못했습니다."));
+      };
+      const failed = () => reject(new Error("기록 상세 기능을 불러오지 못했습니다."));
+
+      if (!script) {
+        script = document.createElement("script");
+        script.src = DETAIL_SCRIPT_PATH;
+        script.dataset.worklogSearchDetail = "1";
+        script.addEventListener("load", loaded, { once: true });
+        script.addEventListener("error", failed, { once: true });
+        document.head.append(script);
+        return;
+      }
+
+      if (script.dataset.loaded === "1") {
+        loaded();
+        return;
+      }
+      script.addEventListener("load", loaded, { once: true });
+      script.addEventListener("error", failed, { once: true });
+    }).catch((error) => {
+      detailModulePromise = null;
+      throw error;
+    });
+
+    return detailModulePromise;
   }
 
   function createOpenButton() {
@@ -118,6 +158,11 @@
     return String(value ?? "").trim();
   }
 
+  function workRecordId(value) {
+    const normalized = text(value);
+    return UUID_RE.test(normalized) ? normalized : "";
+  }
+
   function normalizeQuery(value) {
     return text(value).replace(/\s+/g, " ").slice(0, 120);
   }
@@ -170,6 +215,14 @@
     title.className = "search-result-title";
     title.textContent = text(row?.title) || "제목 없는 기록";
 
+    const recordId = workRecordId(row?.work_record_id);
+    if (recordId) {
+      li.dataset.workRecordId = recordId;
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      li.setAttribute("aria-label", `${title.textContent} 상세 보기`);
+    }
+
     const match = document.createElement("span");
     match.className = "search-match";
     match.textContent = MATCH_LABELS[text(row?.match_type)] || "일치";
@@ -206,6 +259,20 @@
   function renderRows(els, rows, { append = false } = {}) {
     if (!append) els.results.replaceChildren();
     rows.forEach((row) => els.results.append(renderResult(row)));
+  }
+
+  async function openResultDetail(els, item) {
+    const recordId = workRecordId(item?.dataset?.workRecordId);
+    if (!recordId) return;
+    item.setAttribute("aria-busy", "true");
+    try {
+      const detail = await ensureDetailModule();
+      await detail.open(recordId, item);
+    } catch (error) {
+      setStatus(els.status, text(error?.message) || "기록 상세를 열지 못했습니다.", "error");
+    } finally {
+      item.removeAttribute("aria-busy");
+    }
   }
 
   async function readError(response) {
@@ -322,6 +389,7 @@
     els.screen.hidden = false;
     els.screen.setAttribute("aria-hidden", "false");
     document.body.classList.add("search-screen-open");
+    ensureDetailModule().catch(() => {});
 
     if (pushHistory && window.history?.pushState && !window.history.state?.[HISTORY_KEY]) {
       window.history.pushState({ ...(window.history.state || {}), [HISTORY_KEY]: true }, "");
@@ -382,6 +450,20 @@
     els.form.addEventListener("submit", (event) => {
       event.preventDefault();
       runSearch(els, els.input.value, 0, { append: false });
+    });
+
+    els.results.addEventListener("click", (event) => {
+      const item = event.target.closest?.(".search-result[data-work-record-id]");
+      if (!item || !els.results.contains(item)) return;
+      openResultDetail(els, item);
+    });
+
+    els.results.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const item = event.target.closest?.(".search-result[data-work-record-id]");
+      if (!item || !els.results.contains(item)) return;
+      event.preventDefault();
+      openResultDetail(els, item);
     });
 
     els.more.addEventListener("click", () => {
