@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icons/icon-192-v3.png">
   <title>설정 · 업무수첩</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/settings.css?v=20260916-2">
+  <link rel="stylesheet" href="/settings.css?v=20260916-3">
 </head>
 <body class="settings-page-body">
   <main class="app settings-page" id="settingsPage">
@@ -19,7 +19,10 @@
         <p class="eyebrow">업무수첩</p>
         <h1>⚙ 설정</h1>
       </div>
-      <a class="settings-close" href="/">완료</a>
+      <div class="settings-header-actions">
+        <a id="settingsPatchNotes" class="settings-patch-notes-shortcut" href="/patch-notes.html" aria-label="패치 노트" title="패치 노트">📝</a>
+        <a class="settings-close" href="/">완료</a>
+      </div>
     </header>
 
     <details id="settingsPlatformAbout" class="card settings-platform-card">
@@ -150,12 +153,6 @@
         <p id="settingsAccountState" class="settings-account-state">계정 상태를 확인하는 중입니다.</p>
         <p class="settings-note">로그인 정보는 이 기기에 저장되어 앱을 다시 열어도 이어서 사용합니다. 보안상 세션이 만료된 경우에는 다시 로그인이 필요할 수 있습니다.</p>
         <a id="settingsLoginLink" class="settings-link" href="/" hidden>로그인 화면으로 이동</a>
-      </section>
-
-      <section class="settings-section">
-        <h2>업무수첩 정보</h2>
-        <p class="settings-note">업무수첩에 실제 반영된 기능과 개선 내용을 날짜별로 확인합니다.</p>
-        <a id="settingsPatchNotes" class="settings-link" href="/patch-notes.html">패치 노트 확인하기</a>
       </section>
 
       <section class="settings-section settings-secondary-section">
