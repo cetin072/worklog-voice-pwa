@@ -3,6 +3,7 @@ import { createDataCoreRepositories } from "./data-core/repositories.mjs";
 const TYPE_MAP = Object.freeze({ "완료업무": "completed_work", "할 일": "task", "회의·통화": "meeting_call", "지출·세무": "expense_tax", "지시·위임": "delegation", "아이디어": "idea", "문제·확인": "issue_review", "기타": "other" });
 const STATUS_MAP = Object.freeze({ "완료": "completed", "진행중": "in_progress", "대기": "waiting", "확인필요": "needs_review" });
 const TRUSTED_FIELD_SOURCES = new Set(["user_selected", "user_confirmed"]);
+const WORKLOG_SOURCE_TYPES = new Set(["direct", "capture"]);
 const EVENT_SIGNAL_RE = /(미팅|약속|면담|상담|방문|만나|통화|전화(?!번호)|인터뷰|행사|교육|세미나|촬영|식사|점심|저녁|출발|도착|회의(?!\s*(?:자료|록|안건|준비|내용)))/;
 const STRONG_EVENT_VERB_RE = /(약속|면담|상담|방문|만나|통화|전화(?!번호)|출발|도착)/;
 const DEADLINE_RE = /까지[\s\S]{0,40}(?:제출|보내|전달|완료|처리|보고|정리|준비|확인)|(?:마감|제출기한|완료기한)/;
@@ -24,6 +25,10 @@ function amount(value) {
 function fieldSource(value) {
   const source = String(value || "").trim().toLowerCase();
   return TRUSTED_FIELD_SOURCES.has(source) ? source : "unverified";
+}
+function worklogSourceType(value) {
+  const source = String(value || "").trim().toLowerCase();
+  return WORKLOG_SOURCE_TYPES.has(source) ? source : "direct";
 }
 function hasExplicitTime(value) {
   return /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(String(value || ""));
@@ -48,6 +53,8 @@ function normalizedRecord(record = {}) {
   const institutionSource = fieldSource(record.institutionSource ?? record.institution_source);
   const requestedInstitution = String(record.institution || "").trim();
   const institution = TRUSTED_FIELD_SOURCES.has(institutionSource) && requestedInstitution ? requestedInstitution : null;
+  const sourceType = worklogSourceType(record.sourceType ?? record.source_type);
+  const source = sourceType === "capture" ? "capture" : "quick_worklog";
   return Object.freeze({
     clientRequestId,
     title: title(record.cleanTranscript),
@@ -57,11 +64,13 @@ function normalizedRecord(record = {}) {
     status: STATUS_MAP[record.status] || "in_progress",
     institution,
     institutionSource,
+    sourceType,
+    source,
     amount: amount(record.amount),
     followUp: String(record.followUp || "").trim() || null,
     recordedAt: validRecordedAt(record.recordedAt),
     dueAt: dueAt(record.dueStart),
-    metadata: { source: "quick_worklog", clientRequestId, fieldProvenance: { institution: institutionSource } },
+    metadata: { source, sourceType, clientRequestId, fieldProvenance: { institution: institutionSource } },
     sourceExcerpt: String(record.transcript || ""),
   });
 }
@@ -122,10 +131,10 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
         clientRequestId: normalized.clientRequestId,
         entityType: "work_record",
         entityId: String(workRecord.id),
-        sourceType: "direct",
+        sourceType: normalized.sourceType,
         sourceId: normalized.clientRequestId,
         sourceExcerpt: normalized.sourceExcerpt,
-        metadata: { source: "quick_worklog", fieldProvenance: { institution: normalized.institutionSource } },
+        metadata: { source: normalized.source, sourceType: normalized.sourceType, fieldProvenance: { institution: normalized.institutionSource } },
       }, workspaceContext);
       return Object.freeze({ workRecordId: String(workRecord.id), sourceRefId: String(sourceRef?.id || ""), workspaceId: workspaceContext.workspaceId });
     },
