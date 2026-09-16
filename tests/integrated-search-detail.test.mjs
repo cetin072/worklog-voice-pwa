@@ -42,5 +42,5 @@ test("detail hides unverified legacy institution metadata and renders record tex
   assert.match(detail, /title\.textContent = text\(row\?\.title\)/);
   assert.match(detail, /appendSection\(card, "기록 내용", content \|\| original\)/);
   assert.match(detail, /if \(original && original !== content\) appendSection\(card, "원문", original\)/);
-  assert.doesNotMatch(detail, /innerHTML\s*=\s*.*row\?/s);
+  assert.doesNotMatch(detail, /paragraph\.innerHTML|title\.innerHTML|card\.innerHTML\s*=\s*.*row/);
 });
