@@ -70,15 +70,17 @@ export default async (req:Request, _context:Context) => {
         vapidPrivateKey:push.privateKey,
         vapidSubject:push.subject,
       });
-      await client.update("push_subscriptions",{last_success_at:new Date().toISOString(),last_failure_at:null,updated_at:new Date().toISOString()},{id:`eq.${subscriptionId}`,user_id:`eq.${workspace.userId}`});
+      const now=new Date().toISOString();
+      await client.update("push_subscriptions",{last_success_at:now,last_failure_at:null,last_failure_status:null,last_failure_code:null,updated_at:now},{id:`eq.${subscriptionId}`,user_id:`eq.${workspace.userId}`});
       return json(200,{ok:true,delivered:true});
     }catch(error:any){
       const now=new Date().toISOString();
-      const patch:any={last_failure_at:now,updated_at:now};
+      const status=Number(error?.status || 0);
+      const code=String(error?.code || "WEB_PUSH_DELIVERY_FAILED").slice(0,80);
+      const patch:any={last_failure_at:now,last_failure_status:status || null,last_failure_code:code,updated_at:now};
       if(error?.expired) patch.disabled_at=now;
       await client.update("push_subscriptions",patch,{id:`eq.${subscriptionId}`,user_id:`eq.${workspace.userId}`}).catch(()=>{});
-      const status=Number(error?.status || 0);
-      return json(error?.expired ? 410 : 502,{error:String(error?.code || "WEB_PUSH_DELIVERY_FAILED"),message:error?.expired ? "이 기기의 기존 알림 구독이 만료되었습니다. 다시 연결해주세요." : "서버에서 알림을 전송하지 못했습니다.",pushStatus:status || undefined});
+      return json(error?.expired ? 410 : 502,{error:code,message:error?.expired ? "이 기기의 기존 알림 구독이 만료되었습니다. 다시 연결해주세요." : "서버에서 알림을 전송하지 못했습니다.",pushStatus:status || undefined});
     }
   }catch(error:any){
     return json(400,{error:String(error?.code || "PUSH_TEST_FAILED"),message:String(error?.message || "서버 알림 테스트에 실패했습니다.")});
