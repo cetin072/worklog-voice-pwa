@@ -111,6 +111,7 @@ as $$
         or (
           coalesce(wr.title, '') || ' ' ||
           coalesce(wr.content, '') || ' ' ||
+          coalesce(wr.original_text, '') || ' ' ||
           coalesce(wr.institution, '') || ' ' ||
           coalesce(wr.follow_up, '')
         ) ilike p.pattern
@@ -131,7 +132,6 @@ as $$
           from unnest(n.search_aliases) as alias_value(value)
           where lower(btrim(alias_value.value)) = p.q_lower
         )
-        or coalesce(wr.original_text, '') ilike p.pattern
       )
   ),
   ranked as (
