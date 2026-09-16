@@ -63,10 +63,10 @@ test("main loads current ui state while settings keeps the full settings bundle"
   const sw = fs.readFileSync("public/sw.js", "utf8");
   const state = fs.readFileSync("public/main-ui-state.js", "utf8");
   assert.doesNotMatch(main, /\/settings\.js\?v=/);
-  assert.match(main, /\/main-ui-state\.js\?v=20260916-3/);
+  assert.match(main, /\/main-ui-state\.js\?v=20260916-4/);
   assert.match(settings, /\/settings\.js\?v=/);
   assert.match(sw, /"\/main-ui-state\.js"/);
-  assert.match(state, /\/search\.js\?v=20260916-4/);
+  assert.match(state, /\/search\.js\?v=20260916-5/);
 });
 
 test("successful worklog saves emit one briefing refresh signal at the common fetch boundary", () => {
