@@ -12,11 +12,118 @@
 
   if (!mic || !micText || !briefingCard || !briefingOpen) return;
 
+  let recordingStartedAt = 0;
+  let recordingTimer = null;
+
+  function createQuickButton(id, className, icon, label) {
+    const button = document.createElement("button");
+    button.id = id;
+    button.className = `voice-quick-action ${className}`;
+    button.type = "button";
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.textContent = icon;
+    return button;
+  }
+
+  function ensureVoiceQuickDock() {
+    const existing = $("voiceQuickDock");
+    if (existing) {
+      return {
+        dock: existing,
+        timer: $("voiceDockTimer"),
+        timerText: $("voiceDockTimerText"),
+        cancel: $("voiceDockCancel"),
+        manual: $("voiceDockManual"),
+      };
+    }
+
+    const voiceCard = mic.closest(".voice-card");
+    if (!voiceCard) return {};
+
+    const dock = document.createElement("div");
+    dock.id = "voiceQuickDock";
+    dock.className = "voice-quick-dock";
+    dock.setAttribute("aria-label", "음성 빠른 조작");
+
+    const timer = document.createElement("div");
+    timer.id = "voiceDockTimer";
+    timer.className = "voice-dock-timer";
+    timer.setAttribute("role", "timer");
+    timer.setAttribute("aria-live", "polite");
+    timer.setAttribute("aria-label", "녹음 시간 00분 00초");
+    timer.hidden = true;
+
+    const timerText = document.createElement("span");
+    timerText.id = "voiceDockTimerText";
+    timerText.textContent = "00:00";
+    timer.append(timerText);
+
+    const cancel = createQuickButton("voiceDockCancel", "is-cancel", "✕", "현재 입력 취소 및 지우기");
+    const manual = createQuickButton("voiceDockManual", "is-manual", "⌨", "직접 입력으로 이동");
+
+    voiceCard.insertBefore(dock, mic);
+    dock.append(timer, cancel, mic, manual);
+
+    cancel.addEventListener("click", () => {
+      $("clear")?.click();
+    });
+
+    manual.addEventListener("click", () => {
+      $("manualEntry")?.click();
+    });
+
+    return { dock, timer, timerText, cancel, manual };
+  }
+
+  const quickDock = ensureVoiceQuickDock();
+
+  function formatElapsed(milliseconds) {
+    const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function updateRecordingTimer() {
+    if (!recordingStartedAt || !quickDock.timerText || !quickDock.timer) return;
+    const elapsed = Date.now() - recordingStartedAt;
+    const display = formatElapsed(elapsed);
+    quickDock.timerText.textContent = display;
+    const [minutes, seconds] = display.split(":");
+    quickDock.timer.setAttribute("aria-label", `녹음 시간 ${Number(minutes)}분 ${Number(seconds)}초`);
+  }
+
+  function startRecordingTimer() {
+    if (!quickDock.timer || !quickDock.timerText) return;
+    if (!recordingStartedAt) recordingStartedAt = Date.now();
+    quickDock.timer.hidden = false;
+    updateRecordingTimer();
+    if (!recordingTimer) recordingTimer = window.setInterval(updateRecordingTimer, 250);
+  }
+
+  function stopRecordingTimer() {
+    if (recordingTimer) {
+      window.clearInterval(recordingTimer);
+      recordingTimer = null;
+    }
+    recordingStartedAt = 0;
+    if (quickDock.timerText) quickDock.timerText.textContent = "00:00";
+    if (quickDock.timer) {
+      quickDock.timer.hidden = true;
+      quickDock.timer.setAttribute("aria-label", "녹음 시간 00분 00초");
+    }
+  }
+
   function syncMicState() {
     const listening = mic.classList.contains("listening");
     const label = listening ? "종료" : "음성 기록";
     if (micText.textContent !== label) micText.textContent = label;
     mic.setAttribute("aria-label", listening ? "음성 기록 종료 후 저장" : "음성 기록 시작");
+    quickDock.dock?.classList.toggle("is-recording", listening);
+    quickDock.cancel?.classList.toggle("is-recording", listening);
+    if (listening) startRecordingTimer();
+    else stopRecordingTimer();
   }
 
   function actualItems(list) {
