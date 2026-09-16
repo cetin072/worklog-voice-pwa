@@ -66,7 +66,7 @@ test("main loads current ui state while settings keeps the full settings bundle"
   assert.match(main, /\/main-ui-state\.js\?v=20260916-2/);
   assert.match(settings, /\/settings\.js\?v=/);
   assert.match(sw, /"\/main-ui-state\.js"/);
-  assert.match(state, /\/search\.js\?v=20260916-2/);
+  assert.match(state, /\/search\.js\?v=20260916-4/);
 });
 
 test("successful worklog saves emit one briefing refresh signal at the common fetch boundary", () => {
