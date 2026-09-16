@@ -4,10 +4,10 @@
   const micText = $("micText");
   const briefingCard = $("briefingCard");
   const briefingOpen = $("homeBriefingOpen");
-  const todayCount = $("homeBriefingTodayCount");
   const overdueCount = $("homeBriefingOverdueCount");
-  const followUpCount = $("homeBriefingFollowUpCount");
-  const nextSchedule = $("homeBriefingNextSchedule");
+  const todayCount = $("homeBriefingTodayCount");
+  const upcomingCount = $("homeBriefingUpcomingCount");
+  const undatedCount = $("homeBriefingUndatedCount");
   const status = $("homeBriefingStatus");
 
   if (!mic || !micText || !briefingCard || !briefingOpen) return;
@@ -137,28 +137,9 @@
     else stopRecordingTimer();
   }
 
-  function actualItems(list) {
-    if (!list) return [];
-    return [...list.querySelectorAll(":scope > li")].filter((item) => !item.classList.contains("briefing-empty"));
-  }
-
-  function todayMmDd() {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Seoul",
-      month: "numeric",
-      day: "numeric",
-    }).formatToParts(new Date());
-    const get = (type) => parts.find((part) => part.type === type)?.value || "";
-    return `${Number(get("month"))}/${Number(get("day"))}`;
-  }
-
-  function compactScheduleWhen(value) {
-    const raw = String(value || "").trim();
-    if (!raw) return "—";
-    const [day, time] = raw.split(/\s+/, 2);
-    if (day === todayMmDd() && time && time !== "종일") return time;
-    if (day === todayMmDd() && time === "종일") return "종일";
-    return raw;
+  function summaryCount(summary, selector) {
+    const value = summary.querySelector(`${selector} b`)?.textContent?.trim() || "0";
+    return `${Number(value || 0)}건`;
   }
 
   function renderSummaryFromV2() {
@@ -166,19 +147,10 @@
     const summary = root?.querySelector(".briefing-v2-summary");
     if (!root || root.hidden || !summary) return false;
 
-    const overdue = summary.querySelector(".is-overdue b")?.textContent?.trim() || "0";
-    const followUp = root.dataset.followUpCount || "0";
-    const scheduleSection = root.querySelector(".briefing-v2-schedules");
-    const scheduleLists = scheduleSection ? [...scheduleSection.querySelectorAll("ul.briefing-v2-list")] : [];
-    const todayItems = actualItems(scheduleLists[0]);
-    const upcomingItems = actualItems(scheduleLists[1]);
-    const firstSchedule = todayItems[0] || upcomingItems[0] || null;
-    const firstWhen = firstSchedule?.querySelector(".briefing-date")?.textContent || "";
-
-    if (todayCount) todayCount.textContent = `${todayItems.length}건`;
-    if (overdueCount) overdueCount.textContent = `${Number(overdue || 0)}건`;
-    if (followUpCount) followUpCount.textContent = `${Number(followUp || 0)}건`;
-    if (nextSchedule) nextSchedule.textContent = compactScheduleWhen(firstWhen);
+    if (overdueCount) overdueCount.textContent = summaryCount(summary, ".is-overdue");
+    if (todayCount) todayCount.textContent = summaryCount(summary, ".is-today");
+    if (upcomingCount) upcomingCount.textContent = summaryCount(summary, ".is-upcoming");
+    if (undatedCount) undatedCount.textContent = summaryCount(summary, ".is-undated");
     if (status) {
       const meta = $("briefingMeta")?.textContent?.trim() || "";
       status.textContent = meta || "오늘 업무 브리핑을 최신 상태로 정리했습니다.";
@@ -188,13 +160,13 @@
   }
 
   function renderSummaryFallback() {
-    const todayItems = actualItems($("briefingToday"));
-    const upcomingItems = actualItems($("briefingUpcoming"));
-    const firstSchedule = todayItems[0] || upcomingItems[0] || null;
-    const firstWhen = firstSchedule?.querySelector(".briefing-date")?.textContent || "";
-    if (todayCount) todayCount.textContent = `${todayItems.length}건`;
-    if (nextSchedule) nextSchedule.textContent = compactScheduleWhen(firstWhen);
-    if (status) status.textContent = $("briefingMeta")?.textContent?.trim() || "전체 브리핑에서 세부 내용을 확인할 수 있습니다.";
+    [overdueCount, todayCount, upcomingCount, undatedCount].forEach((node) => {
+      if (node) node.textContent = "—";
+    });
+    if (status) {
+      status.textContent = $("briefingMeta")?.textContent?.trim() || "전체 브리핑에서 세부 내용을 확인할 수 있습니다.";
+      status.classList.remove("is-ready");
+    }
   }
 
   function syncBriefingSummary() {
