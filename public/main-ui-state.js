@@ -3,7 +3,7 @@
   const DRAFT_KEY = "worklogDraftV1";
   const BRIEFING_SNAPSHOT_PREFIX = "worklogBriefingV2SnapshotV1:";
   const BRIEFING_DATA_PREFIX = "worklogBriefingV2DataV1:";
-  const previousFetch = window.fetch.bind(window);
+  const previousFetch = typeof window.fetch === "function" ? window.fetch.bind(window) : null;
   let briefingRefreshTimer = 0;
 
   function readPreferences() {
@@ -77,37 +77,40 @@
     }
   }
 
-  window.fetch = async (input, init = {}) => {
-    const details = requestDetails(input, init);
-    const sameOrigin = details.url?.origin === window.location.origin;
+  if (previousFetch) {
+    window.fetch = async (input, init = {}) => {
+      const details = requestDetails(input, init);
+      const sameOrigin = details.url?.origin === window.location.origin;
 
-    if (sameOrigin
-      && details.method === "POST"
-      && details.url.pathname === "/api/briefing"
-      && platformSession()?.access_token
-      && quickUpdateAction(init)) {
-      return new Response(JSON.stringify({ ok: true, mode: "data_core_refresh" }), {
-        status: 200,
-        headers: { "content-type": "application/json; charset=utf-8" },
-      });
-    }
+      if (sameOrigin
+        && details.method === "POST"
+        && details.url.pathname === "/api/briefing"
+        && platformSession()?.access_token
+        && quickUpdateAction(init)) {
+        return new Response(JSON.stringify({ ok: true, mode: "data_core_refresh" }), {
+          status: 200,
+          headers: { "content-type": "application/json; charset=utf-8" },
+        });
+      }
 
-    const response = await previousFetch(input, init);
-    if (response.ok && sameOrigin && details.method === "POST" && details.url.pathname === "/api/worklog") {
-      let saved = {};
-      try { saved = await response.clone().json(); } catch {}
-      window.dispatchEvent(new CustomEvent("worklog:record-saved", {
-        detail: {
-          mode: String(saved?.mode || ""),
-          workRecordId: String(saved?.dataCoreWorkRecordId || ""),
-          scheduleDetected: saved?.scheduleDetected === true,
-        },
-      }));
-    }
-    return response;
-  };
+      const response = await previousFetch(input, init);
+      if (response.ok && sameOrigin && details.method === "POST" && details.url.pathname === "/api/worklog") {
+        let saved = {};
+        try { saved = await response.clone().json(); } catch {}
+        window.dispatchEvent(new CustomEvent("worklog:record-saved", {
+          detail: {
+            mode: String(saved?.mode || ""),
+            workRecordId: String(saved?.dataCoreWorkRecordId || ""),
+            scheduleDetected: saved?.scheduleDetected === true,
+          },
+        }));
+      }
+      return response;
+    };
+  }
 
   function triggerBriefingRefresh(attempt = 0) {
+    if (typeof document === "undefined") return;
     const quick = document.getElementById("briefingQuickUpdate");
     if (!quick || quick.disabled) {
       if (attempt < 12) window.setTimeout(() => triggerBriefingRefresh(attempt + 1), 200);
@@ -122,6 +125,7 @@
   }
 
   function installBriefingReset() {
+    if (typeof document === "undefined") return;
     const actions = document.querySelector("#briefingCard .briefing-actions");
     const quick = document.getElementById("briefingQuickUpdate");
     if (!actions || !quick || document.getElementById("briefingReset")) return;
@@ -139,11 +143,11 @@
     actions.insertBefore(button, quick);
   }
 
-  window.addEventListener("worklog:record-saved", scheduleBriefingRefresh);
-  window.addEventListener("worklog:platform-auth-changed", (event) => {
+  window.addEventListener?.("worklog:record-saved", scheduleBriefingRefresh);
+  window.addEventListener?.("worklog:platform-auth-changed", (event) => {
     if (String(event?.detail?.state || "") === "platform-signed-in") window.setTimeout(installBriefingReset, 0);
   });
-  window.addEventListener("DOMContentLoaded", installBriefingReset, { once: true });
+  window.addEventListener?.("DOMContentLoaded", installBriefingReset, { once: true });
 
   sanitizeLegacyDraftExtras();
   window.WorklogUiPreferences = Object.freeze({ read: readPreferences, save: savePreferences });
