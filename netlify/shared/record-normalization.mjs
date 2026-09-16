@@ -152,7 +152,6 @@ export function normalizeWorkRecord(record = {}, options = {}) {
   let normalizedInstitutionSource = institutionSource;
   let hasDerivedAliases = false;
   if (institution && institutionTrusted) aliases.push(institution);
-  if (institution && !institutionTrusted) needsReview = true;
 
   for (const match of matches) {
     const { entry, matchedAliases } = match;
