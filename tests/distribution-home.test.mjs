@@ -23,6 +23,7 @@ test("distribution home routes settings to a standalone page", () => {
   assert.match(settings, /id="settingsPage"/);
   assert.match(settings, /href="\/setup\.html"/);
   assert.match(settings, /Notion 연결 <span class="settings-optional">선택<\/span>/);
+  assert.match(settings, /id="settingsPatchNotes"[^>]+href="\/patch-notes\.html"/);
   assert.match(settings, /id="settingsShare"/);
   assert.match(settings, /id="settingsLogout"/);
 });
@@ -56,12 +57,14 @@ test("settings defaults briefing open and offers only whole-card collapse", () =
   const notion = html.indexOf("Notion 연결");
   const install = html.indexOf("앱 설치");
   const account = html.indexOf("내 계정");
+  const info = html.indexOf("업무수첩 정보");
   const share = html.indexOf("업무수첩 공유");
   const logout = html.indexOf("로그아웃");
   assert.ok(display >= 0 && display < notion);
   assert.ok(notion < install);
   assert.ok(install < account);
-  assert.ok(account < share);
+  assert.ok(account < info);
+  assert.ok(info < share);
   assert.ok(share < logout);
   assert.match(html, /id="settingsBriefingCollapsed"/);
   assert.doesNotMatch(html, /settingsEntryDetailsExpanded/);
@@ -182,8 +185,8 @@ test("legacy briefing loads only for legacy users without a Platform session", (
 
 test("service worker caches current standalone settings assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v35/);
-  for (const asset of ["/settings.html", "/distribution.css", "/settings.css", "/notifications.js", "/settings.js", "/briefing.css", "/briefing-v2-expand-state.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
+  assert.match(source, /worklog-v36/);
+  for (const asset of ["/settings.html", "/patch-notes.html", "/patch-notes.css", "/distribution.css", "/settings.css", "/notifications.js", "/settings.js", "/briefing.css", "/briefing-v2-expand-state.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }
   assert.ok(!source.includes('"/kakao.js"'), "legacy Kakao UI asset should not be precached");
