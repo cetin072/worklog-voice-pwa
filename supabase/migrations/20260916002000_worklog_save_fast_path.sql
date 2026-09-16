@@ -85,7 +85,7 @@ begin
     p_due_at,
     coalesce(p_metadata, '{}'::jsonb)
   )
-  on conflict (workspace_id, client_request_id)
+  on conflict on constraint work_records_workspace_client_request_id_key
   do update set
     title = excluded.title,
     content = excluded.content,
@@ -121,7 +121,7 @@ begin
     p_source_excerpt,
     jsonb_build_object('source', 'quick_worklog')
   )
-  on conflict (workspace_id, client_request_id)
+  on conflict on constraint source_refs_workspace_client_request_id_key
   do update set
     entity_type = excluded.entity_type,
     entity_id = excluded.entity_id,
