@@ -105,10 +105,19 @@
         </label>
         <p id="settingsMorningPushStatus" class="settings-status" aria-live="polite">로그인 후 설정할 수 있습니다.</p>
 
+        <label class="settings-toggle-row" for="settingsAfternoonPushEnabled">
+          <span>
+            <strong>오후 미완료 업무 알림 · 오후 4:30</strong>
+            <small>오늘 할 일이나 기한 지난 업무가 남아 있을 때만 한 번 알려드립니다. 남은 업무가 없으면 보내지 않습니다.</small>
+          </span>
+          <input id="settingsAfternoonPushEnabled" type="checkbox" disabled>
+        </label>
+        <p id="settingsAfternoonPushStatus" class="settings-status" aria-live="polite">로그인 후 설정할 수 있습니다.</p>
+
         <label class="settings-toggle-row" for="settingsMorningPushDetailEnabled">
           <span>
             <strong>업무·일정 제목 표시</strong>
-            <small>켜면 가장 가까운 일정과 우선 업무 제목을 최대 2개 표시합니다. 끄면 알림에는 건수만 표시합니다.</small>
+            <small>켜면 가장 가까운 일정과 우선 업무 제목을 표시합니다. 끄면 알림에는 건수만 표시합니다.</small>
           </span>
           <input id="settingsMorningPushDetailEnabled" type="checkbox" disabled>
         </label>
@@ -162,9 +171,9 @@
 
   <script src="/auth.js?v=20260915-1" defer></script>
   <script src="/platform-auth.js?v=20260915-3" defer></script>
-  <script src="/notifications.js?v=20260916-3" defer></script>
+  <script src="/notifications.js?v=20260916-4" defer></script>
   <script src="/settings.js?v=20260916-3" defer></script>
   <script src="/push-settings.js?v=20260916-2" defer></script>
-  <script src="/morning-push-settings.js?v=20260916-4" defer></script>
+  <script src="/morning-push-settings.js?v=20260916-6" defer></script>
 </body>
 </html>

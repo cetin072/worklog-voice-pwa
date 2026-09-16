@@ -280,6 +280,24 @@
     return Object.freeze({ ok: true, ...sent.result, subscriptionId: sent.subscriptionId, recovered: sent.recovered });
   }
 
+  async function sendAfternoonPreviewPush() {
+    const session = authSession();
+    if (!session) {
+      const error = new Error("로그인 후 오후 업무 알림을 테스트할 수 있습니다.");
+      error.code = "login_required";
+      throw error;
+    }
+    const sent = await withServerPushSubscriptionRecovery((subscriptionId) => apiJson("/api/afternoon-push-preview", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ subscriptionId }),
+    }));
+    return Object.freeze({ ok: true, ...sent.result, subscriptionId: sent.subscriptionId, recovered: sent.recovered });
+  }
+
   async function scheduleClosedAppServerPushTest() {
     const session = authSession();
     if (!session) {
@@ -320,6 +338,7 @@
     refreshServerPushSubscription,
     sendServerTestPush,
     sendMorningPreviewPush,
+    sendAfternoonPreviewPush,
     scheduleClosedAppServerPushTest,
   });
 })();

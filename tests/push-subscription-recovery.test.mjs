@@ -152,10 +152,12 @@ test("expired Web Push subscription is replaced and the request is retried once"
   });
 });
 
-test("morning preview uses the shared subscription recovery path", () => {
+test("morning and afternoon previews use the shared subscription recovery path", () => {
   assert.match(notificationsSource, /sendMorningPreviewPush[\s\S]*withServerPushSubscriptionRecovery/);
+  assert.match(notificationsSource, /sendAfternoonPreviewPush[\s\S]*withServerPushSubscriptionRecovery/);
   assert.match(notificationsSource, /Number\(error\?\.status \|\| 0\) === 410/);
   assert.match(notificationsSource, /await existing\.unsubscribe\(\)/);
   assert.match(morningSettingsSource, /notifications\?\.sendMorningPreviewPush/);
-  assert.doesNotMatch(morningSettingsSource, /fetch\("\/api\/morning-push-preview"/);
+  assert.match(morningSettingsSource, /notifications\?\.sendAfternoonPreviewPush/);
+  assert.doesNotMatch(morningSettingsSource, /fetch\("\/api\/(?:morning|afternoon)-push-preview"/);
 });
