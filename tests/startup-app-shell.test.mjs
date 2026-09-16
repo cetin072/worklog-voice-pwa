@@ -14,17 +14,27 @@ test("startup loading state uses the existing welcome shell as a lightweight bra
   assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-192-v3\.png/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*content:"업무수첩"/);
   assert.match(css, /body\.platform-auth-loading \.welcome-copy,body\.platform-auth-loading \.welcome-benefits\{display:none\}/);
+  assert.match(css, /body:not\(\.platform-auth-loading\)\.platform-session-hint \.welcome-card/);
 });
 
-test("brand splash adds no startup JavaScript delay or network work", () => {
+test("brand splash survives the first paint while app initialization continues underneath", () => {
   const source = read("public/platform-auth-ui.js");
-  const css = read("public/distribution.css");
+  const scheduleStart = source.indexOf("function scheduleBrandLaunchRelease()");
+  const scheduleEnd = source.indexOf("scheduleBrandLaunchRelease();", scheduleStart);
+  const schedule = source.slice(scheduleStart, scheduleEnd);
+  const stateStart = source.indexOf("function setAuthState");
+  const stateEnd = source.indexOf("function legacyMode", stateStart);
+  const setAuthState = source.slice(stateStart, stateEnd);
 
-  assert.doesNotMatch(source, /brandLaunchSplash|splashDelay|minimumSplash|setTimeout\s*\(/);
-  assert.doesNotMatch(css, /@import|https?:\/\//);
+  assert.match(source, /const BRAND_LAUNCH_MIN_MS = 420/);
+  assert.match(schedule, /requestAnimationFrame/);
+  assert.match(schedule, /setTimeout/);
+  assert.doesNotMatch(schedule, /fetch\s*\(/);
+  assert.doesNotMatch(setAuthState, /platform-auth-loading/);
+  assert.match(source, /scheduleBrandLaunchRelease\(\);[\s\S]*applyLocalAuthHint\(\);[\s\S]*refresh\(\)\.catch/);
 });
 
-test("existing local Platform session reveals the core shell before remote auth verification", () => {
+test("existing local Platform session still prepares the core shell before remote auth verification", () => {
   const source = read("public/platform-auth-ui.js");
   const hintIndex = source.indexOf("applyLocalAuthHint();");
   const refreshIndex = source.indexOf("refresh().catch", hintIndex);
