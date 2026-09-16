@@ -43,13 +43,13 @@ function cleanClaim(row) {
   const primaryScheduleTitle = text(row?.primary_schedule_title, 200);
   const primaryScheduleTime = text(row?.primary_schedule_time, 10);
   if (!deliveryId || !subscriptionId || !endpoint || !p256dh || !auth || todayCount === null || overdueCount === null || scheduleCount === null) {
-    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "아침 알림 전송 대상 정보가 올바르지 않습니다.");
+    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "알림 전송 대상 정보가 올바르지 않습니다.");
   }
   if (primaryWorkBucket && !["today", "overdue"].includes(primaryWorkBucket)) {
-    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "아침 알림 업무 분류가 올바르지 않습니다.");
+    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "알림 업무 분류가 올바르지 않습니다.");
   }
   if (primaryScheduleTime && primaryScheduleTime !== "종일" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(primaryScheduleTime)) {
-    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "아침 알림 일정 시각이 올바르지 않습니다.");
+    throw schedulerError("NOTIFICATION_CLAIM_INVALID", "알림 일정 시각이 올바르지 않습니다.");
   }
   return Object.freeze({
     deliveryId,
@@ -103,17 +103,25 @@ export function createNotificationSchedulerClient({ supabaseUrl, publishableKey,
     return data;
   }
 
+  async function claim(functionName, appOrigin, localDate, label) {
+    const targetOrigin = httpsOrigin(appOrigin);
+    if (!targetOrigin) throw schedulerError("NOTIFICATION_APP_ORIGIN_INVALID", "알림 대상 앱 origin이 올바르지 않습니다.");
+    const data = await rpc(functionName, {
+      p_scheduler_secret: secret,
+      p_app_origin: targetOrigin,
+      p_local_date: localDate || null,
+    });
+    if (!Array.isArray(data)) throw schedulerError("NOTIFICATION_CLAIM_RESPONSE_INVALID", `${label} 알림 claim 결과가 올바르지 않습니다.`);
+    return Object.freeze(data.map(cleanClaim));
+  }
+
   return Object.freeze({
     async claimMorning({ appOrigin, localDate = null } = {}) {
-      const targetOrigin = httpsOrigin(appOrigin);
-      if (!targetOrigin) throw schedulerError("NOTIFICATION_APP_ORIGIN_INVALID", "알림 대상 앱 origin이 올바르지 않습니다.");
-      const data = await rpc("claim_morning_notification_deliveries", {
-        p_scheduler_secret: secret,
-        p_app_origin: targetOrigin,
-        p_local_date: localDate || null,
-      });
-      if (!Array.isArray(data)) throw schedulerError("NOTIFICATION_CLAIM_RESPONSE_INVALID", "아침 알림 claim 결과가 올바르지 않습니다.");
-      return Object.freeze(data.map(cleanClaim));
+      return claim("claim_morning_notification_deliveries", appOrigin, localDate, "아침");
+    },
+
+    async claimAfternoon({ appOrigin, localDate = null } = {}) {
+      return claim("claim_afternoon_notification_deliveries", appOrigin, localDate, "오후");
     },
 
     async finish({ deliveryId, success, status = null, code = null } = {}) {
