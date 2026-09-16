@@ -128,6 +128,7 @@ export function normalizeWorkRecord(record = {}, options = {}) {
   let needsReview = sourceQuality !== "original";
 
   const institution = compactText(record.institution, 500);
+  let normalizedInstitution = institution;
   if (institution) aliases.push(institution);
 
   for (const match of matches) {
@@ -135,6 +136,9 @@ export function normalizeWorkRecord(record = {}, options = {}) {
     const proposed = matchedAliases.some((alias) => alias !== entry.canonical);
     if (entry.autoReplace) {
       for (const alias of matchedAliases) normalizedText = literalReplaceAll(normalizedText, alias, entry.canonical);
+      if (entry.entityType === "institution" || entry.entityType === "organization") {
+        normalizedInstitution = entry.canonical;
+      }
     } else if (proposed) {
       // Keep uncertain/person-name source text untouched and surface the canonical proposal for review/search only.
       needsReview = true;
@@ -162,7 +166,7 @@ export function normalizeWorkRecord(record = {}, options = {}) {
     normalizedTitle,
     normalizedText: compactText(normalizedText || original, 10000),
     structuredData: Object.freeze({
-      institution: institution || null,
+      institution: normalizedInstitution || null,
       dueAt,
       status: compactText(record.status, 80) || null,
       recordType: compactText(record.record_type ?? record.recordType, 80) || null,
