@@ -18,6 +18,7 @@
   let loading=false;
   let lastLoadedAt=0;
   let renderedMode="";
+  let authRetryPending=false;
 
   // briefing.js has already captured the original nodes. Replace the visible
   // header/error nodes so its asynchronous V1 refresh cannot overwrite V2 copy.
@@ -273,12 +274,17 @@
     };
   }
 
-  async function fetchV2({ask=true}={}){
+  async function fetchV2({ask=true,retryAuth=true}={}){
     const headers=authHeaders({ask});
     if(!Object.keys(headers).length) throw new Error("Notion 연결 또는 개인 접근키가 필요합니다.");
     const res=await fetch("/api/briefing-v2",{method:"GET",headers,cache:"no-store"});
     const data=await res.json().catch(()=>({}));
-    if(res.status===401 && window.WorklogAuth?.mode?.()!=="personal"){
+    const platformSession=window.WorklogPlatformAuth?.readSession?.();
+    if(res.status===401 && retryAuth && platformSession?.access_token && window.WorklogPlatformAuth?.refreshSession){
+      await window.WorklogPlatformAuth.refreshSession();
+      return fetchV2({ask:false,retryAuth:false});
+    }
+    if(res.status===401 && !platformSession?.access_token && window.WorklogAuth?.mode?.()!=="personal"){
       localStorage.removeItem("worklogAccessKey");
     }
     if(!res.ok) throw new Error(data.error || "브리핑 2.0을 불러오지 못했습니다.");
@@ -299,7 +305,12 @@
         card.classList.add("has-error");
       }
     }finally{
+      const retryAfterAuth=authRetryPending && lastLoadedAt===0;
+      authRetryPending=false;
       setBusy(false);
+      if(retryAfterAuth){
+        window.setTimeout(()=>refreshV2({ask:false,silentFallback:true}),0);
+      }
     }
   }
 
@@ -427,6 +438,14 @@
     }
   }else{
     quick?.addEventListener("click",quickUpdate);
+    window.addEventListener("worklog:platform-auth-changed",event=>{
+      if(String(event?.detail?.state || "")!=="platform-signed-in" || lastLoadedAt>0) return;
+      if(loading){
+        authRetryPending=true;
+        return;
+      }
+      refreshV2({ask:false,silentFallback:true});
+    });
     document.addEventListener("visibilitychange",()=>{
       if(document.visibilityState==="visible" && Date.now()-lastLoadedAt>90*1000){
         refreshV2({ask:false,silentFallback:true});
