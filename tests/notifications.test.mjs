@@ -107,6 +107,14 @@ test("iPhone browser requires Home Screen install before notification permission
   assert.equal(calls.shown.length, 0);
 });
 
+test("main app shell defers the notification module to settings", () => {
+  const main = fs.readFileSync("public/index.html", "utf8");
+  const settings = fs.readFileSync("public/settings.html", "utf8");
+  assert.doesNotMatch(main, /\/notifications\.js\?v=/);
+  assert.match(main, /\/app\.js/);
+  assert.match(settings, /\/notifications\.js\?v=/);
+});
+
 test("settings exposes notification start and visible-delivery confirmation controls", () => {
   const html = fs.readFileSync("public/settings.html", "utf8");
   assert.match(html, /id="settingsNotificationTest"/);
