@@ -74,6 +74,14 @@ function bearerToken(req:Request){
   return match ? match[1].trim() : "";
 }
 
+function statusFastRpcUnavailable(error:any){
+  return error?.code==="SUPABASE_DATA_CORE_RPC_FAILED";
+}
+
+function statusFastWorkspaceMissing(error:any){
+  return statusFastRpcUnavailable(error) && /PERSONAL_WORKSPACE_MISSING/i.test(String(error?.message || ""));
+}
+
 function personalConnection(req:Request){
   const token=(req.headers.get("x-notion-token") || "").trim();
   const dataSourceId=(req.headers.get("x-notion-data-source-id") || "").trim();
@@ -166,11 +174,40 @@ export default async (req:Request,_context:Context)=>{
     let body:any;
     try{ body=await req.json(); }catch{ return json(400,{error:"요청 형식이 올바르지 않습니다."}); }
     try{
+      const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
+      const statusWriter=createWorklogDataCoreBriefingStatus({client});
       const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
-      const workspaceContext=await resolver.resolve(accessToken);
-      const statusWriter=createWorklogDataCoreBriefingStatus({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
-      const result=await statusWriter.updateStatus({recordId:body.recordId,status:body.status},workspaceContext);
-      return json(200,{ok:true,mode:"data_core",...result});
+      let result:any=null;
+      let workspaceContext:any=null;
+      let fastPath=false;
+
+      try{
+        result=await statusWriter.updateStatusFast({recordId:body.recordId,status:body.status});
+        fastPath=true;
+      }catch(fastError:any){
+        if(fastError?.code==="WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID" || fastError?.code==="WORKLOG_DATA_CORE_STATUS_INVALID" || fastError?.code==="WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN") throw fastError;
+        if(statusFastWorkspaceMissing(fastError)){
+          workspaceContext=await resolver.resolve(accessToken);
+          try{
+            result=await statusWriter.updateStatusFast({recordId:body.recordId,status:body.status});
+            fastPath=true;
+          }catch(retryError:any){
+            if(retryError?.code==="WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID" || retryError?.code==="WORKLOG_DATA_CORE_STATUS_INVALID" || retryError?.code==="WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN") throw retryError;
+            if(!statusFastRpcUnavailable(retryError)) throw retryError;
+            console.warn("Data Core briefing status fast retry failed; using legacy path",String(retryError?.message || "unknown").slice(0,120));
+          }
+        }else if(statusFastRpcUnavailable(fastError)){
+          console.warn("Data Core briefing status fast path unavailable; using legacy path",String(fastError?.message || "unknown").slice(0,120));
+        }else{
+          throw fastError;
+        }
+      }
+
+      if(!result){
+        if(!workspaceContext) workspaceContext=await resolver.resolve(accessToken);
+        result=await statusWriter.updateStatus({recordId:body.recordId,status:body.status},workspaceContext);
+      }
+      return json(200,{ok:true,mode:"data_core",...result,dataCoreFastPath:fastPath});
     }catch(error:any){
       if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 상태를 변경해주세요."});
       if(error?.code==="WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_STATUS_INVALID") return json(400,{error:error.message});
