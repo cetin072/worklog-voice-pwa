@@ -6,6 +6,7 @@
   const CONFIG_STALE_MS = 24 * 60 * 60 * 1000;
   let cachedConfig = null;
   let configRefreshPromise = null;
+  let sessionRefreshPromise = null;
 
   function normalizeSession(session, fallbackRefreshToken = "") {
     if (!session || typeof session.access_token !== "string" || !session.access_token) return null;
@@ -208,15 +209,23 @@
   }
 
   async function refreshSession() {
-    const previous = readSession();
-    if (!previous?.refresh_token) throw new Error("다시 로그인해 주세요.");
-    const data = await request("/auth/v1/token?grant_type=refresh_token", {
-      method: "POST",
-      body: JSON.stringify({ refresh_token: previous.refresh_token })
-    });
-    const saved = saveSession(data, previous.refresh_token);
-    if (!saved) throw new Error("로그인 세션을 갱신하지 못했습니다.");
-    return saved;
+    if (sessionRefreshPromise) return sessionRefreshPromise;
+    sessionRefreshPromise = (async () => {
+      const previous = readSession();
+      if (!previous?.refresh_token) throw new Error("다시 로그인해 주세요.");
+      const data = await request("/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: previous.refresh_token })
+      });
+      const saved = saveSession(data, previous.refresh_token);
+      if (!saved) throw new Error("로그인 세션을 갱신하지 못했습니다.");
+      return saved;
+    })();
+    try {
+      return await sessionRefreshPromise;
+    } finally {
+      sessionRefreshPromise = null;
+    }
   }
 
   async function bootstrapPersonalWorkspace() {
