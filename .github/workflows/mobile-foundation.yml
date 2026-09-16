@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   typecheck:
@@ -41,6 +41,17 @@ jobs:
         run: npm run typecheck
       - name: Run mobile foundation contract tests
         run: node --test tests/mobile-foundation.test.mjs
+      - name: Commit resolved mobile lockfile once
+        if: github.event_name == 'push'
+        run: |
+          if [ -z "$(git status --porcelain -- mobile/package-lock.json)" ]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/package-lock.json
+          git commit -m "chore: lock mobile dependencies"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
       - name: Upload resolved mobile lockfile for audit
         if: always()
         uses: actions/upload-artifact@v4
