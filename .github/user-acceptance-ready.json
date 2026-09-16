@@ -21,7 +21,7 @@
       "command": "node scripts/uar-preview-runtime.mjs"
     },
     "representative_smoke": {
-      "command": "node scripts/uar-representative-smoke.mjs"
+      "command": "node scripts/uar-representative-smoke.mjs && node scripts/uar-search-detail-smoke.mjs"
     },
     "visual_stability": {
       "surface_policy": "representative",
@@ -32,6 +32,7 @@
     "tests/client-stability.test.mjs",
     "tests/core-functions.test.mjs",
     "tests/briefing-v2.test.mjs",
-    "scripts/uar-visual-stability.mjs"
+    "scripts/uar-visual-stability.mjs",
+    "scripts/uar-search-detail-smoke.mjs"
   ]
 }
