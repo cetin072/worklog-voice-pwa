@@ -1,4 +1,4 @@
-const CACHE="worklog-v39-briefing-inline-undo";
+const CACHE="worklog-v38-unified-launch-splash";
 const FILES=["/","/index.html","/settings.html","/patch-notes.html","/setup.html","/styles.css","/distribution.css","/settings.css","/patch-notes.css","/briefing.css","/briefing-edit.css","/home-ux.css","/auth.js","/platform-auth.js","/platform-auth-ui.js","/onboarding.js","/notifications.js","/settings.js","/main-ui-state.js","/push-settings.js","/morning-push-settings.js","/request-id.js","/app.js","/inference-guard.js","/quick-save.js","/manual-input.js","/briefing-legacy-loader.js","/briefing.js","/briefing-v2.js","/briefing-v2-expand-state.js","/briefing-edit.js","/home-ux.js","/setup.js","/manifest.webmanifest","/icons/icon-192-v3.png","/icons/icon-512-v3.png","/icons/icon-maskable-512-v3.png","/icons/icon-192-v4.png","/icons/icon-512-v4.png","/icons/icon-maskable-512-v4.png"];
 const STATIC_PATHS=new Set(FILES.filter(path=>!path.endsWith(".html") && path!=="/"));
 const FRESH_BRIEFING_PATHS=new Set(["/briefing.css","/briefing-v2.js"]);
