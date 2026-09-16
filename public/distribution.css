@@ -1,4 +1,11 @@
 body.platform-auth-loading .core-app-card{display:none}
+body.platform-auth-loading .welcome-card{position:fixed;inset:0;z-index:2000;width:100%;min-height:100vh;min-height:100dvh;margin:0;padding:calc(28px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom));border-radius:0;box-shadow:none;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#111827;color:#fff;text-align:center}
+body.platform-auth-loading .welcome-icon{order:1;width:104px;height:104px;flex:0 0 104px;margin:0 0 26px;border-radius:28px;background:transparent url("/icons/icon-192-v3.png") center/104px 104px no-repeat;font-size:0;box-shadow:0 18px 48px rgba(0,0,0,.28)}
+body.platform-auth-loading .welcome-card h2{order:2;margin:0;font-size:0;line-height:1}
+body.platform-auth-loading .welcome-card h2::after{content:"업무수첩";display:block;font-size:36px;line-height:1.15;letter-spacing:-.04em;font-weight:850;color:#fff}
+body.platform-auth-loading .welcome-eyebrow{order:3;max-width:260px;margin:14px 0 0;color:#e5e7eb;font-size:20px;line-height:1.45;font-weight:750;letter-spacing:-.025em;text-align:center}
+body.platform-auth-loading .welcome-copy,body.platform-auth-loading .welcome-benefits{display:none}
+body.platform-auth-loading header,body.platform-auth-loading footer{visibility:hidden}
 body.platform-signed-out .core-app-card{display:none}
 body.platform-signed-in .welcome-card,body.platform-session-hint .welcome-card,body.platform-legacy-user .welcome-card,body.platform-auth-unavailable .welcome-card{display:none}
 .header-actions{display:flex;align-items:center;gap:8px}
