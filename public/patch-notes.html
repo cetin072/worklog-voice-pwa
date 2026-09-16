@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192-v3.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192-v3.png">
+  <title>패치 노트 · 업무수첩</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/patch-notes.css?v=20260916-1">
+</head>
+<body class="patch-notes-body">
+  <main class="app patch-notes-page">
+    <header class="patch-notes-header">
+      <div>
+        <p class="eyebrow">업무수첩 업데이트 내역</p>
+        <h1>패치 노트</h1>
+      </div>
+      <a class="patch-notes-back" href="/settings.html">설정으로</a>
+    </header>
+
+    <section class="card patch-notes-intro">
+      <strong>실제로 반영된 변경만 정리합니다.</strong>
+      <p>GitHub <code>main</code>에 병합된 기능을 기준으로 날짜별 핵심 변화를 정리했습니다. 개발 중이거나 병합되지 않은 실험 기능은 완료 기능으로 표시하지 않습니다.</p>
+    </section>
+
+    <section class="patch-notes-timeline" aria-label="날짜별 업데이트 내역">
+      <article class="card patch-note" data-date="2026-09-16">
+        <div class="patch-note-head"><div><span class="patch-note-latest">최신</span><h2>2026. 9. 16.</h2></div><p>홈·검색·알림·기록 정제</p></div>
+        <ul>
+          <li><strong>홈 UX 0.2</strong> — 상단에 오늘의 브리핑을 두고, 핵심 음성 기록 버튼을 하단 중앙 엄지 영역으로 옮겼습니다.</li>
+          <li><strong>통합 검색 0.1</strong> — 지난 업무를 키워드로 찾을 수 있는 모바일 검색 화면을 추가했습니다.</li>
+          <li><strong>저장 즉시 반영</strong> — 업무를 저장하면 브리핑과 일정이 바로 갱신되고, 필요하면 브리핑을 리셋해 최신 상태를 다시 읽을 수 있습니다.</li>
+          <li><strong>일정 자동 연결</strong> — 날짜와 시간이 분명한 약속·미팅·방문·통화는 업무 저장과 함께 일정으로 연결할 수 있게 했습니다.</li>
+          <li><strong>알림 확장</strong> — 오전 8:30 오늘 브리핑과 오후 4:30 미완료 업무 Web Push를 추가하고 실제 문구를 즉시 테스트할 수 있게 했습니다.</li>
+          <li><strong>기록 정제 0.1</strong> — 원문은 그대로 보존하면서 검색과 후속 정리에 사용할 정제 결과를 별도로 관리하는 기반을 추가했습니다.</li>
+          <li><strong>속도·안정성</strong> — 앱 시작, 인증 설정, 브리핑 조회, 정적 자산 캐시, 업무 저장 경로를 단계적으로 단축하고 stale 세션 복구를 보강했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-15">
+        <div class="patch-note-head"><div><h2>2026. 9. 15.</h2></div><p>로그인·설정·Data Core</p></div>
+        <ul>
+          <li><strong>Google 로그인</strong>을 기본 시작 방법으로 추가하고 이메일 로그인도 함께 유지했습니다.</li>
+          <li>신규 사용자를 위한 첫 화면, 공유 썸네일, 독립 설정 페이지와 앱 설치 메뉴를 추가했습니다.</li>
+          <li>로그인 후 계정 카드를 숨기고 로그아웃을 설정으로 이동해 홈을 업무 중심으로 단순화했습니다.</li>
+          <li>신규 Platform 사용자의 첫 진입에서 legacy Notion 팝업이 나타나지 않도록 정리했습니다.</li>
+          <li>직접 입력 화면을 텍스트 + 저장 중심으로 단순화하고 브리핑 전체 접기 옵션을 추가했습니다.</li>
+          <li>업무수첩의 구조화 데이터 기반을 Supabase Data Core 중심으로 전환할 수 있는 Production 준비·활성화 기록을 완료했습니다.</li>
+          <li>설정에 업무수첩 플랫폼 소개와 향후 알림·문서·통화·회의 모듈 로드맵을 추가했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-14">
+        <div class="patch-note-head"><div><h2>2026. 9. 14.</h2></div><p>Platform V1 기반</p></div>
+        <ul>
+          <li>Data Core의 Workspace, 업무기록, 일정, 원본 참조, 후보 데이터와 사용자별 RLS 격리 구조를 구축했습니다.</li>
+          <li>Supabase 로그인 사용자의 Personal Workspace 자동 생성과 Data Core 저장 경로를 추가했습니다.</li>
+          <li>Briefing V2가 Data Core 업무·일정을 읽고 완료/되돌리기를 처리할 수 있게 했습니다.</li>
+          <li>일정 후보를 실제 일정으로 안전하게 확정하는 공통 경계를 추가했습니다.</li>
+          <li>통화 처리에서 공통 idempotency, processing job, retry/checkpoint, storage 경계를 재사용하기 시작했습니다.</li>
+          <li>Notion 연결 안내를 초보자 기준으로 정리하고 카카오 브리핑 회차를 오전 8시 / 오후 2시 체계로 재정리했습니다.</li>
+          <li>User Acceptance Ready와 모바일 시각 안정성 검사를 도입해 Preview 검수 기준을 강화했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-13">
+        <div class="patch-note-head"><div><h2>2026. 9. 13.</h2></div><p>제품·모듈 아키텍처</p></div>
+        <ul>
+          <li>업무수첩 프로젝트 헌장과 모듈 아키텍처 V1을 확정했습니다.</li>
+          <li><strong>Standalone-first</strong>, Local-first 원본, 얇은 App Shell, 공통 Result/Adapter 경계를 제품 원칙으로 정했습니다.</li>
+          <li>Platform Foundation과 Module Registry를 정리해 일정·통화·스캔·회의 같은 모듈이 공통 기반을 재사용하도록 했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-12">
+        <div class="patch-note-head"><div><h2>2026. 9. 12.</h2></div><p>브리핑 2.0·일정</p></div>
+        <ul>
+          <li><strong>브리핑 2.0</strong> — 지난 것, 오늘, 기다리는 것, 후속조치 필요를 한눈에 보는 모바일 상황판을 추가했습니다.</li>
+          <li>브리핑의 업무명을 앱에서 바로 수정하고 원본 업무명에도 반영할 수 있게 했습니다.</li>
+          <li>음성에 포함된 날짜·시간을 기한으로 구조화하고 업무명에서는 시간 표현을 정리하도록 했습니다.</li>
+          <li>`더 보기`로 펼친 브리핑 구역이 새로고침 뒤에도 유지되도록 개선했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-11">
+        <div class="patch-note-head"><div><h2>2026. 9. 11.</h2></div><p>홈 단순화</p></div>
+        <ul><li>메인 하단의 지인용 설정 카드를 제거해 기록 → 저장 → 브리핑 흐름에 집중하도록 화면을 정리했습니다.</li></ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-10">
+        <div class="patch-note-head"><div><h2>2026. 9. 10.</h2></div><p>업무수첩 이름·아이콘·품질</p></div>
+        <ul>
+          <li>앱 표시 이름을 <strong>업무수첩</strong>으로 통일했습니다.</li>
+          <li>Samsung/Android 홈 화면에서 아이콘 흰 외곽이 생기지 않도록 일반·maskable 아이콘을 정리했습니다.</li>
+          <li>시스템 브리핑 오선택 방지와 핵심 Function 자동 회귀 테스트를 강화했습니다.</li>
+          <li>npm lockfile을 추가해 빌드 결과를 더 재현 가능하게 만들었습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-09">
+        <div class="patch-note-head"><div><h2>2026. 9. 9.</h2></div><p>브리핑·카카오 안정화</p></div>
+        <ul>
+          <li>카카오 자동전송 실패 재시도와 부분 전송 이어보내기를 추가했습니다.</li>
+          <li>오래된 브리핑 경고, 수동 재전송 쿨다운, 중복 저장 방지와 Preview 실제 전송 차단을 강화했습니다.</li>
+          <li>사용자가 직접 선택한 기관·상태·유형을 자동 추론이 덮어쓰지 않도록 보호했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-07">
+        <div class="patch-note-head"><div><h2>2026. 9. 7.</h2></div><p>브리핑 회차 실험</p></div>
+        <ul><li>당시 오후 6시 브리핑·카카오 자동전송을 추가했습니다. 이후 9월 14일 오전 8시 / 오후 2시 체계로 재정리하면서 이 회차는 제거했습니다.</li></ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-05">
+        <div class="patch-note-head"><div><h2>2026. 9. 5.</h2></div><p>브리핑 확장</p></div>
+        <ul><li>일일 브리핑 우선 업무를 최대 10개로 늘리고 필요한 항목만 더 펼쳐볼 수 있게 했습니다.</li></ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-09-04">
+        <div class="patch-note-head"><div><h2>2026. 9. 4.</h2></div><p>개발 품질 기준</p></div>
+        <ul><li>공통 웹 아키텍처 표준과 경량 문서 로딩 정책을 저장소 작업 기준에 연결해 앱 안정성을 우선하는 개발 규칙을 정리했습니다.</li></ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-08-28">
+        <div class="patch-note-head"><div><h2>2026. 8. 28.</h2></div><p>카카오 브리핑</p></div>
+        <ul>
+          <li>업무 브리핑을 카카오톡 `나와의 채팅방`으로 보내는 기능과 자동전송을 추가했습니다.</li>
+          <li>메시지가 길면 여러 개로 나눠 전체 내용을 보내고 줄바꿈을 유지하도록 개선했습니다.</li>
+          <li>운영판 판별과 카카오 토큰·중복전송 상태 저장을 안정화했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-08-27">
+        <div class="patch-note-head"><div><h2>2026. 8. 27.</h2></div><p>오늘 브리핑·직접 입력</p></div>
+        <ul>
+          <li>앱 홈에 오늘 우선 업무, 오늘 일정, 14일 내 다가오는 일정을 보여주는 첫 오늘 브리핑을 추가했습니다.</li>
+          <li>키보드로 업무를 기록하는 <strong>직접 입력</strong> 기능을 추가했습니다.</li>
+          <li>개인 Notion을 연결해 별도 업무공간을 만드는 초기 온보딩을 추가했습니다.</li>
+          <li>브리핑 액션 문구를 `브리핑 다시 정리`로 단순화했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-08-25">
+        <div class="patch-note-head"><div><h2>2026. 8. 25.</h2></div><p>여러 업무 음성 저장</p></div>
+        <ul>
+          <li>`다음 업무`, `다음 건`, `그다음` 같은 명확한 전환어로 여러 업무를 각각 별도 기록으로 저장할 수 있게 했습니다.</li>
+          <li>각 분리 업무가 자기 문맥으로 상태·유형을 판단하도록 보강했습니다.</li>
+          <li>삼성 통화 텍스트 가져오기 실험을 잠시 추가했지만 같은 날 제거하고 핵심 음성 기록 안정화에 집중했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card patch-note" data-date="2026-08-24">
+        <div class="patch-note-head"><div><h2>2026. 8. 24.</h2></div><p>모바일 음성 기록 안정화</p></div>
+        <ul>
+          <li>잠시 침묵해도 자동 재시작하며 중지 전까지 계속 듣는 연속 음성 기록을 추가했습니다.</li>
+          <li>녹음 중 화면 꺼짐 방지와 작성 중 임시저장·재실행 복구를 추가했습니다.</li>
+          <li>반복 음성 조각을 중복 제거하고 마지막 음성을 확정한 뒤 저장하도록 개선했습니다.</li>
+          <li>저장 버튼을 마이크 가까이 이동한 뒤 `말하기 → 중지하기` 2탭 저장 흐름으로 단축했습니다.</li>
+          <li>저장 성공 진동·성공음과 실패 시 원문 보존을 강화했습니다.</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>기록 기준 · GitHub main에 실제 병합된 변경</footer>
+  </main>
+</body>
+</html>
