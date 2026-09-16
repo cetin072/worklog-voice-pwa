@@ -5,10 +5,13 @@ import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 
 test("service worker separates API, navigation, and static asset strategies", () => {
-  assert.match(source, /const CACHE="worklog-v38-unified-launch-splash"/);
+  assert.match(source, /const CACHE="worklog-v39-search-detail-safe"/);
   assert.match(source, /"\/morning-push-settings\.js"/);
   assert.match(source, /"\/home-ux\.css"/);
   assert.match(source, /"\/home-ux\.js"/);
+  assert.match(source, /"\/search\.css"/);
+  assert.match(source, /"\/search\.js"/);
+  assert.match(source, /"\/search-detail\.js"/);
   assert.match(source, /"\/icons\/icon-192-v4\.png"/);
   assert.match(source, /"\/icons\/icon-512-v4\.png"/);
   assert.match(source, /"\/icons\/icon-maskable-512-v4\.png"/);
