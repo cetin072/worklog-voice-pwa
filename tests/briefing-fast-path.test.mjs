@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createWorklogDataCoreBriefingSource } from "../netlify/shared/worklog-data-core-briefing-source.mjs";
 
-const migration = fs.readFileSync(new URL("../supabase/migrations/20260916085000_briefing_fast_path.sql", import.meta.url), "utf8");
+const migration = fs.readFileSync(new URL("../supabase/migrations/20260916000807_briefing_fast_path.sql", import.meta.url), "utf8");
 const fastFunction = fs.readFileSync(new URL("../netlify/functions/briefing-fast.mts", import.meta.url), "utf8");
 const loader = fs.readFileSync(new URL("../public/briefing-legacy-loader.js", import.meta.url), "utf8");
 const authUi = fs.readFileSync(new URL("../public/platform-auth-ui.js", import.meta.url), "utf8");
