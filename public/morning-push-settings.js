@@ -12,6 +12,8 @@
       morningStatus: document.getElementById("settingsMorningPushStatus"),
       detailToggle: document.getElementById("settingsMorningPushDetailEnabled"),
       detailStatus: document.getElementById("settingsMorningPushDetailStatus"),
+      previewButton: document.getElementById("settingsMorningPushPreview"),
+      previewStatus: document.getElementById("settingsMorningPushPreviewStatus"),
     };
   }
 
@@ -41,8 +43,34 @@
     return data;
   }
 
+  async function previewApi(subscriptionId) {
+    const auth = session();
+    if (!auth) {
+      const error = new Error("로그인 후 오늘 브리핑 알림을 테스트할 수 있습니다.");
+      error.code = "LOGIN_REQUIRED";
+      throw error;
+    }
+    const response = await fetch("/api/morning-push-preview", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        authorization: `Bearer ${auth.access_token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ subscriptionId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(String(data?.message || "오늘 브리핑 알림을 보내지 못했습니다."));
+      error.code = String(data?.error || "MORNING_PUSH_PREVIEW_FAILED");
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+
   function render(data) {
-    const { morningToggle, morningStatus, detailToggle, detailStatus } = elements();
+    const { morningToggle, morningStatus, detailToggle, detailStatus, previewButton } = elements();
     current = {
       morningEnabled: Boolean(data?.morningEnabled),
       detailEnabled: data?.detailEnabled !== false,
@@ -57,6 +85,7 @@
       detailToggle.disabled = false;
       detailToggle.checked = current.detailEnabled;
     }
+    if (previewButton) previewButton.disabled = false;
 
     if (morningStatus) {
       if (current.morningEnabled && current.connected) {
@@ -75,7 +104,7 @@
   }
 
   function renderLoggedOut() {
-    const { morningToggle, morningStatus, detailToggle, detailStatus } = elements();
+    const { morningToggle, morningStatus, detailToggle, detailStatus, previewButton, previewStatus } = elements();
     if (morningToggle) {
       morningToggle.checked = false;
       morningToggle.disabled = true;
@@ -84,12 +113,14 @@
       detailToggle.checked = true;
       detailToggle.disabled = true;
     }
+    if (previewButton) previewButton.disabled = true;
     if (morningStatus) morningStatus.textContent = "로그인 후 아침 업무 알림을 켤 수 있습니다.";
     if (detailStatus) detailStatus.textContent = "로그인 후 알림 내용 표시 방식을 선택할 수 있습니다.";
+    if (previewStatus) previewStatus.textContent = "로그인 후 실제 오늘 브리핑 문구를 받아볼 수 있습니다.";
   }
 
   async function load() {
-    const { morningToggle, morningStatus, detailToggle } = elements();
+    const { morningToggle, morningStatus, detailToggle, previewButton } = elements();
     if (!morningToggle) return;
     if (!session()) {
       renderLoggedOut();
@@ -97,6 +128,7 @@
     }
     morningToggle.disabled = true;
     if (detailToggle) detailToggle.disabled = true;
+    if (previewButton) previewButton.disabled = true;
     if (morningStatus) morningStatus.textContent = "알림 설정을 확인하는 중입니다…";
     try {
       render(await apiJson("GET"));
@@ -120,8 +152,31 @@
     }
   }
 
+  async function sendMorningPreview() {
+    const { previewButton, previewStatus } = elements();
+    if (!previewButton) return;
+    previewButton.disabled = true;
+    if (previewStatus) previewStatus.textContent = "현재 Supabase 업무·일정으로 오늘 브리핑 알림을 만드는 중입니다…";
+    try {
+      const notifications = window.WorklogNotifications;
+      if (!notifications?.ensureServerPushSubscription) throw new Error("서버 알림 기능을 불러오지 못했습니다.");
+      const connected = await notifications.ensureServerPushSubscription();
+      if (!connected?.subscriptionId) throw new Error("이 기기의 서버 알림 구독을 확인하지 못했습니다.");
+      const result = await previewApi(connected.subscriptionId);
+      if (result?.empty || !result?.delivered) {
+        if (previewStatus) previewStatus.textContent = String(result?.message || "오늘은 보낼 브리핑 업무나 일정이 없습니다.");
+      } else if (previewStatus) {
+        previewStatus.textContent = "전송 완료 · 지금 도착한 알림이 실제 08:30 브리핑과 같은 문구 형식입니다.";
+      }
+    } catch (error) {
+      if (previewStatus) previewStatus.textContent = String(error?.message || "오늘 브리핑 알림 테스트에 실패했습니다.");
+    } finally {
+      previewButton.disabled = false;
+    }
+  }
+
   function wire() {
-    const { morningToggle, detailToggle, morningStatus } = elements();
+    const { morningToggle, detailToggle, morningStatus, previewButton } = elements();
     if (!morningToggle) return;
 
     morningToggle.addEventListener("change", async () => {
@@ -149,6 +204,7 @@
       });
     }
 
+    previewButton?.addEventListener("click", sendMorningPreview);
     load();
   }
 
