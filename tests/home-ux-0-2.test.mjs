@@ -50,14 +50,33 @@ test("one mic CTA owns idle and recording-end labels", () => {
   assert.match(source, /MutationObserver\(syncMicState\)/);
 });
 
-test("compact briefing reuses rendered Briefing V2 instead of adding another API", () => {
+test("compact briefing reuses rendered Briefing V2 and keeps follow-up as a secondary signal", () => {
   const source = read("public/home-ux.js");
   assert.match(source, /getElementById\("briefingV2"\)|\$\("briefingV2"\)/);
   assert.match(source, /\.is-overdue b/);
-  assert.match(source, /\.is-followup b/);
+  assert.match(source, /dataset\.followUpCount/);
   assert.match(source, /\.briefing-v2-schedules/);
+  assert.doesNotMatch(source, /\.is-followup b/);
   assert.doesNotMatch(source, /fetch\s*\(/);
   assert.doesNotMatch(source, /\/api\//);
+});
+
+test("full briefing uses one due-date axis while status and follow-up stay as task badges", () => {
+  const source = read("public/briefing-v2.js");
+  const css = read("public/briefing.css");
+  assert.match(source, /지난 것/);
+  assert.match(source, /오늘 할 일/);
+  assert.match(source, /다가오는 업무/);
+  assert.match(source, /기한 없는 업무/);
+  assert.match(source, /briefing-tag is-waiting/);
+  assert.match(source, /briefing-tag is-review/);
+  assert.match(source, /briefing-tag is-followup/);
+  assert.match(source, /root\.dataset\.followUpCount/);
+  assert.doesNotMatch(source, /기다리는 것/);
+  assert.doesNotMatch(source, /sectionHtml\("followUp"/);
+  assert.match(css, /\.briefing-tag\.is-waiting/);
+  assert.match(css, /\.briefing-tag\.is-review/);
+  assert.match(css, /\.briefing-tag\.is-followup/);
 });
 
 test("full briefing stays available behind the compact summary", () => {
@@ -76,7 +95,9 @@ test("Home UX assets and product records are wired into the app", () => {
   const decisions = read("docs/PRODUCT_DECISIONS.md");
 
   assert.match(html, /\/home-ux\.css\?v=20260916-1/);
-  assert.match(html, /\/home-ux\.js\?v=20260916-1/);
+  assert.match(html, /\/home-ux\.js\?v=20260916-2/);
+  assert.match(html, /\/briefing\.css\?v=20260916-2/);
+  assert.match(html, /\/briefing-v2\.js\?v=20260916-3/);
   assert.ok(sw.includes('"/home-ux.css"'));
   assert.ok(sw.includes('"/home-ux.js"'));
   assert.match(changelog, /오늘의 브리핑/);
