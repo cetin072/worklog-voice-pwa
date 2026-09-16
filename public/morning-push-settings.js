@@ -58,32 +58,6 @@
     return data;
   }
 
-  async function previewApi(subscriptionId) {
-    const auth = session();
-    if (!auth) {
-      const error = new Error("로그인 후 오늘 브리핑 알림을 테스트할 수 있습니다.");
-      error.code = "LOGIN_REQUIRED";
-      throw error;
-    }
-    const response = await fetch("/api/morning-push-preview", {
-      method: "POST",
-      cache: "no-store",
-      headers: {
-        authorization: `Bearer ${auth.access_token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ subscriptionId }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(String(data?.message || "오늘 브리핑 알림을 보내지 못했습니다."));
-      error.code = String(data?.error || "MORNING_PUSH_PREVIEW_FAILED");
-      error.status = response.status;
-      throw error;
-    }
-    return data;
-  }
-
   function render(data) {
     const { morningToggle, morningStatus, detailToggle, detailStatus, previewButton } = elements();
     current = {
@@ -174,14 +148,14 @@
     if (previewStatus) previewStatus.textContent = "현재 Supabase 업무·일정으로 오늘 브리핑 알림을 만드는 중입니다…";
     try {
       const notifications = window.WorklogNotifications;
-      if (!notifications?.ensureServerPushSubscription) throw new Error("서버 알림 기능을 불러오지 못했습니다.");
-      const connected = await notifications.ensureServerPushSubscription();
-      if (!connected?.subscriptionId) throw new Error("이 기기의 서버 알림 구독을 확인하지 못했습니다.");
-      const result = await previewApi(connected.subscriptionId);
+      if (!notifications?.sendMorningPreviewPush) throw new Error("서버 알림 기능을 불러오지 못했습니다.");
+      const result = await notifications.sendMorningPreviewPush();
       if (result?.empty || !result?.delivered) {
         if (previewStatus) previewStatus.textContent = String(result?.message || "오늘은 보낼 브리핑 업무나 일정이 없습니다.");
       } else if (previewStatus) {
-        previewStatus.textContent = "전송 완료 · 지금 도착한 알림이 실제 08:30 브리핑과 같은 문구 형식입니다.";
+        previewStatus.textContent = result?.recovered
+          ? "만료된 기기 구독을 자동으로 다시 연결하고 전송했습니다. 지금 도착한 알림이 실제 08:30 브리핑과 같은 문구 형식입니다."
+          : "전송 완료 · 지금 도착한 알림이 실제 08:30 브리핑과 같은 문구 형식입니다.";
       }
     } catch (error) {
       if (previewStatus) previewStatus.textContent = String(error?.message || "오늘 브리핑 알림 테스트에 실패했습니다.");
