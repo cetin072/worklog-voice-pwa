@@ -2,6 +2,7 @@ export const RECORD_NORMALIZATION_VERSION = "record-normalization-v1";
 
 const SAFE_ENTITY_TYPES = new Set(["institution", "organization", "project", "person", "other"]);
 const AUTO_REPLACE_TYPES = new Set(["institution", "organization", "project"]);
+const TRUSTED_METADATA_SOURCES = new Set(["user_selected", "user_confirmed"]);
 
 function normalizationError(code, message) {
   const error = new Error(message);
@@ -101,6 +102,23 @@ function sourceForRecord(record = {}) {
   return { original: fallback, sourceQuality: fallback ? "fallback_content" : "unknown" };
 }
 
+function recordMetadata(record = {}) {
+  const metadata = record?.metadata;
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {};
+}
+
+function metadataFieldSource(record, field) {
+  const metadata = recordMetadata(record);
+  const nested = metadata.fieldProvenance ?? metadata.field_provenance;
+  const nestedValue = nested && typeof nested === "object" && !Array.isArray(nested) ? nested[field] : "";
+  const direct = nestedValue ?? metadata[`${field}Source`] ?? metadata[`${field}_source`];
+  const source = compactText(direct, 40).toLowerCase();
+  if (source) return source;
+  const legacySource = compactText(metadata.legacy_source ?? metadata.legacySource, 40).toLowerCase();
+  if (legacySource === "notion") return "legacy_unverified";
+  return "unverified";
+}
+
 function dictionaryMatches(text, dictionary) {
   const matches = [];
   for (const entry of dictionary) {
@@ -128,8 +146,13 @@ export function normalizeWorkRecord(record = {}, options = {}) {
   let needsReview = sourceQuality !== "original";
 
   const institution = compactText(record.institution, 500);
+  const institutionSource = institution ? metadataFieldSource(record, "institution") : "unset";
+  const institutionTrusted = TRUSTED_METADATA_SOURCES.has(institutionSource);
   let normalizedInstitution = institution;
-  if (institution) aliases.push(institution);
+  let normalizedInstitutionSource = institutionSource;
+  let hasDerivedAliases = false;
+  if (institution && institutionTrusted) aliases.push(institution);
+  if (institution && !institutionTrusted) needsReview = true;
 
   for (const match of matches) {
     const { entry, matchedAliases } = match;
@@ -138,6 +161,7 @@ export function normalizeWorkRecord(record = {}, options = {}) {
       for (const alias of matchedAliases) normalizedText = literalReplaceAll(normalizedText, alias, entry.canonical);
       if (entry.entityType === "institution" || entry.entityType === "organization") {
         normalizedInstitution = entry.canonical;
+        normalizedInstitutionSource = "auto_derived";
       }
     } else if (proposed) {
       // Keep uncertain/person-name source text untouched and surface the canonical proposal for review/search only.
@@ -146,6 +170,7 @@ export function normalizeWorkRecord(record = {}, options = {}) {
     if (entry.requiresReview || entry.confidence < 0.9) needsReview = true;
     confidence = Math.min(confidence, entry.confidence);
     aliases.push(entry.canonical, ...matchedAliases);
+    hasDerivedAliases = true;
     entities.push(Object.freeze({
       type: entry.entityType,
       canonical: entry.canonical,
@@ -159,6 +184,13 @@ export function normalizeWorkRecord(record = {}, options = {}) {
   const reviewState = needsReview ? "needs_review" : "unreviewed";
   const dueAt = compactText(record.due_at ?? record.dueAt, 64) || null;
   const followUp = compactText(record.follow_up ?? record.followUp, 5000) || null;
+  const searchAliasSource = aliases.length === 0
+    ? "unset"
+    : hasDerivedAliases
+      ? "auto_derived"
+      : institutionTrusted
+        ? institutionSource
+        : "unverified";
 
   return Object.freeze({
     workRecordId,
@@ -173,6 +205,10 @@ export function normalizeWorkRecord(record = {}, options = {}) {
       followUp,
       entities: Object.freeze(entities),
       sourceQuality,
+      provenance: Object.freeze({
+        institution: normalizedInstitutionSource,
+        searchAliases: searchAliasSource,
+      }),
     }),
     searchAliases: Object.freeze(uniqueAliases(aliases)),
     confidence: Number(confidence.toFixed(4)),
