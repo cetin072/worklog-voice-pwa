@@ -4,14 +4,20 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const settings = read("public/settings.html");
+const settingsCss = read("public/settings.css");
 const patchNotes = read("public/patch-notes.html");
 const patchCss = read("public/patch-notes.css");
 const sw = read("public/sw.js");
 
-test("settings exposes the user-facing patch notes entry", () => {
-  assert.match(settings, /id="settingsPatchNotes"/);
-  assert.match(settings, /href="\/patch-notes\.html"/);
-  assert.match(settings, /패치 노트 확인하기/);
+test("settings exposes patch notes beside the top-right completion action", () => {
+  assert.match(settings, /class="settings-header-actions"[\s\S]*id="settingsPatchNotes"[\s\S]*class="settings-close"/);
+  assert.match(settings, /id="settingsPatchNotes"[^>]+href="\/patch-notes\.html"[^>]+aria-label="패치 노트"[^>]+title="패치 노트"/);
+  assert.match(settings, /id="settingsPatchNotes"[^>]*>📝<\/a>/);
+  assert.doesNotMatch(settings, /<h2>업무수첩 정보<\/h2>/);
+  assert.doesNotMatch(settings, />패치 노트 확인하기<\/a>/);
+  assert.match(settings, /settings\.css\?v=20260916-3/);
+  assert.match(settingsCss, /\.settings-header-actions\{display:flex;align-items:center;gap:8px\}/);
+  assert.match(settingsCss, /\.settings-patch-notes-shortcut\{[^}]*width:42px;height:42px/);
 });
 
 test("patch notes only present shipped-history framing and current briefing/edit changes", () => {
