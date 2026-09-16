@@ -19,6 +19,8 @@
   let lastLoadedAt=0;
   let renderedMode="";
   let authRetryPending=false;
+  let pendingCompletions=0;
+  let backgroundSyncTimer=0;
 
   const nextTitle=title.cloneNode(true);
   title.replaceWith(nextTitle);
@@ -343,15 +345,118 @@
     return data;
   }
 
+  function readCount(node){
+    const value=Number(node?.textContent || 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function writeCount(node,value){
+    if(node) node.textContent=String(Math.max(0,Number(value) || 0));
+  }
+
+  function summaryTotal(){
+    return ["overdue","today","upcoming","undated"].reduce((total,kind)=>{
+      return total+readCount(root.querySelector(`.briefing-v2-summary .is-${kind} b`));
+    },0);
+  }
+
+  function syncMetaTotal(){
+    const total=summaryTotal();
+    meta.textContent=meta.textContent.replace(/미완료\s+(\d+)(건 이상|건)/,(_,count,suffix)=>`미완료 ${total}${suffix}`);
+  }
+
+  function syncOptimisticEmptyState(){
+    const total=summaryTotal();
+    let clear=root.querySelector('.briefing-v2-clear[data-optimistic-clear="true"]');
+    if(total===0 && !clear){
+      clear=document.createElement("p");
+      clear.className="briefing-v2-clear";
+      clear.dataset.optimisticClear="true";
+      clear.textContent="현재 미완료 업무가 없습니다.";
+      root.appendChild(clear);
+    }else if(total>0 && clear){
+      clear.remove();
+    }
+  }
+
+  function syncOptimisticSection(section){
+    if(!section) return;
+    const rows=[...section.querySelectorAll(".briefing-v2-list > li")].filter(row=>row.dataset.optimisticComplete!=="true");
+    const count=rows.length;
+    writeCount(section.querySelector(".briefing-v2-section-head h3 span"),count);
+    const toggle=section.querySelector(".briefing-v2-more-toggle");
+    const expanded=toggle?.getAttribute("aria-expanded")==="true";
+    rows.forEach((row,index)=>{ row.hidden=!expanded && index>=MAX_VISIBLE; });
+    if(toggle){
+      const extra=Math.max(0,count-MAX_VISIBLE);
+      toggle.hidden=extra===0;
+      toggle.textContent=expanded ? "접기" : `${extra}개 더 보기`;
+    }
+    section.hidden=count===0;
+  }
+
+  function beginOptimisticComplete(button){
+    const row=button.closest("li");
+    const section=button.closest(".briefing-v2-section");
+    const kind=section?.dataset.section || "";
+    if(!row || !section || !["overdue","today","upcoming","undated"].includes(kind)) return null;
+    const hadFollowUp=!!row.querySelector(".briefing-tag.is-followup");
+    row.dataset.optimisticComplete="true";
+    row.hidden=true;
+    const summary=root.querySelector(`.briefing-v2-summary .is-${kind} b`);
+    writeCount(summary,readCount(summary)-1);
+    if(hadFollowUp){
+      root.dataset.followUpCount=String(Math.max(0,Number(root.dataset.followUpCount || 0)-1));
+    }
+    syncOptimisticSection(section);
+    syncMetaTotal();
+    syncOptimisticEmptyState();
+    return {row,section,kind,hadFollowUp};
+  }
+
+  function rollbackOptimisticComplete(state){
+    if(!state?.row?.isConnected) return;
+    delete state.row.dataset.optimisticComplete;
+    const summary=root.querySelector(`.briefing-v2-summary .is-${state.kind} b`);
+    writeCount(summary,readCount(summary)+1);
+    if(state.hadFollowUp){
+      root.dataset.followUpCount=String(Math.max(0,Number(root.dataset.followUpCount || 0)+1));
+    }
+    state.section.hidden=false;
+    syncOptimisticSection(state.section);
+    syncMetaTotal();
+    syncOptimisticEmptyState();
+  }
+
+  function syncV2InBackground(){
+    clearTimeout(backgroundSyncTimer);
+    backgroundSyncTimer=window.setTimeout(async()=>{
+      if(IS_PREVIEW_DEMO) return;
+      if(pendingCompletions>0){
+        syncV2InBackground();
+        return;
+      }
+      if(loading) return;
+      try{
+        const data=await fetchV2({ask:false});
+        render(data);
+        lastLoadedAt=Date.now();
+      }catch{}
+    },120);
+  }
+
   function showUndoNotice(pageId,itemTitle){
     let bar=$("briefingV2UndoBar");
     if(!bar){
       bar=document.createElement("div");
       bar.id="briefingV2UndoBar";
       bar.className="briefing-undo-bar";
+      bar.setAttribute("role","status");
+      bar.setAttribute("aria-live","polite");
       document.body.appendChild(bar);
     }
-    bar.innerHTML=`<span>${escapeHtml(itemTitle)} 완료 처리</span><button type="button" data-v2-undo="${escapeHtml(pageId)}">실행 취소</button>`;
+    bar.setAttribute("aria-label",`${itemTitle} 완료 처리됨. 실행 취소 가능`);
+    bar.innerHTML=`<span>완료됨</span><button type="button" data-v2-undo="${escapeHtml(pageId)}">실행 취소</button>`;
     bar.classList.add("show");
     clearTimeout(bar._hideTimer);
     bar._hideTimer=setTimeout(()=>bar.classList.remove("show"),8000);
@@ -361,20 +466,28 @@
     if(IS_PREVIEW_DEMO || loading || button.disabled) return;
     const pageId=button.dataset.pageId || "";
     const itemTitle=button.dataset.title || "업무";
+    const fallbackStatus=button.dataset.status || "";
     if(!pageId) return;
+    const optimisticState=beginOptimisticComplete(button);
     button.disabled=true;
     button.textContent="처리 중";
+    pendingCompletions+=1;
+    let saved=false;
     try{
       const data=await updateTaskStatus(pageId,"완료");
-      const previousStatus=renderedMode==="data_core" ? button.dataset.status : data.previousStatus;
+      const previousStatus=renderedMode==="data_core" ? fallbackStatus : (data.previousStatus || fallbackStatus);
       if(previousStatus && previousStatus!=="완료") saveUndoState(pageId,previousStatus,itemTitle);
-      await refreshV2({ask:false});
       showUndoNotice(pageId,itemTitle);
+      saved=true;
     }catch(err){
+      rollbackOptimisticComplete(optimisticState);
       error.textContent=err?.message || "완료 처리에 실패했습니다.";
       card.classList.add("has-error");
       button.disabled=false;
       button.textContent="완료";
+    }finally{
+      pendingCompletions=Math.max(0,pendingCompletions-1);
+      if(saved) syncV2InBackground();
     }
   }
 
