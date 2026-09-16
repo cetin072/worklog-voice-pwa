@@ -65,10 +65,19 @@ for (const expected of requiredScripts) {
 }
 
 const homeUxCss = fs.readFileSync(path.join(root, 'public', 'home-ux.css'), 'utf8');
-if (!/\.mic\{[^}]*position:fixed/.test(homeUxCss)
-  || !/\.mic\{[^}]*left:50%/.test(homeUxCss)
-  || !homeUxCss.includes('safe-area-inset-bottom')) {
+if (!/\.voice-quick-dock\{[^}]*position:fixed/.test(homeUxCss)
+  || !/\.voice-quick-dock\{[^}]*left:50%/.test(homeUxCss)
+  || !homeUxCss.includes('safe-area-inset-bottom')
+  || !/\.voice-quick-dock \.mic\{[^}]*position:absolute/.test(homeUxCss)) {
   throw new Error('UAR_UI_CONTRACT_THUMB_FIRST_MIC_MISSING');
+}
+
+const homeUxScript = fs.readFileSync(path.join(root, 'public', 'home-ux.js'), 'utf8');
+for (const token of ['voiceQuickDock', 'voiceDockTimer', 'voiceDockCancel', 'voiceDockManual', '취소', '메모']) {
+  if (!homeUxScript.includes(token)) throw new Error(`UAR_UI_CONTRACT_VOICE_QUICK_DOCK_MISSING:${token}`);
+}
+if (!homeUxScript.includes('$("clear")?.click()') || !homeUxScript.includes('$("manualEntry")?.click()')) {
+  throw new Error('UAR_UI_CONTRACT_VOICE_QUICK_DOCK_REUSE_MISSING');
 }
 
 const legacyLoaderPath = path.join(root, 'public', 'briefing-legacy-loader.js');
