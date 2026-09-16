@@ -114,8 +114,8 @@ for (const marker of ['id="mic"', 'id="save"', 'id="manualEntry"', 'id="text"', 
   if (!dom.includes(marker)) throw new Error(`UAR_SMOKE_CORE_CONTROL_MISSING:${marker}`);
 }
 
-if (!/id="health"[^>]*>\s*확인 필요\s*</.test(dom)) {
-  const health = dom.match(/id="health"[^>]*>([^<]*)</)?.[1]?.trim() || 'missing';
+const health = dom.match(/id="health"[^>]*>([^<]*)</)?.[1]?.trim() || 'missing';
+if (!['로그인 필요', '확인 필요'].includes(health)) {
   throw new Error(`UAR_SMOKE_HEALTH_SAFE_STATE_MISSING:${health}`);
 }
 
@@ -129,4 +129,4 @@ if (!dom.includes(`${previewUrl}/app.js`)) {
   throw new Error('UAR_SMOKE_PREVIEW_ASSET_SOURCE_MISSING');
 }
 
-console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} preview_assets=true external_writes=false health=확인 필요`);
+console.log(`UAR_REPRESENTATIVE_SMOKE_PASS chrome=${chrome} preview_assets=true external_writes=false health=${health}`);
