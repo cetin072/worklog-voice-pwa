@@ -27,10 +27,12 @@ test("home puts the daily briefing before capture support content", () => {
 
 test("primary voice capture stays in the lower-center thumb reach zone", () => {
   const css = read("public/home-ux.css");
-  assert.match(css, /\.mic\{[^}]*position:fixed/);
-  assert.match(css, /\.mic\{[^}]*left:50%/);
-  assert.match(css, /\.mic\{[^}]*bottom:calc\([^)]*env\(safe-area-inset-bottom\)/);
-  assert.match(css, /\.mic\{[^}]*transform:translateX\(-50%\)/);
+  assert.match(css, /\.voice-quick-dock\{[^}]*position:fixed/);
+  assert.match(css, /\.voice-quick-dock\{[^}]*left:50%/);
+  assert.match(css, /\.voice-quick-dock\{[^}]*bottom:calc\([^)]*env\(safe-area-inset-bottom\)/);
+  assert.match(css, /\.voice-quick-dock\{[^}]*transform:translateX\(-50%\)/);
+  assert.match(css, /\.voice-quick-dock \.mic\{[^}]*left:50%/);
+  assert.match(css, /\.voice-quick-dock \.mic\{[^}]*bottom:0/);
   assert.match(css, /\.app\{[^}]*padding-bottom:calc\(/);
 
   const clearRule = css.match(/\.voice-card \.clear\{([^}]*)\}/)?.[1] || "";
