@@ -6,6 +6,21 @@
     return value?.access_token ? value : null;
   }
 
+  function ensurePreviewControls() {
+    if (document.getElementById("settingsMorningPushPreview")) return;
+    const body = document.querySelector("#settingsNotificationDiagnostics .settings-diagnostics-body");
+    if (!body) return;
+    const box = document.createElement("div");
+    box.className = "settings-future-note";
+    box.innerHTML = `
+      <strong>실제 아침 브리핑 문구 확인</strong>
+      <p class="settings-note">현재 Supabase 업무·일정으로 08:30 알림과 같은 문구를 지금 바로 보냅니다. 정식 아침 알림의 중복방지 이력에는 영향을 주지 않습니다.</p>
+      <button id="settingsMorningPushPreview" class="settings-action" type="button">오늘 브리핑 알림 보내보기</button>
+      <p id="settingsMorningPushPreviewStatus" class="settings-status" aria-live="polite"></p>
+    `;
+    body.prepend(box);
+  }
+
   function elements() {
     return {
       morningToggle: document.getElementById("settingsMorningPushEnabled"),
@@ -176,6 +191,7 @@
   }
 
   function wire() {
+    ensurePreviewControls();
     const { morningToggle, detailToggle, morningStatus, previewButton } = elements();
     if (!morningToggle) return;
 
