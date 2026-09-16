@@ -84,13 +84,15 @@ test("search client has mobile-facing loading empty error and pagination states 
   assert.match(css, /\.search-status\.error/);
 });
 
-test("home state loader adds search lazily without changing the core capture app shell", () => {
+test("home shell loads search deterministically before the state loader while keeping the fallback guard", () => {
   const html = read("public/index.html");
   const state = read("public/main-ui-state.js");
 
   assert.match(html, /id="mic"/);
   assert.match(html, /id="text"/);
-  assert.match(state, /\/search\.js\?v=20260916-2/);
+  assert.match(html, /\/search\.css\?v=20260916-3" data-worklog-search="1"/);
+  assert.match(html, /\/search\.js\?v=20260916-3" data-worklog-search="1" defer/);
+  assert.ok(html.indexOf("/search.js?v=20260916-3") < html.indexOf("/main-ui-state.js?v=20260916-2"));
   assert.match(state, /data-worklog-search/);
   assert.match(state, /document\.head\.append\(script\)/);
 });
