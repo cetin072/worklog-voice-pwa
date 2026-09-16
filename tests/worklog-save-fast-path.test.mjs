@@ -63,6 +63,8 @@ test("worklog fast adapter persists WorkRecord + SourceRef with exactly one RPC"
 test("clear timed meeting intent is saved as a confirmed Schedule in the same RPC", async () => {
   const calls = [];
   const client = {
+    insert: async () => { throw new Error("insert must not be called"); },
+    upsert: async () => { throw new Error("upsert must not be called"); },
     async rpc(name, body) {
       calls.push({ name, body });
       return rpcRow({ schedule_id: "55555555-5555-5555-5555-555555555555" });
@@ -83,7 +85,7 @@ test("clear timed meeting intent is saved as a confirmed Schedule in the same RP
 
 test("timed person meeting creates a schedule even when the work type is a generic task", () => {
   const schedule = quickWorklogSchedule(
-    { transcript: "내일 오후 2시에 김대리 만나" },
+    { transcript: "내일 오후 2시에 김대리 만나", dueStart: "2026-09-17T14:00:00+09:00" },
     { title: "김대리 만나", dueAt: "2026-09-17T14:00:00+09:00", recordType: "task" }
   );
   assert.equal(schedule?.startsAt, "2026-09-17T14:00:00+09:00");
@@ -91,18 +93,18 @@ test("timed person meeting creates a schedule even when the work type is a gener
 
 test("deadline wording stays WorkRecord due_at only and does not create a calendar Schedule", () => {
   assert.equal(quickWorklogSchedule(
-    { transcript: "내일 오후 2시까지 견적서 보내" },
+    { transcript: "내일 오후 2시까지 견적서 보내", dueStart: "2026-09-17T14:00:00+09:00" },
     { title: "견적서 보내", dueAt: "2026-09-17T14:00:00+09:00", recordType: "task" }
   ), null);
   assert.equal(quickWorklogSchedule(
-    { transcript: "내일 오후 2시까지 회의자료 제출" },
+    { transcript: "내일 오후 2시까지 회의자료 제출", dueStart: "2026-09-17T14:00:00+09:00" },
     { title: "회의자료 제출", dueAt: "2026-09-17T14:00:00+09:00", recordType: "meeting_call" }
   ), null);
 });
 
 test("date-only due date never auto-creates a Schedule", () => {
   assert.equal(quickWorklogSchedule(
-    { transcript: "내일 삼현 미팅 준비" },
+    { transcript: "내일 삼현 미팅 준비", dueStart: "2026-09-17" },
     { title: "삼현 미팅 준비", dueAt: "2026-09-17T00:00:00+09:00", recordType: "meeting_call" }
   ), null);
 });
