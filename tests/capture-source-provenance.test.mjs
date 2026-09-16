@@ -14,7 +14,6 @@ function captureRecord(overrides = {}) {
     cleanTranscript: "삼현 미팅",
     institution: "기타",
     institutionSource: "unverified",
-    sourceType: "capture",
     status: "진행중",
     type: "회의·통화",
     recordedAt: "2026-09-16T10:00:00+09:00",
@@ -23,9 +22,8 @@ function captureRecord(overrides = {}) {
   };
 }
 
-test("capture fast save passes sourceType through the existing canonical RPC", async () => {
-  const calls = [];
-  const client = {
+function rpcClient(calls) {
+  return {
     insert: async () => { throw new Error("insert must not be called"); },
     upsert: async () => { throw new Error("upsert must not be called"); },
     async rpc(name, body) {
@@ -39,11 +37,31 @@ test("capture fast save passes sourceType through the existing canonical RPC", a
       }];
     },
   };
-  await createWorklogDataCoreAdapter({ client }).persistFast(captureRecord());
+}
+
+test("capture request namespace survives the existing /api/worklog record boundary", async () => {
+  const calls = [];
+  await createWorklogDataCoreAdapter({ client: rpcClient(calls) }).persistFast(captureRecord());
   assert.equal(calls.length, 1);
   assert.equal(calls[0].name, "save_my_worklog_with_schedule");
   assert.equal(calls[0].body.p_metadata.sourceType, "capture");
   assert.equal(calls[0].body.p_metadata.source, "capture");
+});
+
+test("explicit capture sourceType also stays capture", async () => {
+  const calls = [];
+  await createWorklogDataCoreAdapter({ client: rpcClient(calls) }).persistFast(captureRecord({ sourceType: "capture" }));
+  assert.equal(calls[0].body.p_metadata.sourceType, "capture");
+});
+
+test("ordinary worklog request namespace remains direct", async () => {
+  const calls = [];
+  await createWorklogDataCoreAdapter({ client: rpcClient(calls) }).persistFast(captureRecord({
+    clientRequestId: "req-20260916-1234567890",
+    sourceType: undefined,
+  }));
+  assert.equal(calls[0].body.p_metadata.sourceType, "direct");
+  assert.equal(calls[0].body.p_metadata.source, "quick_worklog");
 });
 
 test("canonical SQL preserves capture SourceRef and capture Schedule provenance", () => {
