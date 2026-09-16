@@ -9,6 +9,7 @@ function runMainUiState(seed = {}) {
   const localStorage = {
     getItem: (key) => store.has(key) ? store.get(key) : null,
     setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
   };
   class CustomEventMock {
     constructor(type, init = {}) {
@@ -56,12 +57,39 @@ test("main ui state preserves the briefing preference read/save contract", () =>
   assert.equal(events.at(-1)?.detail?.briefingCollapsed, false);
 });
 
-test("main loads minimal ui state while settings keeps the full settings bundle", () => {
+test("main loads current ui state while settings keeps the full settings bundle", () => {
   const main = fs.readFileSync("public/index.html", "utf8");
   const settings = fs.readFileSync("public/settings.html", "utf8");
   const sw = fs.readFileSync("public/sw.js", "utf8");
   assert.doesNotMatch(main, /\/settings\.js\?v=/);
-  assert.match(main, /\/main-ui-state\.js\?v=20260916-1/);
+  assert.match(main, /\/main-ui-state\.js\?v=20260916-2/);
   assert.match(settings, /\/settings\.js\?v=/);
   assert.match(sw, /"\/main-ui-state\.js"/);
+});
+
+test("successful worklog saves emit one briefing refresh signal at the common fetch boundary", () => {
+  const source = fs.readFileSync("public/main-ui-state.js", "utf8");
+  assert.match(source, /details\.url\.pathname === "\/api\/worklog"/);
+  assert.match(source, /new CustomEvent\("worklog:record-saved"/);
+  assert.match(source, /window\.setTimeout\(\(\) => triggerBriefingRefresh\(\), 120\)/);
+  assert.match(source, /window\.clearTimeout\(briefingRefreshTimer\)/);
+});
+
+test("Data Core refresh reuses V2 renderer without calling legacy quick-update mutation", () => {
+  const source = fs.readFileSync("public/main-ui-state.js", "utf8");
+  assert.match(source, /details\.url\.pathname === "\/api\/briefing"/);
+  assert.match(source, /platformSession\(\)\?\.access_token/);
+  assert.match(source, /quickUpdateAction\(init\)/);
+  assert.match(source, /mode: "data_core_refresh"/);
+  assert.match(source, /quick\.click\(\)/);
+});
+
+test("briefing reset clears per-user SWR caches and exposes an explicit reset button", () => {
+  const source = fs.readFileSync("public/main-ui-state.js", "utf8");
+  assert.match(source, /worklogBriefingV2SnapshotV1:/);
+  assert.match(source, /worklogBriefingV2DataV1:/);
+  assert.match(source, /button\.id = "briefingReset"/);
+  assert.match(source, /↻ 브리핑 리셋/);
+  assert.match(source, /clearBriefingCache\(\)/);
+  assert.match(source, /new CustomEvent\("worklog:briefing-reset"\)/);
 });
