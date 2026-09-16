@@ -93,12 +93,12 @@
         <button id="homeBriefingOpen" class="home-briefing-open" type="button" aria-expanded="false" aria-controls="briefingCard">전체 보기</button>
       </div>
       <div class="home-briefing-grid" aria-live="polite">
-        <div class="home-briefing-item"><span>오늘 일정</span><strong id="homeBriefingTodayCount">—</strong></div>
-        <div class="home-briefing-item is-overdue"><span>기한 경과</span><strong id="homeBriefingOverdueCount">—</strong></div>
-        <div class="home-briefing-item"><span>후속조치 필요</span><strong id="homeBriefingFollowUpCount">—</strong></div>
-        <div class="home-briefing-item is-next"><span>다음 일정</span><strong id="homeBriefingNextSchedule">—</strong></div>
+        <div class="home-briefing-item is-overdue"><span>지난 것</span><strong id="homeBriefingOverdueCount">—</strong></div>
+        <div class="home-briefing-item is-today"><span>오늘 할 일</span><strong id="homeBriefingTodayCount">—</strong></div>
+        <div class="home-briefing-item is-upcoming"><span>다가오는 업무</span><strong id="homeBriefingUpcomingCount">—</strong></div>
+        <div class="home-briefing-item is-undated"><span>기한 없는 업무</span><strong id="homeBriefingUndatedCount">—</strong></div>
       </div>
-      <p id="homeBriefingStatus" class="home-briefing-status">오늘 업무와 일정을 불러오는 중입니다.</p>
+      <p id="homeBriefingStatus" class="home-briefing-status">오늘 업무를 불러오는 중입니다.</p>
     </section>
 
     <section id="briefingCard" class="card briefing-card core-app-card" hidden aria-live="polite">
@@ -194,9 +194,9 @@
   <script src="/quick-save.js" defer></script>
   <script src="/manual-input.js" defer></script>
   <script src="/briefing-legacy-loader.js?v=20260915-1" defer></script>
-  <script src="/briefing-v2.js?v=20260916-2" defer></script>
+  <script src="/briefing-v2.js?v=20260916-3" defer></script>
   <script src="/briefing-v2-expand-state.js?v=20260916-1" defer></script>
   <script src="/briefing-edit.js" defer></script>
-  <script src="/home-ux.js?v=20260916-2" defer></script>
+  <script src="/home-ux.js?v=20260916-3" defer></script>
 </body>
 </html>
