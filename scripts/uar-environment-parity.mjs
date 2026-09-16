@@ -68,6 +68,33 @@ try {
   throw new Error('UAR_ENV_BRIEFING_ERROR_RESPONSE_INVALID');
 }
 
+// Server Push must validate the real Deploy Preview runtime secret, not only a
+// synthetic unit-test key. The GET endpoint derives the public VAPID key from the
+// private Netlify secret, so a malformed/missing private key fails this gate before
+// a user is ever asked to test on a phone.
+const pushConfig = await get('/api/push-subscription');
+if (!pushConfig.response.ok) {
+  throw new Error(`UAR_ENV_PUSH_CONFIG_HTTP_${pushConfig.response.status}`);
+}
+let pushJson;
+try {
+  pushJson = JSON.parse(pushConfig.text);
+} catch {
+  throw new Error('UAR_ENV_PUSH_CONFIG_INVALID_JSON');
+}
+if (pushJson?.configured !== true) {
+  throw new Error(`UAR_ENV_PUSH_NOT_CONFIGURED:${JSON.stringify({ configured: pushJson?.configured })}`);
+}
+const vapidPublicKey = String(pushJson?.publicKey || '');
+if (!/^[A-Za-z0-9_-]{80,100}$/.test(vapidPublicKey)) {
+  throw new Error('UAR_ENV_PUSH_PUBLIC_KEY_INVALID');
+}
+for (const forbidden of ['privateKey', 'private_key', 'WEB_PUSH_VAPID_PRIVATE_KEY']) {
+  if (Object.prototype.hasOwnProperty.call(pushJson, forbidden) || pushConfig.text.includes(forbidden)) {
+    throw new Error(`UAR_ENV_PUSH_PRIVATE_KEY_LEAK:${forbidden}`);
+  }
+}
+
 const manifest = await get('/manifest.webmanifest');
 if (!manifest.response.ok) throw new Error(`UAR_ENV_MANIFEST_HTTP_${manifest.response.status}`);
 let manifestJson;
@@ -93,4 +120,4 @@ if (!robots.includes('noindex')) {
   throw new Error(`UAR_ENV_NOINDEX_HEADER_MISSING:${robots}`);
 }
 
-console.log(`UAR_ENVIRONMENT_PARITY_PASS preview=${base.hostname} owner_secret_isolated=true briefing_status=${briefing.response.status}`);
+console.log(`UAR_ENVIRONMENT_PARITY_PASS preview=${base.hostname} owner_secret_isolated=true push_configured=true briefing_status=${briefing.response.status}`);
