@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createWorklogDataCoreBriefingStatus } from "../netlify/shared/worklog-data-core-briefing-status.mjs";
 
-const migration = fs.readFileSync(new URL("../supabase/migrations/20260916003500_briefing_status_fast_path.sql", import.meta.url), "utf8");
+const migration = fs.readFileSync(new URL("../supabase/migrations/20260916003054_briefing_status_fast_path.sql", import.meta.url), "utf8");
 const briefingFunction = fs.readFileSync(new URL("../netlify/functions/briefing-v2.mts", import.meta.url), "utf8");
 
 const recordId = "11111111-1111-4111-8111-111111111111";
