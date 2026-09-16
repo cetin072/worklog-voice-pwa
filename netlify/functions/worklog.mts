@@ -69,6 +69,25 @@ function fastSaveWorkspaceMissing(error:any){
     || /PERSONAL_WORKSPACE_MISSING/i.test(String(error?.message || ""));
 }
 
+async function queueRecordNormalization(req:Request,accessToken:string,workRecordIdValue:unknown){
+  const workRecordId=String(workRecordIdValue || "").trim();
+  if(!accessToken || !/^[0-9a-f-]{36}$/i.test(workRecordId)) return false;
+  try{
+    const endpoint=new URL("/api/record-normalize",req.url);
+    const response=await fetch(endpoint,{
+      method:"POST",
+      headers:{authorization:`Bearer ${accessToken}`,"content-type":"application/json"},
+      body:JSON.stringify({workRecordId})
+    });
+    const accepted=response.status===202 || response.ok;
+    if(!accepted) console.warn("Worklog normalization queue rejected",response.status);
+    return accepted;
+  }catch(error){
+    console.warn("Worklog normalization queue failed",String((error as any)?.message || "unknown").slice(0,120));
+    return false;
+  }
+}
+
 export default async (req:Request, _context:Context) => {
   const personal=personalConnection(req);
   const envToken = Netlify.env.get("NOTION_TOKEN");
@@ -226,7 +245,8 @@ export default async (req:Request, _context:Context) => {
         }
       });
       const result=await primary.execute(record,primaryExisting || {});
-      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,dataCoreFastPath:fastPath,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
+      const normalizationQueued=await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
+      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,dataCoreFastPath:fastPath,normalizationQueued,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
     }catch(err:any){
       if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog primary error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
@@ -250,7 +270,8 @@ export default async (req:Request, _context:Context) => {
 
       const prior=dualExisting || (existing?.pageId ? {notion:{pageId:existing.pageId,url:existing.url || ""}} : {});
       if(prior.dataCore && prior.notion){
-        return json(200,{ok:true,pageId:prior.notion.pageId,url:prior.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,deduped:true,dataCoreWorkRecordId:prior.dataCore.workRecordId || ""});
+        const normalizationQueued=await queueRecordNormalization(req,accessToken,prior.dataCore.workRecordId);
+        return json(200,{ok:true,pageId:prior.notion.pageId,url:prior.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,deduped:true,dataCoreWorkRecordId:prior.dataCore.workRecordId || "",normalizationQueued});
       }
 
       const notion=createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION});
@@ -267,7 +288,8 @@ export default async (req:Request, _context:Context) => {
       if(!result.complete){
         return json(503,{ok:false,error:"한 저장소에만 저장되었습니다. 원문은 유지되며 같은 내용을 다시 저장하면 완료되지 않은 저장소만 재시도합니다.",retryable:true,notionSaved:Boolean(result.notion),dataCoreSaved:Boolean(result.dataCore)});
       }
-      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId});
+      const normalizationQueued=await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
+      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,normalizationQueued});
     }catch(err:any){
       if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog dual-write error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
