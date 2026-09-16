@@ -60,6 +60,15 @@ function bearerToken(req:Request){
   return match ? match[1].trim() : "";
 }
 
+function fastSaveRpcUnavailable(error:any){
+  return error?.code==="SUPABASE_DATA_CORE_RPC_FAILED";
+}
+
+function fastSaveWorkspaceMissing(error:any){
+  return error?.code==="WORKLOG_DATA_CORE_FAST_WORKSPACE_MISSING"
+    || /PERSONAL_WORKSPACE_MISSING/i.test(String(error?.message || ""));
+}
+
 export default async (req:Request, _context:Context) => {
   const personal=personalConnection(req);
   const envToken = Netlify.env.get("NOTION_TOKEN");
@@ -161,17 +170,55 @@ export default async (req:Request, _context:Context) => {
     if(!requestId || !idem) return json(400,{error:"Data Core 저장에는 유효한 저장 요청 ID가 필요합니다."});
 
     try{
+      const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
+      const dataCore=createWorklogDataCoreAdapter({client});
       const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
-      const workspaceContext=await resolver.resolve(accessToken);
-      const primaryKey=`request:${requestId}:user:${workspaceContext.userId}`;
+      let workspaceContext:any=null;
+      let fastDataCore:any=null;
+      let fastPath=false;
+
+      try{
+        fastDataCore=await dataCore.persistFast(record);
+        fastPath=true;
+      }catch(fastError:any){
+        if(fastSaveWorkspaceMissing(fastError)){
+          workspaceContext=await resolver.resolve(accessToken);
+          try{
+            fastDataCore=await dataCore.persistFast(record);
+            fastPath=true;
+          }catch(retryError:any){
+            console.warn("Worklog fast save repair retry failed",String(retryError?.code || "unknown"),String(retryError?.message || "unknown").slice(0,120));
+          }
+        }else if(fastSaveRpcUnavailable(fastError)){
+          console.warn("Worklog fast save unavailable; using legacy Data Core path",String(fastError?.message || "unknown").slice(0,120));
+        }else{
+          throw fastError;
+        }
+      }
+
+      if(!fastDataCore){
+        if(!workspaceContext) workspaceContext=await resolver.resolve(accessToken);
+      }
+
+      const userId=String(fastDataCore?.userId || workspaceContext?.userId || "").trim();
+      if(!userId) throw new Error("WORKLOG_DATA_CORE_USER_ID_MISSING");
+      const primaryKey=`request:${requestId}:user:${userId}`;
       let primaryExisting:any=null;
       try{ primaryExisting=await idem.get(primaryKey,{type:"json"}); }
       catch(error){ console.warn("Worklog primary idempotency read failed",String((error as any)?.message || "unknown").slice(0,120)); }
 
-      const dataCore=createWorklogDataCoreAdapter({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
+      if(fastDataCore){
+        const hadDataCore=Boolean(primaryExisting?.dataCore);
+        primaryExisting={...(primaryExisting || {}),dataCore:fastDataCore};
+        if(!hadDataCore){
+          try{ await idem.setJSON(primaryKey,{...primaryExisting,mode,createdAt:new Date().toISOString()}); }
+          catch(error){ console.warn("Worklog primary fast-path progress write failed",String((error as any)?.message || "unknown").slice(0,120)); }
+        }
+      }
+
       const notion=notionConfigured ? createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION}) : null;
       const primary=createWorklogPrimarySave({
-        writeDataCore:()=>dataCore.persist(record,workspaceContext),
+        writeDataCore:()=>fastDataCore || dataCore.persist(record,workspaceContext),
         writeNotion:notion ? ()=>notion.create(record) : null,
         saveProgress:async progress=>{
           try{ await idem.setJSON(primaryKey,{...progress,mode,createdAt:new Date().toISOString()}); }
@@ -179,7 +226,7 @@ export default async (req:Request, _context:Context) => {
         }
       });
       const result=await primary.execute(record,primaryExisting || {});
-      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
+      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,dataCoreFastPath:fastPath,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
     }catch(err:any){
       if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog primary error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
