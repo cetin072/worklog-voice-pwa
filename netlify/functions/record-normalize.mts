@@ -97,8 +97,11 @@ export default async (req:Request,_context:Context)=>{
     ? String(record.client_request_id)
     : `norm-${targetId}`;
   const existingJob=object(normalization.platform_job);
+  const resumableJob=existingJob.jobId && ["queued","processing"].includes(String(existingJob.status || ""))
+    ? existingJob
+    : null;
   const job=createRecordNormalizationPlatformJob({
-    existingJob:existingJob.jobId ? existingJob : null,
+    existingJob:resumableJob,
     requestId,
     workRecordId:targetId,
     workspaceContext,
@@ -162,7 +165,7 @@ export default async (req:Request,_context:Context)=>{
 
   const plan=createRecordNormalizationRetryPlan(result.job,new Date());
   await client.update("work_record_normalizations",{
-    processing_status:plan.status === "scheduled" ? "failed" : "failed",
+    processing_status:"failed",
     retry_plan:plan,
     next_retry_at:plan.retryAt,
     last_error_code:result.error?.code || null,
