@@ -1,5 +1,5 @@
 (() => {
-  const BRAND_LAUNCH_HOLD_MS = 1000;
+  const BRAND_LAUNCH_HOLD_MS = 1500;
 
   function scheduleBrandLaunchRelease() {
     const release = () => document.body.classList.remove("platform-auth-loading");
