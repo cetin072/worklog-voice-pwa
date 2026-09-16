@@ -44,9 +44,25 @@ const browserStub = `<script>
   window.__uarXssExecuted = false;
   const recordId = ${JSON.stringify(recordId)};
   const fakeSession = { access_token: 'uar-access-token', refresh_token: 'uar-refresh-token' };
-  try {
-    localStorage.setItem('worklogSupabaseSessionV1', JSON.stringify(fakeSession));
-  } catch {}
+  const fakeConfig = {
+    configured: true,
+    supabaseUrl: 'https://uar.supabase.test',
+    publishableKey: 'sb_publishable_uar',
+    dataCorePrimaryEnabled: true,
+  };
+
+  window.WorklogPlatformAuth = {
+    readSession: () => fakeSession,
+    getConfig: async () => fakeConfig,
+    currentUser: async () => ({ id: 'uar-user', email: 'uar@example.test' }),
+    takeOAuthError: () => '',
+    refreshSession: async () => fakeSession,
+    signIn: async () => fakeSession,
+    signUp: async () => fakeSession,
+    signInWithGoogle: async () => {},
+    signOut: async () => {},
+    isDataCorePrimaryEnabled: async () => true,
+  };
 
   const json = (body, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {
     status,
@@ -54,14 +70,6 @@ const browserStub = `<script>
   }));
   window.fetch = async (input, init = {}) => {
     const raw = typeof input === 'string' ? input : String(input && input.url || '');
-    if (raw.includes('/api/supabase-auth-config')) {
-      return json({
-        configured: true,
-        supabaseUrl: 'https://uar.supabase.test',
-        publishableKey: 'sb_publishable_uar',
-        dataCorePrimaryEnabled: true,
-      });
-    }
     if (raw.includes('/rest/v1/rpc/search_my_work_records')) {
       return json([{
         work_record_id: recordId,
@@ -93,12 +101,6 @@ const browserStub = `<script>
         due_at: '2026-09-17T09:00:00Z',
         metadata: { fieldProvenance: { institution: 'user_confirmed' } }
       }]);
-    }
-    if (/\/auth\/v1\/user(?:\?|$)/.test(raw)) {
-      return json({ id: 'uar-user', email: 'uar@example.test' });
-    }
-    if (/\/auth\/v1\/token\?grant_type=refresh_token/.test(raw)) {
-      return json(fakeSession);
     }
     if (raw.startsWith('/api/briefing') || raw.startsWith('/api/kakao')) {
       return json({ error: 'Deploy Preview owner integrations are intentionally isolated.' }, 500);
@@ -190,7 +192,10 @@ const interaction = `<script>
 </script>`;
 
 let html = await fetchPreviewHtml();
-html = html.replace(/<head>/i, `<head><base href="${previewUrl}/">${browserStub}`);
+const authScriptPattern = /<script\s+src=["']\/platform-auth\.js\?[^"']+["']\s+defer><\/script>/i;
+if (!authScriptPattern.test(html)) throw new Error('UAR_SEARCH_DETAIL_PLATFORM_AUTH_TAG_MISSING');
+html = html.replace(authScriptPattern, browserStub);
+html = html.replace(/<head>/i, `<head><base href="${previewUrl}/">`);
 html = html.replace(/\b(src|href)=(["'])(\/[^"']+)\2/g, (_match, attr, quote, resource) => {
   return `${attr}=${quote}${previewUrl}${resource}${quote}`;
 });
