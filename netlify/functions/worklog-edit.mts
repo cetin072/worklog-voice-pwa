@@ -1,6 +1,9 @@
 import type { Config, Context } from "@netlify/functions";
 import { pageBelongsToDataSource } from "../shared/core-logic.mjs";
+import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
+import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
 import { normalizeWorklogTitle, validWorklogPageId } from "../shared/worklog-edit.mjs";
+import { createWorklogDataCoreTitleEditor } from "../shared/worklog-data-core-title-editor.mjs";
 
 const NOTION_VERSION="2026-03-11";
 const DEFAULT_DATA_SOURCE_ID="e345d19d-504f-4466-815a-912b1d6b9a3a";
@@ -13,6 +16,11 @@ function json(status:number,body:Record<string,unknown>){
       "cache-control":"no-store"
     }
   });
+}
+
+function bearerToken(req:Request){
+  const match=/^Bearer\s+(.+)$/i.exec(String(req.headers.get("authorization") || ""));
+  return match ? match[1].trim() : "";
 }
 
 function personalConnection(req:Request){
@@ -96,19 +104,47 @@ async function updateTitle(token:string,pageId:string,title:string){
 export default async (req:Request,_context:Context)=>{
   if(req.method!=="POST") return json(405,{error:"허용되지 않은 요청입니다."});
 
-  const connection:any=resolveConnection(req);
-  if(connection.error) return json(connection.status || 400,{error:connection.error});
-  const {token,dataSourceId,mode}=connection;
-
   let body:any;
   try{ body=await req.json(); }
   catch{ return json(400,{error:"요청 형식이 올바르지 않습니다."}); }
 
   const pageId=String(body.pageId || "").trim();
   const nextTitle=normalizeWorklogTitle(body.title);
-  if(!validWorklogPageId(pageId)) return json(400,{error:"수정할 업무 식별자가 올바르지 않습니다."});
   if(!nextTitle) return json(400,{error:"업무명을 입력해주세요."});
   if(nextTitle.length>160) return json(400,{error:"업무명은 160자 이하로 입력해주세요."});
+
+  const accessToken=bearerToken(req);
+  if(accessToken){
+    const supabaseUrl=Netlify.env.get("SUPABASE_URL");
+    const publishableKey=Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
+    if(!supabaseUrl || !publishableKey) return json(503,{error:"Data Core 편집 설정이 아직 준비되지 않았습니다."});
+    try{
+      const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
+      const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
+      const editor=createWorklogDataCoreTitleEditor({client});
+      const workspaceContext=await resolver.resolve(accessToken);
+      const result=await editor.updateTitle({recordId:pageId,title:nextTitle},workspaceContext);
+      return json(200,{ok:true,pageId:result.recordId,title:result.title,mode:"data_core"});
+    }catch(error:any){
+      if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED"){
+        return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 수정해주세요."});
+      }
+      if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID"){
+        return json(400,{error:error.message});
+      }
+      if(error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN"){
+        return json(404,{error:error.message});
+      }
+      console.error("Data Core worklog edit error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));
+      return json(502,{error:"업무명을 수정하지 못했습니다."});
+    }
+  }
+
+  const connection:any=resolveConnection(req);
+  if(connection.error) return json(connection.status || 400,{error:connection.error});
+  const {token,dataSourceId,mode}=connection;
+
+  if(!validWorklogPageId(pageId)) return json(400,{error:"수정할 업무 식별자가 올바르지 않습니다."});
 
   try{
     const page=await getVerifiedPage(token,pageId,dataSourceId);
