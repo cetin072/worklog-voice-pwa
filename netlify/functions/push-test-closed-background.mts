@@ -64,10 +64,12 @@ export default async (req:Request, _context:Context) => {
         vapidSubject:push.subject,
       });
       const now=new Date().toISOString();
-      await client.update("push_subscriptions",{last_success_at:now,last_failure_at:null,updated_at:now},{id:`eq.${subscriptionId}`,user_id:`eq.${workspace.userId}`});
+      await client.update("push_subscriptions",{last_success_at:now,last_failure_at:null,last_failure_status:null,last_failure_code:null,updated_at:now},{id:`eq.${subscriptionId}`,user_id:`eq.${workspace.userId}`});
     }catch(error:any){
       const now=new Date().toISOString();
-      const patch:any={last_failure_at:now,updated_at:now};
+      const status=Number(error?.status || 0);
+      const code=String(error?.code || "WEB_PUSH_DELIVERY_FAILED").slice(0,80);
+      const patch:any={last_failure_at:now,last_failure_status:status || null,last_failure_code:code,updated_at:now};
       if(error?.expired) patch.disabled_at=now;
       await client.update("push_subscriptions",patch,{id:`eq.${subscriptionId}`,user_id:`eq.${workspace.userId}`}).catch(()=>{});
     }
