@@ -23,8 +23,9 @@ test("settings exposes patch notes beside the top-right completion action", () =
 test("patch notes only present shipped-history framing and current briefing/edit changes", () => {
   assert.match(patchNotes, /GitHub <code>main<\/code>에 병합된 기능/);
   assert.match(patchNotes, /지난 것 \/ 오늘 할 일 \/ 다가오는 업무 \/ 기한 없는 업무/);
-  assert.match(patchNotes, /Data Core 업무 편집/);
-  assert.match(patchNotes, /예전 Notion 운영자 접근키를 요구하지 않고/);
+  assert.match(patchNotes, /업무 편집 확장/);
+  assert.match(patchNotes, /업무명뿐 아니라 날짜와 시간을 함께 수정/);
+  assert.match(patchNotes, /날짜를 비우면 기한 없는 업무/);
   assert.match(patchNotes, /2026\. 8\. 24\./);
   assert.doesNotMatch(patchNotes, /Draft\/실험 기능을 완료 기능/);
 });
