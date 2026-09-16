@@ -7,7 +7,7 @@ export default async () => {
     status: 200,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store"
+      "cache-control": "public, max-age=300, stale-while-revalidate=3600"
     }
   });
 };
