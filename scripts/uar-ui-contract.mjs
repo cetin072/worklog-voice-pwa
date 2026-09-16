@@ -75,8 +75,11 @@ const appScript = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 if (!appScript.includes('navigator.serviceWorker.register("/sw.js")')) {
   throw new Error('UAR_UI_CONTRACT_SERVICE_WORKER_REGISTRATION_MISSING');
 }
-if (!appScript.includes('fetch("/api/worklog")')) {
-  throw new Error('UAR_UI_CONTRACT_WORKLOG_HEALTH_CHECK_MISSING');
+if (appScript.includes('fetch("/api/worklog")')) {
+  throw new Error('UAR_UI_CONTRACT_STARTUP_WORKLOG_HEALTH_FETCH_FORBIDDEN');
+}
+if (!appScript.includes('worklog:platform-auth-changed') || !appScript.includes('WorklogPlatformAuth?.readSession?.()')) {
+  throw new Error('UAR_UI_CONTRACT_LOCAL_AUTH_HEALTH_STATE_MISSING');
 }
 
 console.log(`UAR_UI_CONTRACT_PASS ids=${requiredIds.length} scripts=${requiredScripts.length}`);

@@ -527,16 +527,32 @@ els.save.onclick=async()=>{
   }
 };
 
-restoreDraft();
-
-(async()=>{
-  try{
-    const res=await fetch("/api/worklog");
-    const data=await res.json();
-    els.health.textContent = data.ok && data.configured ? "연결됨" : "설정 필요";
-  }catch{
-    els.health.textContent="확인 필요";
+function syncHealthFromAuth(event){
+  const state=String(event?.detail?.state || "");
+  if(state==="platform-signed-in" || state==="platform-legacy-user"){
+    els.health.textContent="연결됨";
+    return;
   }
-})();
+  if(state==="platform-signed-out"){
+    els.health.textContent="로그인 필요";
+    return;
+  }
+  if(state==="platform-auth-unavailable"){
+    els.health.textContent=window.WorklogAuth?.mode?.() && window.WorklogAuth.mode()!=="unset" ? "연결됨" : "확인 필요";
+    return;
+  }
+
+  const session=window.WorklogPlatformAuth?.readSession?.();
+  if(session?.access_token){
+    els.health.textContent="연결됨";
+    return;
+  }
+  const legacyMode=window.WorklogAuth?.mode?.() || "unset";
+  els.health.textContent=legacyMode!=="unset" ? "연결됨" : "로그인 필요";
+}
+
+restoreDraft();
+syncHealthFromAuth();
+window.addEventListener("worklog:platform-auth-changed",syncHealthFromAuth);
 
 if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
