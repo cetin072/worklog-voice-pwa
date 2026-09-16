@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const readBytes = (path) => readFileSync(new URL(`../${path}`, import.meta.url));
+
+function pngSize(path) {
+  const bytes = readBytes(path);
+  assert.equal(bytes.subarray(1, 4).toString("ascii"), "PNG");
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
 
 test("PWA launch owns the app icon while the one-second in-app brand screen avoids drawing it again", () => {
   const html = read("public/index.html");
@@ -13,20 +20,26 @@ test("PWA launch owns the app icon while the one-second in-app brand screen avoi
   assert.match(html, /distribution\.css\?v=20260916-3/);
   assert.equal(manifest.background_color, "#ffffff");
   assert.equal(manifest.theme_color, "#ffffff");
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-192-v4.png"));
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-512-v4.png"));
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-maskable-512-v4.png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-192-v5.png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-512-v5.png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-maskable-512-v5.png"));
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*position:fixed/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*inset:0/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*background:#fff/);
   assert.match(css, /body\.platform-auth-loading \.welcome-icon\{display:none\}/);
-  assert.doesNotMatch(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-192-v4\.png/);
+  assert.doesNotMatch(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-192-v[45]\.png/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*content:"업무수첩"/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*font-size:clamp\(48px,13vw,58px\)/);
   assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::before\{content:"말하면 기록되고,"\}/);
   assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::after\{content:"일정까지 한눈에"/);
   assert.match(css, /body\.platform-auth-loading \.welcome-copy,body\.platform-auth-loading \.welcome-benefits\{display:none\}/);
   assert.match(css, /body:not\(\.platform-auth-loading\)\.platform-session-hint \.welcome-card/);
+});
+
+test("polished PWA icons keep exact native sizes and a dedicated maskable asset", () => {
+  assert.deepEqual(pngSize("public/icons/icon-192-v5.png"), { width: 192, height: 192 });
+  assert.deepEqual(pngSize("public/icons/icon-512-v5.png"), { width: 512, height: 512 });
+  assert.deepEqual(pngSize("public/icons/icon-maskable-512-v5.png"), { width: 512, height: 512 });
 });
 
 test("brand splash remains visible for one second after first paint while initialization continues", () => {
