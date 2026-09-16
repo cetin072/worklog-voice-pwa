@@ -27,7 +27,17 @@ test("search opens as an accessible full-screen mobile dialog", () => {
   assert.match(css, /\.search-screen\{position:fixed;inset:0;z-index:1000/);
   assert.match(css, /\.search-screen-open\{overflow:hidden\}/);
   assert.match(source, /document\.body\.classList\.add\("search-screen-open"\)/);
-  assert.match(source, /requestAnimationFrame\(\(\) => els\.input\.focus\(\)\)/);
+  assert.match(source, /requestAnimationFrame\(\(\) => focusSearchInput\(els\)\)/);
+});
+
+test("search title is a real touch target that returns focus to the query input", () => {
+  assert.match(source, /id="worklogSearchFocus" class="search-title-action" type="button"/);
+  assert.match(source, /aria-label="검색어 입력으로 이동"/);
+  assert.match(source, /focus: document\.getElementById\("worklogSearchFocus"\)/);
+  assert.match(source, /function focusSearchInput\(els\)\{?[\s\S]*els\.input\.focus\(\)/);
+  assert.match(source, /els\.focus\.addEventListener\("click", \(\) => focusSearchInput\(els\)\)/);
+  assert.match(css, /\.search-title-action\{/);
+  assert.match(css, /\.search-title-action:focus-visible\{/);
 });
 
 test("mobile back, escape and sign-out close search safely", () => {
