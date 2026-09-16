@@ -2,6 +2,7 @@ import { createDataCoreRepositories } from "./data-core/repositories.mjs";
 
 const TYPE_MAP = Object.freeze({ "완료업무": "completed_work", "할 일": "task", "회의·통화": "meeting_call", "지출·세무": "expense_tax", "지시·위임": "delegation", "아이디어": "idea", "문제·확인": "issue_review", "기타": "other" });
 const STATUS_MAP = Object.freeze({ "완료": "completed", "진행중": "in_progress", "대기": "waiting", "확인필요": "needs_review" });
+const TRUSTED_FIELD_SOURCES = new Set(["user_selected", "user_confirmed"]);
 
 function adapterError(code, message, details = {}) { const error = new Error(message); error.code = code; Object.assign(error, details); return error; }
 function validRecordedAt(value) { const date = new Date(value || ""); return Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString(); }
@@ -17,10 +18,17 @@ function amount(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
+function fieldSource(value) {
+  const source = String(value || "").trim().toLowerCase();
+  return TRUSTED_FIELD_SOURCES.has(source) ? source : "unverified";
+}
 
 function normalizedRecord(record = {}) {
   const clientRequestId = String(record.clientRequestId || "").trim();
   if (!/^[A-Za-z0-9-]{16,100}$/.test(clientRequestId)) throw adapterError("WORKLOG_DATA_CORE_REQUEST_ID_REQUIRED", "Data Core 저장에는 유효한 clientRequestId가 필요합니다.");
+  const institutionSource = fieldSource(record.institutionSource ?? record.institution_source);
+  const requestedInstitution = String(record.institution || "").trim();
+  const institution = TRUSTED_FIELD_SOURCES.has(institutionSource) && requestedInstitution ? requestedInstitution : null;
   return Object.freeze({
     clientRequestId,
     title: title(record.cleanTranscript),
@@ -28,12 +36,17 @@ function normalizedRecord(record = {}) {
     originalText: String(record.transcript || ""),
     recordType: TYPE_MAP[record.type] || "other",
     status: STATUS_MAP[record.status] || "in_progress",
-    institution: String(record.institution || "").trim() || null,
+    institution,
+    institutionSource,
     amount: amount(record.amount),
     followUp: String(record.followUp || "").trim() || null,
     recordedAt: validRecordedAt(record.recordedAt),
     dueAt: dueAt(record.dueStart),
-    metadata: { source: "quick_worklog", clientRequestId },
+    metadata: {
+      source: "quick_worklog",
+      clientRequestId,
+      fieldProvenance: { institution: institutionSource },
+    },
     sourceExcerpt: String(record.transcript || ""),
   });
 }
@@ -92,7 +105,7 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
         sourceType: "direct",
         sourceId: normalized.clientRequestId,
         sourceExcerpt: normalized.sourceExcerpt,
-        metadata: { source: "quick_worklog" },
+        metadata: { source: "quick_worklog", fieldProvenance: { institution: normalized.institutionSource } },
       }, workspaceContext);
       return Object.freeze({ workRecordId: String(workRecord.id), sourceRefId: String(sourceRef?.id || ""), workspaceId: workspaceContext.workspaceId });
     },

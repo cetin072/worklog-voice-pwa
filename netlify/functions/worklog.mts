@@ -15,6 +15,7 @@ const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
 const INSTITUTIONS = new Set(["태장","미래여성가족진흥원","기타"]);
 const STATUSES = new Set(["완료","진행중","대기","확인필요"]);
 const TYPES = new Set(["완료업무","할 일","회의·통화","지출·세무","지시·위임","아이디어","문제·확인","기타"]);
+const TRUSTED_INSTITUTION_SOURCES = new Set(["user_selected","user_confirmed"]);
 
 function json(status:number, body:Record<string,unknown>){
   return new Response(JSON.stringify(body), {
@@ -163,6 +164,8 @@ export default async (req:Request, _context:Context) => {
   }
 
   const requestedInstitution=String(body.institution || "").trim().slice(0,60);
+  const requestedInstitutionSource=String(body.institutionSource || body.institution_source || "").trim().toLowerCase();
+  const institutionSource=TRUSTED_INSTITUTION_SOURCES.has(requestedInstitutionSource) ? requestedInstitutionSource : "unverified";
   const institution=mode==="personal"
     ? (requestedInstitution || "기타")
     : (INSTITUTIONS.has(requestedInstitution) ? requestedInstitution : "기타");
@@ -176,7 +179,7 @@ export default async (req:Request, _context:Context) => {
     : extractScheduleFromText(transcript,body.recordedAt || new Date());
   const cleanTranscript=String(schedule.text || transcript).trim() || transcript;
   const record={
-    clientRequestId:requestId, transcript, cleanTranscript, institution, status, type,
+    clientRequestId:requestId, transcript, cleanTranscript, institution, institutionSource, status, type,
     recordedAt:body.recordedAt || new Date().toISOString(),
     recordedDate:seoulDateFromRecordedAt(body.recordedAt),
     amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
