@@ -46,10 +46,7 @@
     }
 
     const existing = await navigator.serviceWorker.getRegistration?.("/");
-    if (existing) {
-      existing.update?.().catch(() => {});
-      return existing;
-    }
+    if (existing) return existing;
 
     return navigator.serviceWorker.register(SW_URL, { scope: "/" });
   }
@@ -268,8 +265,4 @@
     sendServerTestPush,
     scheduleClosedAppServerPushTest,
   });
-
-  if ("serviceWorker" in navigator) {
-    ensureServiceWorker().catch(() => {});
-  }
 })();

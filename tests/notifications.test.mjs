@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
-function loadNotifications({ userAgent = "Android", standalone = false, permission = "default" } = {}) {
-  const calls = { permission: 0, shown: [], registered: 0 };
+function loadNotifications({ userAgent = "Android", standalone = false, permission = "default", existingRegistration = true } = {}) {
+  const calls = { permission: 0, shown: [], registered: 0, registrationLookups: 0, updated: 0 };
   const registration = {
-    update: async () => {},
+    update: async () => { calls.updated += 1; },
     showNotification: async (title, options) => calls.shown.push({ title, options }),
   };
 
@@ -26,7 +26,10 @@ function loadNotifications({ userAgent = "Android", standalone = false, permissi
     userAgent,
     standalone,
     serviceWorker: {
-      getRegistration: async () => registration,
+      getRegistration: async () => {
+        calls.registrationLookups += 1;
+        return existingRegistration ? registration : undefined;
+      },
       register: async () => {
         calls.registered += 1;
         return registration;
@@ -57,22 +60,39 @@ function loadNotifications({ userAgent = "Android", standalone = false, permissi
   return { api: window.WorklogNotifications, calls, NotificationApi };
 }
 
-test("notification permission is never requested during module load", async () => {
+test("notification module load does not touch permission or service worker registration", async () => {
   const { calls } = loadNotifications();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(calls.permission, 0);
+  assert.equal(calls.registrationLookups, 0);
+  assert.equal(calls.registered, 0);
+  assert.equal(calls.updated, 0);
 });
 
-test("test notification requests permission from the button flow and uses service worker notification", async () => {
+test("test notification reuses an existing service worker without forcing update", async () => {
   const { api, calls } = loadNotifications();
   const result = await api.showTestNotification();
 
   assert.equal(result.ok, true);
   assert.equal(result.code, "shown");
+  assert.equal(calls.registrationLookups, 1);
+  assert.equal(calls.registered, 0);
+  assert.equal(calls.updated, 0);
   assert.equal(calls.permission, 1);
   assert.equal(calls.shown.length, 1);
   assert.equal(calls.shown[0].title, "업무수첩 알림 테스트");
   assert.equal(calls.shown[0].options.data.url, "/");
+});
+
+test("test notification registers service worker on demand when none exists", async () => {
+  const { api, calls } = loadNotifications({ existingRegistration: false });
+  const result = await api.showTestNotification();
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.registrationLookups, 1);
+  assert.equal(calls.registered, 1);
+  assert.equal(calls.updated, 0);
+  assert.equal(calls.shown.length, 1);
 });
 
 test("iPhone browser requires Home Screen install before notification permission", async () => {
@@ -82,6 +102,8 @@ test("iPhone browser requires Home Screen install before notification permission
   assert.equal(result.ok, false);
   assert.equal(result.code, "ios_install_required");
   assert.equal(calls.permission, 0);
+  assert.equal(calls.registrationLookups, 0);
+  assert.equal(calls.registered, 0);
   assert.equal(calls.shown.length, 0);
 });
 
