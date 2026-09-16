@@ -11,23 +11,25 @@ function pngSize(path) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-test("PWA launch owns the app icon while the one-second in-app brand screen avoids drawing it again", () => {
+test("system launch and the 1.5-second in-app brand screen share the v6 brand icon", () => {
   const html = read("public/index.html");
   const css = read("public/distribution.css");
   const manifest = JSON.parse(read("public/manifest.webmanifest"));
 
   assert.match(html, /class="eyebrow welcome-eyebrow">말하면 기록되고, 일정까지 한눈에<\/p>/);
-  assert.match(html, /distribution\.css\?v=20260916-3/);
+  assert.match(html, /distribution\.css\?v=20260917-1/);
+  assert.match(html, /rel="preload" as="image" href="\/icons\/icon-512-v6\.png"/);
+  assert.match(html, /name="theme-color" content="#ffffff"/);
   assert.equal(manifest.background_color, "#ffffff");
   assert.equal(manifest.theme_color, "#ffffff");
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-192-v5.png"));
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-512-v5.png"));
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-maskable-512-v5.png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-192-v6.png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-512-v6.png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-maskable-512-v6.png"));
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*position:fixed/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*inset:0/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*background:#fff/);
-  assert.match(css, /body\.platform-auth-loading \.welcome-icon\{display:none\}/);
-  assert.doesNotMatch(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-192-v[45]\.png/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-512-v6\.png/);
+  assert.doesNotMatch(css, /body\.platform-auth-loading \.welcome-icon\{display:none\}/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*content:"업무수첩"/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*font-size:clamp\(48px,13vw,58px\)/);
   assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::before\{content:"말하면 기록되고,"\}/);
@@ -36,13 +38,13 @@ test("PWA launch owns the app icon while the one-second in-app brand screen avoi
   assert.match(css, /body:not\(\.platform-auth-loading\)\.platform-session-hint \.welcome-card/);
 });
 
-test("polished PWA icons keep exact native sizes and a dedicated maskable asset", () => {
-  assert.deepEqual(pngSize("public/icons/icon-192-v5.png"), { width: 192, height: 192 });
-  assert.deepEqual(pngSize("public/icons/icon-512-v5.png"), { width: 512, height: 512 });
-  assert.deepEqual(pngSize("public/icons/icon-maskable-512-v5.png"), { width: 512, height: 512 });
+test("v6 PWA icons keep exact native sizes and a dedicated maskable asset", () => {
+  assert.deepEqual(pngSize("public/icons/icon-192-v6.png"), { width: 192, height: 192 });
+  assert.deepEqual(pngSize("public/icons/icon-512-v6.png"), { width: 512, height: 512 });
+  assert.deepEqual(pngSize("public/icons/icon-maskable-512-v6.png"), { width: 512, height: 512 });
 });
 
-test("brand splash remains visible for one second after first paint while initialization continues", () => {
+test("brand splash remains visible for 1.5 seconds after first paint while initialization continues", () => {
   const source = read("public/platform-auth-ui.js");
   const scheduleStart = source.indexOf("function scheduleBrandLaunchRelease()");
   const scheduleEnd = source.indexOf("scheduleBrandLaunchRelease();", scheduleStart);
@@ -51,7 +53,7 @@ test("brand splash remains visible for one second after first paint while initia
   const stateEnd = source.indexOf("function legacyMode", stateStart);
   const setAuthState = source.slice(stateStart, stateEnd);
 
-  assert.match(source, /const BRAND_LAUNCH_HOLD_MS = 1000/);
+  assert.match(source, /const BRAND_LAUNCH_HOLD_MS = 1500/);
   assert.match(schedule, /requestAnimationFrame/);
   assert.match(schedule, /setTimeout\(release, BRAND_LAUNCH_HOLD_MS\)/);
   assert.doesNotMatch(schedule, /fetch\s*\(/);
