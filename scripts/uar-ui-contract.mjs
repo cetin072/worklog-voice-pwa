@@ -7,6 +7,12 @@ const html = fs.readFileSync(indexPath, 'utf8');
 
 const requiredIds = [
   'health',
+  'homeBriefingCard',
+  'homeBriefingTodayCount',
+  'homeBriefingOverdueCount',
+  'homeBriefingFollowUpCount',
+  'homeBriefingNextSchedule',
+  'homeBriefingOpen',
   'mic',
   'micText',
   'save',
@@ -46,7 +52,8 @@ const requiredScripts = [
   '/briefing-legacy-loader.js',
   '/briefing-v2.js',
   '/briefing-v2-expand-state.js',
-  '/briefing-edit.js'
+  '/briefing-edit.js',
+  '/home-ux.js'
 ];
 
 const scriptSources = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(match => match[1]);
@@ -55,6 +62,13 @@ for (const expected of requiredScripts) {
   if (!source) throw new Error(`UAR_UI_CONTRACT_MISSING_SCRIPT:${expected}`);
   const localPath = path.join(root, 'public', expected.replace(/^\//, ''));
   if (!fs.existsSync(localPath)) throw new Error(`UAR_UI_CONTRACT_SCRIPT_FILE_MISSING:${expected}`);
+}
+
+const homeUxCss = fs.readFileSync(path.join(root, 'public', 'home-ux.css'), 'utf8');
+if (!/\.mic\{[^}]*position:fixed/.test(homeUxCss)
+  || !/\.mic\{[^}]*left:50%/.test(homeUxCss)
+  || !homeUxCss.includes('safe-area-inset-bottom')) {
+  throw new Error('UAR_UI_CONTRACT_THUMB_FIRST_MIC_MISSING');
 }
 
 const legacyLoaderPath = path.join(root, 'public', 'briefing-legacy-loader.js');

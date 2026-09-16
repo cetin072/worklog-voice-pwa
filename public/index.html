@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="/distribution.css?v=20260916-2">
   <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/briefing-edit.css">
+  <link rel="stylesheet" href="/home-ux.css?v=20260916-1">
 </head>
 <body class="platform-auth-loading">
   <main class="app">
@@ -83,22 +84,27 @@
       <p class="platform-auth-footnote">가입하면 개인 업무공간이 자동으로 만들어집니다.</p>
     </section>
 
-    <section class="card voice-card core-app-card">
-      <button id="mic" class="mic" type="button">
-        <span class="micIcon">🎙</span>
-        <span id="micText">말하기</span>
-      </button>
-      <p id="hint">중지하면 바로 저장됩니다. 여러 건이면 “다음 업무”, “다음 건”, “그다음”처럼 구분해 말하세요.</p>
-      <button id="save" class="save" type="button">저장</button>
-      <button id="manualEntry" class="manual-entry" type="button" aria-controls="text">⌨ 직접 입력</button>
-      <button id="clear" class="clear" type="button">입력 지우기</button>
-      <p id="result" class="result" aria-live="polite"></p>
+    <section id="homeBriefingCard" class="card home-briefing-card core-app-card" aria-labelledby="homeBriefingTitle">
+      <div class="home-briefing-head">
+        <div>
+          <p class="eyebrow">오늘의 브리핑</p>
+          <h2 id="homeBriefingTitle">지금 확인할 것</h2>
+        </div>
+        <button id="homeBriefingOpen" class="home-briefing-open" type="button" aria-expanded="false" aria-controls="briefingCard">전체 보기</button>
+      </div>
+      <div class="home-briefing-grid" aria-live="polite">
+        <div class="home-briefing-item"><span>오늘 일정</span><strong id="homeBriefingTodayCount">—</strong></div>
+        <div class="home-briefing-item is-overdue"><span>기한 경과</span><strong id="homeBriefingOverdueCount">—</strong></div>
+        <div class="home-briefing-item"><span>후속조치 필요</span><strong id="homeBriefingFollowUpCount">—</strong></div>
+        <div class="home-briefing-item is-next"><span>다음 일정</span><strong id="homeBriefingNextSchedule">—</strong></div>
+      </div>
+      <p id="homeBriefingStatus" class="home-briefing-status">오늘 업무와 일정을 불러오는 중입니다.</p>
     </section>
 
-    <section id="briefingCard" class="card briefing-card core-app-card" aria-live="polite">
+    <section id="briefingCard" class="card briefing-card core-app-card" hidden aria-live="polite">
       <div class="briefing-head">
         <div>
-          <p class="eyebrow">오늘 브리핑</p>
+          <p class="eyebrow">전체 브리핑</p>
           <h2 id="briefingTitle">오늘 업무 확인 중</h2>
         </div>
         <div class="briefing-actions">
@@ -122,6 +128,22 @@
         </ul>
       </details>
       <p id="briefingError" class="briefing-error"></p>
+    </section>
+
+    <section class="card voice-card core-app-card">
+      <div class="voice-card-head">
+        <p class="eyebrow">새 기록</p>
+        <h2>말하면 바로 업무로 저장됩니다</h2>
+      </div>
+      <button id="mic" class="mic" type="button" aria-describedby="hint">
+        <span class="micIcon">🎙</span>
+        <span id="micText">음성 기록</span>
+      </button>
+      <p id="hint">버튼을 누르고 업무를 말하세요. 같은 버튼을 다시 누르면 저장합니다.</p>
+      <button id="save" class="save" type="button">저장</button>
+      <button id="manualEntry" class="manual-entry" type="button" aria-controls="text">⌨ 직접 입력</button>
+      <button id="clear" class="clear" type="button">입력 지우기</button>
+      <p id="result" class="result" aria-live="polite"></p>
     </section>
 
     <section id="entryCard" class="card core-app-card">
@@ -175,5 +197,6 @@
   <script src="/briefing-v2.js?v=20260916-2" defer></script>
   <script src="/briefing-v2-expand-state.js?v=20260916-1" defer></script>
   <script src="/briefing-edit.js" defer></script>
+  <script src="/home-ux.js?v=20260916-1" defer></script>
 </body>
 </html>
