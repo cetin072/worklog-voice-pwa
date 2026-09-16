@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("startup loading state uses a white centered brand launch splash", () => {
+test("startup loading state uses a large white centered notebook-inspired brand launch splash", () => {
   const html = read("public/index.html");
   const css = read("public/distribution.css");
 
@@ -12,10 +12,14 @@ test("startup loading state uses a white centered brand launch splash", () => {
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*position:fixed/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*inset:0/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*background:#fff/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*width:174px[^}]*height:194px/);
   assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-192-v3\.png/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*border:3px solid #111827/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-icon::before\{[^}]*repeating-linear-gradient/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*content:"업무수첩"/);
-  assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*color:#111827/);
-  assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow\{[^}]*font-size:24px/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*font-size:clamp\(48px,13vw,58px\)/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::before\{content:"말하면 기록되고,"\}/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::after\{content:"일정까지 한눈에"/);
   assert.match(css, /body\.platform-auth-loading \.welcome-copy,body\.platform-auth-loading \.welcome-benefits\{display:none\}/);
   assert.match(css, /body:not\(\.platform-auth-loading\)\.platform-session-hint \.welcome-card/);
 });
