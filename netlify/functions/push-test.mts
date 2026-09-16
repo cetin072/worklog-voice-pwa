@@ -3,6 +3,7 @@ import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-r
 import { publicSupabaseAuthConfig } from "../shared/platform/supabase-auth-config.mjs";
 import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
 import { sendWebPush } from "../shared/web-push.mjs";
+import { vapidConfigFromEnv } from "../shared/vapid-config.mjs";
 
 function json(status:number, body:Record<string,unknown>){
   return new Response(JSON.stringify(body), { status, headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"} });
@@ -14,13 +15,7 @@ function bearerToken(req:Request){
 }
 
 function pushConfig(){
-  const publicKey=String(Netlify.env.get("WEB_PUSH_VAPID_PUBLIC_KEY") || "").trim();
-  const privateKey=String(Netlify.env.get("WEB_PUSH_VAPID_PRIVATE_KEY") || "").trim();
-  const subject=String(Netlify.env.get("WEB_PUSH_VAPID_SUBJECT") || "").trim();
-  return {
-    configured:/^[A-Za-z0-9_-]{80,100}$/.test(publicKey) && /^[A-Za-z0-9_-]{40,60}$/.test(privateKey) && /^https:\/\//.test(subject),
-    publicKey, privateKey, subject,
-  };
+  return vapidConfigFromEnv((name:string)=>Netlify.env.get(name));
 }
 
 function uuid(value:any){
