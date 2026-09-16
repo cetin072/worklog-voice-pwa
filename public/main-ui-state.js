@@ -30,6 +30,7 @@
   }
 
   function loadIntegratedSearch() {
+    if (typeof document === "undefined") return;
     if (document.querySelector('script[data-worklog-search="1"]')) return;
     const script = document.createElement("script");
     script.src = "/search.js?v=20260916-1";
