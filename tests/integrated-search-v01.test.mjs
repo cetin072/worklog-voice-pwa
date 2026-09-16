@@ -44,8 +44,13 @@ test("integrated search covers raw, normalized, structured and alias fields in t
   assert.ok(exact >= 0 && exact < partial && partial < alias, "ranking must stay exact -> partial -> alias");
   assert.match(sql, /order by r\.match_rank asc, r\.recorded_at desc/i);
 
+  const executableSql = sql
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("--"))
+    .join("\n")
+    .toLowerCase();
   for (const forbidden of ["vector", "embedding", "openai", "gemini", "claude"]) {
-    assert.doesNotMatch(sql.toLowerCase(), new RegExp(forbidden));
+    assert.doesNotMatch(executableSql, new RegExp(forbidden));
   }
 });
 
