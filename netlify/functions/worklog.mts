@@ -15,6 +15,7 @@ const DEFAULT_DATA_SOURCE_ID = "e345d19d-504f-4466-815a-912b1d6b9a3a";
 const INSTITUTIONS = new Set(["태장","미래여성가족진흥원","기타"]);
 const STATUSES = new Set(["완료","진행중","대기","확인필요"]);
 const TYPES = new Set(["완료업무","할 일","회의·통화","지출·세무","지시·위임","아이디어","문제·확인","기타"]);
+const TRUSTED_INSTITUTION_SOURCES = new Set(["user_selected","user_confirmed"]);
 
 function json(status:number, body:Record<string,unknown>){
   return new Response(JSON.stringify(body), {
@@ -163,6 +164,8 @@ export default async (req:Request, _context:Context) => {
   }
 
   const requestedInstitution=String(body.institution || "").trim().slice(0,60);
+  const requestedInstitutionSource=String(body.institutionSource || body.institution_source || "").trim().toLowerCase();
+  const institutionSource=TRUSTED_INSTITUTION_SOURCES.has(requestedInstitutionSource) ? requestedInstitutionSource : "unverified";
   const institution=mode==="personal"
     ? (requestedInstitution || "기타")
     : (INSTITUTIONS.has(requestedInstitution) ? requestedInstitution : "기타");
@@ -176,7 +179,7 @@ export default async (req:Request, _context:Context) => {
     : extractScheduleFromText(transcript,body.recordedAt || new Date());
   const cleanTranscript=String(schedule.text || transcript).trim() || transcript;
   const record={
-    clientRequestId:requestId, transcript, cleanTranscript, institution, status, type,
+    clientRequestId:requestId, transcript, cleanTranscript, institution, institutionSource, status, type,
     recordedAt:body.recordedAt || new Date().toISOString(),
     recordedDate:seoulDateFromRecordedAt(body.recordedAt),
     amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
@@ -269,75 +272,41 @@ export default async (req:Request, _context:Context) => {
       catch(error){ console.warn("Worklog dual-write idempotency read failed",String((error as any)?.message || "unknown").slice(0,120)); }
 
       const prior=dualExisting || (existing?.pageId ? {notion:{pageId:existing.pageId,url:existing.url || ""}} : {});
-      if(prior.dataCore && prior.notion){
-        const normalizationQueued=await queueRecordNormalization(req,accessToken,prior.dataCore.workRecordId);
-        return json(200,{ok:true,pageId:prior.notion.pageId,url:prior.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,deduped:true,dataCoreWorkRecordId:prior.dataCore.workRecordId || "",normalizationQueued});
-      }
-
-      const notion=createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION});
-      const dataCore=createWorklogDataCoreAdapter({client:createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken})});
+      const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
+      const dataCore=createWorklogDataCoreAdapter({client});
+      const notion=notionConfigured ? createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION}) : null;
       const coordinator=createDualWriteCoordinator({
-        writeDataCore:()=>dataCore.persist(record,workspaceContext),
-        writeNotion:()=>notion.create(record),
+        writers:{
+          notion:notion ? ()=>notion.create(record) : null,
+          dataCore:()=>dataCore.persist(record,workspaceContext),
+        },
         saveProgress:async progress=>{
           try{ await idem.setJSON(dualKey,{...progress,mode,createdAt:new Date().toISOString()}); }
-          catch(error){ console.warn("Worklog dual-write idempotency write failed",String((error as any)?.message || "unknown").slice(0,120)); }
+          catch(error){ console.warn("Worklog dual idempotency write failed",String((error as any)?.message || "unknown").slice(0,120)); }
         }
       });
       const result=await coordinator.execute(record,prior);
-      if(!result.complete){
-        return json(503,{ok:false,error:"한 저장소에만 저장되었습니다. 원문은 유지되며 같은 내용을 다시 저장하면 완료되지 않은 저장소만 재시도합니다.",retryable:true,notionSaved:Boolean(result.notion),dataCoreSaved:Boolean(result.dataCore)});
-      }
-      const normalizationQueued=await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
-      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,normalizationQueued});
+      if(result.dataCore?.workRecordId) await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
+      return json(200,{ok:true,mode,dualWrite:true,pageId:result.notion?.pageId || "",url:result.notion?.url || "",dataCoreWorkRecordId:result.dataCore?.workRecordId || "",dataCoreWorkspaceId:result.dataCore?.workspaceId || "",notionError:result.errors?.notion || null,dataCoreError:result.errors?.dataCore || null});
     }catch(err:any){
-      if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog dual-write error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
-      return json(502,{error:"Data Core와 Notion 저장에 실패했습니다. 원문은 유지되며 다시 저장할 수 있습니다."});
+      return json(502,{error:"업무 저장 동기화에 실패했습니다. 원문은 유지되며 다시 저장할 수 있습니다."});
     }
   }
 
+  if(!notionConfigured) return json(503,{error:"Notion 저장 설정이 없습니다."});
   try{
     const notion=createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION});
-    const data=await notion.create(record);
-
+    const result=await notion.create(record);
     if(idem){
-      try{
-        await idem.setJSON(`request:${requestId}`,{
-          pageId:data.pageId,
-          url:data.url,
-          mode,
-          createdAt:new Date().toISOString()
-        });
-      }catch(error){
-        console.warn("Worklog idempotency write failed",String((error as any)?.message || "unknown").slice(0,120));
-      }
+      try{ await idem.setJSON(`request:${requestId}`,{pageId:result.pageId,url:result.url,mode,createdAt:new Date().toISOString()}); }
+      catch(error){ console.warn("Worklog idempotency write failed",String((error as any)?.message || "unknown").slice(0,120)); }
     }
-
-    return json(200,{
-      ok:true,
-      pageId:data.pageId,
-      url:data.url,
-      mode,
-      scheduleDetected:Boolean(schedule.matched),
-      dueStart:String(schedule.dueStart || ""),
-      cleanTranscript
-    });
+    return json(200,{ok:true,mode,pageId:result.pageId,url:result.url});
   }catch(err:any){
-    const notionStatus=Number(err?.notionStatus || 0);
-    if(err?.code==="NOTION_WORKLOG_WRITE_FAILED"){
-      console.error("Notion worklog error",notionStatus,String(err?.notionCode || "").slice(0,300));
-      if(mode==="personal" && (notionStatus===401 || notionStatus===404)){
-        return json(401,{error:"개인 Notion 연결이 만료되었거나 DB를 찾을 수 없습니다. ‘내 Notion으로 시작하기’에서 다시 연결해주세요."});
-      }
-      return json(502,{error:"Notion 저장에 실패했습니다. 토큰과 DB 연결 권한을 확인해주세요.", notionStatus});
-    }
-    console.error(err);
-    return json(502,{error:"Notion 서버에 연결하지 못했습니다."});
+    console.error("Worklog Notion error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
+    return json(502,{error:"Notion 저장에 실패했습니다. 원문은 유지되며 다시 저장할 수 있습니다."});
   }
 };
 
-export const config:Config = {
-  path:"/api/worklog",
-  method:["GET","POST"]
-};
+export const config:Config={path:"/api/worklog"};
