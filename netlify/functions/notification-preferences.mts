@@ -23,7 +23,7 @@ function requestOrigin(req:Request){
 
 async function loadState(client:any, workspace:any, origin:string){
   const preferences=await client.select("notification_preferences",{
-    select:"morning_enabled,morning_time,timezone",
+    select:"morning_enabled,morning_time,timezone,morning_detail_enabled",
     workspace_id:`eq.${workspace.workspaceId}`,
     user_id:`eq.${workspace.userId}`,
     limit:"1",
@@ -39,6 +39,7 @@ async function loadState(client:any, workspace:any, origin:string){
   const pref=preferences[0] || {};
   return {
     morningEnabled:Boolean(pref.morning_enabled),
+    detailEnabled:pref.morning_detail_enabled !== false,
     morningTime:"08:30",
     timezone:"Asia/Seoul",
     connected:subscriptions.length>0,
@@ -63,8 +64,13 @@ export default async (req:Request,_context:Context)=>{
     if(req.method==="GET") return json(200,{ok:true,...await loadState(client,workspace,origin)});
 
     const body=await req.json().catch(()=>({}));
-    if(typeof body?.morningEnabled!=="boolean") return json(400,{error:"MORNING_ENABLED_REQUIRED",message:"아침 알림 사용 여부를 확인해주세요."});
-    if(body.morningEnabled){
+    const hasMorning=Object.prototype.hasOwnProperty.call(body,"morningEnabled");
+    const hasDetail=Object.prototype.hasOwnProperty.call(body,"detailEnabled");
+    if(hasMorning && typeof body?.morningEnabled!=="boolean") return json(400,{error:"MORNING_ENABLED_INVALID",message:"아침 알림 사용 여부를 확인해주세요."});
+    if(hasDetail && typeof body?.detailEnabled!=="boolean") return json(400,{error:"DETAIL_ENABLED_INVALID",message:"알림 내용 표시 설정을 확인해주세요."});
+    if(!hasMorning && !hasDetail) return json(400,{error:"NOTIFICATION_PREFERENCE_REQUIRED",message:"변경할 알림 설정을 확인해주세요."});
+
+    if(hasMorning && body.morningEnabled){
       const connected=await client.select("push_subscriptions",{
         select:"id",
         workspace_id:`eq.${workspace.workspaceId}`,
@@ -76,10 +82,12 @@ export default async (req:Request,_context:Context)=>{
       if(!connected.length) return json(409,{error:"PUSH_SUBSCRIPTION_REQUIRED",message:"먼저 이 기기를 서버 알림에 연결해주세요."});
     }
 
+    const current=await loadState(client,workspace,origin);
     await client.upsert("notification_preferences",{
       workspace_id:workspace.workspaceId,
       user_id:workspace.userId,
-      morning_enabled:body.morningEnabled,
+      morning_enabled:hasMorning ? body.morningEnabled : current.morningEnabled,
+      morning_detail_enabled:hasDetail ? body.detailEnabled : current.detailEnabled,
       morning_time:"08:30:00",
       timezone:"Asia/Seoul",
       updated_at:new Date().toISOString(),
