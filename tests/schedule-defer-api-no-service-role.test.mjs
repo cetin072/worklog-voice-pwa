@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-defer.mts',import.meta.url),'utf8');test('미루기 API는 SUPABASE_SERVICE_ROLE_KEY를 사용하지 않는다',()=>assert.doesNotMatch(src,/SERVICE_ROLE/));
