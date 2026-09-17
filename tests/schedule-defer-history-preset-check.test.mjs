@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('미루기 이력 preset 컬럼도 허용값 check를 가진다',()=>assert.match(sql,/preset text not null check \(preset in \('day','week','fortnight','month','custom'\)\)/));
