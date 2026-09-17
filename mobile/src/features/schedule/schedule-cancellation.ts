@@ -33,20 +33,18 @@ async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
 }
 
 /**
- * Cancels a Data Core schedule first, then converges device state.  A durable
- * pending list lets the next app start retry Calendar/notification cleanup if
- * a device permission or OS provider was temporarily unavailable.
+ * Cancels a Data Core schedule first, then converges device state. A durable
+ * pending list is recorded only after server confirmation, so restart recovery
+ * never removes device artifacts for a schedule whose cancellation is unknown.
  */
 export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseClient, scheduleId: string) {
   if (!UUID_PATTERN.test(scheduleId)) throw new Error('취소할 일정 정보를 확인하지 못했습니다.');
 
+  const { error } = await client.rpc('cancel_my_schedule', { p_schedule_id: scheduleId });
+  if (error) throw new Error(error.message || '일정을 취소하지 못했습니다.');
+
   const pending = await pendingScheduleIds();
   await savePendingScheduleIds([...pending, scheduleId]);
-  const { error } = await client.rpc('cancel_my_schedule', { p_schedule_id: scheduleId });
-  if (error) {
-    await savePendingScheduleIds(pending);
-    throw new Error(error.message || '일정을 취소하지 못했습니다.');
-  }
 
   try {
     await cleanupDeviceScheduleArtifacts(scheduleId);

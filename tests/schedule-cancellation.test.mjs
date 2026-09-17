@@ -16,10 +16,15 @@ test('Schedule cancellation is owner-scoped soft cancellation, never a hard dele
   assert.match(migration, /grant execute on function public\.cancel_my_schedule\(uuid\) to authenticated, service_role/i);
 });
 
-test('Mobile cancellation records recoverable cleanup before canceling the server schedule', () => {
+test('Mobile cancellation records recoverable cleanup only after the server cancellation is confirmed', () => {
   assert.match(mobileCancellation, /PENDING_SCHEDULE_CLEANUP_KEY/);
-  assert.match(mobileCancellation, /savePendingScheduleIds\(\[\.\.\.pending, scheduleId\]\)/);
   assert.match(mobileCancellation, /client\.rpc\('cancel_my_schedule'/);
+  const rpc = mobileCancellation.indexOf("client.rpc('cancel_my_schedule'");
+  const pending = mobileCancellation.indexOf('savePendingScheduleIds([...pending, scheduleId]);');
+  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId);');
+  assert.ok(rpc >= 0);
+  assert.ok(pending > rpc, 'pending cleanup must be saved after a successful server RPC');
+  assert.ok(cleanup > pending, 'device cleanup must start only after the confirmed pending marker exists');
   assert.match(mobileCancellation, /removeScheduleFromCalendar\(scheduleId\)/);
   assert.match(mobileCancellation, /cancelAllScheduleReminders\(scheduleId\)/);
   assert.match(mobileCancellation, /reconcileCanceledScheduleArtifacts/);
