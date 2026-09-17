@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const api=fs.readFileSync(new URL('../netlify/functions/schedule-defer.mts',import.meta.url),'utf8');test('일정 미루기 API는 notification snooze 개념을 섞지 않는다',()=>assert.doesNotMatch(api,/snooze/i));
