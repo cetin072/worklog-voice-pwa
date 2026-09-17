@@ -12,7 +12,7 @@
 
 ### Customer Index Daily Incremental Sync 0.1
 - MASTER v5를 수정하지 않는 별도 LIVE 고객 인덱스 스키마를 추가했습니다.
-- Google Drive Changes API의 fileId/folderId와 page token으로 신규·변경 항목만 하루 1회 처리합니다.
+- 비활성 기본값의 GitHub Actions 일일 작업에서 Google Drive Changes API의 fileId/folderId와 page token으로 신규·변경 항목만 처리합니다.
 - 기존 Drive 연결은 P-고객키를 유지하고, 명백한 신규 단일 고객 폴더만 새 고객후보 키를 생성합니다.
 - 이름만 일치하거나 동명이인·가족관계가 불명확한 건은 확인대기로 보냅니다.
 - 삭제·이동된 Drive 항목이 고객 Identity를 자동 삭제하지 않도록 했습니다.

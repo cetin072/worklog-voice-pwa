@@ -1,0 +1,36 @@
+name: Customer Index Daily Incremental Sync
+
+on:
+  schedule:
+    - cron: "15 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Customer Index Daily Incremental Sync
+    if: ${{ vars.CUSTOMER_INDEX_SYNC_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CUSTOMER_INDEX_SYNC_ENABLED: ${{ vars.CUSTOMER_INDEX_SYNC_ENABLED }}
+      CUSTOMER_INDEX_SYNC_WORKSPACE_ID: ${{ secrets.CUSTOMER_INDEX_SYNC_WORKSPACE_ID }}
+      CUSTOMER_INDEX_WATCH_FOLDER_ID: ${{ secrets.CUSTOMER_INDEX_WATCH_FOLDER_ID }}
+      CUSTOMER_INDEX_MASTER_FILE_ID: ${{ secrets.CUSTOMER_INDEX_MASTER_FILE_ID }}
+      GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL }}
+      GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run incremental sync
+        run: node scripts/customer-index-daily-sync.mjs

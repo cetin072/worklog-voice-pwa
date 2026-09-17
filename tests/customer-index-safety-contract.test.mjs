@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const migration = read("supabase/migrations/20260917023000_customer_index_daily_sync_v01.sql");
-const functionSource = read("netlify/functions/customer-index-daily-sync.mts");
+const runnerSource = read("scripts/customer-index-daily-sync.mjs");
+const workflowSource = read(".github/workflows/customer-index-daily-sync.yml");
 const driveSource = read("netlify/shared/customer-index/google-drive-adapter.mjs");
 const syncSource = read("netlify/shared/customer-index/daily-sync.mjs");
 const docs = read("docs/CUSTOMER_INDEX_DAILY_INCREMENTAL_SYNC_V01.md");
@@ -35,11 +36,12 @@ test("Drive connector is read-only and MASTER is a guard target, not a write tar
   assert.match(docs, /MASTER[^\n]*읽기 전용/);
 });
 
-test("scheduled function is daily, disabled by default, and logs counts only", () => {
-  assert.match(functionSource, /CUSTOMER_INDEX_SYNC_ENABLED/);
-  assert.match(functionSource, /schedule:"15 0 \* \* \*"/);
-  assert.match(functionSource, /changed:result\.changed/);
-  assert.doesNotMatch(functionSource, /result\.(name|fullName|phone|path)/);
+test("scheduled workflow is daily, disabled by default, and logs counts only", () => {
+  assert.match(workflowSource, /cron: "15 0 \* \* \*"/);
+  assert.match(workflowSource, /if: \$\{\{ vars\.CUSTOMER_INDEX_SYNC_ENABLED == 'true' \}\}/);
+  assert.match(runnerSource, /CUSTOMER_INDEX_SYNC_ENABLED/);
+  assert.match(runnerSource, /changed: result\.changed/);
+  assert.doesNotMatch(runnerSource, /result\.(name|fullName|phone|path)/);
 });
 
 test("sync engine contains no customer identity deletion path", () => {

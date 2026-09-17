@@ -101,7 +101,7 @@ Drive 항목이 삭제·휴지통·감시 폴더 밖 이동 상태가 되어도 
 
 | 변수 | 설명 |
 | --- | --- |
-| `CUSTOMER_INDEX_SYNC_ENABLED` | `true`일 때만 실행 |
+| `CUSTOMER_INDEX_SYNC_ENABLED` | GitHub Actions repository variable. `true`일 때만 실행 |
 | `CUSTOMER_INDEX_SYNC_WORKSPACE_ID` | LIVE Identity 소유 Workspace UUID |
 | `CUSTOMER_INDEX_WATCH_FOLDER_ID` | `고객 상담파일` Drive folderId |
 | `CUSTOMER_INDEX_MASTER_FILE_ID` | MASTER v5 Drive fileId. 감시 폴더와 다른지 guard에 사용 |
@@ -114,9 +114,10 @@ Drive 항목이 삭제·휴지통·감시 폴더 밖 이동 상태가 되어도 
 
 ## 실행
 
-`customer-index-daily-sync.mts`는 매일 00:15 UTC, 즉 Asia/Seoul 09:15에 실행한다.
+`.github/workflows/customer-index-daily-sync.yml`은 매일 00:15 UTC, 즉 Asia/Seoul 09:15에 실행한다. 실제 동기화 코드는 `scripts/customer-index-daily-sync.mjs`가 호출한다. Netlify Function으로 새 Lambda를 추가하지 않으므로 기존 Netlify Functions의 환경변수 한도와 배포 경계를 변경하지 않는다.
 
-- 설정 누락 또는 `CUSTOMER_INDEX_SYNC_ENABLED != true`: fail closed
+- repository variable `CUSTOMER_INDEX_SYNC_ENABLED != true`: workflow job 자체가 실행되지 않음
+- 설정 누락: fail closed
 - 변경 없음: Identity/Link/Review 변경 0건, run 상태 `noop`
 - 성공: 모든 변경 처리가 끝난 뒤에만 새 page token 저장
 - 실패: 기존 page token 유지. 다음 실행이 같은 변경을 다시 처리하며 fingerprint/event key로 멱등 수렴
@@ -128,10 +129,10 @@ Netlify console에는 상태와 건수, 오류코드만 기록한다. 고객명�
 1. migration을 Preview/DEV Supabase에만 적용
 2. MASTER v5 활성 Identity seed 행 수와 키 무결성 검증
 3. Drive 기존 연결 seed 검증
-4. 환경변수 등록 후 `CUSTOMER_INDEX_SYNC_ENABLED`는 계속 `false`
+4. GitHub Actions secrets를 등록하고 repository variable `CUSTOMER_INDEX_SYNC_ENABLED`는 생성하지 않거나 `false` 유지
 5. 첫 수동 실행이 `checkpoint_initialized`인지 확인
 6. 합성 테스트 폴더로 기존/신규/확인대기/이동 시나리오 확인
 7. 확인대기 UI 또는 운영 조회 경로 준비
-8. 대표자 승인 후 scheduled sync 활성화
+8. 대표자 승인 후 repository variable을 `true`로 변경해 scheduled sync 활성화
 
 Production 데이터 migration과 실제 활성화는 이 코드 PR의 범위가 아니다.
