@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('schedule id와 새 시작시각이 없으면 DB에서 거부한다',()=>assert.match(sql,/p_schedule_id is null or p_new_starts_at is null/));
