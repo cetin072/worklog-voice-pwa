@@ -21,7 +21,10 @@ export default function HomeScreen() {
   const [password, setPassword] = useState('');
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState('');
+  const [briefingMessage, setBriefingMessage] = useState('');
+  const [briefingError, setBriefingError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [briefingBusy, setBriefingBusy] = useState(false);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -32,6 +35,22 @@ export default function HomeScreen() {
       setMessage(nextError instanceof Error ? nextError.message : '처리 중 오류가 발생했습니다.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runBriefing() {
+    if (!session || briefingBusy) return;
+
+    setBriefingBusy(true);
+    setBriefingMessage('');
+    setBriefingError('');
+    try {
+      const result = await loadBriefing(session.access_token);
+      setBriefingMessage(`브리핑 연결 성공\n${JSON.stringify(result.counts || {}, null, 2)}`);
+    } catch (nextError) {
+      setBriefingError(nextError instanceof Error ? nextError.message : '브리핑을 불러오지 못했습니다.');
+    } finally {
+      setBriefingBusy(false);
     }
   }
 
@@ -107,15 +126,12 @@ export default function HomeScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>업무 상황 읽기</Text>
           <Button
-            title="브리핑 불러오기"
-            disabled={busy}
-            onPress={() =>
-              run(async () => {
-                const result = await loadBriefing(session.access_token);
-                setMessage(`브리핑 연결 성공\n${JSON.stringify(result.counts || {}, null, 2)}`);
-              })
-            }
+            title={briefingBusy ? '브리핑 불러오는 중...' : '브리핑 불러오기'}
+            disabled={briefingBusy}
+            onPress={runBriefing}
           />
+          {briefingMessage ? <Text style={styles.messageInline}>{briefingMessage}</Text> : null}
+          {briefingError ? <Text style={styles.errorText}>{briefingError}</Text> : null}
         </View>
 
         <View style={styles.card}>
@@ -181,6 +197,13 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 110, textAlignVertical: 'top' },
   errorText: { color: '#b42318', lineHeight: 20 },
+  messageInline: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#f4f5f7',
+    color: '#30343b',
+    lineHeight: 20,
+  },
   message: {
     padding: 16,
     borderRadius: 12,
