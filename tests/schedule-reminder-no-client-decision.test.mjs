@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const publicClient=fs.readFileSync(new URL('../public/schedule-defer.js',import.meta.url),'utf8');test('웹 client는 30분 전 발송 대상 판단을 하지 않는다',()=>assert.doesNotMatch(publicClient,/isScheduleReminderEligible|sendWebPush|reminderAt/));
