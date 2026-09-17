@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';test('일정 사전 Push는 별도 scheduled function으로 분리된다',()=>assert.equal(fs.existsSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url)),true));
