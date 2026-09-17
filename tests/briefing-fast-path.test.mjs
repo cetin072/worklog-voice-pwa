@@ -46,6 +46,7 @@ test("briefing source reader uses exactly one RPC and preserves task/schedule co
   assert.equal(source.tasks[0].project, "운영");
   assert.equal(source.schedules.total, 1);
   assert.equal(source.schedules.today[0].status, "확정");
+  assert.equal(source.schedules.today[0].startsAt, "2026-09-16T10:00:00+09:00");
 });
 
 test("briefing source reader fails closed when personal workspace is missing", async () => {
