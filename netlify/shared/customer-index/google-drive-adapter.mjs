@@ -194,6 +194,27 @@ export function createGoogleDriveChangesAdapter({
         fields: "nextPageToken,newStartPageToken,changes(removed,fileId,file(id,name,mimeType,parents,createdTime,modifiedTime,md5Checksum,trashed,driveId))",
       });
     },
+    async listItemsModifiedSince(sinceIso, pageToken = "") {
+      const parsed = new Date(cleanText(sinceIso));
+      if (Number.isNaN(parsed.getTime())) {
+        throw adapterError("CUSTOMER_INDEX_BOOTSTRAP_DATE_INVALID", "초기 대조 시작일이 올바르지 않습니다.");
+      }
+      const params = {
+        q: `modifiedTime >= '${parsed.toISOString()}' and trashed = false`,
+        pageSize: "1000",
+        spaces: "drive",
+        includeItemsFromAllDrives: "true",
+        supportsAllDrives: "true",
+        fields: "nextPageToken,files(id,name,mimeType,parents,createdTime,modifiedTime,md5Checksum,trashed,driveId)",
+      };
+      const token = cleanText(pageToken);
+      if (token) params.pageToken = token;
+      const data = await driveGet("/drive/v3/files", params);
+      return Object.freeze({
+        items: Object.freeze(Array.isArray(data?.files) ? data.files : []),
+        nextPageToken: cleanText(data?.nextPageToken),
+      });
+    },
     getItem,
     resolvePath,
   });
