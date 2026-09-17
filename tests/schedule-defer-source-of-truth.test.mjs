@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('미루기 대상 원본은 schedules row를 잠금 조회한다',()=>{assert.match(sql,/from public\.schedules s/);assert.match(sql,/for update/);});
