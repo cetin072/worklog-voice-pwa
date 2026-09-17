@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('DB RPC 자체에서도 auth.uid null을 거부한다',()=>assert.match(sql,/if \(select auth\.uid\(\)\) is null then raise exception 'AUTHENTICATION_REQUIRED'/));
