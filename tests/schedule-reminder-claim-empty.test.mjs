@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('대상 일정이 0건이면 빈 rows로 정상 종료 가능한 구조다',()=>{assert.match(src,/let rows:any\[\]=\[\]/);assert.match(src,/for\(const row of rows\)/);});
