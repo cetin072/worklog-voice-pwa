@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-defer.mts',import.meta.url),'utf8');test('상대 미루기 새 시각은 서버 shared rule이 계산한다',()=>assert.match(src,/deferScheduleTime/));
