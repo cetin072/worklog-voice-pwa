@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {deferScheduleTime} from '../netlify/shared/schedule-defer-reminder.mjs';test('직접 선택에서 날짜가 없으면 거부한다',()=>assert.throws(()=>deferScheduleTime('2026-09-17T05:00:00Z','custom'),/직접 선택한/));
