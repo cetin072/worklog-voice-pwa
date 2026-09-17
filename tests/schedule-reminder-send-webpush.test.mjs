@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('일정 알림 전송은 기존 sendWebPush를 사용한다',()=>assert.match(src,/await sendWebPush\(/));
