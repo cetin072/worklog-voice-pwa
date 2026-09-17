@@ -6,6 +6,7 @@ const appJson = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
 const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 const providerSource = fs.readFileSync('mobile/src/providers/platform-provider.tsx', 'utf8');
 const googleAuthSource = fs.readFileSync('mobile/src/platform/google-auth.ts', 'utf8');
+const googleAuthRouteSource = fs.readFileSync('mobile/app/google-auth.tsx', 'utf8');
 const authPreferencesSource = fs.readFileSync('mobile/src/platform/auth-preferences.ts', 'utf8');
 
 test('Mobile app owns a stable worklog deep-link scheme', () => {
@@ -25,6 +26,13 @@ test('Google sign-in reuses Supabase OAuth and returns through the app scheme', 
   assert.match(googleAuthSource, /callbackInFlight/);
   assert.match(googleAuthSource, /client\.auth\.setSession/);
   assert.match(googleAuthSource, /client\.auth\.exchangeCodeForSession/);
+});
+
+test('Google callback has an Expo Router route and returns to the app shell after auth completes', () => {
+  assert.match(googleAuthRouteSource, /GoogleAuthCallbackScreen/);
+  assert.match(googleAuthRouteSource, /usePlatform/);
+  assert.match(googleAuthRouteSource, /Google 로그인 완료 중/);
+  assert.match(googleAuthRouteSource, /router\.replace\('\/'\)/);
 });
 
 test('Mobile Google OAuth does not persist Google provider tokens', () => {
