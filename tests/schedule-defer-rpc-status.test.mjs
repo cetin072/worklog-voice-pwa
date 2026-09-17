@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('DB 미루기 RPC도 active 일정 상태만 허용한다',()=>assert.match(sql,/v\.status not in \('confirmed','tentative'\)/));
