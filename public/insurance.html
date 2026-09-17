@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192-v6.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192-v6.png">
+  <title>보험팩 · 업무수첩</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/insurance.css?v=20260917-1">
+</head>
+<body>
+  <main class="app insurance-page" id="insurancePage">
+    <header>
+      <div>
+        <p class="eyebrow">업무수첩 전문 모듈</p>
+        <h1>🛡 보험팩</h1>
+      </div>
+      <a class="insurance-home" href="/">업무수첩</a>
+    </header>
+
+    <p id="insuranceStatus" class="insurance-status" aria-live="polite">보험사건을 불러오는 중입니다.</p>
+
+    <section id="insuranceSignedOut" class="card insurance-empty" hidden>
+      <h2>로그인이 필요합니다</h2>
+      <p>보험사건은 내 업무공간 안에서만 확인할 수 있습니다.</p>
+      <a class="insurance-primary-link" href="/">로그인 화면으로 이동</a>
+    </section>
+
+    <section id="insuranceListSection" class="card" hidden>
+      <div class="insurance-section-head">
+        <div><p class="eyebrow">보상·청구 업무</p><h2>보험사건</h2></div>
+        <span id="insuranceCaseCount" class="badge">0건</span>
+      </div>
+      <p class="insurance-note">새 사건은 업무수첩 브리핑의 업무에서 시작합니다.</p>
+      <ul id="insuranceCaseList" class="insurance-case-list"></ul>
+      <p id="insuranceCaseEmpty" class="insurance-empty-copy" hidden>아직 연결된 보험사건이 없습니다.</p>
+    </section>
+
+    <section id="insuranceCreateSection" class="card" hidden>
+      <p class="eyebrow">업무에서 사건 만들기</p>
+      <h2>보험사건 생성</h2>
+      <div class="insurance-source-box">
+        <span>원본 업무</span>
+        <strong id="insuranceCreateSource">확인 중</strong>
+      </div>
+      <form id="insuranceCreateForm">
+        <label><span>고객 식별키</span><input id="insuranceCustomerKey" autocomplete="off" maxlength="40" placeholder="P-계열 customer_key" required></label>
+        <p class="insurance-field-note">고객 이름이나 전화번호를 저장하지 않습니다. Preview 합성 확인에는 P-DEV-0001을 사용할 수 있습니다.</p>
+        <label><span>사건 제목</span><input id="insuranceCaseTitle" maxlength="200" required></label>
+        <button class="save" type="submit">보험사건 만들기</button>
+      </form>
+    </section>
+
+    <section id="insuranceDetailSection" hidden>
+      <article class="card insurance-detail-card">
+        <div class="insurance-section-head">
+          <div><p class="eyebrow">보험사건 상세</p><h2 id="insuranceDetailHeading">사건</h2></div>
+          <a class="insurance-list-link" href="/insurance.html">목록</a>
+        </div>
+        <dl class="insurance-summary">
+          <div><dt>연결 고객</dt><dd id="insuranceDetailCustomer">—</dd></div>
+          <div><dt>고객 연결</dt><dd id="insuranceDetailCustomerState">—</dd></div>
+          <div><dt>원본 업무</dt><dd id="insuranceDetailOriginal">—</dd></div>
+        </dl>
+        <form id="insuranceDetailForm">
+          <label><span>사건 제목</span><input id="insuranceDetailTitle" maxlength="200" required></label>
+          <label><span>사건 상태</span>
+            <select id="insuranceDetailStatus">
+              <option value="intake">문의접수</option>
+              <option value="checking">확인중</option>
+              <option value="waiting">대기</option>
+              <option value="active">진행중</option>
+              <option value="closed">종결</option>
+            </select>
+          </label>
+          <label><span>대기 상대</span>
+            <select id="insuranceWaitingParty">
+              <option value="">없음</option>
+              <option value="customer">고객</option>
+              <option value="insurer">보험사</option>
+              <option value="internal">내부 확인</option>
+              <option value="external">외부 처리자</option>
+            </select>
+          </label>
+          <label><span>대기 사유</span><textarea id="insuranceWaitingReason" rows="3" maxlength="1000"></textarea></label>
+          <button class="save" type="submit">사건 정보 저장</button>
+        </form>
+      </article>
+
+      <article class="card">
+        <p class="eyebrow">Core WorkRecord</p>
+        <h2>현재 다음 행동</h2>
+        <div id="insuranceCurrentAction" class="insurance-action-current">다음 행동이 없습니다.</div>
+        <button id="insuranceCompleteAction" class="insurance-secondary-action" type="button" hidden>다음 행동 완료</button>
+        <form id="insuranceActionForm">
+          <label><span>새 다음 행동</span><input id="insuranceActionTitle" maxlength="200" placeholder="예: 고객 증권 확인" required></label>
+          <label><span>기한</span><input id="insuranceActionDue" type="date"></label>
+          <p class="insurance-field-note">기한은 Core 업무의 due_at에 저장됩니다. 시간 약속은 기존 일정 기능에서 관리합니다.</p>
+          <button class="save" type="submit">다음 행동 지정</button>
+        </form>
+      </article>
+    </section>
+
+    <footer>보험팩 0.1-A1 · 고객키 연결 · 사건 상태 · Core 다음 행동</footer>
+  </main>
+
+  <script src="/platform-auth.js?v=20260916-2" defer></script>
+  <script type="module" src="/insurance.js?v=20260917-1"></script>
+</body>
+</html>

@@ -192,7 +192,10 @@
       : IS_PREVIEW_DEMO
       ? `<button class="briefing-complete briefing-v2-complete" type="button" disabled>완료</button>`
       : `<button class="briefing-complete briefing-v2-complete" type="button" data-page-id="${escapeHtml(item.pageId)}" data-status="${escapeHtml(item.status)}" data-title="${escapeHtml(item.title)}">완료</button>`;
-    return `<li${hidden}><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${badges}${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>${follow}</div>${action}</li>`;
+    const insurance=renderedMode==="data_core" && !IS_PREVIEW_DEMO
+      ? `<a class="insurance-briefing-link" href="/insurance.html?workRecordId=${encodeURIComponent(item.pageId)}">보험사건</a>`
+      : "";
+    return `<li${hidden}><div><strong>${escapeHtml(item.title)}</strong><div class="briefing-sub">${institution}${badges}${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>${follow}</div><div class="briefing-v2-actions">${insurance}${action}</div></li>`;
   }
 
   function sectionHtml(kind,label,items,canUpdate){
