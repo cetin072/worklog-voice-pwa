@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 
+import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { loadBriefing, saveWorklog } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 
@@ -100,6 +101,8 @@ export default function HomeScreen() {
           <Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text>
           <Text style={styles.meta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text>
         </View>
+
+        <VoiceRecorderCard />
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>업무 상황 읽기</Text>
