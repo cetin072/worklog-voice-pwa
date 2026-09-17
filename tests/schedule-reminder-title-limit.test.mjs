@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('Push 일정 제목은 160자로 제한한다',()=>assert.equal(buildScheduleReminderPayload({scheduleId:'s',title:'가'.repeat(300)}).body.length,160));
