@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/shared/notification-scheduler.mjs',import.meta.url),'utf8');test('기존 finish 계약의 deliveryId/success/status/code를 유지한다',()=>{for(const k of ['deliveryId','success','status','code'])assert.match(src,new RegExp(k));});
