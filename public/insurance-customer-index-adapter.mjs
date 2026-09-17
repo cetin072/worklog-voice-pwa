@@ -32,7 +32,8 @@ export function createDefaultCustomerIndexAdapter({ hostname = "" } = {}) {
   const host = String(hostname).toLowerCase();
   const allowFixture = host === "localhost"
     || host === "127.0.0.1"
-    || host.startsWith("deploy-preview-");
+    || host.startsWith("deploy-preview-")
+    || host.includes("worklog-insurance-sandbox");
   const fixtures = allowFixture
     ? new Map([["P-DEV-0001", { displayName: "DEV 합성 고객" }]])
     : new Map();

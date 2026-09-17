@@ -1,5 +1,6 @@
 import { createInsuranceCaseClient } from "./insurance-case-client.mjs";
 import { createDefaultCustomerIndexAdapter } from "./insurance-customer-index-adapter.mjs";
+import { createInsuranceSandboxRpc, isInsuranceSandboxHost } from "./insurance-sandbox-store.mjs";
 
 const $ = (id) => document.getElementById(id);
 const STATUS_LABELS = Object.freeze({ intake: "문의접수", checking: "확인중", waiting: "대기", active: "진행중", closed: "종결" });
@@ -7,6 +8,7 @@ const ACTION_STATUS_LABELS = Object.freeze({ in_progress: "진행중", waiting: 
 const PENDING_KEY = "worklogInsurancePendingRequestsV1";
 const PENDING_MAX_AGE = 30 * 60 * 1000;
 let activeCase = null;
+const IS_SANDBOX = isInsuranceSandboxHost(location.hostname);
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -81,7 +83,8 @@ async function rpc(name, body, retry = true) {
   return data;
 }
 
-const client = createInsuranceCaseClient({ rpc, nextRequestId, clearRequestId });
+const activeRpc = IS_SANDBOX ? createInsuranceSandboxRpc() : rpc;
+const client = createInsuranceCaseClient({ rpc: activeRpc, nextRequestId, clearRequestId });
 const customers = createDefaultCustomerIndexAdapter({ hostname: location.hostname });
 
 function dueLabel(value) {
@@ -158,15 +161,19 @@ async function renderDetail(caseId) {
 }
 
 async function initialize() {
+  if (IS_SANDBOX) {
+    $("insuranceSandboxBanner").hidden = false;
+    $("insuranceSandboxStart").hidden = false;
+  }
   const auth = window.WorklogPlatformAuth;
   const session = auth?.readSession?.();
-  if (!session?.access_token) {
+  if (!IS_SANDBOX && !session?.access_token) {
     $("insuranceSignedOut").hidden = false;
     setStatus("로그인이 필요합니다.", "is-error");
     return;
   }
   try {
-    await auth.bootstrapPersonalWorkspace();
+    if (!IS_SANDBOX) await auth.bootstrapPersonalWorkspace();
     const params = new URLSearchParams(location.search);
     const caseId = params.get("case");
     const workRecordId = params.get("workRecordId");

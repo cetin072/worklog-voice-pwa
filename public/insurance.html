@@ -22,6 +22,11 @@
       <a class="insurance-home" href="/">업무수첩</a>
     </header>
 
+    <section id="insuranceSandboxBanner" class="insurance-sandbox-banner" hidden>
+      <strong>Netlify Sandbox · 합성 데이터 전용</strong>
+      <span>이 브라우저에만 저장되며 Production·Supabase·실제 고객 데이터와 연결되지 않습니다.</span>
+    </section>
+
     <p id="insuranceStatus" class="insurance-status" aria-live="polite">보험사건을 불러오는 중입니다.</p>
 
     <section id="insuranceSignedOut" class="card insurance-empty" hidden>
@@ -36,6 +41,7 @@
         <span id="insuranceCaseCount" class="badge">0건</span>
       </div>
       <p class="insurance-note">새 사건은 업무수첩 브리핑의 업무에서 시작합니다.</p>
+      <a id="insuranceSandboxStart" class="insurance-primary-link insurance-sandbox-start" href="/insurance.html?workRecordId=22222222-2222-4222-8222-222222222222" hidden>합성 업무 → 보험사건 만들기</a>
       <ul id="insuranceCaseList" class="insurance-case-list"></ul>
       <p id="insuranceCaseEmpty" class="insurance-empty-copy" hidden>아직 연결된 보험사건이 없습니다.</p>
     </section>
@@ -109,6 +115,6 @@
   </main>
 
   <script src="/platform-auth.js?v=20260916-2" defer></script>
-  <script type="module" src="/insurance.js?v=20260917-1"></script>
+  <script type="module" src="/insurance.js?v=20260918-1"></script>
 </body>
 </html>
