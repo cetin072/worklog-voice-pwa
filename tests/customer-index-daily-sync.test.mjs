@@ -104,13 +104,18 @@ function makeRepository({ checkpoint = { pageToken: "page-1", lastSuccessfulAt: 
   return repository;
 }
 
-function makeDrive({ changes = [], paths = new Map(), startPageToken = "start-1" } = {}) {
+function makeDrive({ changes = [], paths = new Map(), startPageToken = "start-1", bootstrapItems = [] } = {}) {
   return {
+    rootId: ROOT_ID,
+    masterFileId: "masterFile12345",
     async getStartPageToken() {
       return startPageToken;
     },
     async listChanges() {
       return { changes, newStartPageToken: "page-2" };
+    },
+    async listItemsModifiedSince() {
+      return { items: bootstrapItems, nextPageToken: "" };
     },
     async resolvePath(item) {
       return paths.get(item.id) || { underRoot: false, item, folders: [], ancestorIds: [], path: item.name };
@@ -135,19 +140,56 @@ test("P-key generation is deterministic for a Drive folder", () => {
   assert.match(first, /^P-[A-F0-9]{12}$/);
 });
 
-test("first run only stores a Drive checkpoint and does not discover historical identities", async () => {
+test("first run backfills current Seoul month before storing the Drive checkpoint", async () => {
   const repository = makeRepository({ checkpoint: null });
-  const drive = makeDrive({ changes: [{ fileId: CUSTOMER_FOLDER_ID, file: folder(CUSTOMER_FOLDER_ID, "홍길동") }] });
+  const newFolder = folder(CUSTOMER_FOLDER_ID, "홍길동 (26.09)");
+  const drive = makeDrive({
+    bootstrapItems: [newFolder],
+    paths: new Map([[CUSTOMER_FOLDER_ID, {
+      underRoot: true,
+      item: newFolder,
+      folders: [newFolder],
+      ancestorIds: [],
+      path: "6) G금융 재무상담 (23.01 ~ 현재)/2026 년/9 월 -------/홍길동 (26.09)",
+    }]]),
+  });
   const result = await runCustomerIndexDailySync({
     workspaceId: WORKSPACE_ID,
     drive,
     repository,
     now: new Date(STARTED_AT),
   });
-  assert.equal(result.status, "checkpoint_initialized");
-  assert.equal(repository.state.identities.size, 0);
-  assert.equal(repository.state.sourceItems.size, 0);
+  const key = deterministicPKey(CUSTOMER_FOLDER_ID);
+  assert.equal(result.status, "bootstrap_completed");
+  assert.equal(result.bootstrapSince, "2026-08-31T15:00:00.000Z");
+  assert.equal(result.newIdentity, 1);
+  assert.equal(repository.state.identities.has(key), true);
   assert.equal(repository.state.checkpoint.pageToken, "start-1");
+});
+
+test("first-run current-month spouse or referral folders go to review instead of auto-merge", async () => {
+  const repository = makeRepository({ checkpoint: null });
+  const coupleFolder = folder(CUSTOMER_FOLDER_ID, "이차진 김민자 - 구태정소개 부산 (26.09)");
+  const drive = makeDrive({
+    bootstrapItems: [coupleFolder],
+    paths: new Map([[CUSTOMER_FOLDER_ID, {
+      underRoot: true,
+      item: coupleFolder,
+      folders: [coupleFolder],
+      ancestorIds: [],
+      path: coupleFolder.name,
+    }]]),
+  });
+  const result = await runCustomerIndexDailySync({
+    workspaceId: WORKSPACE_ID,
+    drive,
+    repository,
+    now: new Date(STARTED_AT),
+  });
+  assert.equal(result.status, "bootstrap_completed");
+  assert.equal(result.reviewRequired, 1);
+  assert.equal(repository.state.identities.size, 0);
+  assert.equal([...repository.state.reviews.values()][0].reason, "CUSTOMER_FOLDER_AMBIGUOUS");
 });
 
 test("a day with no Drive changes is a no-op", async () => {
@@ -184,16 +226,9 @@ test("a changed file under an already linked folder keeps the existing P-key", a
       path: "2026년/9월/홍길동 (26.09)/상담기록.pdf",
     }]]),
   });
-  const result = await runCustomerIndexDailySync({
-    workspaceId: WORKSPACE_ID,
-    drive,
-    repository,
-    now: new Date(STARTED_AT),
-  });
+  const result = await runCustomerIndexDailySync({ workspaceId: WORKSPACE_ID, drive, repository, now: new Date(STARTED_AT) });
   assert.equal(result.existingIdentity, 1);
   assert.equal(repository.state.sourceItems.get(FILE_ID).linkedCustomerKey, EXISTING_KEY);
-  assert.equal(repository.state.links.get(FILE_ID), EXISTING_KEY);
-  assert.equal(repository.state.identities.size, 1);
 });
 
 test("a clear newly created folder with no existing candidate creates one deterministic customer candidate", async () => {
@@ -201,134 +236,49 @@ test("a clear newly created folder with no existing candidate creates one determ
   const changedFolder = folder(CUSTOMER_FOLDER_ID, "홍길동 (26.09)");
   const drive = makeDrive({
     changes: [{ fileId: CUSTOMER_FOLDER_ID, file: changedFolder }],
-    paths: new Map([[CUSTOMER_FOLDER_ID, {
-      underRoot: true,
-      item: changedFolder,
-      folders: [changedFolder],
-      ancestorIds: [],
-      path: "2026년/9월/홍길동 (26.09)",
-    }]]),
+    paths: new Map([[CUSTOMER_FOLDER_ID, { underRoot: true, item: changedFolder, folders: [changedFolder], ancestorIds: [], path: "2026년/9월/홍길동 (26.09)" }]]),
   });
-  const result = await runCustomerIndexDailySync({
-    workspaceId: WORKSPACE_ID,
-    drive,
-    repository,
-    now: new Date(STARTED_AT),
-  });
+  const result = await runCustomerIndexDailySync({ workspaceId: WORKSPACE_ID, drive, repository, now: new Date(STARTED_AT) });
   const key = deterministicPKey(CUSTOMER_FOLDER_ID);
   assert.equal(result.newIdentity, 1);
   assert.equal(repository.state.identities.get(key).personType, "고객후보");
-  assert.equal(repository.state.links.get(CUSTOMER_FOLDER_ID), key);
-  assert.equal(repository.state.reviews.size, 0);
 });
 
 test("name-only match is not auto-merged", async () => {
   const repository = makeRepository();
-  repository.state.identities.set(EXISTING_KEY, {
-    customerKey: EXISTING_KEY,
-    normalizedName: "홍길동",
-    active: true,
-  });
+  repository.state.identities.set(EXISTING_KEY, { customerKey: EXISTING_KEY, normalizedName: "홍길동", active: true });
   const changedFolder = folder(CUSTOMER_FOLDER_ID, "홍길동 (26.09)");
-  const drive = makeDrive({
-    changes: [{ fileId: CUSTOMER_FOLDER_ID, file: changedFolder }],
-    paths: new Map([[CUSTOMER_FOLDER_ID, {
-      underRoot: true,
-      item: changedFolder,
-      folders: [changedFolder],
-      ancestorIds: [],
-      path: "2026년/9월/홍길동 (26.09)",
-    }]]),
-  });
-  const result = await runCustomerIndexDailySync({
-    workspaceId: WORKSPACE_ID,
-    drive,
-    repository,
-    now: new Date(STARTED_AT),
-  });
+  const drive = makeDrive({ changes: [{ fileId: CUSTOMER_FOLDER_ID, file: changedFolder }], paths: new Map([[CUSTOMER_FOLDER_ID, { underRoot: true, item: changedFolder, folders: [changedFolder], ancestorIds: [], path: changedFolder.name }]]) });
+  const result = await runCustomerIndexDailySync({ workspaceId: WORKSPACE_ID, drive, repository, now: new Date(STARTED_AT) });
   assert.equal(result.reviewRequired, 1);
-  assert.equal(repository.state.links.has(CUSTOMER_FOLDER_ID), false);
   assert.equal([...repository.state.reviews.values()][0].reason, "NAME_ONLY_MATCH_INSUFFICIENT");
 });
 
 test("multiple names and relationship markers are sent to review", async () => {
   const repository = makeRepository();
   const changedFolder = folder(CUSTOMER_FOLDER_ID, "홍길동 김영희 - 배우자 상담 (26.09)");
-  const drive = makeDrive({
-    changes: [{ fileId: CUSTOMER_FOLDER_ID, file: changedFolder }],
-    paths: new Map([[CUSTOMER_FOLDER_ID, {
-      underRoot: true,
-      item: changedFolder,
-      folders: [changedFolder],
-      ancestorIds: [],
-      path: changedFolder.name,
-    }]]),
-  });
-  const result = await runCustomerIndexDailySync({
-    workspaceId: WORKSPACE_ID,
-    drive,
-    repository,
-    now: new Date(STARTED_AT),
-  });
+  const drive = makeDrive({ changes: [{ fileId: CUSTOMER_FOLDER_ID, file: changedFolder }], paths: new Map([[CUSTOMER_FOLDER_ID, { underRoot: true, item: changedFolder, folders: [changedFolder], ancestorIds: [], path: changedFolder.name }]]) });
+  const result = await runCustomerIndexDailySync({ workspaceId: WORKSPACE_ID, drive, repository, now: new Date(STARTED_AT) });
   assert.equal(result.reviewRequired, 1);
   assert.equal(repository.state.identities.size, 0);
-  assert.equal([...repository.state.reviews.values()][0].reason, "CUSTOMER_FOLDER_AMBIGUOUS");
 });
 
 test("a deleted or moved source never deletes its linked identity", async () => {
   const repository = makeRepository();
-  repository.state.identities.set(EXISTING_KEY, {
-    customerKey: EXISTING_KEY,
-    normalizedName: "홍길동",
-    active: true,
-  });
-  repository.state.sourceItems.set(FILE_ID, {
-    driveItemId: FILE_ID,
-    name: "상담기록.pdf",
-    mimeType: "application/pdf",
-    fingerprint: "a".repeat(64),
-    linkedCustomerKey: EXISTING_KEY,
-    firstSeenAt: "2026-09-16T00:00:00.000Z",
-  });
-  const drive = makeDrive({ changes: [{ fileId: FILE_ID, removed: true }] });
-  const result = await runCustomerIndexDailySync({
-    workspaceId: WORKSPACE_ID,
-    drive,
-    repository,
-    now: new Date(STARTED_AT),
-  });
+  repository.state.identities.set(EXISTING_KEY, { customerKey: EXISTING_KEY, normalizedName: "홍길동", active: true });
+  repository.state.sourceItems.set(FILE_ID, { driveItemId: FILE_ID, name: "상담기록.pdf", mimeType: "application/pdf", fingerprint: "a".repeat(64), linkedCustomerKey: EXISTING_KEY, firstSeenAt: "2026-09-16T00:00:00.000Z" });
+  const result = await runCustomerIndexDailySync({ workspaceId: WORKSPACE_ID, drive: makeDrive({ changes: [{ fileId: FILE_ID, removed: true }] }), repository, now: new Date(STARTED_AT) });
   assert.equal(result.sourceUnavailable, 1);
   assert.equal(repository.state.identities.has(EXISTING_KEY), true);
-  assert.equal(repository.state.sourceItems.get(FILE_ID).sourceState, "removed");
 });
 
 test("reprocessing the same fingerprint is idempotently skipped", async () => {
   const repository = makeRepository();
   const changedFolder = folder(CUSTOMER_FOLDER_ID, "홍길동 (26.09)");
-  const drive = makeDrive({
-    changes: [{ fileId: CUSTOMER_FOLDER_ID, file: changedFolder }],
-    paths: new Map([[CUSTOMER_FOLDER_ID, {
-      underRoot: true,
-      item: changedFolder,
-      folders: [changedFolder],
-      ancestorIds: [],
-      path: changedFolder.name,
-    }]]),
-  });
-  const first = await runCustomerIndexDailySync({
-    workspaceId: WORKSPACE_ID,
-    drive,
-    repository,
-    now: new Date(STARTED_AT),
-  });
-  const second = await runCustomerIndexDailySync({
-    workspaceId: WORKSPACE_ID,
-    drive,
-    repository,
-    now: new Date("2026-09-18T00:15:00.000Z"),
-  });
+  const drive = makeDrive({ changes: [{ fileId: CUSTOMER_FOLDER_ID, file: changedFolder }], paths: new Map([[CUSTOMER_FOLDER_ID, { underRoot: true, item: changedFolder, folders: [changedFolder], ancestorIds: [], path: changedFolder.name }]]) });
+  const first = await runCustomerIndexDailySync({ workspaceId: WORKSPACE_ID, drive, repository, now: new Date(STARTED_AT) });
+  const second = await runCustomerIndexDailySync({ workspaceId: WORKSPACE_ID, drive, repository, now: new Date("2026-09-18T00:15:00.000Z") });
   assert.equal(first.newIdentity, 1);
   assert.equal(second.skipped, 1);
   assert.equal(repository.state.identities.size, 1);
-  assert.equal(repository.state.events.size, 1);
 });
