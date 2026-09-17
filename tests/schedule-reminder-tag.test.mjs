@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('일정별 notification tag가 분리된다',()=>{assert.notEqual(buildScheduleReminderPayload({scheduleId:'a',title:'A'}).tag,buildScheduleReminderPayload({scheduleId:'b',title:'B'}).tag);});
