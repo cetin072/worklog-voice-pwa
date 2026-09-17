@@ -20,8 +20,9 @@ test('Expo config enables explicit background recording support', () => {
   assert.match(audioPlugin[1].microphonePermission, /마이크/);
 });
 
-test('Recorder remains local-first and requests permission at user action', () => {
+test('Recorder remains local-first and requests required permissions at user action', () => {
   assert.match(recorderSource, /requestRecordingPermissionsAsync/);
+  assert.match(recorderSource, /requestNotificationPermissionsAsync/);
   assert.match(recorderSource, /directory:\s*'document'/);
   assert.match(recorderSource, /allowsBackgroundRecording:\s*true/);
   assert.match(recorderSource, /recorder\.pause\(\)/);
@@ -39,4 +40,10 @@ test('Authenticated mobile home surfaces the recorder without replacing Data Cor
   assert.match(homeSource, /VoiceRecorderCard/);
   assert.match(homeSource, /loadBriefing/);
   assert.match(homeSource, /saveWorklog/);
+});
+
+test('Briefing smoke shows progress and result or error next to the action', () => {
+  assert.match(homeSource, /브리핑 불러오는 중/);
+  assert.match(homeSource, /briefingMessage/);
+  assert.match(homeSource, /briefingError/);
 });
