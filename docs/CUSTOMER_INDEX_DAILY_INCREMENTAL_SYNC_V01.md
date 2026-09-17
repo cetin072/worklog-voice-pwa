@@ -2,12 +2,13 @@
 
 기준 Issue: #309
 관련 Source-of-Truth 문서 PR: #306
+후속 월별 MASTER 승격 Issue: #345
 
 ## 목적
 
-Google Drive의 `메티스업무/고객 상담파일`에서 이전 성공 실행 이후 신규·변경된 항목만 하루 1회 확인하고, 별도 LIVE 고객 인덱스에 누적 반영한다.
+Google Drive의 `메티스업무/고객 상담파일`에서 신규·변경된 항목을 하루 1회 확인하고, 별도 LIVE 고객 인덱스에 누적 반영한다.
 
-최종 MASTER 파일 `메티스_전체고객인덱스_MASTER_v1_최종_v5.xlsx`는 읽기 전용 기준원본이다. 자동 동기화는 MASTER 파일을 수정하지 않는다. 기존 `DEV_메티스_고객인덱스_v5_STAGING`은 CRM DEV 검색용 파생본으로 유지하며, 일일 변경 감시 원본으로 사용하지 않는다.
+최종 MASTER 파일은 읽기 전용 기준원본이다. 일일 자동 동기화는 MASTER 파일을 직접 수정하지 않는다. 기존 `DEV_메티스_고객인덱스_v5_STAGING`은 CRM DEV 검색용 파생본으로 유지하며, 일일 변경 감시 원본으로 사용하지 않는다.
 
 ## MASTER v5에서 승계한 운영 규칙
 
@@ -20,8 +21,9 @@ LIVE Identity의 기준키는 `P-[A-F0-9]{12}` 형식이다. 기존 고객과 �
 ## 구조
 
 ```text
-Google Drive Changes API (metadata.readonly)
-  → fileId/folderId + modifiedTime 변화
+Google Drive (metadata.readonly)
+  → 첫 실행: 현재 월 생성·수정 항목 1회 보강 대조
+  → 이후: Drive Changes API page token 이후 변경만 처리
   → 감시 루트 하위 경로 확인
   → 기존 Drive 연결 우선 조회
      ├─ 기존 연결 1개: 기존 P-키로 이력 추가
@@ -45,7 +47,11 @@ LIVE 테이블에는 먼저 MASTER v5 `44_활성Identity운영마스터`의 활�
 4. MASTER import 행 수와 빈 키·중복 키 검증
 5. 과거 Drive 연결은 MASTER `20_증분스캔로그`의 식별값을 가능한 범위에서 Source Link로 적재
 
-체크포인트가 없는 첫 scheduled run은 현재 Drive `startPageToken`만 저장하고 종료한다. 과거 전체 폴더를 자동 재스캔하지 않는다. 이후 실행부터 그 page token 이후 변경만 처리한다.
+체크포인트가 없는 첫 scheduled run은 Asia/Seoul 기준 현재 월 1일 00:00 이후 생성·수정된 Drive 메타데이터를 1회 보강 대조한다. 전체 과거 폴더를 전수 재스캔하지는 않지만, 최초 가동 직전에 추가된 신규 고객을 놓치지 않도록 현재 월 항목을 먼저 확인한다.
+
+보강 대조에서도 감시 루트 하위 항목만 처리한다. `G금융 → 현재년도 → 현재월` 경로가 신규 고객의 주된 운영 경로이지만, 특정 경로만 하드코딩하지 않고 감시 루트 전체에서 현재 월 생성·수정 항목을 확인해 예외 위치의 신규 고객도 놓치지 않도록 한다.
+
+첫 실행의 보강 대조가 성공한 뒤 현재 Drive `startPageToken`을 저장한다. 이후 실행부터는 그 page token 이후 변경만 처리한다.
 
 ## 자동 판정
 
@@ -78,6 +84,8 @@ LIVE 테이블에는 먼저 MASTER v5 `44_활성Identity운영마스터`의 활�
 - 소개자·배우자·부모·자녀·가족·관계자 표시
 - 과거에 생성됐지만 새로 감시 폴더로 이동된 폴더
 - 파일명만으로 발견된 신규 인물
+
+부부·가족처럼 한 폴더에 여러 사람이 들어온 경우는 자동으로 한 사람으로 합치지 않고 검토대기로 보낸다.
 
 ### 삭제·이동
 
@@ -118,11 +126,38 @@ Drive 항목이 삭제·휴지통·감시 폴더 밖 이동 상태가 되어도 
 
 - repository variable `CUSTOMER_INDEX_SYNC_ENABLED != true`: workflow job 자체가 실행되지 않음
 - 설정 누락: fail closed
+- 첫 실행: 현재 월 생성·수정 항목 보강 대조 후 checkpoint 저장
 - 변경 없음: Identity/Link/Review 변경 0건, run 상태 `noop`
 - 성공: 모든 변경 처리가 끝난 뒤에만 새 page token 저장
 - 실패: 기존 page token 유지. 다음 실행이 같은 변경을 다시 처리하며 fingerprint/event key로 멱등 수렴
 
 Netlify console에는 상태와 건수, 오류코드만 기록한다. 고객명·전화번호·Drive 경로는 출력하지 않는다.
+
+## 월별 MASTER 승격 정책
+
+일일 자동화의 운영 기준은 LIVE 고객인덱스다. MASTER는 월 1회 대표자 승인 후 새 월별 확정본으로 발행한다.
+
+운영 절차:
+
+1. LIVE 고객인덱스는 매일 신규·변경 고객을 자동 반영
+2. 검토대기 항목은 사람이 확인
+3. 매월 1회 신규·변경·검토 결과와 무결성 검사 결과를 집계
+4. 대표자에게 월간 변경 요약과 확인 필요 항목을 제시
+5. 대표자 명시적 승인 후에만 새 MASTER 생성
+6. 기존 MASTER는 덮어쓰거나 삭제하지 않고 보관
+
+파일명 규칙:
+
+`메티스_전체고객인덱스_MASTER_v{schemaVersion}_{YYYY.MM}.xlsx`
+
+현재 구조 기준 예시:
+
+- `메티스_전체고객인덱스_MASTER_v5_2026.09.xlsx`
+- `메티스_전체고객인덱스_MASTER_v5_2026.10.xlsx`
+
+`v5`는 데이터 구조 버전이고 `2026.09`는 월별 기준시점이다. 데이터 구조가 바뀔 때만 schemaVersion을 올린다.
+
+월별 MASTER 승격 자동화/반자동화 구현은 후속 Issue #345에서 관리한다. 일일 증분동기화가 MASTER를 직접 수정하지 않는 안전 경계는 유지한다.
 
 ## 배포 전 확인
 
@@ -130,7 +165,7 @@ Netlify console에는 상태와 건수, 오류코드만 기록한다. 고객명�
 2. MASTER v5 활성 Identity seed 행 수와 키 무결성 검증
 3. Drive 기존 연결 seed 검증
 4. GitHub Actions secrets를 등록하고 repository variable `CUSTOMER_INDEX_SYNC_ENABLED`는 생성하지 않거나 `false` 유지
-5. 첫 수동 실행이 `checkpoint_initialized`인지 확인
+5. 첫 수동 실행이 현재 월 보강 대조 후 `checkpoint_initialized`인지 확인
 6. 합성 테스트 폴더로 기존/신규/확인대기/이동 시나리오 확인
 7. 확인대기 UI 또는 운영 조회 경로 준비
 8. 대표자 승인 후 repository variable을 `true`로 변경해 scheduled sync 활성화
