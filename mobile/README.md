@@ -15,6 +15,7 @@ Android 우선 Expo/React Native 모바일 클라이언트다.
 - 최신 PWA와 같은 홈 브리핑 구조(지난 것·오늘 할 일·다가오는 업무·기한 없는 업무)와 오늘/다가오는 일정 표시
 - `/api/briefing-fast`를 통한 Data Core 브리핑 읽기와 loading/empty/error/retry
 - `/api/worklog`를 통한 직접 입력 업무 저장
+- 브리핑 내 업무 검색, 상세 보기, 기존 Data Core 상태 변경(완료·진행중·대기·확인필요)
 - `expo-audio` 기반 사용자 시작형 음성 녹음
 - 홈의 빠른 음성 메모와 별도 장시간 회의 녹음 진입(동일 recorder core 재사용)
 - Android background recording foreground service

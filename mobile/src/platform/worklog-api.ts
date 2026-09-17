@@ -69,3 +69,16 @@ export async function saveWorklog(accessToken: string, transcript: string) {
   });
   return readJson(response);
 }
+
+export async function updateWorklogStatus(accessToken: string, recordId: string, status: '완료' | '진행중' | '대기' | '확인필요') {
+  const response = await fetch(`${getApiBaseUrl()}/api/briefing-v2`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ recordId, status }),
+  });
+  return readJson(response);
+}
