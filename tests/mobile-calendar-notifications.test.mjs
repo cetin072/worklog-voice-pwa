@@ -7,6 +7,7 @@ const appJson = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
 const calendarSource = fs.readFileSync('mobile/src/features/schedule/device-calendar.ts', 'utf8');
 const notificationSource = fs.readFileSync('mobile/src/features/schedule/local-notifications.ts', 'utf8');
 const scheduleActionsSource = fs.readFileSync('mobile/src/features/schedule/schedule-device-actions.tsx', 'utf8');
+const cancellationSource = fs.readFileSync('mobile/src/features/schedule/schedule-cancellation.ts', 'utf8');
 const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 
 test('Mobile calendar uses the OS provider with writable-calendar permission and local event mapping', () => {
@@ -36,6 +37,9 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(scheduleActionsSource, /Google Calendar \/ 휴대폰 캘린더/);
   assert.match(scheduleActionsSource, /REMINDER_PRESETS/);
   assert.match(scheduleActionsSource, /이 일정 알림 모두 취소/);
+  assert.match(scheduleActionsSource, /이 일정 취소/);
+  assert.match(scheduleActionsSource, /cancelScheduleWithDeviceCleanup/);
+  assert.match(cancellationSource, /reconcileCanceledScheduleArtifacts/);
 });
 
 test('Notifications reconcile after app restart, open the linked schedule, and consume the cold-start response', () => {
@@ -46,6 +50,7 @@ test('Notifications reconcile after app restart, open the linked schedule, and c
   assert.match(homeSource, /addNotificationResponseReceivedListener/);
   assert.match(homeSource, /clearLastNotificationResponseAsync/);
   assert.match(homeSource, /handleNotificationResponse/);
+  assert.match(homeSource, /reconcileCanceledScheduleArtifacts/);
   assert.match(homeSource, /알림.*일정/);
   assert.match(homeSource, /setScreen\('calendar'\)/);
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Button, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   getPreferredCalendarId,
@@ -20,7 +20,9 @@ import {
   type ReminderOffsetMinutes,
   type ScheduleReminder,
 } from './local-notifications';
+import { cancelScheduleWithDeviceCleanup } from './schedule-cancellation';
 import type { BriefingSchedule } from '@/src/platform/worklog-api';
+import { usePlatform } from '@/src/providers/platform-provider';
 
 function reminderTime(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -39,6 +41,7 @@ function calendarSubtitle(calendar: WritableCalendarOption) {
 }
 
 export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule }) {
+  const { client } = usePlatform();
   const [calendarOptions, setCalendarOptions] = useState<WritableCalendarOption[]>([]);
   const [calendarId, setCalendarId] = useState<string | null>(null);
   const [calendarLoaded, setCalendarLoaded] = useState(false);
@@ -137,6 +140,27 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
     } catch (error) { setMessage(error instanceof Error ? error.message : '일정 알림을 취소하지 못했습니다.'); } finally { setBusy(false); }
   }
 
+  async function cancelSchedule() {
+    if (!client) {
+      setMessage('일정 취소 세션을 확인하지 못했습니다. 다시 로그인해 주세요.');
+      return;
+    }
+    setBusy(true); setMessage('');
+    try {
+      await cancelScheduleWithDeviceCleanup(client, scheduleId);
+      setMessage('일정을 취소하고 연결된 Calendar 이벤트와 알림을 정리했습니다. 브리핑을 다시 정리하면 목록에서 사라집니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '일정을 취소하지 못했습니다.');
+    } finally { setBusy(false); }
+  }
+
+  function confirmScheduleCancellation() {
+    Alert.alert('일정 취소', '업무 기록은 유지하고 이 일정만 취소합니다. 연결된 휴대폰 Calendar 이벤트와 알림도 함께 정리합니다.', [
+      { text: '돌아가기', style: 'cancel' },
+      { text: '일정 취소', style: 'destructive', onPress: () => { void cancelSchedule(); } },
+    ]);
+  }
+
   const selectedCalendar = calendarOptions.find((calendar) => calendar.id === calendarId);
   const hasGoogleCalendar = calendarOptions.some((calendar) => calendar.isGoogle);
 
@@ -166,6 +190,12 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
         </Pressable>;
       })}</View>
       {reminders.length ? <View style={styles.reminderSummary}><Text style={styles.summaryTitle}>예약된 알림</Text>{reminders.map((reminder) => <Text key={`${reminder.offsetMinutes}-${reminder.identifier}`} style={styles.summaryLine}>• {REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`} · {reminderTime(reminder.triggerAt)}</Text>)}<Button title="이 일정 알림 모두 취소" disabled={busy} onPress={() => void clearReminders()} /></View> : <Text style={styles.muted}>예약된 알림이 없습니다.</Text>}
+    </View>
+
+    <View style={styles.section}>
+      <Text style={styles.heading}>일정 관리</Text>
+      <Text style={styles.help}>업무 기록은 보존하고 일정만 취소합니다. 취소된 일정은 브리핑에 다시 표시되지 않습니다.</Text>
+      <Button title="이 일정 취소" color="#b42318" disabled={busy} onPress={confirmScheduleCancellation} />
     </View>
 
     {message ? <Text style={styles.message}>{message}</Text> : null}
