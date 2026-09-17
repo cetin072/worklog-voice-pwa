@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/shared/notification-scheduler.mjs',import.meta.url),'utf8');test('schedule claim은 p_now를 명시해 DB 판단에 전달한다',()=>assert.match(src,/p_now:now\|\|new Date\(\)\.toISOString\(\)/));
