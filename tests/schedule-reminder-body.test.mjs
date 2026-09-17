@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('30분 전 Push body는 일정 제목이다',()=>assert.equal(buildScheduleReminderPayload({scheduleId:'s',title:'고객 미팅'}).body,'고객 미팅'));
