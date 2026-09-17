@@ -119,7 +119,7 @@ test("Home UX assets and product records are wired into the app", () => {
   const decisions = read("docs/PRODUCT_DECISIONS.md");
 
   assert.match(html, /\/home-ux\.css\?v=20260916-2/);
-  assert.match(html, /\/home-ux\.js\?v=20260916-3/);
+  assert.match(html, /\/home-ux\.js\?v=20260917-1/);
   assert.match(html, /\/briefing\.css\?v=20260916-2/);
   assert.match(html, /\/briefing-v2\.js\?v=20260916-3/);
   assert.ok(sw.includes('"/home-ux.css"'));
