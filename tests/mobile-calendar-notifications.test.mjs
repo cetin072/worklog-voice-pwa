@@ -19,24 +19,33 @@ test('Mobile calendar uses the OS provider with writable-calendar permission and
   assert.match(calendarSource, /Asia\/Seoul/);
 });
 
-test('Local notifications request permission and deduplicate schedule reminders without inventing a default time', () => {
+test('Calendar and reminder V2 keep the OS-provider selection and multiple explicit presets visible', () => {
   assert.equal(packageJson.dependencies['expo-notifications'], '57.0.19');
+  assert.match(calendarSource, /ownerAccount/);
+  assert.match(calendarSource, /isPrimary/);
+  assert.match(calendarSource, /setPreferredCalendarId/);
   assert.match(notificationSource, /requestScheduleNotificationPermission/);
   assert.match(notificationSource, /scheduleNotificationAsync/);
   assert.match(notificationSource, /cancelScheduledNotificationAsync/);
+  assert.match(notificationSource, /cancelAllScheduleReminders/);
+  assert.match(notificationSource, /REMINDER_PRESETS/);
   assert.match(notificationSource, /scheduleId/);
   assert.match(notificationSource, /triggerAt/);
+  assert.match(notificationSource, /이미 지났습니다/);
   assert.doesNotMatch(notificationSource, /08:30|09:00|16:30/);
-  assert.match(scheduleActionsSource, /일정 시작 시각에 알림/);
-  assert.match(scheduleActionsSource, /휴대폰 캘린더 선택/);
+  assert.match(scheduleActionsSource, /Google Calendar \/ 휴대폰 캘린더/);
+  assert.match(scheduleActionsSource, /REMINDER_PRESETS/);
+  assert.match(scheduleActionsSource, /이 일정 알림 모두 취소/);
 });
 
-test('Notifications reconcile after app restart and open the linked schedule on response', () => {
+test('Notifications reconcile after app restart, open the linked schedule, and consume the cold-start response', () => {
   assert.match(notificationSource, /reconcileScheduleReminders/);
   assert.match(notificationSource, /getAllScheduledNotificationsAsync/);
   assert.match(notificationSource, /target: 'schedule'/);
   assert.match(homeSource, /getLastNotificationResponseAsync/);
   assert.match(homeSource, /addNotificationResponseReceivedListener/);
+  assert.match(homeSource, /clearLastNotificationResponseAsync/);
+  assert.match(homeSource, /handleNotificationResponse/);
   assert.match(homeSource, /알림.*일정/);
   assert.match(homeSource, /setScreen\('calendar'\)/);
 });

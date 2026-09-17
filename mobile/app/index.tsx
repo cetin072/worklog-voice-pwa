@@ -96,14 +96,23 @@ export default function HomeScreen() {
   useEffect(() => {
     const openSchedule = (data: unknown) => {
       const payload = data as { target?: unknown; scheduleId?: unknown };
-      if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return;
+      if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return false;
       setNotificationScheduleId(payload.scheduleId);
       setScreen('calendar');
       setMessage('알림에서 연 일정입니다.');
+      return true;
     };
+
+    const handleNotificationResponse = async (response: Notifications.NotificationResponse | null) => {
+      if (!response) return;
+      openSchedule(response.notification.request.content.data);
+      // Expo retains this response across a cold start unless the app consumes it.
+      await Notifications.clearLastNotificationResponseAsync();
+    };
+
     void reconcileScheduleReminders().catch(() => undefined);
-    void Notifications.getLastNotificationResponseAsync().then((response) => openSchedule(response?.notification.request.content.data));
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => openSchedule(response.notification.request.content.data));
+    void Notifications.getLastNotificationResponseAsync().then(handleNotificationResponse).catch(() => undefined);
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => { void handleNotificationResponse(response); });
     return () => subscription.remove();
   }, []);
 
