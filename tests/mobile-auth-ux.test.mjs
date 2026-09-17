@@ -8,6 +8,8 @@ const providerSource = fs.readFileSync('mobile/src/providers/platform-provider.t
 const googleAuthSource = fs.readFileSync('mobile/src/platform/google-auth.ts', 'utf8');
 const googleAuthRouteSource = fs.readFileSync('mobile/app/google-auth.tsx', 'utf8');
 const authPreferencesSource = fs.readFileSync('mobile/src/platform/auth-preferences.ts', 'utf8');
+const appShellSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
+const rootLayoutSource = fs.readFileSync('mobile/app/_layout.tsx', 'utf8');
 
 test('Mobile app owns a stable worklog deep-link scheme', () => {
   assert.equal(appJson.expo.scheme, 'worklog');
@@ -60,6 +62,16 @@ test('Login UI exposes Google first plus password visibility and autofill hints'
 
 test('Android resizes the app above the software keyboard during login', () => {
   assert.equal(appJson.expo.android.softwareKeyboardLayoutMode, 'resize');
+  assert.match(appShellSource, /KeyboardAvoidingView/);
+  assert.match(appShellSource, /Platform\.OS === 'ios' \? 'padding' : 'height'/);
+  assert.match(appShellSource, /keyboardDismissMode="on-drag"/);
+});
+
+test('App shell applies the installed safe-area provider to login and bottom navigation', () => {
+  assert.match(rootLayoutSource, /SafeAreaProvider/);
+  assert.match(appShellSource, /useSafeAreaInsets/);
+  assert.match(appShellSource, /bottomInset/);
+  assert.match(appShellSource, /Math\.max\(10, bottomInset\)/);
 });
 
 test('Only the non-sensitive email identifier is remembered by the app', () => {
