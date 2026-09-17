@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-defer.mts',import.meta.url),'utf8');test('예상 밖 DB 오류는 일반 사용자 메시지로 502 처리한다',()=>assert.match(src,/return json\(502,\{error:'일정을 미루지 못했습니다.'\}\)/));
