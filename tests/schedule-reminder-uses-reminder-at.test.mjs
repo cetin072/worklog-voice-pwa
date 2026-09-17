@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {isScheduleReminderEligible} from '../netlify/shared/schedule-defer-reminder.mjs';test('명시 reminderAt이 있으면 그 시각을 우선 사용한다',()=>assert.equal(isScheduleReminderEligible({startsAt:'2026-09-17T05:00:00Z',reminderAt:'2026-09-17T04:00:00Z',status:'confirmed'},'2026-09-17T04:01:00Z'),true));
