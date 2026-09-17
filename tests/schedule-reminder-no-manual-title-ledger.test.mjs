@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190500_schedule_advance_notification_v1.sql',import.meta.url),'utf8');test('delivery insert 컬럼에는 title 컬럼이 없다',()=>assert.match(sql,/notification_deliveries\(subscription_id,kind,local_date,source_key,status,metadata\)/));
