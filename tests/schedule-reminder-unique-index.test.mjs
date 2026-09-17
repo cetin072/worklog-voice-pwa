@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190500_schedule_advance_notification_v1.sql',import.meta.url),'utf8');test('schedule reminder unique index는 schedule_advance kind에만 적용된다',()=>assert.match(sql,/where kind='schedule_advance'/));
