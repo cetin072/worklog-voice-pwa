@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {scheduleReminderAt} from '../netlify/shared/schedule-defer-reminder.mjs';test('잘못된 사전 알림 분수는 거부한다',()=>{assert.throws(()=>scheduleReminderAt('2026-09-17T05:00:00Z',0));assert.throws(()=>scheduleReminderAt('2026-09-17T05:00:00Z',2000));});
