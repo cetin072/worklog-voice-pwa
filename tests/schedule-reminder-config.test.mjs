@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('서버/VAPID/origin 설정이 불완전하면 발송하지 않는다',()=>assert.match(src,/!scheduler\.configured\|\|!vapid\.configured\|\|!origin/));
