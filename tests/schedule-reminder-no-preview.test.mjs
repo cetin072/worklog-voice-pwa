@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';test('V1은 별도 PWA 일정 reminder preview endpoint를 추가하지 않는다',()=>assert.equal(fs.existsSync(new URL('../netlify/functions/schedule-advance-push-preview.mts',import.meta.url)),false));
