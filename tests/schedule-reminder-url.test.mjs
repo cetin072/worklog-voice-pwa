@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('일정 알림 클릭 목적지는 기존 브리핑이다',()=>assert.equal(buildScheduleReminderPayload({scheduleId:'s',title:'회의'}).url,'/#briefingCard'));
