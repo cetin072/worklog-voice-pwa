@@ -24,7 +24,13 @@ export type WritableCalendarOption = {
   isPrimary: boolean;
 };
 
-type CalendarEventMapping = Record<string, { calendarId: string; eventId: string; fingerprint: string }>;
+type CalendarEventCleanup = { calendarId: string; eventId: string };
+type CalendarEventMapping = Record<string, {
+  calendarId: string;
+  eventId: string;
+  fingerprint: string;
+  pendingCleanup?: CalendarEventCleanup[];
+}>;
 type ExpoCalendar = Awaited<ReturnType<typeof Calendar.getCalendars>>[number];
 
 function fingerprint(schedule: DeviceSchedule) {
@@ -56,6 +62,20 @@ async function readMappings(): Promise<CalendarEventMapping> {
 
 async function writeMappings(value: CalendarEventMapping) {
   await secureSessionStorage.setItem(CALENDAR_MAPPING_KEY, JSON.stringify(value));
+}
+
+function cleanupKey(value: CalendarEventCleanup) {
+  return `${value.calendarId}:${value.eventId}`;
+}
+
+function appendPendingCleanup(mapping: CalendarEventMapping[string], cleanup: CalendarEventCleanup) {
+  const pending = mapping.pendingCleanup || [];
+  if (pending.some((value) => cleanupKey(value) === cleanupKey(cleanup))) return pending;
+  return [...pending, cleanup];
+}
+
+async function deleteCalendarEvent(eventId: string) {
+  await (await Calendar.ExpoCalendarEvent.get(eventId)).delete();
 }
 
 export async function getPreferredCalendarId() {
@@ -122,7 +142,7 @@ export async function syncScheduleToCalendar(calendarId: string, schedule: Devic
       updated = true;
     } catch { /* A deleted or detached OS event is recreated below. */ }
     if (current.calendarId === calendarId && updated) {
-      mappings[schedule.scheduleId] = { calendarId, eventId: current.eventId, fingerprint: nextFingerprint };
+      mappings[schedule.scheduleId] = { calendarId, eventId: current.eventId, fingerprint: nextFingerprint, pendingCleanup: current.pendingCleanup };
       await writeMappings(mappings);
       return { eventId: current.eventId, created: false };
     }
@@ -132,12 +152,23 @@ export async function syncScheduleToCalendar(calendarId: string, schedule: Devic
   if (current?.eventId && current.calendarId !== calendarId) {
     try {
       // A cross-calendar change is a move, never an update followed by a duplicate create.
-      await (await Calendar.ExpoCalendarEvent.get(current.eventId)).delete();
+      await deleteCalendarEvent(current.eventId);
     } catch {
-      // The old event may already have been removed manually; the new event is authoritative.
+      // Keep A authoritative until B can be rolled back.  Silently accepting this
+      // failure would leave an untracked duplicate event in Calendar A and B.
+      try {
+        await deleteCalendarEvent(event.id);
+      } catch {
+        mappings[schedule.scheduleId] = {
+          ...current,
+          pendingCleanup: appendPendingCleanup(current, { calendarId, eventId: event.id }),
+        };
+        await writeMappings(mappings);
+      }
+      throw new Error('기존 캘린더 일정을 제거하지 못해 이동을 취소했습니다. 잠시 후 다시 시도해주세요.');
     }
   }
-  mappings[schedule.scheduleId] = { calendarId, eventId: event.id, fingerprint: nextFingerprint };
+  mappings[schedule.scheduleId] = { calendarId, eventId: event.id, fingerprint: nextFingerprint, pendingCleanup: current?.pendingCleanup };
   await writeMappings(mappings);
   return { eventId: event.id, created: true };
 }
@@ -146,8 +177,46 @@ export async function removeScheduleFromCalendar(scheduleId: string) {
   const mappings = await readMappings();
   const current = mappings[scheduleId];
   if (!current) return false;
-  try { await (await Calendar.ExpoCalendarEvent.get(current.eventId)).delete(); } catch { /* Already removed by the user is converged locally. */ }
+  const eventIds = [...new Set([current.eventId, ...(current.pendingCleanup || []).map((cleanup) => cleanup.eventId)])];
+  try {
+    for (const eventId of eventIds) await deleteCalendarEvent(eventId);
+  } catch {
+    // Retain the mapping so a user-initiated removal or cancellation can retry
+    // rather than losing an orphan event that the app no longer knows about.
+    throw new Error('휴대폰 캘린더 일정을 제거하지 못했습니다. 권한과 동기화 상태를 확인한 뒤 다시 시도해주세요.');
+  }
   delete mappings[scheduleId];
   await writeMappings(mappings);
   return true;
+}
+
+/**
+ * If a cross-calendar move could not roll back the new event, preserve the old
+ * mapping and retry only that orphan cleanup at the next app start.
+ */
+export async function reconcileCalendarEventCleanup() {
+  const mappings = await readMappings();
+  let cleaned = 0;
+  let remaining = 0;
+  let changed = false;
+
+  for (const mapping of Object.values(mappings)) {
+    if (!mapping.pendingCleanup?.length) continue;
+    const unresolved: CalendarEventCleanup[] = [];
+    for (const cleanup of mapping.pendingCleanup) {
+      try {
+        await deleteCalendarEvent(cleanup.eventId);
+        cleaned += 1;
+      } catch {
+        unresolved.push(cleanup);
+      }
+    }
+    remaining += unresolved.length;
+    if (unresolved.length) mapping.pendingCleanup = unresolved;
+    else delete mapping.pendingCleanup;
+    changed = true;
+  }
+
+  if (changed) await writeMappings(mappings);
+  return { cleaned, remaining };
 }

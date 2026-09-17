@@ -27,7 +27,12 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(calendarSource, /setPreferredCalendarId/);
   assert.match(calendarSource, /current\.calendarId === calendarId/);
   assert.match(calendarSource, /current\.calendarId !== calendarId/);
-  assert.match(calendarSource, /ExpoCalendarEvent\.get\(current\.eventId\)\)\.delete/);
+  assert.match(calendarSource, /deleteCalendarEvent\(current\.eventId\)/);
+  assert.match(calendarSource, /deleteCalendarEvent\(event\.id\)/);
+  assert.match(calendarSource, /pendingCleanup/);
+  assert.match(calendarSource, /reconcileCalendarEventCleanup/);
+  assert.match(calendarSource, /Retain the mapping so a user-initiated removal or cancellation can retry/);
+  assert.match(calendarSource, /이동을 취소했습니다/);
   assert.match(scheduleActionsSource, /mapping\?\.calendarId \|\| preferred/);
   assert.match(notificationSource, /requestScheduleNotificationPermission/);
   assert.match(notificationSource, /scheduleNotificationAsync/);
@@ -55,6 +60,7 @@ test('Notifications reconcile after app restart, open the linked schedule, and c
   assert.match(homeSource, /clearLastNotificationResponseAsync/);
   assert.match(homeSource, /handleNotificationResponse/);
   assert.match(homeSource, /reconcileCanceledScheduleArtifacts/);
+  assert.match(homeSource, /reconcileCalendarEventCleanup/);
   assert.match(homeSource, /\+ 새 일정/);
   assert.match(homeSource, /setScreen\('input'\)/);
   assert.match(homeSource, /알림.*일정/);

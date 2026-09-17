@@ -8,6 +8,7 @@ import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-actions';
 import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
+import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-calendar';
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, saveWorklog, updateWorklogStatus } from '@/src/platform/worklog-api';
@@ -115,7 +116,7 @@ export default function HomeScreen() {
       await Notifications.clearLastNotificationResponseAsync();
     };
 
-    void Promise.all([reconcileScheduleReminders(), reconcileCanceledScheduleArtifacts()]).catch(() => undefined);
+    void Promise.all([reconcileScheduleReminders(), reconcileCanceledScheduleArtifacts(), reconcileCalendarEventCleanup()]).catch(() => undefined);
     void Notifications.getLastNotificationResponseAsync().then(handleNotificationResponse).catch(() => undefined);
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => { void handleNotificationResponse(response); });
     return () => subscription.remove();
