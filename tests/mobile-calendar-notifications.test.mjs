@@ -37,5 +37,6 @@ test('Notifications reconcile after app restart and open the linked schedule on 
   assert.match(notificationSource, /target: 'schedule'/);
   assert.match(homeSource, /getLastNotificationResponseAsync/);
   assert.match(homeSource, /addNotificationResponseReceivedListener/);
-  assert.match(homeSource, /알림 일정/);
+  assert.match(homeSource, /알림.*일정/);
+  assert.match(homeSource, /setScreen\('calendar'\)/);
 });
