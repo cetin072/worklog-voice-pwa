@@ -30,3 +30,17 @@ test('Mobile cancellation records recoverable cleanup only after the server canc
   assert.match(mobileCancellation, /reconcileCanceledScheduleArtifacts/);
   assert.match(mobileCancellation, /앱을 다시 열면 자동으로 다시 시도합니다/);
 });
+
+test('Startup cancellation recovery verifies Data Core cancellation before cleanup and can recover a lost marker', () => {
+  assert.match(mobileCancellation, /listTrackedCalendarScheduleIds/);
+  assert.match(mobileCancellation, /listTrackedReminderScheduleIds/);
+  assert.match(mobileCancellation, /\.from\('schedules'\)/);
+  assert.match(mobileCancellation, /\.eq\('status', 'cancelled'\)/);
+  assert.match(mobileCancellation, /a stale marker never authorizes cleanup by itself/);
+  const candidates = mobileCancellation.indexOf('const candidateIds =');
+  const serverState = mobileCancellation.indexOf(".from('schedules')", candidates);
+  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId);', serverState);
+  assert.ok(candidates >= 0, 'pending and device mappings must both be reconciliation candidates');
+  assert.ok(serverState > candidates, 'server state must be read after local candidates are collected');
+  assert.ok(cleanup > serverState, 'device cleanup must follow a server cancelled-state check');
+});

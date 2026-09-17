@@ -116,11 +116,20 @@ export default function HomeScreen() {
       await Notifications.clearLastNotificationResponseAsync();
     };
 
-    void Promise.all([reconcileScheduleReminders(), reconcileCanceledScheduleArtifacts(), reconcileCalendarEventCleanup()]).catch(() => undefined);
+    // All three reconcilers read and rewrite device mappings. Keep this order
+    // deterministic: server-confirmed schedule cancellation first, then
+    // Calendar rollback artifacts, then reminder restoration/cleanup.
+    if (client && session) {
+      void (async () => {
+        await reconcileCanceledScheduleArtifacts(client);
+        await reconcileCalendarEventCleanup();
+        await reconcileScheduleReminders();
+      })().catch(() => undefined);
+    }
     void Notifications.getLastNotificationResponseAsync().then(handleNotificationResponse).catch(() => undefined);
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => { void handleNotificationResponse(response); });
     return () => subscription.remove();
-  }, []);
+  }, [client, session?.access_token]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true); setMessage('');

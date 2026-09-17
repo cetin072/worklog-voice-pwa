@@ -1,5 +1,5 @@
-import { removeScheduleFromCalendar } from './device-calendar';
-import { cancelAllScheduleReminders } from './local-notifications';
+import { listTrackedCalendarScheduleIds, removeScheduleFromCalendar } from './device-calendar';
+import { cancelAllScheduleReminders, listTrackedReminderScheduleIds } from './local-notifications';
 import { secureSessionStorage } from '@/src/platform/secure-storage';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 
@@ -54,11 +54,40 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
   }
 }
 
-export async function reconcileCanceledScheduleArtifacts() {
+/**
+ * Reconciles device artifacts from the Data Core's actual schedule state.
+ *
+ * The cancellation RPC and SecureStore cannot share one transaction.  If the
+ * app exits after the RPC commits but before its marker is persisted, existing
+ * Calendar/reminder mappings still identify the orphaned device artifacts.
+ * Conversely, a stale marker never authorizes cleanup by itself: only a
+ * server-confirmed `cancelled` schedule is eligible for deletion.
+ */
+export async function reconcileCanceledScheduleArtifacts(client: PlatformSupabaseClient) {
   const pending = await pendingScheduleIds();
-  const remaining: string[] = [];
+  const [calendarScheduleIds, reminderScheduleIds] = await Promise.all([
+    listTrackedCalendarScheduleIds(),
+    listTrackedReminderScheduleIds(),
+  ]);
+  const candidateIds = [...new Set([...pending, ...calendarScheduleIds, ...reminderScheduleIds])];
+  if (!candidateIds.length) return { cleaned: 0, remaining: 0 };
+
+  const { data, error } = await client
+    .from('schedules')
+    .select('id, status')
+    .in('id', candidateIds)
+    .eq('status', 'cancelled');
+  if (error) throw new Error(error.message || '취소된 일정 상태를 확인하지 못했습니다.');
+
+  const cancelledIds = new Set(
+    (data || []).flatMap((schedule) => (
+      typeof schedule.id === 'string' && schedule.status === 'cancelled' ? [schedule.id] : []
+    )),
+  );
+  const remaining = pending.filter((scheduleId) => !cancelledIds.has(scheduleId));
   let cleaned = 0;
-  for (const scheduleId of pending) {
+  for (const scheduleId of candidateIds) {
+    if (!cancelledIds.has(scheduleId)) continue;
     try {
       await cleanupDeviceScheduleArtifacts(scheduleId);
       cleaned += 1;

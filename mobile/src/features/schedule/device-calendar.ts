@@ -121,6 +121,15 @@ export async function getScheduleCalendarMapping(scheduleId: string) {
   return mappings[scheduleId] || null;
 }
 
+/**
+ * Returns every schedule for which this device still owns a Calendar event.
+ * Startup cancellation recovery uses these durable local references to repair
+ * a server-cancelled schedule when the cancellation marker itself was lost.
+ */
+export async function listTrackedCalendarScheduleIds() {
+  return Object.keys(await readMappings());
+}
+
 export async function syncScheduleToCalendar(calendarId: string, schedule: DeviceSchedule) {
   const calendars = await listWritableCalendars();
   const calendar = calendars.find((candidate) => candidate.id === calendarId);

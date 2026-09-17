@@ -122,6 +122,15 @@ export async function listScheduleReminders(scheduleId: string) {
   return Object.values(saved[scheduleId] || {}).sort((left, right) => left.offsetMinutes - right.offsetMinutes);
 }
 
+/**
+ * Returns every schedule for which this device still owns one or more local
+ * reminders.  These mappings let startup recovery converge after an app exit
+ * between a confirmed server cancellation and marker persistence.
+ */
+export async function listTrackedReminderScheduleIds() {
+  return Object.keys(await mappings());
+}
+
 export async function scheduleReminder({ scheduleId, title, scheduleStartsAt, offsetMinutes }: { scheduleId: string; title: string; scheduleStartsAt: string | Date; offsetMinutes: ReminderOffsetMinutes }) {
   const triggerAt = reminderTriggerAt(scheduleStartsAt, offsetMinutes);
   if (!Number.isFinite(triggerAt.getTime()) || triggerAt.getTime() <= Date.now()) throw new Error(`${reminderLabel(offsetMinutes)} 알림 시각이 이미 지났습니다.`);
