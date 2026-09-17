@@ -135,8 +135,12 @@ function schedulePartsAreLinked(source,datePart,timePart){
   if(!datePart || !timePart) return true;
   const first=datePart.index<=timePart.index ? datePart : timePart;
   const second=first===datePart ? timePart : datePart;
-  const gap=source.slice(first.index+first.raw.length,second.index);
-  return /^[\s,]*(?:(?:은|는|에|에는)[\s,]*)?$/.test(gap);
+  const gap=normalize(source.slice(first.index+first.raw.length,second.index));
+  if(!gap) return true;
+  if(gap.length>60) return false;
+  if(/[.!?;:]/.test(gap)) return false;
+  if(/(?:^|\s)(?:그리고|하지만|그러나|또|또는|혹은|하고|하며|한편)(?=\s|$)/.test(gap)) return false;
+  return true;
 }
 
 function escapeRegExp(value){
