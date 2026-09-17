@@ -3,8 +3,10 @@
 기준 프로젝트: `worklog-platform`
 
 - Supabase project ref: `zlhdhwgabqzsuuhaiedc`
-- Production app: `https://worklog-voice-pwa.netlify.app/`
+- Production web app: `https://worklog-voice-pwa.netlify.app/`
 - Google OAuth callback: `https://zlhdhwgabqzsuuhaiedc.supabase.co/auth/v1/callback`
+- Native mobile app scheme: `worklog`
+- Native mobile redirect: `worklog://google-auth`
 
 ## 목표
 
@@ -16,17 +18,27 @@ Supabase Auth는 동일한 검증 이메일을 가진 identity를 기본적으�
 
 ## 1. Google Auth Platform 설정
 
-Google Cloud / Google Auth Platform에서 OAuth Client를 새로 만든다.
+Google Cloud / Google Auth Platform에서 OAuth Client를 생성·관리한다.
+
+### Web
 
 - Application type: `Web application`
 - Authorized JavaScript origin:
   - `https://worklog-voice-pwa.netlify.app`
 - Authorized redirect URI:
   - `https://zlhdhwgabqzsuuhaiedc.supabase.co/auth/v1/callback`
-- 기본 scopes:
-  - `openid`
-  - email
-  - profile
+
+### Native mobile
+
+모바일 앱도 최종 인증 교환은 같은 Supabase Google Provider를 통과한다. Android/iOS의 네이티브 Google SDK 또는 Credential Manager 방식으로 전환하는 경우 플랫폼별 Client ID와 서명 인증서(SHA-1 등)를 Google Cloud에 추가하고 Supabase Google Provider의 Client IDs에 등록한다.
+
+현재 Mobile Auth UX 0.2는 Expo/Supabase OAuth + 앱 custom scheme 방식으로 시작한다. Google Client Secret을 앱에 넣지 않는다.
+
+기본 scopes:
+
+- `openid`
+- email
+- profile
 
 초기 제한 테스트가 필요하면 Google OAuth Audience의 test user로 검증하고, 일반 배포 시 Audience/Publishing 상태를 별도로 점검한다.
 
@@ -50,6 +62,7 @@ Google Client Secret은:
 
 - GitHub에 저장하지 않는다.
 - Netlify 공개 환경변수로 넣지 않는다.
+- 모바일 앱 환경변수에 넣지 않는다.
 - 프론트엔드 JavaScript에 넣지 않는다.
 - 채팅에 붙여넣지 않는다.
 - Supabase Auth Provider 설정에 직접 입력한다.
@@ -62,13 +75,17 @@ Production Site URL:
 
 `https://worklog-voice-pwa.netlify.app/`
 
-Production redirect URL도 정확히 허용한다.
+Production web redirect URL도 정확히 허용한다.
 
 Preview에서 실제 Google OAuth를 시험하려면 Netlify Preview URL도 Additional Redirect URLs에 허용해야 한다. 예:
 
 `https://**--worklog-voice-pwa.netlify.app/**`
 
-Production에서는 가능한 한 정확한 URL을 사용한다.
+Native mobile Google 로그인을 사용하려면 **Additional Redirect URLs에 아래 값을 추가한다.**
+
+`worklog://google-auth`
+
+이 custom scheme은 `mobile/app.json`의 Expo scheme `worklog`와 일치해야 한다. Production에서는 필요한 redirect만 허용한다.
 
 ## 4. 앱 동작
 
@@ -77,19 +94,28 @@ Production에서는 가능한 한 정확한 URL을 사용한다.
 1. `Google로 시작`
 2. 이메일/비밀번호 로그인 또는 무료 가입
 
+### Web
+
 Google 로그인은 Supabase `/auth/v1/authorize?provider=google` 흐름을 사용한다.
 
-OAuth 완료 후 앱으로 돌아오면:
+### Native mobile
+
+Mobile Auth UX 0.2는 기존 Supabase Google Provider를 재사용한다.
+
+1. 앱이 Supabase `signInWithOAuth({ provider: 'google' })`로 authorize URL을 만든다.
+2. 시스템 브라우저에서 Google 로그인을 진행한다.
+3. Supabase가 `worklog://google-auth`로 앱을 다시 연다.
+4. 앱은 callback의 Supabase 세션 정보만 받아 기존 SecureStore session adapter에 저장한다.
+
+OAuth 완료 후 앱에 저장하는 것은 Supabase 세션에 필요한 값뿐이다.
 
 - Supabase `access_token`
 - Supabase `refresh_token`
 - 세션 만료 정보
 
-만 로컬 세션에 저장한다.
-
 Google `provider_token` 또는 Google refresh token은 저장하거나 로그하지 않는다.
 
-로그인 완료 후 기존과 동일하게 `bootstrap_personal_workspace`를 호출한다.
+로그인 완료 후 기존 Data Core API/RLS 경계를 그대로 사용한다.
 
 ## 5. 기존 Gmail 이메일 계정 자동 연결 검증 — 필수
 
@@ -135,6 +161,14 @@ Google identity 연결 후에도 기존 이메일/비밀번호로 다시 로그�
 
 Google 로그인과 이메일 로그인은 **두 개의 로그인 방법**일 뿐, 사용자 업무공간은 하나여야 한다.
 
+모바일에서는 추가로 확인한다.
+
+- 마지막 사용 이메일 자동 채움
+- 비밀번호 기본 마스킹 및 보기/숨기기
+- OS 비밀번호 관리자/자동완성 제안
+- 앱 강제 종료 후 Supabase 세션 유지
+- 로그아웃 후 재로그인 정상
+
 ## 7. 신규 Google 사용자 검증
 
 기존 업무수첩 계정이 없는 별도 Google QA 계정으로 확인한다.
@@ -168,13 +202,19 @@ Google Client Secret을 새 도메인 때문에 프론트엔드에 옮길 필요
 - [ ] Production origin 등록
 - [ ] Supabase callback 등록
 - [ ] Google Provider Supabase에서 ON
-- [ ] Site URL / redirect allow-list 확인
+- [ ] Site URL / web redirect allow-list 확인
+- [ ] Supabase Additional Redirect URLs에 `worklog://google-auth` 등록
+- [ ] Android 실기기 `Google로 시작` → 앱 복귀 PASS
 - [ ] 동일 Gmail 기존 계정 자동 연결 PASS
 - [ ] user ID 유지 PASS
 - [ ] Personal Workspace 유지 PASS
+- [ ] 기존 데이터/브리핑 유지 PASS
 - [ ] 기존 이메일/비밀번호 로그인 PASS
+- [ ] 비밀번호 마스킹/보기·숨기기 PASS
+- [ ] OS 자동완성/비밀번호 관리자 무회귀
+- [ ] 앱 재실행 후 세션 유지 PASS
 - [ ] 신규 Google 사용자 PASS
 - [ ] npm test PASS
 - [ ] UAR PASS
-- [ ] Deploy Preview PASS
+- [ ] Android standalone APK PASS
 - [ ] Google Client Secret 노출 없음
