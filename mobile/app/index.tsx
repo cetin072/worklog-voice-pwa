@@ -7,10 +7,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-actions';
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
+import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, saveWorklog, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 
-type AppScreen = 'home' | 'briefing' | 'calendar' | 'task' | 'input' | 'meeting' | 'settings';
+type AppScreen = 'home' | 'briefing' | 'calendar' | 'task' | 'input' | 'meeting' | 'settings' | 'patchNotes';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type PrimaryTab = 'home' | 'briefing' | 'calendar' | 'settings';
 
@@ -50,7 +51,7 @@ function ScheduleRows({ schedules, empty }: { schedules?: BriefingSchedule[]; em
 function activePrimaryTab(screen: AppScreen): PrimaryTab {
   if (screen === 'briefing' || screen === 'task') return 'briefing';
   if (screen === 'calendar') return 'calendar';
-  if (screen === 'settings') return 'settings';
+  if (screen === 'settings' || screen === 'patchNotes') return 'settings';
   return 'home';
 }
 
@@ -175,7 +176,8 @@ export default function HomeScreen() {
 
     {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>입력한 원문을 기존 업무수첩에 저장합니다.</Text><TextInput accessibilityLabel="업무 내용" multiline placeholder="예: 내일 오후 3시 김과장에게 계약서 확인 전화" style={[styles.input, styles.multiline]} value={draft} onChangeText={setDraft} textAlignVertical="top" /><Button title={busy ? '저장 중...' : '저장'} disabled={busy || !draft.trim()} onPress={() => void persistDraft()} />{message ? <Text style={styles.messageInline}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
-    {screen === 'settings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text><Button title="로그아웃" disabled={busy} onPress={() => void run(signOut)} /></View> : null}
+    {screen === 'settings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text><Button title="📝 업데이트 내역" onPress={() => setScreen('patchNotes')} /><Button title="로그아웃" disabled={busy} onPress={() => void run(signOut)} /></View> : null}
+    {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView><PrimaryNavigation screen={screen} bottomInset={insets.bottom} onNavigate={(tab) => { setSelectedTask(null); setScreen(tab); }} /></View></View>;
 }
 
@@ -245,6 +247,7 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: '#e1e4e8' },
   dividerText: { fontSize: 12, fontWeight: '700', color: '#8a9099' },
   authHint: { fontSize: 12, color: '#737985', lineHeight: 18 },
+  patchNoteItem: { fontSize: 14, color: '#4b515c', lineHeight: 21 },
   message: { padding: 14, borderRadius: 12, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
   messageInline: { padding: 12, borderRadius: 10, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
   bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#dfe3e8', backgroundColor: '#fff', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 10 },
