@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('claim 실패 로그는 오류 code만 기록한다',()=>assert.match(src,/console\.error\('Schedule advance claim failed',String\(e\?\.code\|\|'unknown'\)\)/));
