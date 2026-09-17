@@ -1,0 +1,47 @@
+const PRESETS = Object.freeze({ day: { days: 1 }, week: { days: 7 }, fortnight: { days: 15 }, month: { months: 1 } });
+
+function ruleError(code, message) { const error = new Error(message); error.code = code; return error; }
+function validDate(value) { const date = value instanceof Date ? new Date(value) : new Date(String(value || "")); return Number.isFinite(date.getTime()) ? date : null; }
+
+export function deferScheduleTime(startsAt, preset, customStartsAt = null) {
+  const source = validDate(startsAt);
+  if (!source) throw ruleError("SCHEDULE_START_INVALID", "일정 시작 시각이 올바르지 않습니다.");
+  if (preset === "custom") {
+    const custom = validDate(customStartsAt);
+    if (!custom) throw ruleError("SCHEDULE_DEFER_CUSTOM_INVALID", "직접 선택한 미루기 시각이 올바르지 않습니다.");
+    return custom.toISOString();
+  }
+  const rule = PRESETS[preset];
+  if (!rule) throw ruleError("SCHEDULE_DEFER_PRESET_INVALID", "지원하지 않는 미루기 기간입니다.");
+  const next = new Date(source);
+  if (rule.days) next.setUTCDate(next.getUTCDate() + rule.days);
+  if (rule.months) next.setUTCMonth(next.getUTCMonth() + rule.months);
+  return next.toISOString();
+}
+
+export function scheduleReminderAt(startsAt, minutesBefore = 30) {
+  const source = validDate(startsAt);
+  const minutes = Number(minutesBefore);
+  if (!source || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) throw ruleError("SCHEDULE_REMINDER_RULE_INVALID", "일정 사전 알림 규칙이 올바르지 않습니다.");
+  return new Date(source.getTime() - minutes * 60_000).toISOString();
+}
+
+export function isScheduleReminderEligible(schedule = {}, now = new Date(), windowMinutes = 5) {
+  if (schedule.allDay) return false;
+  if (!["confirmed", "tentative"].includes(String(schedule.status || ""))) return false;
+  const start = validDate(schedule.startsAt || schedule.starts_at);
+  const current = validDate(now);
+  if (!start || !current || start <= current) return false;
+  const reminder = validDate(schedule.reminderAt || schedule.reminder_at || scheduleReminderAt(start));
+  if (!reminder) return false;
+  const windowMs = Math.max(1, Number(windowMinutes) || 5) * 60_000;
+  return current >= reminder && current < new Date(reminder.getTime() + windowMs);
+}
+
+export const SCHEDULE_DEFER_PRESETS = Object.freeze([
+  Object.freeze({ id: "day", label: "1일 뒤" }),
+  Object.freeze({ id: "week", label: "1주 뒤" }),
+  Object.freeze({ id: "fortnight", label: "15일 뒤" }),
+  Object.freeze({ id: "month", label: "1개월 뒤" }),
+  Object.freeze({ id: "custom", label: "날짜 직접 선택" }),
+]);
