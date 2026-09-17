@@ -13,6 +13,14 @@
 - 아키텍처·보안·권한·배포 구조 변경에서만 중앙 공통 표준 원문을 반드시 다시 확인한다.
 - 중앙 표준은 모든 작업의 상시 체크리스트가 아니라 아키텍처 판단과 감사의 상위 기준이다.
 
+## 업무수첩 제품·모듈 설계 기준
+
+- 신규 범용 기능, 외부 연동, AI/STT/OCR/문서처리, Calendar/Notification 공급자 선택 전 `docs/planning/WORK_NOTE_OPEN_SOURCE_MODULAR_ARCHITECTURE_V1.md`를 우선 참조한다.
+- 기본 판단 순서는 **Existing Platform/Core → 공식 SDK/API → 검증된 오픈소스 → Adapter/Service → 최소 자체 구현 → 필요 시 Fork**다.
+- 범용 기능 재개발보다 사용자가 실제로 해야 하는 업무를 줄이는 기능과 업무수첩 고유의 업무 이해·연결·상태 판단·행동 전환 로직에 개발 역량을 우선 사용한다.
+- 규칙·코드·DB·OS 기능으로 해결 가능한 문제에 생성형 AI를 기본 엔진으로 사용하지 않는다.
+- 오픈소스/로컬 처리는 절대 규칙이 아니다. 보안, 정확도, 성능, 배터리, 유지보수, API 비용을 포함한 총비용으로 선택한다.
+
 ## 공통 웹 아키텍처 기준
 
 - 웹 제작 공통 source of truth는 `cetin072/ai-development-system`의 `docs/WEB_ARCHITECTURE_STANDARD_V1.md`다.
