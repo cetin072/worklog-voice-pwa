@@ -9,6 +9,7 @@
   const upcomingCount = $("homeBriefingUpcomingCount");
   const undatedCount = $("homeBriefingUndatedCount");
   const status = $("homeBriefingStatus");
+  const entryCard = $("entryCard");
 
   if (!mic || !micText || !briefingCard || !briefingOpen) return;
 
@@ -35,6 +36,11 @@
 
     button.append(iconNode, labelNode);
     return button;
+  }
+
+  function setEntryOpen(open) {
+    if (entryCard) entryCard.hidden = !open;
+    $("voiceDockManual")?.setAttribute("aria-expanded", String(open));
   }
 
   function ensureVoiceQuickDock() {
@@ -72,15 +78,19 @@
 
     const cancel = createQuickButton("voiceDockCancel", "is-cancel", "✕", "취소", "현재 입력 취소 및 지우기");
     const manual = createQuickButton("voiceDockManual", "is-manual", "✏️", "메모", "메모 직접 입력으로 이동");
+    manual.setAttribute("aria-controls", "entryCard");
+    manual.setAttribute("aria-expanded", String(Boolean(entryCard && !entryCard.hidden)));
 
     voiceCard.insertBefore(dock, mic);
     dock.append(timer, cancel, mic, manual);
 
     cancel.addEventListener("click", () => {
       $("clear")?.click();
+      setEntryOpen(false);
     });
 
     manual.addEventListener("click", () => {
+      setEntryOpen(true);
       $("manualEntry")?.click();
     });
 
@@ -195,7 +205,12 @@
   const briefingObserver = new MutationObserver(syncBriefingSummary);
   briefingObserver.observe(briefingCard, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
 
-  window.addEventListener("worklog:record-saved", () => window.setTimeout(syncBriefingSummary, 250));
+  window.addEventListener("worklog:record-saved", () => {
+    window.setTimeout(() => {
+      syncBriefingSummary();
+      if (!$("text")?.value?.trim()) setEntryOpen(false);
+    }, 250);
+  });
   window.addEventListener("worklog:briefing-reset", () => {
     if (status) {
       status.textContent = "브리핑을 최신 상태로 다시 불러오는 중입니다.";
@@ -204,6 +219,7 @@
   });
 
   setFullBriefingOpen(false);
+  setEntryOpen(Boolean($("text")?.value?.trim()));
   syncMicState();
   syncBriefingSummary();
 })();

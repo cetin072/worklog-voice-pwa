@@ -26,7 +26,7 @@
   <link rel="preload" as="image" href="/icons/icon-512-v6.png" fetchpriority="high">
   <title>업무수첩</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/distribution.css?v=20260917-1">
+  <link rel="stylesheet" href="/distribution.css?v=20260917-2">
   <link rel="stylesheet" href="/briefing.css?v=20260916-2">
   <link rel="stylesheet" href="/briefing-edit.css?v=20260916-2">
   <link rel="stylesheet" href="/home-ux.css?v=20260916-2">
@@ -140,14 +140,14 @@
         <span class="micIcon">🎙</span>
         <span id="micText">음성 기록</span>
       </button>
-      <p id="hint">버튼을 누르고 업무를 말하세요. 같은 버튼을 다시 누르면 저장합니다.</p>
-      <button id="save" class="save" type="button">저장</button>
-      <button id="manualEntry" class="manual-entry" type="button" aria-controls="text">⌨ 직접 입력</button>
-      <button id="clear" class="clear" type="button">입력 지우기</button>
+      <p id="hint">하단 음성 기록 버튼을 누르고 업무를 말하세요. 같은 버튼을 다시 누르면 저장합니다.</p>
+      <button id="save" class="save" type="button" hidden aria-hidden="true" tabindex="-1">저장</button>
+      <button id="manualEntry" class="manual-entry" type="button" aria-controls="text" hidden aria-hidden="true" tabindex="-1">⌨ 직접 입력</button>
+      <button id="clear" class="clear" type="button" hidden aria-hidden="true" tabindex="-1">입력 지우기</button>
       <p id="result" class="result" aria-live="polite"></p>
     </section>
 
-    <section id="entryCard" class="card core-app-card">
+    <section id="entryCard" class="card core-app-card" hidden>
       <label class="label" for="text">직접 입력</label>
       <textarea id="text" rows="5" placeholder="업무 내용을 적어주세요. 예: 계좌 개설 서류 확인해야 함."></textarea>
       <button id="typedSave" class="save typed-save" type="button">저장</button>
@@ -198,6 +198,6 @@
   <script src="/briefing-v2.js?v=20260916-3" defer></script>
   <script src="/briefing-v2-expand-state.js?v=20260916-1" defer></script>
   <script src="/briefing-edit.js?v=20260916-2" defer></script>
-  <script src="/home-ux.js?v=20260916-3" defer></script>
+  <script src="/home-ux.js?v=20260917-1" defer></script>
 </body>
 </html>

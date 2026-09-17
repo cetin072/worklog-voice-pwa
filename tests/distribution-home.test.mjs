@@ -83,6 +83,7 @@ test("direct input exposes only text and save while keeping inference compatibil
   const end = html.indexOf("<footer>", start);
   const entry = html.slice(start, end);
   assert.ok(start >= 0 && end > start);
+  assert.match(entry, /<section id="entryCard" class="card core-app-card" hidden>/);
   assert.match(entry, />직접 입력<\/label>/);
   assert.match(entry, /id="text"/);
   assert.match(entry, /id="typedSave"/);
@@ -184,7 +185,7 @@ test("legacy briefing loads only for legacy users without a Platform session", (
 
 test("service worker caches current standalone settings assets", () => {
   const source = read("public/sw.js");
-  assert.match(source, /worklog-v39-brand-identity-v6/);
+  assert.match(source, /worklog-v40-home-ux-0-5/);
   for (const asset of ["/settings.html", "/distribution.css", "/settings.css", "/notifications.js", "/settings.js", "/briefing.css", "/briefing-v2-expand-state.js", "/platform-auth.js", "/platform-auth-ui.js", "/onboarding.js", "/briefing-legacy-loader.js"]) {
     assert.ok(source.includes(`\"${asset}\"`), `missing ${asset}`);
   }
