@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('미루기 이력은 별도 외부 source id를 요구하지 않는다',()=>assert.doesNotMatch(sql,/notion|google_calendar|external_id/i));
