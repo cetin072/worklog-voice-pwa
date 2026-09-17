@@ -6,7 +6,7 @@ import { secureSessionStorage } from '@/src/platform/secure-storage';
 const NOTIFICATION_MAPPING_KEY = 'worklog.mobile.schedule-notifications.v1';
 const CHANNEL_ID = 'worklog-schedule-reminders';
 
-type NotificationMappings = Record<string, { identifier: string; triggerAt: string }>;
+type NotificationMappings = Record<string, { identifier: string; triggerAt: string; title: string }>;
 
 Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
 
@@ -33,10 +33,10 @@ export async function scheduleReminder({ scheduleId, title, triggerAt }: { sched
   if (!permission.granted) throw new Error('알림 권한이 필요합니다. 휴대폰 설정에서 업무수첩 알림을 허용해주세요.');
   const saved = await mappings();
   const previous = saved[scheduleId];
-  if (previous?.triggerAt === triggerAt.toISOString()) return previous.identifier;
+  if (previous?.triggerAt === triggerAt.toISOString() && previous.title === title) return previous.identifier;
   if (previous) await Notifications.cancelScheduledNotificationAsync(previous.identifier).catch(() => undefined);
   const identifier = await Notifications.scheduleNotificationAsync({ content: { title: '업무수첩 · 일정 알림', body: title, data: { scheduleId, target: 'schedule' } }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerAt, channelId: CHANNEL_ID } });
-  saved[scheduleId] = { identifier, triggerAt: triggerAt.toISOString() };
+  saved[scheduleId] = { identifier, triggerAt: triggerAt.toISOString(), title };
   await saveMappings(saved);
   return identifier;
 }
@@ -49,4 +49,28 @@ export async function cancelScheduleReminder(scheduleId: string) {
   delete saved[scheduleId];
   await saveMappings(saved);
   return true;
+}
+
+export async function reconcileScheduleReminders() {
+  const saved = await mappings();
+  const system = await Notifications.getAllScheduledNotificationsAsync();
+  const activeIds = new Set(system.map((notification) => notification.identifier));
+  const now = Date.now();
+  let restored = 0;
+  let removed = 0;
+  for (const [scheduleId, reminder] of Object.entries(saved)) {
+    const triggerAt = new Date(reminder.triggerAt);
+    if (triggerAt.getTime() <= now) {
+      delete saved[scheduleId];
+      removed += 1;
+      continue;
+    }
+    if (!activeIds.has(reminder.identifier)) {
+      const identifier = await Notifications.scheduleNotificationAsync({ content: { title: '업무수첩 · 일정 알림', body: reminder.title, data: { scheduleId, target: 'schedule' } }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerAt, channelId: CHANNEL_ID } });
+      saved[scheduleId] = { ...reminder, identifier };
+      restored += 1;
+    }
+  }
+  await saveMappings(saved);
+  return { restored, removed };
 }

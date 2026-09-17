@@ -7,6 +7,7 @@ const appJson = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
 const calendarSource = fs.readFileSync('mobile/src/features/schedule/device-calendar.ts', 'utf8');
 const notificationSource = fs.readFileSync('mobile/src/features/schedule/local-notifications.ts', 'utf8');
 const scheduleActionsSource = fs.readFileSync('mobile/src/features/schedule/schedule-device-actions.tsx', 'utf8');
+const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 
 test('Mobile calendar uses the OS provider with writable-calendar permission and local event mapping', () => {
   assert.equal(packageJson.dependencies['expo-calendar'], '57.0.4');
@@ -28,4 +29,13 @@ test('Local notifications request permission and deduplicate schedule reminders 
   assert.doesNotMatch(notificationSource, /08:30|09:00|16:30/);
   assert.match(scheduleActionsSource, /일정 시작 시각에 알림/);
   assert.match(scheduleActionsSource, /휴대폰 캘린더 선택/);
+});
+
+test('Notifications reconcile after app restart and open the linked schedule on response', () => {
+  assert.match(notificationSource, /reconcileScheduleReminders/);
+  assert.match(notificationSource, /getAllScheduledNotificationsAsync/);
+  assert.match(notificationSource, /target: 'schedule'/);
+  assert.match(homeSource, /getLastNotificationResponseAsync/);
+  assert.match(homeSource, /addNotificationResponseReceivedListener/);
+  assert.match(homeSource, /알림 일정/);
 });
