@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {SCHEDULE_DEFER_PRESETS} from '../netlify/shared/schedule-defer-reminder.mjs';test('미루기 preset id는 API/DB용 안정 키를 사용한다',()=>assert.deepEqual(SCHEDULE_DEFER_PRESETS.map(x=>x.id),['day','week','fortnight','month','custom']));
