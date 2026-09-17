@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const rules=fs.readFileSync(new URL('../netlify/shared/schedule-defer-reminder.mjs',import.meta.url),'utf8');test('30분 전 판단은 AI 호출 없이 결정적 규칙으로 처리한다',()=>assert.doesNotMatch(rules,/openai|anthropic|gemini|fetch\(/i));
