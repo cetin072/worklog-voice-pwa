@@ -42,8 +42,9 @@ test('Authenticated mobile home surfaces the recorder without replacing Data Cor
   assert.match(homeSource, /saveWorklog/);
 });
 
-test('Briefing smoke shows progress and result or error next to the action', () => {
-  assert.match(homeSource, /브리핑 불러오는 중/);
-  assert.match(homeSource, /briefingMessage/);
+test('Briefing App Shell shows progress plus typed result or error next to the action', () => {
+  assert.match(homeSource, /오늘 업무를 불러오는 중/);
+  assert.match(homeSource, /briefingBusy/);
+  assert.match(homeSource, /MobileBriefing/);
   assert.match(homeSource, /briefingError/);
 });

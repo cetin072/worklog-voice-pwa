@@ -12,9 +12,11 @@ Android 우선 Expo/React Native 모바일 클라이언트다.
 - 기존 Supabase Google Provider를 재사용하는 `Google로 시작`
 - 마지막 로그인 이메일 기억, OS 비밀번호 관리자/자동완성 힌트
 - 비밀번호 기본 마스킹 + 보기/숨기기
-- `/api/briefing-fast`를 통한 Data Core 읽기 smoke
-- `/api/worklog`를 통한 Data Core 쓰기 smoke
+- 최신 PWA와 같은 홈 브리핑 구조(지난 것·오늘 할 일·다가오는 업무·기한 없는 업무)와 오늘/다가오는 일정 표시
+- `/api/briefing-fast`를 통한 Data Core 브리핑 읽기와 loading/empty/error/retry
+- `/api/worklog`를 통한 직접 입력 업무 저장
 - `expo-audio` 기반 사용자 시작형 음성 녹음
+- 홈의 빠른 음성 메모와 별도 장시간 회의 녹음 진입(동일 recorder core 재사용)
 - Android background recording foreground service
 - 녹음 원본을 앱 document directory에 Local-first 보존
 - 녹음 결과를 공통 Audio Intelligence용 `mobile-recording` AudioInput 메타데이터로 변환

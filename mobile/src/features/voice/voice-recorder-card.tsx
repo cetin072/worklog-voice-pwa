@@ -20,6 +20,10 @@ const RECORDING_OPTIONS = {
 
 type RecorderPhase = 'idle' | 'recording' | 'paused' | 'stopping';
 
+type VoiceRecorderCardProps = {
+  mode?: 'quick' | 'meeting';
+};
+
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -27,7 +31,7 @@ function formatDuration(durationMs: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-export function VoiceRecorderCard() {
+export function VoiceRecorderCard({ mode = 'quick' }: VoiceRecorderCardProps) {
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(recorder, 250);
   const [phase, setPhase] = useState<RecorderPhase>('idle');
@@ -127,9 +131,11 @@ export function VoiceRecorderCard() {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionTitle}>음성 녹음</Text>
+      <Text style={styles.sectionTitle}>{mode === 'meeting' ? '회의 녹음' : '빠른 음성 메모'}</Text>
       <Text style={styles.body}>
-        직접 시작한 녹음만 기기에 저장합니다. 화면을 잠그거나 다른 앱으로 이동해도 녹음이 계속됩니다.
+        {mode === 'meeting'
+          ? '긴 회의도 로컬에 보존합니다. 화면을 잠그거나 다른 앱으로 이동해도 녹음이 계속됩니다.'
+          : '짧은 업무 메모를 바로 녹음해 기기에 저장합니다. 자동 업로드하지 않습니다.'}
       </Text>
 
       <View style={styles.statusRow}>
@@ -146,8 +152,8 @@ export function VoiceRecorderCard() {
       </View>
 
       {!active ? <Button title="녹음 시작" onPress={startRecording} /> : null}
-      {phase === 'recording' ? <Button title="일시정지" onPress={pauseRecording} /> : null}
-      {phase === 'paused' ? <Button title="녹음 재개" onPress={resumeRecording} /> : null}
+      {mode === 'meeting' && phase === 'recording' ? <Button title="일시정지" onPress={pauseRecording} /> : null}
+      {mode === 'meeting' && phase === 'paused' ? <Button title="녹음 재개" onPress={resumeRecording} /> : null}
       {active ? (
         <Button title={phase === 'stopping' ? '저장 중...' : '녹음 종료'} disabled={phase === 'stopping'} onPress={stopRecording} />
       ) : null}

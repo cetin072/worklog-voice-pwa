@@ -1,5 +1,35 @@
 import { getApiBaseUrl } from './config';
 
+export type BriefingTask = {
+  pageId?: string;
+  title?: string;
+  institution?: string;
+  status?: string;
+  dueKey?: string;
+  daysOverdue?: number;
+  daysUntil?: number;
+  followUp?: string;
+};
+
+export type BriefingSchedule = {
+  scheduleId?: string;
+  title?: string;
+  startsAt?: string;
+  dateKey?: string;
+  allDay?: boolean;
+  status?: string;
+  location?: string;
+};
+
+export type MobileBriefing = {
+  today?: string;
+  generatedAt?: string;
+  counts?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated' | 'total', number>>;
+  structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>>;
+  schedules?: { today?: BriefingSchedule[]; upcoming?: BriefingSchedule[]; total?: number };
+  scheduleEnabled?: boolean;
+};
+
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
@@ -20,7 +50,7 @@ export async function loadBriefing(accessToken: string) {
       authorization: `Bearer ${accessToken}`,
     },
   });
-  return readJson(response);
+  return readJson(response) as Promise<MobileBriefing>;
 }
 
 export async function saveWorklog(accessToken: string, transcript: string) {
