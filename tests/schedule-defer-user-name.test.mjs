@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const doc=fs.readFileSync(new URL('../docs/SCHEDULE_DEFER_REMINDER_V1.md',import.meta.url),'utf8');test('사용자 기능 명칭은 미루기를 사용한다',()=>{assert.match(doc,/미루기/);assert.doesNotMatch(doc,/사용자 표시.*Snooze/);});
