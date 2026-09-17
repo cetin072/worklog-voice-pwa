@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {scheduleReminderAt} from '../netlify/shared/schedule-defer-reminder.mjs';test('기본 사전 알림은 정확히 30분 전이다',()=>assert.equal(new Date('2026-09-17T05:00:00Z')-new Date(scheduleReminderAt('2026-09-17T05:00:00Z')),30*60*1000));
