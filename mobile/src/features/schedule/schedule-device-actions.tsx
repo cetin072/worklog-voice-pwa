@@ -130,8 +130,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
         await scheduleReminder({ scheduleId, title: schedule.title || '업무수첩 일정', scheduleStartsAt: startsAt, offsetMinutes });
         setMessage('일정 알림을 예약했습니다.');
       }
-      await refreshReminders();
-    } catch (error) { setMessage(error instanceof Error ? error.message : '일정 알림을 변경하지 못했습니다.'); } finally { setBusy(false); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : '일정 알림을 변경하지 못했습니다.'); } finally { await refreshReminders().catch(() => undefined); setBusy(false); }
   }
 
   async function clearReminders() {
