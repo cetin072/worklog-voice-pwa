@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {deferScheduleTime} from '../netlify/shared/schedule-defer-reminder.mjs';test('서버 미루기 계산 결과는 ISO timestamp다',()=>assert.match(deferScheduleTime('2026-09-17T14:00:00+09:00','day'),/^2026-09-18T05:00:00\.000Z$/));
