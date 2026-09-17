@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('직접 날짜 선택도 DB에서 동일 duration 보존 경로를 사용한다',()=>{assert.match(sql,/p_preset not in/);assert.match(sql,/v_duration/);});
