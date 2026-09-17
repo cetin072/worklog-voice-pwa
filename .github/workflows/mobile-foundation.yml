@@ -4,9 +4,7 @@ on:
   pull_request:
     paths:
       - 'mobile/**'
-      - 'tests/mobile-foundation.test.mjs'
-      - 'tests/mobile-voice-capture.test.mjs'
-      - 'tests/mobile-auth-ux.test.mjs'
+      - 'tests/mobile-*.test.mjs'
       - '.github/workflows/mobile-foundation.yml'
 
 concurrency:
@@ -37,7 +35,7 @@ jobs:
         working-directory: mobile
         run: npm run typecheck
       - name: Run mobile contract tests
-        run: node --test tests/mobile-foundation.test.mjs tests/mobile-voice-capture.test.mjs tests/mobile-auth-ux.test.mjs
+        run: node --test tests/mobile-*.test.mjs
 
   android-standalone:
     needs: typecheck
