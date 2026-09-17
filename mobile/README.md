@@ -21,7 +21,14 @@ Android 우선 Expo/React Native 모바일 클라이언트다.
 - 녹음 원본을 앱 document directory에 Local-first 보존
 - 녹음 결과를 공통 Audio Intelligence용 `mobile-recording` AudioInput 메타데이터로 변환
 
-Push, Share Intent, Widget, Calendar, 실제 오디오 업로드/STT는 후속 Issue에서 추가한다.
+Push, Share Intent, Widget, 실제 오디오 업로드/STT는 후속 Issue에서 추가한다.
+
+## 일정과 알림
+
+- 브리핑의 일정 행에서 사용자가 직접 휴대폰의 수정 가능한 Calendar를 선택해 일정을 추가할 수 있다. Android Calendar Provider가 Google 계정 Calendar와 동기화하는 경우 그 계정을 그대로 사용한다.
+- 앱은 기기에 저장한 Schedule → Calendar event ID mapping으로 같은 일정의 중복 생성을 막고, 변경·삭제를 재시도할 수 있는 경계를 둔다.
+- 일정 알림은 사용자가 직접 선택한 일정의 시작 시각에만 local notification으로 예약한다. 제품 기본 알림 시각은 임의로 정하지 않는다.
+- Calendar/알림 권한이 거부되면 설정에서 허용하도록 안내하며, Google Calendar REST API 토큰은 사용하거나 저장하지 않는다.
 
 ## 실행
 

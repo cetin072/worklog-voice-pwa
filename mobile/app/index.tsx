@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, Button, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
+import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-actions';
 import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, saveWorklog } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 
@@ -39,7 +40,7 @@ function TaskRow({ bucket, task }: { bucket: BriefingBucket; task: BriefingTask 
 
 function ScheduleRows({ schedules, empty }: { schedules?: BriefingSchedule[]; empty: string }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
-  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}</View>);
+  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}<ScheduleDeviceActions schedule={schedule} /></View>);
 }
 
 export default function HomeScreen() {
