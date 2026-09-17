@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('공백 제목 일정은 Push payload를 만들지 않는다',()=>assert.equal(buildScheduleReminderPayload({scheduleId:'s',title:'   '}),null));
