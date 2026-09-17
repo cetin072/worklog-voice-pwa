@@ -68,7 +68,6 @@ export default function HomeScreen() {
   const [draft, setDraft] = useState('');
   const [screen, setScreen] = useState<AppScreen>('home');
   const [selectedTask, setSelectedTask] = useState<{ bucket: BriefingBucket; task: BriefingTask } | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [notificationScheduleId, setNotificationScheduleId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [briefing, setBriefing] = useState<MobileBriefing | null>(null);
@@ -198,7 +197,6 @@ export default function HomeScreen() {
 
   const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
-  const normalizedSearch = searchQuery.trim().toLocaleLowerCase('ko-KR');
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
   return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
