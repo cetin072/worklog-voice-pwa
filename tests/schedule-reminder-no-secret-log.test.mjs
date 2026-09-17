@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('일정 Push 함수는 endpoint/key/auth 값을 로그하지 않는다',()=>assert.doesNotMatch(src,/console\.(?:log|error)\([^\n]*(?:endpoint|p256dh|auth|privateKey)/));
