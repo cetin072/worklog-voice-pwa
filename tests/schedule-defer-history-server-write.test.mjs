@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const api=fs.readFileSync(new URL('../netlify/functions/schedule-defer.mts',import.meta.url),'utf8');test('API는 이력 테이블을 직접 쓰지 않고 원자적 RPC에 위임한다',()=>assert.doesNotMatch(api,/schedule_defer_history/));
