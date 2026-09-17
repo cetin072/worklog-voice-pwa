@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('사전 알림 body는 일정 제목 하나만 사용한다',()=>{const p=buildScheduleReminderPayload({scheduleId:'s',title:'회의',startsAt:'x'});assert.equal(p.body,'회의');});
