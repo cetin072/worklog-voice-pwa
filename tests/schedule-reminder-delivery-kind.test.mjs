@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190500_schedule_advance_notification_v1.sql',import.meta.url),'utf8');test('claim insert는 schedule_advance kind를 기록한다',()=>assert.match(sql,/select subs\.id,'schedule_advance'/));
