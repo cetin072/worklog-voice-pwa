@@ -79,3 +79,52 @@ Supabase URL이나 publishable key를 모바일 저장소에 복사하지 않는
 - 인증/권한의 최종 판정은 기존 서버/DB/RLS가 맡는다.
 - 세션은 SecureStore adapter에 저장하며 큰 세션 값은 안전한 크기로 분할한다.
 - 녹음 원본은 사용자 승인 없는 자동 업로드를 하지 않는다.
+
+
+## 빠른 실기기 QA 루프
+
+모바일 UI/TypeScript 변경을 확인할 때마다 release APK를 새로 내려받아 설치하지 않는다.
+
+### 1) 개발 빌드 1회 설치
+
+Android 기기를 USB로 연결하고 디버깅을 허용한 뒤:
+
+```bash
+cd mobile
+npm ci
+npm run android:device
+```
+
+이 명령은 현재 native 구성으로 Android development build를 생성·설치한다. 새 native dependency, Expo config plugin, Android permission/manifest가 바뀌지 않는 한 매 UI 수정마다 다시 설치하지 않는다.
+
+### 2) 이후 JS/TS/UI 변경 반복 확인
+
+```bash
+cd mobile
+npm run start:device
+```
+
+같은 개발 빌드가 Metro에 연결되면 React/TypeScript 변경은 reload/Fast Refresh로 확인한다.
+
+### 3) development build를 다시 만들어야 하는 경우
+
+다음 변경이 있을 때만 재빌드를 기본으로 한다.
+
+- native dependency 추가/제거
+- Expo config plugin 변경
+- Android permission 또는 manifest 변경
+- scheme/deep-link native config 변경
+- STT 등 새 native runtime 추가
+- Expo/RN native version 변경
+
+브리핑 레이아웃, 버튼, 상태 표시, 일반 TypeScript 로직처럼 native 계약을 바꾸지 않는 변경은 기존 development build로 우선 검수한다.
+
+### 4) release artifact 생성 시점
+
+standalone ARM64 release APK는 작은 UI 수정마다 만들지 않고 다음 시점에 생성한다.
+
+- native 변경 검증
+- milestone Human QA
+- release checkpoint
+
+QA development build와 production/release build는 구분하며 production OTA, Play Store 제출, production credential 변경은 별도 승인 없이는 수행하지 않는다.
