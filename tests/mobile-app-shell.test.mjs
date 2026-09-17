@@ -33,3 +33,11 @@ test('Mobile shell provides direct entry, recovery states, and Android back navi
   assert.match(homeSource, /BackHandler\.addEventListener/);
   assert.match(homeSource, /setScreen\('home'\)/);
 });
+
+test('Authenticated mobile shell exposes persistent primary navigation and a dedicated schedule-notification entry', () => {
+  for (const label of ['홈', '업무', '일정·알림', '설정']) assert.match(homeSource, new RegExp(label));
+  assert.match(homeSource, /PrimaryNavigation/);
+  assert.match(homeSource, /screen === 'calendar'/);
+  assert.match(homeSource, /휴대폰 일정 연결/);
+  assert.match(homeSource, /일정 만들기/);
+});
