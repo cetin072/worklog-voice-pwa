@@ -11,6 +11,15 @@ test("extracts tomorrow afternoon time and removes schedule words",()=>{
   assert.equal(result.hasTime,true);
 });
 
+test("links a natural task title between relative date and time",()=>{
+  const result=extractScheduleFromText("내일 미팅 테스트 오전 9시",RECORDED_AT);
+  assert.equal(result.matched,true);
+  assert.equal(result.dateKey,"2026-09-13");
+  assert.equal(result.dueStart,"2026-09-13T09:00:00+09:00");
+  assert.equal(result.text,"미팅 테스트");
+  assert.equal(result.hasTime,true);
+});
+
 test("extracts explicit month day and minute",()=>{
   const result=extractScheduleFromText("9월 15일 오전 10시 30분에 회의 자료 전달",RECORDED_AT);
   assert.equal(result.dueStart,"2026-09-15T10:30:00+09:00");
@@ -60,6 +69,13 @@ test("preserves original text when separate schedule phrases could be combined i
   assert.equal(result.matched,false);
   assert.equal(result.dueStart,"");
   assert.equal(result.text,"회의는 오후 3시에 하고 자료는 내일 보내기");
+});
+
+test("does not bridge date and time across a sentence boundary",()=>{
+  const result=extractScheduleFromText("내일 보고서 정리. 오후 3시 고객 전화",RECORDED_AT);
+  assert.equal(result.matched,false);
+  assert.equal(result.dueStart,"");
+  assert.equal(result.text,"내일 보고서 정리. 오후 3시 고객 전화");
 });
 
 test("preserves original text when more than one time is present",()=>{
