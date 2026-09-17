@@ -22,6 +22,7 @@ type RecorderPhase = 'idle' | 'recording' | 'paused' | 'stopping';
 
 type VoiceRecorderCardProps = {
   mode?: 'quick' | 'meeting';
+  onOpenWorklogInput?: () => void;
 };
 
 function formatDuration(durationMs: number) {
@@ -31,7 +32,7 @@ function formatDuration(durationMs: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-export function VoiceRecorderCard({ mode = 'quick' }: VoiceRecorderCardProps) {
+export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput }: VoiceRecorderCardProps) {
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(recorder, 250);
   const [phase, setPhase] = useState<RecorderPhase>('idle');
@@ -166,11 +167,13 @@ export function VoiceRecorderCard({ mode = 'quick' }: VoiceRecorderCardProps) {
 
       {completed ? (
         <View style={styles.result}>
-          <Text style={styles.resultTitle}>로컬 녹음 저장 완료</Text>
+          <Text style={styles.resultTitle}>✅ 음성 메모 파일 저장 완료</Text>
           <Text style={styles.meta}>파일: {completed.fileName}</Text>
           <Text style={styles.meta}>길이: {formatDuration(completed.durationMs)}</Text>
           <Text style={styles.meta}>형식: {completed.mimeType}</Text>
           <Text style={styles.meta}>입력: {completed.sourceKind}</Text>
+          <Text style={styles.notice}>이 녹음 파일은 기기에 보존됐습니다. 업무 기록·브리핑에는 자동 등록되지 않습니다.</Text>
+          {mode === 'quick' && onOpenWorklogInput ? <Button title="업무 직접 입력으로 기록하기" onPress={onOpenWorklogInput} /> : null}
         </View>
       ) : null}
     </View>

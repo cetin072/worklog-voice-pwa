@@ -48,3 +48,10 @@ test('Briefing App Shell shows progress plus typed result or error next to the a
   assert.match(homeSource, /MobileBriefing/);
   assert.match(homeSource, /briefingError/);
 });
+
+test('Quick voice memo distinguishes device-file completion from worklog registration', () => {
+  assert.match(recorderSource, /✅ 음성 메모 파일 저장 완료/);
+  assert.match(recorderSource, /업무 기록·브리핑에는 자동 등록되지 않습니다/);
+  assert.match(recorderSource, /업무 직접 입력으로 기록하기/);
+  assert.match(homeSource, /onOpenWorklogInput=\{\(\) => setScreen\('input'\)\}/);
+});
