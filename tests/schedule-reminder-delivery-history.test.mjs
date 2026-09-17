@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190500_schedule_advance_notification_v1.sql',import.meta.url),'utf8');test('일정 알림도 기존 notification_deliveries ledger를 사용한다',()=>assert.match(sql,/insert into public\.notification_deliveries/));
