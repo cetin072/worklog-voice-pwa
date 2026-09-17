@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "업무수첩",
+    "slug": "worklog-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "worklog",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.cetin072.worklog"
+    },
+    "android": {
+      "package": "com.cetin072.worklog"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
