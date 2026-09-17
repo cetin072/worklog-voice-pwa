@@ -115,7 +115,7 @@ export async function syncScheduleToCalendar(calendarId: string, schedule: Devic
 
   if (current?.calendarId === calendarId && current.fingerprint === nextFingerprint) return { eventId: current.eventId, created: false };
 
-  if (current?.eventId) {
+  if (current?.eventId && current.calendarId === calendarId) {
     let updated = false;
     try {
       await (await Calendar.ExpoCalendarEvent.get(current.eventId)).update({ title: schedule.title, startDate, endDate, allDay: Boolean(schedule.allDay), location: schedule.location || '' });
@@ -129,6 +129,14 @@ export async function syncScheduleToCalendar(calendarId: string, schedule: Devic
   }
 
   const event = await calendar.createEvent({ title: schedule.title, startDate, endDate, allDay: Boolean(schedule.allDay), location: schedule.location || '', timeZone: 'Asia/Seoul' });
+  if (current?.eventId && current.calendarId !== calendarId) {
+    try {
+      // A cross-calendar change is a move, never an update followed by a duplicate create.
+      await (await Calendar.ExpoCalendarEvent.get(current.eventId)).delete();
+    } catch {
+      // The old event may already have been removed manually; the new event is authoritative.
+    }
+  }
   mappings[schedule.scheduleId] = { calendarId, eventId: event.id, fingerprint: nextFingerprint };
   await writeMappings(mappings);
   return { eventId: event.id, created: true };

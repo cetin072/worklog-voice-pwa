@@ -56,7 +56,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
   useEffect(() => {
     if (!scheduleId) return;
     void Promise.all([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]).then(([preferred, mapping, savedReminders]) => {
-      setCalendarId(preferred);
+      setCalendarId(mapping?.calendarId || preferred);
       setCalendarSynced(Boolean(mapping));
       setReminders(savedReminders);
     });

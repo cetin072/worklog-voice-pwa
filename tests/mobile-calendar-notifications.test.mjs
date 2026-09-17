@@ -25,6 +25,10 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(calendarSource, /ownerAccount/);
   assert.match(calendarSource, /isPrimary/);
   assert.match(calendarSource, /setPreferredCalendarId/);
+  assert.match(calendarSource, /current\.calendarId === calendarId/);
+  assert.match(calendarSource, /current\.calendarId !== calendarId/);
+  assert.match(calendarSource, /ExpoCalendarEvent\.get\(current\.eventId\)\)\.delete/);
+  assert.match(scheduleActionsSource, /mapping\?\.calendarId \|\| preferred/);
   assert.match(notificationSource, /requestScheduleNotificationPermission/);
   assert.match(notificationSource, /scheduleNotificationAsync/);
   assert.match(notificationSource, /cancelScheduledNotificationAsync/);
