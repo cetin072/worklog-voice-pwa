@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('미루기는 schedule 삭제가 아니라 update로 처리한다',()=>{assert.match(sql,/update public\.schedules/);assert.doesNotMatch(sql,/delete from public\.schedules/);});
