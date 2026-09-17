@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('종일 일정 미루기는 reminder_at을 null로 유지한다',()=>assert.match(sql,/case when v\.all_day then null else p_new_starts_at-interval '30 minutes' end/));
