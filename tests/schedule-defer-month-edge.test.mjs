@@ -1,1 +1,1 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {deferScheduleTime} from '../netlify/shared/schedule-defer-reminder.mjs';test('월말 1개월 미루기는 JavaScript UTC month 규칙을 사용한다',()=>assert.equal(deferScheduleTime('2026-01-31T05:00:00Z','month'),'2026-03-03T05:00:00.000Z'));
+import test from 'node:test';import assert from 'node:assert/strict';import {deferScheduleTime} from '../netlify/shared/schedule-defer-reminder.mjs';test('월말 1개월 미루기는 다음 달 마지막 유효일로 보정한다',()=>assert.equal(deferScheduleTime('2026-01-31T05:00:00Z','month'),'2026-02-28T05:00:00.000Z'));
