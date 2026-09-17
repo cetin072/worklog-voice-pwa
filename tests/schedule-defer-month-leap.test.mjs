@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {deferScheduleTime} from '../netlify/shared/schedule-defer-reminder.mjs';test('윤년 1월 31일은 2월 29일로 1개월 미룬다',()=>assert.equal(deferScheduleTime('2028-01-31T05:00:00Z','month'),'2028-02-29T05:00:00.000Z'));
