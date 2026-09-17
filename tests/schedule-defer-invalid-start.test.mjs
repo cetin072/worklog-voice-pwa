@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {deferScheduleTime} from '../netlify/shared/schedule-defer-reminder.mjs';test('원본 시작시각이 잘못되면 미루기를 거부한다',()=>assert.throws(()=>deferScheduleTime('bad','day'),/시작 시각/));
