@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../public/schedule-defer.js',import.meta.url),'utf8');test('웹 미루기 client에 service role/scheduler secret이 없다',()=>assert.doesNotMatch(src,/service[_ -]?role|scheduler[_ -]?secret|private[_ -]?key/i));
