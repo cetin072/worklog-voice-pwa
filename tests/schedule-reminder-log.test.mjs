@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('완료 로그는 claimed/sent/failed 집계만 기록한다',()=>assert.match(src,/JSON\.stringify\(\{claimed:rows\.length,sent,failed\}\)/));
