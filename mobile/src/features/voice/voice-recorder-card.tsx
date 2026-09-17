@@ -6,7 +6,7 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import { useState } from 'react';
-import { Button, StyleSheet, Text, View } from 'react-native';
+import { Button, Platform, StyleSheet, Text, View } from 'react-native';
 
 import {
   createMobileRecordingAudioInput,
@@ -43,6 +43,14 @@ export function VoiceRecorderCard() {
       if (!permission.granted) {
         setError('마이크 권한이 필요합니다. Android 설정에서 업무수첩의 마이크 권한을 허용해주세요.');
         return;
+      }
+
+      if (Platform.OS === 'android') {
+        const notificationPermission = await AudioModule.requestNotificationPermissionsAsync();
+        if (!notificationPermission.granted) {
+          setError('백그라운드 녹음에는 알림 권한이 필요합니다. Android 설정에서 업무수첩의 알림을 허용해주세요.');
+          return;
+        }
       }
 
       await setAudioModeAsync({
