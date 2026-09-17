@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/shared/notification-scheduler.mjs',import.meta.url),'utf8');test('schedule claim 전에 https app origin 검증을 수행한다',()=>assert.match(src,/claimScheduleAdvance.*targetOrigin=httpsOrigin\(appOrigin\)/s));
