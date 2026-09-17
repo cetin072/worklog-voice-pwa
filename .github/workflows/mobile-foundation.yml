@@ -6,6 +6,7 @@ on:
       - 'mobile/**'
       - 'tests/mobile-foundation.test.mjs'
       - 'tests/mobile-voice-capture.test.mjs'
+      - 'tests/mobile-auth-ux.test.mjs'
       - '.github/workflows/mobile-foundation.yml'
 
 concurrency:
@@ -36,7 +37,7 @@ jobs:
         working-directory: mobile
         run: npm run typecheck
       - name: Run mobile contract tests
-        run: node --test tests/mobile-foundation.test.mjs tests/mobile-voice-capture.test.mjs
+        run: node --test tests/mobile-foundation.test.mjs tests/mobile-voice-capture.test.mjs tests/mobile-auth-ux.test.mjs
 
   android-standalone:
     needs: typecheck
@@ -69,7 +70,7 @@ jobs:
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: worklog-mobile-voice-capture-arm64-apk
+          name: worklog-mobile-auth-ux-arm64-apk
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
