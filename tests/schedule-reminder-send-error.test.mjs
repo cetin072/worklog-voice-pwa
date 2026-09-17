@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('Push transport 오류 status/code를 finish에 전달한다',()=>{assert.match(src,/status:Number\.isInteger|const status=Number\.isInteger/);assert.match(src,/code:String\(e\?\.code/);});
