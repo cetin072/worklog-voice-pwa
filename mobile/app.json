@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.cetin072.worklog",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
