@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190500_schedule_advance_notification_v1.sql',import.meta.url),'utf8');test('disabled_at이 있는 구독은 일정 Push 대상이 아니다',()=>assert.match(sql,/disabled_at is null/));
