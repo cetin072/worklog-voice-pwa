@@ -26,6 +26,7 @@ function requireAdapters(drive, repository) {
   [
     "getStartPageToken",
     "listChanges",
+    "listItemsModifiedSince",
     "resolvePath",
   ].forEach((method) => requireMethod(drive, method, "Drive adapter"));
   [
@@ -50,6 +51,20 @@ function isoDate(value, fallback = new Date()) {
     throw syncError("CUSTOMER_INDEX_DATE_INVALID", "고객 인덱스 실행 시각이 올바르지 않습니다.");
   }
   return date.toISOString();
+}
+
+function seoulMonthStartIso(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw syncError("CUSTOMER_INDEX_DATE_INVALID", "고객 인덱스 실행 시각이 올바르지 않습니다.");
+  }
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const shifted = new Date(date.getTime() + KST_OFFSET_MS);
+  return new Date(Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    1,
+  ) - KST_OFFSET_MS).toISOString();
 }
 
 function firstCandidateFolder(pathInfo = {}) {
@@ -327,6 +342,38 @@ async function processChange({
   result.reviewRequired += 1;
 }
 
+async function bootstrapCurrentMonth({
+  drive,
+  repository,
+  workspaceId,
+  runId,
+  startedAt,
+  result,
+}) {
+  const monthStart = seoulMonthStartIso(startedAt);
+  const bootstrapCheckpoint = { lastSuccessfulAt: monthStart };
+  let pageToken = "";
+  do {
+    const page = await drive.listItemsModifiedSince(monthStart, pageToken);
+    const items = Array.isArray(page?.items) ? page.items : [];
+    for (const item of items) {
+      if (!item?.id || item.id === drive.rootId || item.id === drive.masterFileId) continue;
+      await processChange({
+        change: { fileId: item?.id, file: item },
+        checkpoint: bootstrapCheckpoint,
+        drive,
+        repository,
+        workspaceId,
+        runId,
+        now: startedAt,
+        result,
+      });
+    }
+    pageToken = cleanText(page?.nextPageToken);
+  } while (pageToken);
+  return monthStart;
+}
+
 export async function runCustomerIndexDailySync({
   workspaceId,
   drive,
@@ -346,22 +393,36 @@ export async function runCustomerIndexDailySync({
     const checkpoint = await repository.getCheckpoint({ workspaceId: workspace });
     if (!checkpoint?.pageToken) {
       const pageToken = await drive.getStartPageToken();
+      const bootstrapSince = await bootstrapCurrentMonth({
+        drive,
+        repository,
+        workspaceId: workspace,
+        runId,
+        startedAt,
+        result,
+      });
       await repository.saveCheckpoint({
         workspaceId: workspace,
         pageToken,
         lastSuccessfulAt: startedAt,
         runId,
       });
+      const runStatus = result.changed === 0 && result.sourceUnavailable === 0 ? "noop" : "succeeded";
       await repository.finishRun({
         workspaceId: workspace,
         runId,
-        status: "noop",
+        status: runStatus,
         finishedAt: startedAt,
         counts: result,
         checkpointBefore: "",
         checkpointAfter: pageToken,
       });
-      return Object.freeze({ status: "checkpoint_initialized", runId, ...result });
+      return Object.freeze({
+        status: "bootstrap_completed",
+        bootstrapSince,
+        runId,
+        ...result,
+      });
     }
 
     let pageToken = checkpoint.pageToken;
