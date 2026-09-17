@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {deferScheduleTime} from '../netlify/shared/schedule-defer-reminder.mjs';test('1개월 뒤 preset은 같은 시각을 다음 달로 이동한다',()=>assert.equal(deferScheduleTime('2026-09-17T05:00:00Z','month'),'2026-10-17T05:00:00.000Z'));
