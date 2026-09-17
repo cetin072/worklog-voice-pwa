@@ -9,6 +9,9 @@ Android 우선 Expo/React Native 모바일 클라이언트다.
 - 기존 `/api/supabase-auth-config`를 통한 공개 Supabase 설정 로딩
 - `expo-secure-store` 기반 Supabase 세션 저장
 - 기존 계정 이메일/비밀번호 로그인
+- 기존 Supabase Google Provider를 재사용하는 `Google로 시작`
+- 마지막 로그인 이메일 기억, OS 비밀번호 관리자/자동완성 힌트
+- 비밀번호 기본 마스킹 + 보기/숨기기
 - `/api/briefing-fast`를 통한 Data Core 읽기 smoke
 - `/api/worklog`를 통한 Data Core 쓰기 smoke
 - `expo-audio` 기반 사용자 시작형 음성 녹음
@@ -27,7 +30,17 @@ npm run typecheck
 npm start
 ```
 
-Android 네이티브 권한/foreground service까지 포함한 녹음 검수는 Expo Go가 아니라 standalone/development build에서 수행한다.
+Android 네이티브 권한/foreground service까지 포함한 녹음 검수와 Google OAuth deep link 검수는 Expo Go가 아니라 standalone/development build에서 수행한다.
+
+## 인증 경계
+
+- Supabase URL과 publishable key는 기존 `/api/supabase-auth-config`에서 읽는다.
+- 이메일/비밀번호 로그인은 기존 Supabase Auth session을 사용한다.
+- 앱은 마지막 사용 이메일만 로컬에 기억하고 사용자 비밀번호 원문을 직접 저장하지 않는다.
+- 비밀번호 저장/자동완성은 Android/iOS의 OS credential/autofill 계층을 우선한다.
+- Google 로그인은 기존 Supabase Google Provider를 재사용하고 `worklog://google-auth`로 앱에 복귀한다.
+- Supabase URL Configuration의 Additional Redirect URLs에 `worklog://google-auth`가 허용되어야 한다.
+- Google Client Secret이나 provider token은 앱 코드/저장소에 넣지 않는다.
 
 ## 음성 녹음 경계
 
