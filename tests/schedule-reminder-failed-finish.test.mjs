@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('개별 Push 실패가 다음 row 발송을 중단하지 않는 loop 구조다',()=>{assert.match(src,/for\(const row of rows\)/);assert.match(src,/catch\(e:any\)\{failed\+\+/);});
