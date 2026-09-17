@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/shared/notification-scheduler.mjs',import.meta.url),'utf8');test('schedule claim 응답이 배열이 아니면 fail closed 한다',()=>assert.match(src,/일정 알림 claim 결과가 올바르지 않습니다/));
