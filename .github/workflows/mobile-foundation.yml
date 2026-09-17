@@ -1,14 +1,15 @@
-name: Mobile Foundation
+name: Mobile App
 
 on:
   pull_request:
     paths:
       - 'mobile/**'
       - 'tests/mobile-foundation.test.mjs'
+      - 'tests/mobile-voice-capture.test.mjs'
       - '.github/workflows/mobile-foundation.yml'
 
 concurrency:
-  group: mobile-foundation-${{ github.ref }}
+  group: mobile-app-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -23,19 +24,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
-      - name: Install locked mobile dependencies
+      - name: Refresh mobile dependency lock for audit
         working-directory: mobile
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: Check Expo dependency compatibility
         working-directory: mobile
         run: npx expo install --check
       - name: Typecheck mobile app
         working-directory: mobile
         run: npm run typecheck
-      - name: Run mobile foundation contract tests
-        run: node --test tests/mobile-foundation.test.mjs
+      - name: Run mobile contract tests
+        run: node --test tests/mobile-foundation.test.mjs tests/mobile-voice-capture.test.mjs
+      - name: Upload resolved mobile lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-package-lock-refresh
+          path: mobile/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
 
   android-standalone:
     needs: typecheck
@@ -46,15 +52,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install locked mobile dependencies
+      - name: Install mobile dependencies for audit build
         working-directory: mobile
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: Generate Android project
         working-directory: mobile
         env:
@@ -68,7 +72,7 @@ jobs:
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: worklog-mobile-standalone-arm64-apk
+          name: worklog-mobile-voice-capture-arm64-apk
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
