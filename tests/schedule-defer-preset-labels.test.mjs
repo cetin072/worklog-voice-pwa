@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {SCHEDULE_DEFER_PRESETS} from '../netlify/shared/schedule-defer-reminder.mjs';test('미루기 사용자 표시 라벨을 확정한다',()=>assert.deepEqual(SCHEDULE_DEFER_PRESETS.map(x=>x.label),['1일 뒤','1주 뒤','15일 뒤','1개월 뒤','날짜 직접 선택']));
