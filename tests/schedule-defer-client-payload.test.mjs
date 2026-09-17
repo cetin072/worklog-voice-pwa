@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../public/schedule-defer.js',import.meta.url),'utf8');test('웹 client는 scheduleId/startsAt/preset/customStartsAt 계약으로 호출한다',()=>assert.match(src,/JSON\.stringify\(\{scheduleId,startsAt,preset,customStartsAt\}\)/));
