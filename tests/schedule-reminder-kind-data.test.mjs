@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('Push data kind는 schedule_advance다',()=>assert.equal(buildScheduleReminderPayload({scheduleId:'s',title:'회의'}).data.kind,'schedule_advance'));
