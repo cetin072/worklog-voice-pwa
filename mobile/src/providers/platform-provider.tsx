@@ -157,7 +157,8 @@ export function PlatformProvider({ children }: PropsWithChildren) {
       signInWithGoogle: async () => {
         if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');
         setAuthError('');
-        await beginGoogleOAuth(client);
+        const result = await beginGoogleOAuth(client);
+        if (result === 'cancelled') setAuthError('Google 로그인을 취소했습니다. 다른 방법으로 로그인할 수 있습니다.');
       },
       signOut: async () => {
         if (!client) return;

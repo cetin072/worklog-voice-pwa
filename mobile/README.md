@@ -39,6 +39,7 @@ Android 네이티브 권한/foreground service까지 포함한 녹음 검수와 
 - 앱은 마지막 사용 이메일만 로컬에 기억하고 사용자 비밀번호 원문을 직접 저장하지 않는다.
 - 비밀번호 저장/자동완성은 Android/iOS의 OS credential/autofill 계층을 우선한다.
 - Google 로그인은 기존 Supabase Google Provider를 재사용하고 `worklog://google-auth`로 앱에 복귀한다.
+- Google 로그인은 Expo AuthSession 브라우저를 사용하므로 취소를 명확히 표시하고, cold start·foreground deep link callback을 모두 처리한다.
 - Supabase URL Configuration의 Additional Redirect URLs에 `worklog://google-auth`가 허용되어야 한다.
 - Google Client Secret이나 provider token은 앱 코드/저장소에 넣지 않는다.
 

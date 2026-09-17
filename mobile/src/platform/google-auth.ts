@@ -1,10 +1,15 @@
 import 'react-native-url-polyfill/auto';
 
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 
 import type { PlatformSupabaseClient } from './supabase';
 
 export const GOOGLE_AUTH_REDIRECT_URL = 'worklog://google-auth';
+
+WebBrowser.maybeCompleteAuthSession();
+
+let callbackInFlight: { url: string; completion: Promise<boolean> } | null = null;
 
 function parseGoogleAuthCallback(url: string) {
   const parsed = new URL(url);
@@ -42,10 +47,17 @@ export async function beginGoogleOAuth(client: PlatformSupabaseClient) {
   if (error) throw error;
   if (!data.url) throw new Error('Google 로그인 주소를 만들지 못했습니다.');
 
-  await Linking.openURL(data.url);
+  const result = await WebBrowser.openAuthSessionAsync(data.url, GOOGLE_AUTH_REDIRECT_URL);
+  if (result.type === 'success') {
+    await completeGoogleOAuthFromUrl(client, result.url);
+    return 'success' as const;
+  }
+
+  if (result.type === 'cancel' || result.type === 'dismiss') return 'cancelled' as const;
+  throw new Error('Google 로그인 브라우저를 시작하지 못했습니다.');
 }
 
-export async function completeGoogleOAuthFromUrl(client: PlatformSupabaseClient, url: string) {
+async function completeGoogleOAuthCallback(client: PlatformSupabaseClient, url: string) {
   const callback = parseGoogleAuthCallback(url);
   if (!callback) return false;
 
@@ -69,4 +81,14 @@ export async function completeGoogleOAuthFromUrl(client: PlatformSupabaseClient,
   }
 
   throw new Error('Google 로그인 결과에서 Supabase 세션을 확인하지 못했습니다.');
+}
+
+export function completeGoogleOAuthFromUrl(client: PlatformSupabaseClient, url: string) {
+  if (callbackInFlight?.url === url) return callbackInFlight.completion;
+
+  const completion = completeGoogleOAuthCallback(client, url).finally(() => {
+    if (callbackInFlight?.completion === completion) callbackInFlight = null;
+  });
+  callbackInFlight = { url, completion };
+  return completion;
 }

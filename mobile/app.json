@@ -24,7 +24,8 @@
           "recordAudioAndroid": true,
           "enableBackgroundRecording": true
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

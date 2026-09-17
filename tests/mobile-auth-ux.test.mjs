@@ -10,6 +10,7 @@ const authPreferencesSource = fs.readFileSync('mobile/src/platform/auth-preferen
 
 test('Mobile app owns a stable worklog deep-link scheme', () => {
   assert.equal(appJson.expo.scheme, 'worklog');
+  assert.ok(appJson.expo.plugins.includes('expo-web-browser'));
   assert.match(googleAuthSource, /worklog:\/\/google-auth/);
 });
 
@@ -17,7 +18,11 @@ test('Google sign-in reuses Supabase OAuth and returns through the app scheme', 
   assert.match(googleAuthSource, /provider:\s*'google'/);
   assert.match(googleAuthSource, /redirectTo:\s*GOOGLE_AUTH_REDIRECT_URL/);
   assert.match(googleAuthSource, /skipBrowserRedirect:\s*true/);
-  assert.match(googleAuthSource, /Linking\.openURL/);
+  assert.match(googleAuthSource, /WebBrowser\.openAuthSessionAsync/);
+  assert.match(googleAuthSource, /GOOGLE_AUTH_REDIRECT_URL/);
+  assert.match(googleAuthSource, /result\.type === 'cancel'/);
+  assert.match(googleAuthSource, /result\.type === 'dismiss'/);
+  assert.match(googleAuthSource, /callbackInFlight/);
   assert.match(googleAuthSource, /client\.auth\.setSession/);
   assert.match(googleAuthSource, /client\.auth\.exchangeCodeForSession/);
 });
@@ -32,6 +37,7 @@ test('Platform provider handles initial and foreground Google auth callbacks', (
   assert.match(providerSource, /Linking\.addEventListener\('url'/);
   assert.match(providerSource, /signInWithGoogle/);
   assert.match(providerSource, /rememberedEmail/);
+  assert.match(providerSource, /Google 로그인을 취소했습니다/);
 });
 
 test('Login UI exposes Google first plus password visibility and autofill hints', () => {
