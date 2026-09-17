@@ -50,6 +50,10 @@ test('Login UI exposes Google first plus password visibility and autofill hints'
   assert.match(homeSource, /importantForAutofill="yes"/);
 });
 
+test('Android resizes the app above the software keyboard during login', () => {
+  assert.equal(appJson.expo.android.softwareKeyboardLayoutMode, 'resize');
+});
+
 test('Only the non-sensitive email identifier is remembered by the app', () => {
   assert.match(authPreferencesSource, /LAST_LOGIN_EMAIL_KEY/);
   assert.match(authPreferencesSource, /SecureStore\.setItemAsync/);
