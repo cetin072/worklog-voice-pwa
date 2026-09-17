@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('일정 Push는 기존 Netlify URL/VAPID subject origin 경계를 재사용한다',()=>{assert.match(src,/Netlify\.env\.get\('URL'\)/);assert.match(src,/vapid\.subject/);});
