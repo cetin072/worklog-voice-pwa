@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import test from 'node:test';
+
+const appJson = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
+const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
+const providerSource = fs.readFileSync('mobile/src/providers/platform-provider.tsx', 'utf8');
+const googleAuthSource = fs.readFileSync('mobile/src/platform/google-auth.ts', 'utf8');
+const authPreferencesSource = fs.readFileSync('mobile/src/platform/auth-preferences.ts', 'utf8');
+
+test('Mobile app owns a stable worklog deep-link scheme', () => {
+  assert.equal(appJson.expo.scheme, 'worklog');
+  assert.match(googleAuthSource, /worklog:\/\/google-auth/);
+});
+
+test('Google sign-in reuses Supabase OAuth and returns through the app scheme', () => {
+  assert.match(googleAuthSource, /provider:\s*'google'/);
+  assert.match(googleAuthSource, /redirectTo:\s*GOOGLE_AUTH_REDIRECT_URL/);
+  assert.match(googleAuthSource, /skipBrowserRedirect:\s*true/);
+  assert.match(googleAuthSource, /Linking\.openURL/);
+  assert.match(googleAuthSource, /client\.auth\.setSession/);
+  assert.match(googleAuthSource, /client\.auth\.exchangeCodeForSession/);
+});
+
+test('Mobile Google OAuth does not persist Google provider tokens', () => {
+  assert.doesNotMatch(googleAuthSource, /provider_token/);
+  assert.doesNotMatch(googleAuthSource, /provider_refresh_token/);
+});
+
+test('Platform provider handles initial and foreground Google auth callbacks', () => {
+  assert.match(providerSource, /Linking\.getInitialURL\(\)/);
+  assert.match(providerSource, /Linking\.addEventListener\('url'/);
+  assert.match(providerSource, /signInWithGoogle/);
+  assert.match(providerSource, /rememberedEmail/);
+});
+
+test('Login UI exposes Google first plus password visibility and autofill hints', () => {
+  assert.match(homeSource, /Google로 시작/);
+  assert.match(homeSource, /secureTextEntry=!\{?showPassword\}?/);
+  assert.match(homeSource, /보기/);
+  assert.match(homeSource, /숨기기/);
+  assert.match(homeSource, /autoComplete="email"/);
+  assert.match(homeSource, /autoComplete="current-password"/);
+  assert.match(homeSource, /importantForAutofill="yes"/);
+});
+
+test('Only the non-sensitive email identifier is remembered by the app', () => {
+  assert.match(authPreferencesSource, /LAST_LOGIN_EMAIL_KEY/);
+  assert.match(authPreferencesSource, /SecureStore\.setItemAsync/);
+  assert.doesNotMatch(authPreferencesSource, /password/i);
+});
