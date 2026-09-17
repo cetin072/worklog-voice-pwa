@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('scheduled function은 별도 외부 일정 API를 호출하지 않는다',()=>assert.doesNotMatch(src,/googleapis|calendar\.google|notion\.com/));
