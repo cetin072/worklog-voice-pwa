@@ -5,6 +5,7 @@ import { secureSessionStorage } from '@/src/platform/secure-storage';
 
 const LEGACY_NOTIFICATION_MAPPING_KEY = 'worklog.mobile.schedule-notifications.v1';
 const NOTIFICATION_MAPPING_KEY = 'worklog.mobile.schedule-notifications.v2';
+const PENDING_NOTIFICATION_CLEANUP_KEY = 'worklog.mobile.pending-notification-cleanup.v1';
 const CHANNEL_ID = 'worklog-schedule-reminders';
 
 export const REMINDER_PRESETS = [
@@ -20,6 +21,7 @@ export type ReminderOffsetMinutes = (typeof REMINDER_PRESETS)[number]['offsetMin
 export type ScheduleReminder = { identifier: string; triggerAt: string; title: string; offsetMinutes: number };
 type NotificationMappings = Record<string, Record<string, ScheduleReminder>>;
 type LegacyNotificationMappings = Record<string, { identifier: string; triggerAt: string; title: string }>;
+type PendingNotificationCleanup = Record<string, string[]>;
 
 Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
 
@@ -51,6 +53,33 @@ async function mappings(): Promise<NotificationMappings> {
 
 async function saveMappings(value: NotificationMappings) {
   await secureSessionStorage.setItem(NOTIFICATION_MAPPING_KEY, JSON.stringify(value));
+}
+
+async function pendingNotificationCleanup(): Promise<PendingNotificationCleanup> {
+  const raw = await secureSessionStorage.getItem(PENDING_NOTIFICATION_CLEANUP_KEY);
+  if (!raw) return {};
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).map(([scheduleId, identifiers]) => [
+      scheduleId,
+      Array.isArray(identifiers) ? identifiers.filter((identifier): identifier is string => typeof identifier === 'string' && Boolean(identifier)) : [],
+    ]).filter(([, identifiers]) => identifiers.length));
+  } catch {
+    return {};
+  }
+}
+
+async function savePendingNotificationCleanup(value: PendingNotificationCleanup) {
+  const entries = Object.entries(value).filter(([, identifiers]) => identifiers.length);
+  if (!entries.length) return secureSessionStorage.removeItem(PENDING_NOTIFICATION_CLEANUP_KEY);
+  return secureSessionStorage.setItem(PENDING_NOTIFICATION_CLEANUP_KEY, JSON.stringify(Object.fromEntries(entries)));
+}
+
+async function queueNotificationCleanup(scheduleId: string, identifier: string) {
+  const pending = await pendingNotificationCleanup();
+  pending[scheduleId] = [...new Set([...(pending[scheduleId] || []), identifier])];
+  await savePendingNotificationCleanup(pending);
 }
 
 function notificationRequest(reminder: ScheduleReminder, scheduleId: string) {
@@ -105,11 +134,23 @@ export async function scheduleReminder({ scheduleId, title, scheduleStartsAt, of
   const previous = scheduleReminders[key];
   const triggerIso = triggerAt.toISOString();
   if (previous?.triggerAt === triggerIso && previous.title === title) return previous;
-  if (previous) await Notifications.cancelScheduledNotificationAsync(previous.identifier).catch(() => undefined);
 
   const draft: ScheduleReminder = { identifier: '', triggerAt: triggerIso, title, offsetMinutes };
   const identifier = await Notifications.scheduleNotificationAsync(notificationRequest(draft, scheduleId));
   const reminder = { ...draft, identifier };
+  if (previous) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(previous.identifier);
+    } catch {
+      // Keep the prior mapping authoritative until the replacement can be rolled back.
+      try {
+        await Notifications.cancelScheduledNotificationAsync(identifier);
+      } catch {
+        await queueNotificationCleanup(scheduleId, identifier);
+      }
+      throw new Error('기존 일정 알림을 취소하지 못해 변경을 되돌렸습니다. 잠시 후 다시 시도해주세요.');
+    }
+  }
   scheduleReminders[key] = reminder;
   saved[scheduleId] = scheduleReminders;
   await saveMappings(saved);
@@ -122,25 +163,92 @@ export async function cancelScheduleReminder(scheduleId: string, offsetMinutes: 
   const key = String(offsetMinutes);
   const previous = scheduleReminders?.[key];
   if (!previous) return false;
-  await Notifications.cancelScheduledNotificationAsync(previous.identifier).catch(() => undefined);
+  let queuedForCleanup = false;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(previous.identifier);
+  } catch {
+    await queueNotificationCleanup(scheduleId, previous.identifier);
+    queuedForCleanup = true;
+  }
   delete scheduleReminders[key];
   if (Object.keys(scheduleReminders).length) saved[scheduleId] = scheduleReminders;
   else delete saved[scheduleId];
   await saveMappings(saved);
+  if (queuedForCleanup) throw new Error('일정 알림 취소를 다시 시도합니다. 앱을 다시 열면 자동으로 정리됩니다.');
   return true;
 }
 
 export async function cancelAllScheduleReminders(scheduleId: string) {
   const saved = await mappings();
   const scheduleReminders = Object.values(saved[scheduleId] || {});
-  await Promise.all(scheduleReminders.map((reminder) => Notifications.cancelScheduledNotificationAsync(reminder.identifier).catch(() => undefined)));
-  delete saved[scheduleId];
+  const unresolved: ScheduleReminder[] = [];
+  let queuedForCleanup = 0;
+  for (const reminder of scheduleReminders) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(reminder.identifier);
+    } catch {
+      try {
+        await queueNotificationCleanup(scheduleId, reminder.identifier);
+        queuedForCleanup += 1;
+      } catch {
+        unresolved.push(reminder);
+      }
+    }
+  }
+  if (unresolved.length) saved[scheduleId] = Object.fromEntries(unresolved.map((reminder) => [String(reminder.offsetMinutes), reminder]));
+  else delete saved[scheduleId];
   await saveMappings(saved);
+  if (unresolved.length) throw new Error('일부 일정 알림을 취소하지 못했습니다. 알림 권한과 기기 상태를 확인한 뒤 다시 시도해주세요.');
+  if (queuedForCleanup) throw new Error('일부 일정 알림 취소를 다시 시도합니다. 앱을 다시 열면 자동으로 정리됩니다.');
   return scheduleReminders.length;
+}
+
+/** Keeps existing presets aligned when the underlying schedule title or time changes. */
+export async function synchronizeScheduleReminders({ scheduleId, title, scheduleStartsAt }: { scheduleId: string; title: string; scheduleStartsAt: string | Date }) {
+  const saved = await mappings();
+  const reminders = Object.values(saved[scheduleId] || {});
+  let updated = 0;
+  let removed = 0;
+  let failed = 0;
+
+  for (const reminder of reminders) {
+    const triggerAt = reminderTriggerAt(scheduleStartsAt, reminder.offsetMinutes);
+    if (!Number.isFinite(triggerAt.getTime()) || triggerAt.getTime() <= Date.now()) {
+      try {
+        await cancelScheduleReminder(scheduleId, reminder.offsetMinutes);
+        removed += 1;
+      } catch {
+        failed += 1;
+      }
+      continue;
+    }
+    if (reminder.triggerAt === triggerAt.toISOString() && reminder.title === title) continue;
+    try {
+      await scheduleReminder({ scheduleId, title, scheduleStartsAt, offsetMinutes: reminder.offsetMinutes as ReminderOffsetMinutes });
+      updated += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { updated, removed, failed };
 }
 
 export async function reconcileScheduleReminders() {
   const saved = await mappings();
+  const pending = await pendingNotificationCleanup();
+  const unresolvedPending: PendingNotificationCleanup = {};
+  let cleanedPending = 0;
+  for (const [scheduleId, identifiers] of Object.entries(pending)) {
+    for (const identifier of identifiers) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(identifier);
+        cleanedPending += 1;
+      } catch {
+        unresolvedPending[scheduleId] = [...(unresolvedPending[scheduleId] || []), identifier];
+      }
+    }
+  }
+  await savePendingNotificationCleanup(unresolvedPending);
   const system = await Notifications.getAllScheduledNotificationsAsync();
   const activeIds = new Set(system.map((notification) => notification.identifier));
   const now = Date.now();
@@ -165,5 +273,5 @@ export async function reconcileScheduleReminders() {
   }
 
   await saveMappings(saved);
-  return { restored, removed };
+  return { restored, removed, cleanedPending, pending: Object.values(unresolvedPending).flat().length };
 }

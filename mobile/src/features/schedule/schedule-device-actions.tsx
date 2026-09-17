@@ -17,6 +17,7 @@ import {
   REMINDER_PRESETS,
   reminderTriggerAt,
   scheduleReminder,
+  synchronizeScheduleReminders,
   type ReminderOffsetMinutes,
   type ScheduleReminder,
 } from './local-notifications';
@@ -55,12 +56,14 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
 
   useEffect(() => {
     if (!scheduleId) return;
-    void Promise.all([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]).then(([preferred, mapping, savedReminders]) => {
+    void (async () => {
+      await synchronizeScheduleReminders({ scheduleId, title: schedule.title || '업무수첩 일정', scheduleStartsAt: startsAt }).catch(() => undefined);
+      const [preferred, mapping, savedReminders] = await Promise.all([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]);
       setCalendarId(mapping?.calendarId || preferred);
       setCalendarSynced(Boolean(mapping));
       setReminders(savedReminders);
-    });
-  }, [scheduleId]);
+    })().catch(() => undefined);
+  }, [scheduleId, startsAt, schedule.title]);
 
   if (!scheduleId || !startsAt) return null;
 
@@ -137,7 +140,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
       const count = await cancelAllScheduleReminders(scheduleId);
       setReminders([]);
       setMessage(count ? `${count}개의 일정 알림을 모두 취소했습니다.` : '예약된 일정 알림이 없습니다.');
-    } catch (error) { setMessage(error instanceof Error ? error.message : '일정 알림을 취소하지 못했습니다.'); } finally { setBusy(false); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : '일정 알림을 취소하지 못했습니다.'); } finally { await refreshReminders().catch(() => undefined); setBusy(false); }
   }
 
   async function cancelSchedule() {
