@@ -9,8 +9,9 @@ import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifi
 import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, saveWorklog, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 
-type AppScreen = 'home' | 'briefing' | 'task' | 'input' | 'meeting' | 'settings';
+type AppScreen = 'home' | 'briefing' | 'calendar' | 'task' | 'input' | 'meeting' | 'settings';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
+type PrimaryTab = 'home' | 'briefing' | 'calendar' | 'settings';
 
 const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' }> = [
   { key: 'overdue', label: '지난 것', tone: 'danger' },
@@ -43,6 +44,24 @@ function TaskRow({ bucket, task, onOpen }: { bucket: BriefingBucket; task: Brief
 function ScheduleRows({ schedules, empty }: { schedules?: BriefingSchedule[]; empty: string }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
   return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}<ScheduleDeviceActions schedule={schedule} /></View>);
+}
+
+function activePrimaryTab(screen: AppScreen): PrimaryTab {
+  if (screen === 'briefing' || screen === 'task') return 'briefing';
+  if (screen === 'calendar') return 'calendar';
+  if (screen === 'settings') return 'settings';
+  return 'home';
+}
+
+function PrimaryNavigation({ screen, onNavigate }: { screen: AppScreen; onNavigate: (tab: PrimaryTab) => void }) {
+  const active = activePrimaryTab(screen);
+  const items: Array<{ key: PrimaryTab; icon: string; label: string }> = [
+    { key: 'home', icon: '⌂', label: '홈' },
+    { key: 'briefing', icon: '✓', label: '업무' },
+    { key: 'calendar', icon: '▣', label: '일정·알림' },
+    { key: 'settings', icon: '⚙', label: '설정' },
+  ];
+  return <View style={styles.bottomNav}>{items.map((item) => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={`${item.label} 메뉴`} style={[styles.navItem, active === item.key ? styles.navItemActive : null]} onPress={() => onNavigate(item.key)}><Text style={[styles.navIcon, active === item.key ? styles.navTextActive : null]}>{item.icon}</Text><Text style={[styles.navLabel, active === item.key ? styles.navTextActive : null]}>{item.label}</Text></Pressable>)}</View>;
 }
 
 export default function HomeScreen() {
@@ -79,7 +98,7 @@ export default function HomeScreen() {
       const payload = data as { target?: unknown; scheduleId?: unknown };
       if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return;
       setNotificationScheduleId(payload.scheduleId);
-      setScreen('briefing');
+      setScreen('calendar');
       setMessage('알림에서 연 일정입니다.');
     };
     void reconcileScheduleReminders().catch(() => undefined);
@@ -92,16 +111,19 @@ export default function HomeScreen() {
     setBusy(true); setMessage('');
     try { await action(); } catch (nextError) { setMessage(messageOf(nextError, '처리 중 오류가 발생했습니다.')); } finally { setBusy(false); }
   }
+
   async function refreshBriefing() {
     if (!session || briefingBusy) return;
     setBriefingBusy(true); setBriefingError('');
     try { setBriefing(await loadBriefing(session.access_token)); } catch (nextError) { setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.')); } finally { setBriefingBusy(false); }
   }
+
   async function runEmailSignIn() {
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password || busy) return;
     await run(() => signIn(normalizedEmail, password));
   }
+
   async function persistDraft() {
     if (!session || !draft.trim() || busy) return;
     await run(async () => {
@@ -110,6 +132,7 @@ export default function HomeScreen() {
       await refreshBriefing();
     });
   }
+
   async function changeTaskStatus(status: '완료' | '진행중' | '대기' | '확인필요') {
     if (!session || !selectedTask?.task.pageId || busy) return;
     await run(async () => {
@@ -128,14 +151,21 @@ export default function HomeScreen() {
   const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase('ko-KR');
-  return <SafeAreaView style={styles.page}><StatusBar style="dark" /><ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled"><View style={styles.header}><View><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.settingsButton} onPress={() => setScreen('settings')}><Text style={styles.settingsIcon}>⚙</Text></Pressable></View>
-    {screen === 'home' ? <><View style={styles.card}><View style={styles.sectionHead}><View><Text style={styles.eyebrow}>오늘의 브리핑</Text><Text style={styles.sectionTitle}>지금 확인할 것</Text></View><Pressable accessibilityRole="button" onPress={() => setScreen('briefing')}><Text style={styles.linkText}>전체 보기</Text></Pressable></View>{briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}{briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}{briefing ? <View style={styles.countGrid}>{briefingBuckets.map((bucket) => <Pressable key={bucket.key} accessibilityRole="button" accessibilityLabel={`${bucket.label} ${Number(counts[bucket.key] || 0)}건, 전체 브리핑 열기`} style={[styles.countTile, countToneStyles[bucket.tone]]} onPress={() => setScreen('briefing')}><Text style={styles.countLabel}>{bucket.label}</Text><Text style={styles.countValue}>{Number(counts[bucket.key] || 0)}</Text></Pressable>)}</View> : null}{briefing && Number(counts.total || 0) === 0 ? <Text style={styles.emptyText}>현재 미완료 업무가 없습니다.</Text> : null}</View><VoiceRecorderCard mode="quick" /><View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무를 바로 저장</Text></Pressable></View>{message ? <Text style={styles.message}>{message}</Text> : null}</> : null}
-    {screen === 'briefing' ? <View style={styles.card}><PanelHead eyebrow="전체 브리핑" title="오늘 업무 상황" onClose={() => setScreen('home')} /><TextInput accessibilityLabel="업무 검색" placeholder="업무 검색" style={styles.input} value={searchQuery} onChangeText={setSearchQuery} /><Button title={briefingBusy ? '브리핑 정리 중...' : '브리핑 다시 정리'} disabled={briefingBusy} onPress={() => void refreshBriefing()} />{briefingError ? <Text style={styles.errorText}>{briefingError}</Text> : null}{briefingBuckets.map((bucket) => { const tasks = (structure[bucket.key] || []).filter((task) => !normalizedSearch || `${task.title || ''} ${task.institution || ''} ${task.followUp || ''}`.toLocaleLowerCase('ko-KR').includes(normalizedSearch)); return <View key={bucket.key} style={styles.detailSection}><Text style={styles.detailTitle}>{bucket.label} · {tasks.length}건</Text>{tasks.length ? tasks.map((task, index) => <TaskRow key={task.pageId || `${bucket.key}-${index}`} bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} />) : <Text style={styles.emptyText}>{normalizedSearch ? '검색 결과가 없습니다.' : '해당 업무가 없습니다.'}</Text>}</View>; })}{briefing?.scheduleEnabled ? <View style={styles.detailSection}>{notificationScheduleId ? <><Text style={styles.detailTitle}>🔔 알림 일정</Text><ScheduleRows schedules={[...(briefing.schedules?.today || []), ...(briefing.schedules?.upcoming || [])].filter((schedule) => schedule.scheduleId === notificationScheduleId)} empty="연결된 일정을 찾지 못했습니다. 브리핑을 다시 정리해주세요." /></> : null}<Text style={styles.detailTitle}>📅 오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." /><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." /></View> : null}</View> : null}
+  const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
+
+  return <SafeAreaView style={styles.page}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled"><View style={styles.header}><View><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.settingsButton} onPress={() => setScreen('settings')}><Text style={styles.settingsIcon}>⚙</Text></Pressable></View>
+    {screen === 'home' ? <><View style={styles.card}><View style={styles.sectionHead}><View><Text style={styles.eyebrow}>오늘의 브리핑</Text><Text style={styles.sectionTitle}>지금 확인할 것</Text></View><Pressable accessibilityRole="button" onPress={() => setScreen('briefing')}><Text style={styles.linkText}>전체 보기</Text></Pressable></View>{briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}{briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}{briefing ? <View style={styles.countGrid}>{briefingBuckets.map((bucket) => <Pressable key={bucket.key} accessibilityRole="button" accessibilityLabel={`${bucket.label} ${Number(counts[bucket.key] || 0)}건, 업무 메뉴 열기`} style={[styles.countTile, countToneStyles[bucket.tone]]} onPress={() => setScreen('briefing')}><Text style={styles.countLabel}>{bucket.label}</Text><Text style={styles.countValue}>{Number(counts[bucket.key] || 0)}</Text></Pressable>)}</View> : null}{briefing && Number(counts.total || 0) === 0 ? <Text style={styles.emptyText}>현재 미완료 업무가 없습니다.</Text> : null}</View><VoiceRecorderCard mode="quick" /><View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무를 바로 저장</Text></Pressable></View>{message ? <Text style={styles.message}>{message}</Text> : null}</> : null}
+
+    {screen === 'briefing' ? <View style={styles.card}><PanelHead eyebrow="업무" title="업무 찾기·상태 변경" onClose={() => setScreen('home')} /><Text style={styles.body}>검색하고 업무를 눌러 완료·진행중·대기·확인필요 상태를 바꿀 수 있습니다.</Text><TextInput accessibilityLabel="업무 검색" placeholder="업무 검색" style={styles.input} value={searchQuery} onChangeText={setSearchQuery} /><Button title={briefingBusy ? '브리핑 정리 중...' : '브리핑 다시 정리'} disabled={briefingBusy} onPress={() => void refreshBriefing()} />{briefingError ? <Text style={styles.errorText}>{briefingError}</Text> : null}{briefingBuckets.map((bucket) => { const tasks = (structure[bucket.key] || []).filter((task) => !normalizedSearch || `${task.title || ''} ${task.institution || ''} ${task.followUp || ''}`.toLocaleLowerCase('ko-KR').includes(normalizedSearch)); return <View key={bucket.key} style={styles.detailSection}><Text style={styles.detailTitle}>{bucket.label} · {tasks.length}건</Text>{tasks.length ? tasks.map((task, index) => <TaskRow key={task.pageId || `${bucket.key}-${index}`} bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} />) : <Text style={styles.emptyText}>{normalizedSearch ? '검색 결과가 없습니다.' : '해당 업무가 없습니다.'}</Text>}</View>; })}</View> : null}
+
+    {screen === 'calendar' ? <View style={styles.card}><PanelHead eyebrow="일정·알림" title="휴대폰 일정 연결" onClose={() => setScreen('home')} /><Text style={styles.body}>업무수첩 일정에서 휴대폰 캘린더 동기화와 시작 시각 알림을 설정합니다.</Text>{briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>일정을 불러오는 중입니다.</Text></View> : null}{briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}{briefing?.scheduleEnabled ? <><View style={styles.detailSection}>{notificationScheduleId ? <><Text style={styles.detailTitle}>🔔 알림에서 연 일정</Text><ScheduleRows schedules={allSchedules.filter((schedule) => schedule.scheduleId === notificationScheduleId)} empty="연결된 일정을 찾지 못했습니다. 브리핑을 다시 정리해주세요." /></> : null}<Text style={styles.detailTitle}>📅 오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." /><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." /></View>{allSchedules.length === 0 ? <View style={styles.emptyAction}><Text style={styles.emptyText}>등록된 일정이 없습니다. 날짜와 시간을 포함해 업무를 입력하면 여기에서 캘린더·알림을 설정할 수 있습니다.</Text><Button title="일정 만들기" onPress={() => setScreen('input')} /></View> : null}</> : <View style={styles.emptyAction}><Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text><Button title="브리핑 다시 정리" onPress={() => void refreshBriefing()} /></View>}</View> : null}
+
     {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('briefing')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View>{message ? <Text style={styles.messageInline}>{message}</Text> : null}</View> : null}
+
     {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>입력한 원문을 기존 업무수첩에 저장합니다.</Text><TextInput accessibilityLabel="업무 내용" multiline placeholder="예: 내일 오후 3시 김과장에게 계약서 확인 전화" style={[styles.input, styles.multiline]} value={draft} onChangeText={setDraft} textAlignVertical="top" /><Button title={busy ? '저장 중...' : '저장'} disabled={busy || !draft.trim()} onPress={() => void persistDraft()} />{message ? <Text style={styles.messageInline}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
     {screen === 'settings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text><Button title="로그아웃" disabled={busy} onPress={() => void run(signOut)} /></View> : null}
-  </ScrollView></SafeAreaView>;
+  </ScrollView><PrimaryNavigation screen={screen} onNavigate={(tab) => { setSelectedTask(null); setScreen(tab); }} /></View></SafeAreaView>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
@@ -143,7 +173,74 @@ function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#f4f5f7' }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, backgroundColor: '#f4f5f7' }, scroll: { padding: 20, gap: 16, paddingBottom: 36 }, loginScroll: { flexGrow: 1, justifyContent: 'center', padding: 20, gap: 16 }, header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }, headerTitle: { fontSize: 28, fontWeight: '800', color: '#17191d' }, loginHero: { gap: 8, padding: 8 }, card: { backgroundColor: '#ffffff', borderRadius: 20, padding: 20, gap: 14 }, panel: { gap: 12 }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: '#5f6570' }, title: { fontSize: 28, fontWeight: '800', color: '#17191d' }, sectionTitle: { fontSize: 20, fontWeight: '800', color: '#17191d' }, body: { fontSize: 15, color: '#4b515c', lineHeight: 22 }, meta: { fontSize: 13, color: '#737985' }, statusText: { fontSize: 15, color: '#4b515c' }, settingsButton: { minWidth: 46, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d7dae0', borderRadius: 14, backgroundColor: '#fff' }, settingsIcon: { fontSize: 21 }, sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }, linkText: { color: '#275daf', fontWeight: '800', padding: 8 }, countGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, countTile: { width: '47%', minHeight: 92, padding: 14, borderRadius: 14, justifyContent: 'space-between' }, countDanger: { backgroundColor: '#fff0f0' }, countWarning: { backgroundColor: '#fff5e7' }, countInfo: { backgroundColor: '#edf4ff' }, countNeutral: { backgroundColor: '#f1f3f5' }, countLabel: { fontSize: 13, fontWeight: '700', color: '#4b515c' }, countValue: { fontSize: 30, fontWeight: '800', color: '#17191d' }, loadingInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16 }, errorPanel: { gap: 10 }, errorText: { color: '#b42318', lineHeight: 20 }, emptyText: { color: '#737985', lineHeight: 20, paddingVertical: 4 }, actionGrid: { flexDirection: 'row', gap: 12 }, actionCard: { flex: 1, minHeight: 132, borderRadius: 18, padding: 16, gap: 6, backgroundColor: '#fff' }, actionIcon: { fontSize: 24 }, actionTitle: { fontSize: 17, fontWeight: '800', color: '#17191d' }, actionBody: { fontSize: 13, color: '#737985', lineHeight: 18 }, detailSection: { gap: 8, borderTopWidth: 1, borderTopColor: '#eceef1', paddingTop: 16 }, detailTitle: { fontSize: 16, fontWeight: '800', color: '#17191d' }, taskRow: { paddingVertical: 10, gap: 3 }, taskTitle: { fontSize: 15, fontWeight: '700', color: '#30343b', lineHeight: 21 }, taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 }, followUp: { fontSize: 13, color: '#4b515c', lineHeight: 18 }, statusActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, statusButton: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: '#cfd5dd', borderRadius: 12, backgroundColor: '#fff' }, statusButtonActive: { backgroundColor: '#e8f0fe', borderColor: '#275daf' }, statusButtonText: { fontSize: 14, fontWeight: '700', color: '#30343b' }, scheduleRow: { gap: 3, borderLeftWidth: 3, borderLeftColor: '#80a9e8', paddingLeft: 10, paddingVertical: 5 }, scheduleDate: { fontSize: 13, fontWeight: '700', color: '#275daf' }, input: { borderWidth: 1, borderColor: '#d7dae0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, backgroundColor: '#fff' }, multiline: { minHeight: 150 }, passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, passwordInput: { flex: 1 }, passwordToggle: { minWidth: 58, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d7dae0', borderRadius: 12, backgroundColor: '#fff' }, passwordToggleText: { fontSize: 14, fontWeight: '700', color: '#30343b' }, dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, dividerLine: { flex: 1, height: 1, backgroundColor: '#e1e4e8' }, dividerText: { fontSize: 12, fontWeight: '700', color: '#8a9099' }, authHint: { fontSize: 12, color: '#737985', lineHeight: 18 }, message: { padding: 14, borderRadius: 12, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 }, messageInline: { padding: 12, borderRadius: 10, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
+  page: { flex: 1, backgroundColor: '#f4f5f7' },
+  authenticatedShell: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, backgroundColor: '#f4f5f7' },
+  scroll: { padding: 20, gap: 16, paddingBottom: 28 },
+  loginScroll: { flexGrow: 1, justifyContent: 'center', padding: 20, gap: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#17191d' },
+  loginHero: { gap: 8, padding: 8 },
+  card: { backgroundColor: '#ffffff', borderRadius: 20, padding: 20, gap: 14 },
+  panel: { gap: 12 },
+  eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: '#5f6570' },
+  title: { fontSize: 28, fontWeight: '800', color: '#17191d' },
+  sectionTitle: { fontSize: 20, fontWeight: '800', color: '#17191d' },
+  body: { fontSize: 15, color: '#4b515c', lineHeight: 22 },
+  meta: { fontSize: 13, color: '#737985' },
+  statusText: { fontSize: 15, color: '#4b515c' },
+  settingsButton: { minWidth: 46, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d7dae0', borderRadius: 14, backgroundColor: '#fff' },
+  settingsIcon: { fontSize: 21 },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  linkText: { color: '#275daf', fontWeight: '800', padding: 8 },
+  countGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  countTile: { width: '47%', minHeight: 92, padding: 14, borderRadius: 14, justifyContent: 'space-between' },
+  countDanger: { backgroundColor: '#fff0f0' },
+  countWarning: { backgroundColor: '#fff5e7' },
+  countInfo: { backgroundColor: '#edf4ff' },
+  countNeutral: { backgroundColor: '#f1f3f5' },
+  countLabel: { fontSize: 13, fontWeight: '700', color: '#4b515c' },
+  countValue: { fontSize: 30, fontWeight: '800', color: '#17191d' },
+  loadingInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16 },
+  errorPanel: { gap: 10 },
+  errorText: { color: '#b42318', lineHeight: 20 },
+  emptyText: { color: '#737985', lineHeight: 20, paddingVertical: 4 },
+  emptyAction: { gap: 10, paddingTop: 8 },
+  actionGrid: { flexDirection: 'row', gap: 12 },
+  actionCard: { flex: 1, minHeight: 132, borderRadius: 18, padding: 16, gap: 6, backgroundColor: '#fff' },
+  actionIcon: { fontSize: 24 },
+  actionTitle: { fontSize: 17, fontWeight: '800', color: '#17191d' },
+  actionBody: { fontSize: 13, color: '#737985', lineHeight: 18 },
+  detailSection: { gap: 8, borderTopWidth: 1, borderTopColor: '#eceef1', paddingTop: 16 },
+  detailTitle: { fontSize: 16, fontWeight: '800', color: '#17191d' },
+  taskRow: { paddingVertical: 10, gap: 3 },
+  taskTitle: { fontSize: 15, fontWeight: '700', color: '#30343b', lineHeight: 21 },
+  taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 },
+  followUp: { fontSize: 13, color: '#4b515c', lineHeight: 18 },
+  statusActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statusButton: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: '#cfd5dd', borderRadius: 12, backgroundColor: '#fff' },
+  statusButtonActive: { backgroundColor: '#e8f0fe', borderColor: '#275daf' },
+  statusButtonText: { fontSize: 14, fontWeight: '700', color: '#30343b' },
+  scheduleRow: { gap: 3, borderLeftWidth: 3, borderLeftColor: '#80a9e8', paddingLeft: 10, paddingVertical: 5 },
+  scheduleDate: { fontSize: 13, fontWeight: '700', color: '#275daf' },
+  input: { borderWidth: 1, borderColor: '#d7dae0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, backgroundColor: '#fff' },
+  multiline: { minHeight: 150 },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  passwordInput: { flex: 1 },
+  passwordToggle: { minWidth: 58, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d7dae0', borderRadius: 12, backgroundColor: '#fff' },
+  passwordToggleText: { fontSize: 14, fontWeight: '700', color: '#30343b' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e1e4e8' },
+  dividerText: { fontSize: 12, fontWeight: '700', color: '#8a9099' },
+  authHint: { fontSize: 12, color: '#737985', lineHeight: 18 },
+  message: { padding: 14, borderRadius: 12, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
+  messageInline: { padding: 12, borderRadius: 10, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
+  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#dfe3e8', backgroundColor: '#fff', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 10 },
+  navItem: { flex: 1, minHeight: 54, alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: 12 },
+  navItemActive: { backgroundColor: '#edf4ff' },
+  navIcon: { fontSize: 18, color: '#737985' },
+  navLabel: { fontSize: 11, fontWeight: '700', color: '#737985' },
+  navTextActive: { color: '#275daf' },
 });
 
 const countToneStyles = {
