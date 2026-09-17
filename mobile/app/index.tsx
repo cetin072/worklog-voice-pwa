@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Button,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -16,15 +17,32 @@ import { loadBriefing, saveWorklog } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 
 export default function HomeScreen() {
-  const { phase, session, error, reload, signIn, signOut, config } = usePlatform();
+  const {
+    phase,
+    session,
+    error,
+    authError,
+    rememberedEmail,
+    reload,
+    clearAuthError,
+    signIn,
+    signInWithGoogle,
+    signOut,
+    config,
+  } = usePlatform();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState('');
   const [briefingMessage, setBriefingMessage] = useState('');
   const [briefingError, setBriefingError] = useState('');
   const [busy, setBusy] = useState(false);
   const [briefingBusy, setBriefingBusy] = useState(false);
+
+  useEffect(() => {
+    if (!email && rememberedEmail) setEmail(rememberedEmail);
+  }, [email, rememberedEmail]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -36,6 +54,12 @@ export default function HomeScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function runEmailSignIn() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password || busy) return;
+    await run(() => signIn(normalizedEmail, password));
   }
 
   async function runBriefing() {
@@ -77,35 +101,83 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.page}>
         <StatusBar style="auto" />
-        <View style={styles.card}>
-          <Text style={styles.eyebrow}>MOBILE FOUNDATION 0.1</Text>
-          <Text style={styles.title}>업무수첩</Text>
-          <Text style={styles.body}>기존 Platform 계정으로 로그인합니다.</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="이메일"
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="password"
-            placeholder="비밀번호"
-            secureTextEntry
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <Button
-            title={busy ? '로그인 중...' : '로그인'}
-            disabled={busy || !email.trim() || !password}
-            onPress={() => run(() => signIn(email.trim(), password))}
-          />
-          {message ? <Text style={styles.errorText}>{message}</Text> : null}
-        </View>
+        <ScrollView contentContainerStyle={styles.loginScroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.card}>
+            <Text style={styles.eyebrow}>MOBILE AUTH 0.2</Text>
+            <Text style={styles.title}>업무수첩</Text>
+            <Text style={styles.body}>가장 편한 방법으로 기존 업무공간에 로그인합니다.</Text>
+
+            <Button
+              title="Google로 시작"
+              disabled={busy}
+              onPress={() => run(signInWithGoogle)}
+            />
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>또는 이메일</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TextInput
+              accessibilityLabel="이메일"
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              importantForAutofill="yes"
+              keyboardType="email-address"
+              placeholder="이메일"
+              returnKeyType="next"
+              style={styles.input}
+              textContentType="username"
+              value={email}
+              onChangeText={(value) => {
+                setEmail(value);
+                clearAuthError();
+              }}
+            />
+
+            <View style={styles.passwordRow}>
+              <TextInput
+                accessibilityLabel="비밀번호"
+                autoCapitalize="none"
+                autoComplete="current-password"
+                autoCorrect={false}
+                importantForAutofill="yes"
+                placeholder="비밀번호"
+                returnKeyType="done"
+                secureTextEntry={!showPassword}
+                style={[styles.input, styles.passwordInput]}
+                textContentType="password"
+                value={password}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  clearAuthError();
+                }}
+                onSubmitEditing={() => void runEmailSignIn()}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+                hitSlop={8}
+                style={styles.passwordToggle}
+                onPress={() => setShowPassword((value) => !value)}
+              >
+                <Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text>
+              </Pressable>
+            </View>
+
+            <Button
+              title={busy ? '로그인 중...' : '이메일로 로그인'}
+              disabled={busy || !email.trim() || !password}
+              onPress={() => void runEmailSignIn()}
+            />
+            <Text style={styles.authHint}>
+              이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.
+            </Text>
+            {message || authError ? <Text style={styles.errorText}>{message || authError}</Text> : null}
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -173,6 +245,7 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: '#f4f5f7',
   },
+  loginScroll: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   scroll: { padding: 20, gap: 16 },
   card: {
     backgroundColor: '#ffffff',
@@ -195,6 +268,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#ffffff',
   },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  passwordInput: { flex: 1 },
+  passwordToggle: {
+    minWidth: 58,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#d7dae0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+  },
+  passwordToggleText: { fontSize: 14, fontWeight: '700', color: '#30343b' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e1e4e8' },
+  dividerText: { fontSize: 12, fontWeight: '700', color: '#8a9099' },
+  authHint: { fontSize: 12, color: '#737985', lineHeight: 18 },
   multiline: { minHeight: 110, textAlignVertical: 'top' },
   errorText: { color: '#b42318', lineHeight: 20 },
   messageInline: {
