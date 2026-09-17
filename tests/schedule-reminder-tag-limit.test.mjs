@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('notification tag의 schedule id는 80자로 제한한다',()=>assert.equal(buildScheduleReminderPayload({scheduleId:'x'.repeat(200),title:'회의'}).tag.length,'worklog-schedule-reminder-'.length+80));
