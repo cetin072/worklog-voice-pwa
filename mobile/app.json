@@ -16,7 +16,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "업무수첩이 회의·업무 음성을 녹음하도록 마이크 사용을 허용해주세요.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,14 +1,15 @@
-name: Mobile Foundation
+name: Mobile App
 
 on:
   pull_request:
     paths:
       - 'mobile/**'
       - 'tests/mobile-foundation.test.mjs'
+      - 'tests/mobile-voice-capture.test.mjs'
       - '.github/workflows/mobile-foundation.yml'
 
 concurrency:
-  group: mobile-foundation-${{ github.ref }}
+  group: mobile-app-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -34,8 +35,8 @@ jobs:
       - name: Typecheck mobile app
         working-directory: mobile
         run: npm run typecheck
-      - name: Run mobile foundation contract tests
-        run: node --test tests/mobile-foundation.test.mjs
+      - name: Run mobile contract tests
+        run: node --test tests/mobile-foundation.test.mjs tests/mobile-voice-capture.test.mjs
 
   android-standalone:
     needs: typecheck
@@ -68,7 +69,7 @@ jobs:
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: worklog-mobile-standalone-arm64-apk
+          name: worklog-mobile-voice-capture-arm64-apk
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
