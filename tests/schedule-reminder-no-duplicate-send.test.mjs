@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-advance-push.mts',import.meta.url),'utf8');test('Push 발송 전에 DB claim을 먼저 수행한다',()=>assert.ok(src.indexOf('claimScheduleAdvance')<src.indexOf('sendWebPush')));
