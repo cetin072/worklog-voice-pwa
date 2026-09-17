@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {SCHEDULE_DEFER_PRESETS as server} from '../netlify/shared/schedule-defer-reminder.mjs';import {SCHEDULE_DEFER_PRESETS as web} from '../public/schedule-defer-presets.js';test('서버와 웹의 미루기 preset id/label이 같다',()=>assert.deepEqual(web,server));
