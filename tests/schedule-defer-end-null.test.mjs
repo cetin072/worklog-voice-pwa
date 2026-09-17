@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('종료시각 없는 일정은 미룬 뒤에도 ends_at null을 유지한다',()=>assert.match(sql,/case when v_duration is null then null else p_new_starts_at\+v_duration end/));
