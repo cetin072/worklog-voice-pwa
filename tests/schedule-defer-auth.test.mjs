@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-defer.mts',import.meta.url),'utf8');test('Bearer가 없으면 401을 반환한다',()=>assert.match(src,/if\(!accessToken\) return json\(401/));
