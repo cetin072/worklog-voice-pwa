@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {isScheduleReminderEligible} from '../netlify/shared/schedule-defer-reminder.mjs';test('30분 전보다 이른 시각에는 알림 대상이 아니다',()=>assert.equal(isScheduleReminderEligible({startsAt:'2026-09-17T05:00:00Z',status:'confirmed'},'2026-09-17T04:29:59Z'),false));
