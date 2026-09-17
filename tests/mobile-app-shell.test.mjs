@@ -34,10 +34,13 @@ test('Mobile shell provides direct entry, recovery states, and Android back navi
   assert.match(homeSource, /setScreen\('home'\)/);
 });
 
-test('Authenticated mobile shell exposes persistent primary navigation and a dedicated schedule-notification entry', () => {
-  for (const label of ['홈', '업무', '일정·알림', '설정']) assert.match(homeSource, new RegExp(label));
-  assert.match(homeSource, /PrimaryNavigation/);
-  assert.match(homeSource, /screen === 'calendar'/);
-  assert.match(homeSource, /휴대폰 일정 연결/);
-  assert.match(homeSource, /일정 만들기/);
+test('Authenticated mobile shell is home-first without the duplicated bottom tab bar', () => {
+  assert.doesNotMatch(homeSource, /PrimaryNavigation/);
+  assert.doesNotMatch(homeSource, /type PrimaryTab/);
+  assert.doesNotMatch(homeSource, /screen === 'calendar'/);
+  assert.match(homeSource, /accessibilityLabel="과거 업무 검색"/);
+  assert.match(homeSource, /accessibilityLabel="설정 열기"/);
+  assert.match(homeSource, /오늘과 다가오는 일정/);
+  assert.match(homeSource, /\+ 새 일정/);
+  assert.match(homeSource, /briefingBuckets\.map/);
 });
