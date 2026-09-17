@@ -12,7 +12,13 @@
       "bundleIdentifier": "com.cetin072.worklog"
     },
     "android": {
-      "package": "com.cetin072.worklog"
+      "package": "com.cetin072.worklog",
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -24,7 +30,15 @@
           "recordAudioAndroid": true,
           "enableBackgroundRecording": true
         }
-      ]
+      ],
+      "expo-web-browser",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "업무수첩이 선택한 일정을 휴대폰 캘린더에 추가하도록 허용해주세요."
+        }
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

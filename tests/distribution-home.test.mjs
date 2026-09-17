@@ -150,7 +150,7 @@ test("auth UI wires Google sign-in and hides signed-in account card", () => {
   assert.match(source, /platform-signed-out/);
   assert.match(source, /platform-signed-in/);
   assert.match(source, /worklog:platform-auth-changed/);
-  assert.match(source, /card\.hidden = true;\n    setAuthState\("platform-signed-in", user\)/);
+  assert.match(source, /card\.hidden = true;\r?\n    setAuthState\("platform-signed-in", user\)/);
   assert.doesNotMatch(source, /Notion 연결 없이 바로 사용할 수 있습니다/);
 });
 

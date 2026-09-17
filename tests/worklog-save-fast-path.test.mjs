@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createWorklogDataCoreAdapter, quickWorklogSchedule } from "../netlify/shared/worklog-data-core-adapter.mjs";
+import { extractScheduleFromText } from "../netlify/shared/schedule-extract.mjs";
 
 const scheduleMigration = fs.readFileSync(new URL("../supabase/migrations/20260916082824_worklog_schedule_fast_path.sql", import.meta.url), "utf8");
 const guardMigration = fs.readFileSync(new URL("../supabase/migrations/20260916094545_worklog_schedule_provenance_guard.sql", import.meta.url), "utf8");
@@ -149,4 +150,22 @@ test("Data Core primary save attempts fast RPC before legacy workspace resolver"
   assert.ok(fallbackIndex > fastIndex, "legacy resolver must only appear after fast save attempt");
   assert.match(worklogFunction, /dataCoreFastPath:fastPath/);
   assert.match(worklogFunction, /fastSaveRpcUnavailable/);
+});
+
+test("the natural-language tomorrow 9 AM schedule keeps its exact instant at the save boundary", async () => {
+  const calls = [];
+  const extracted = extractScheduleFromText("내일 미팅 테스트 오전 9시", "2026-09-12T08:45:00.000Z");
+  assert.equal(extracted.dueStart, "2026-09-13T09:00:00+09:00");
+
+  await createWorklogDataCoreAdapter({
+    client: rpcOnlyClient(calls, { schedule_id: "55555555-5555-5555-5555-555555555555" }),
+  }).persistFast(record({
+    transcript: "내일 미팅 테스트 오전 9시",
+    cleanTranscript: extracted.text,
+    type: "회의·통화",
+    dueStart: extracted.dueStart,
+  }));
+
+  assert.equal(calls[0].body.p_schedule_title, "미팅 테스트");
+  assert.equal(calls[0].body.p_schedule_starts_at, "2026-09-13T09:00:00+09:00");
 });
