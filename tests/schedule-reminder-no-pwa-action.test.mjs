@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('V1 일정 알림 payload에는 PWA 전용 actions/snooze를 넣지 않는다',()=>{const p=buildScheduleReminderPayload({scheduleId:'s',title:'회의'});assert.equal('actions' in p,false);assert.equal('snooze' in p,false);});
