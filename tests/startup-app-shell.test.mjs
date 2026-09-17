@@ -11,37 +11,38 @@ function pngSize(path) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-test("system launch and the 1.5-second in-app brand screen share the v6 brand icon", () => {
+test("system launch and the 1.5-second in-app brand screen share one v6 brand icon", () => {
   const html = read("public/index.html");
   const css = read("public/distribution.css");
   const manifest = JSON.parse(read("public/manifest.webmanifest"));
 
   assert.match(html, /class="eyebrow welcome-eyebrow">말하면 기록되고, 일정까지 한눈에<\/p>/);
-  assert.match(html, /distribution\.css\?v=20260917-1/);
+  assert.match(html, /distribution\.css\?v=20260917-2/);
   assert.match(html, /rel="preload" as="image" href="\/icons\/icon-512-v6\.png"/);
   assert.match(html, /name="theme-color" content="#ffffff"/);
   assert.equal(manifest.background_color, "#ffffff");
   assert.equal(manifest.theme_color, "#ffffff");
   assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-192-v6.png"));
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-512-v6.png"));
-  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-maskable-512-v6.png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/icons/icon-512-v6.png" && icon.purpose.split(/\s+/).includes("maskable")));
+  assert.equal(manifest.icons.filter((icon) => icon.purpose.split(/\s+/).includes("maskable")).length, 1);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*position:fixed/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*inset:0/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card\{[^}]*background:#fff/);
   assert.match(css, /body\.platform-auth-loading \.welcome-icon\{[^}]*\/icons\/icon-512-v6\.png/);
   assert.doesNotMatch(css, /body\.platform-auth-loading \.welcome-icon\{display:none\}/);
   assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*content:"업무수첩"/);
-  assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*font-size:clamp\(48px,13vw,58px\)/);
+  assert.match(css, /body\.platform-auth-loading \.welcome-card h2::after\{[^}]*animation:brand-copy-rise/);
   assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::before\{content:"말하면 기록되고,"\}/);
   assert.match(css, /body\.platform-auth-loading \.welcome-eyebrow::after\{content:"일정까지 한눈에"/);
+  assert.match(css, /@keyframes brand-copy-rise/);
+  assert.match(css, /prefers-reduced-motion:reduce/);
   assert.match(css, /body\.platform-auth-loading \.welcome-copy,body\.platform-auth-loading \.welcome-benefits\{display:none\}/);
   assert.match(css, /body:not\(\.platform-auth-loading\)\.platform-session-hint \.welcome-card/);
 });
 
-test("v6 PWA icons keep exact native sizes and a dedicated maskable asset", () => {
+test("v6 PWA icons keep exact native sizes while the same 512 asset can be maskable", () => {
   assert.deepEqual(pngSize("public/icons/icon-192-v6.png"), { width: 192, height: 192 });
   assert.deepEqual(pngSize("public/icons/icon-512-v6.png"), { width: 512, height: 512 });
-  assert.deepEqual(pngSize("public/icons/icon-maskable-512-v6.png"), { width: 512, height: 512 });
 });
 
 test("brand splash remains visible for 1.5 seconds after first paint while initialization continues", () => {
