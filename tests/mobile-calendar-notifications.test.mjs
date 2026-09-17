@@ -51,7 +51,7 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(cancellationSource, /reconcileCanceledScheduleArtifacts/);
 });
 
-test('Notifications reconcile after app restart, open the linked schedule, and consume the cold-start response', () => {
+test('Notifications reconcile after app restart and route the linked schedule into the home schedule section', () => {
   assert.match(notificationSource, /reconcileScheduleReminders/);
   assert.match(notificationSource, /getAllScheduledNotificationsAsync/);
   assert.match(notificationSource, /target: 'schedule'/);
@@ -70,6 +70,7 @@ test('Notifications reconcile after app restart, open the linked schedule, and c
   assert.ok(reminderCleanup > calendarCleanup, 'reminder reconcile runs after all calendar cleanup');
   assert.match(homeSource, /\+ 새 일정/);
   assert.match(homeSource, /setScreen\('input'\)/);
-  assert.match(homeSource, /알림.*일정/);
-  assert.match(homeSource, /setScreen\('calendar'\)/);
+  assert.match(homeSource, /setNotificationScheduleId\(payload\.scheduleId\)/);
+  assert.match(homeSource, /setScreen\('home'\)/);
+  assert.doesNotMatch(homeSource, /setScreen\('calendar'\)/);
 });
