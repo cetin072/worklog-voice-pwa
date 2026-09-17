@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190500_schedule_advance_notification_v1.sql',import.meta.url),'utf8');test('미룬 뒤에는 현재 schedules.starts_at/reminder_at 값으로 다시 판단한다',()=>{assert.match(sql,/s\.starts_at/);assert.match(sql,/s\.reminder_at/);});
