@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {buildScheduleReminderPayload} from '../netlify/shared/schedule-reminder-content.mjs';test('사전 알림 제목은 30분 뒤 일정으로 고정한다',()=>assert.equal(buildScheduleReminderPayload({scheduleId:'s',title:'회의'}).title,'업무수첩 · 30분 뒤 일정'));
