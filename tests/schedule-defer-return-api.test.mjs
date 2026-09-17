@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const src=fs.readFileSync(new URL('../netlify/functions/schedule-defer.mts',import.meta.url),'utf8');test('미루기 endpoint 성공 응답은 갱신 schedule을 반환한다',()=>assert.match(src,/\{ok:true,schedule:result\}/));
