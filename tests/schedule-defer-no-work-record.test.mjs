@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('V1 미루기 DB 변경은 schedules에 한정하고 work_records를 수정하지 않는다',()=>assert.doesNotMatch(sql,/update public\.work_records|delete from public\.work_records/));
