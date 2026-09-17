@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190500_schedule_advance_notification_v1.sql',import.meta.url),'utf8');test('일정 소유자와 Push 구독 user_id가 일치해야 claim된다',()=>assert.match(sql,/subs\.user_id=due\.created_by_user_id/));
