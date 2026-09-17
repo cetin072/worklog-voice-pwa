@@ -36,7 +36,7 @@ test('Platform provider handles initial and foreground Google auth callbacks', (
 
 test('Login UI exposes Google first plus password visibility and autofill hints', () => {
   assert.match(homeSource, /Google로 시작/);
-  assert.match(homeSource, /secureTextEntry=!\{?showPassword\}?/);
+  assert.match(homeSource, /secureTextEntry=\{!showPassword\}/);
   assert.match(homeSource, /보기/);
   assert.match(homeSource, /숨기기/);
   assert.match(homeSource, /autoComplete="email"/);
