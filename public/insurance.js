@@ -184,7 +184,13 @@ $("insuranceCreateForm")?.addEventListener("submit", async (event) => {
   const button = form.querySelector("button");
   button.disabled = true;
   try {
-    const result = await client.create({ originalWorkRecordId: form.dataset.workRecordId, customerKey: $("insuranceCustomerKey").value, title: $("insuranceCaseTitle").value });
+    const customer = await customers.resolve($("insuranceCustomerKey").value);
+    if (customer.state !== "resolved") {
+      const error = new Error("Customer Index에서 확인된 고객만 연결할 수 있습니다.");
+      error.code = "INSURANCE_CUSTOMER_NOT_RESOLVED";
+      throw error;
+    }
+    const result = await client.create({ originalWorkRecordId: form.dataset.workRecordId, customerKey: customer.customerKey, title: $("insuranceCaseTitle").value });
     location.assign(`/insurance.html?case=${encodeURIComponent(result.insurance_case_id)}`);
   } catch (error) {
     setStatus(error?.message || "보험사건을 만들지 못했습니다.", "is-error");

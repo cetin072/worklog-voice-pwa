@@ -64,6 +64,13 @@ test("insurance UI exposes list, original WorkRecord, state, waiting reason, and
   assert.match(sw, /"\/insurance-customer-index-adapter\.mjs"/);
 });
 
+test("case creation fails closed until the Customer Index adapter resolves the key", () => {
+  assert.match(app, /await customers\.resolve\(\$\("insuranceCustomerKey"\)\.value\)/);
+  assert.match(app, /customer\.state !== "resolved"/);
+  assert.match(app, /INSURANCE_CUSTOMER_NOT_RESOLVED/);
+  assert.match(app, /customerKey: customer\.customerKey/);
+});
+
 test("0.1-A1 stays inside the requested scope", () => {
   const combined = `${migration}\n${page}\n${app}`;
   assert.doesNotMatch(combined, /insurance_claims|insurance_contracts|drive_folder_id|claim_amount|premium_amount/i);
