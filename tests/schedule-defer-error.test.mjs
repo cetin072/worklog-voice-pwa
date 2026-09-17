@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';const sql=fs.readFileSync(new URL('../supabase/migrations/20260917190000_schedule_defer_reminder_v1.sql',import.meta.url),'utf8');test('본인 일정이 없으면 SCHEDULE_NOT_FOUND_OR_FORBIDDEN으로 거부한다',()=>assert.match(sql,/SCHEDULE_NOT_FOUND_OR_FORBIDDEN/));
