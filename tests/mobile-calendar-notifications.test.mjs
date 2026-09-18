@@ -44,6 +44,8 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(notificationSource, /이미 지났습니다/);
   assert.doesNotMatch(notificationSource, /08:30|09:00|16:30/);
   assert.match(scheduleActionsSource, /connectedCalendarLabel/);
+  assert.match(scheduleActionsSource, /compactOnly/);
+  assert.match(homeSource, /showDeviceStatus/);
   assert.match(scheduleActionsSource, /synchronizeMappedScheduleToCalendar/);
   assert.match(calendarSource, /getCalendarPermissions/);
   assert.match(calendarSource, /reason: 'not-connected'/);
