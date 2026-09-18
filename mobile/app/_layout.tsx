@@ -3,15 +3,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { PlatformProvider } from '@/src/providers/platform-provider';
 import { MeetingRecordingProvider } from '@/src/features/voice/meeting-recording-provider';
+import { AppErrorBoundary } from '@/src/ui/app-error-boundary';
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <PlatformProvider>
-        <MeetingRecordingProvider>
-          <Stack screenOptions={{ headerShown: false }} />
-        </MeetingRecordingProvider>
-      </PlatformProvider>
-    </SafeAreaProvider>
+    <AppErrorBoundary>
+      <SafeAreaProvider>
+        <PlatformProvider>
+          <MeetingRecordingProvider>
+            <Stack screenOptions={{ headerShown: false }} />
+          </MeetingRecordingProvider>
+        </PlatformProvider>
+      </SafeAreaProvider>
+    </AppErrorBoundary>
   );
 }
