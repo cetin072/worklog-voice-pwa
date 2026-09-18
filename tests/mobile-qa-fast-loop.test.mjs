@@ -6,6 +6,7 @@ const packageJson = JSON.parse(fs.readFileSync('mobile/package.json', 'utf8'));
 const readme = fs.readFileSync('mobile/README.md', 'utf8');
 const plan = fs.readFileSync('docs/planning/MOBILE_QA_FAST_LOOP_V1.md', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/mobile-foundation.yml', 'utf8');
+const smokeScript = fs.readFileSync('mobile/scripts/android-runtime-smoke.sh', 'utf8');
 
 test('Mobile QA fast loop exposes local device scripts without adding a new native dependency', () => {
   assert.equal(packageJson.scripts['android:device'], 'expo run:android --device');
@@ -31,7 +32,9 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /Bundle Android app with Metro/);
   assert.match(workflow, /android-runtime-smoke:/);
   assert.match(workflow, /android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d/);
-  assert.match(workflow, /adb shell am start -W -n com\.cetin072\.worklog\/\.MainActivity/);
-  assert.match(workflow, /grep -Eq '업무수첩\|연결을 확인해주세요'/);
+  assert.match(workflow, /bash mobile\/scripts\/android-runtime-smoke\.sh/);
+  assert.match(smokeScript, /adb shell am start -W -n "\$ACTIVITY"/);
+  assert.match(smokeScript, /업무수첩\|연결을 확인해주세요/);
+  assert.match(smokeScript, /Android runtime smoke PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);
 });
