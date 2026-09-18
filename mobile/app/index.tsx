@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -124,6 +124,7 @@ export default function HomeScreen() {
   const [notificationScheduleId, setNotificationScheduleId] = useState<string | null>(null);
   const [scheduleFocusReason, setScheduleFocusReason] = useState<'notification' | 'created' | null>(null);
   const [message, setMessage] = useState('');
+  const [messageTone, setMessageTone] = useState<'success' | 'error' | 'info'>('info');
   const [briefing, setBriefing] = useState<MobileBriefing | null>(null);
   const [briefingError, setBriefingError] = useState('');
   const [briefingBusy, setBriefingBusy] = useState(false);
@@ -158,7 +159,7 @@ export default function HomeScreen() {
       setNotificationScheduleId(payload.scheduleId);
       setScheduleFocusReason('notification');
       setScreen('home');
-      setMessage('알림에서 연 일정을 홈의 일정 영역에 표시했습니다.');
+      showMessage('알림에서 연 일정을 홈의 일정 영역에 표시했습니다.', 'info');
       return true;
     };
 
@@ -184,9 +185,19 @@ export default function HomeScreen() {
     return () => subscription.remove();
   }, [client, session?.access_token]);
 
+  function showMessage(text: string, tone: 'success' | 'error' | 'info' = 'info') {
+    setMessage(text);
+    setMessageTone(tone);
+  }
+
+  function clearMessage() {
+    clearMessage();
+    setMessageTone('info');
+  }
+
   async function run(action: () => Promise<void>) {
-    setBusy(true); setMessage('');
-    try { await action(); } catch (nextError) { setMessage(messageOf(nextError, '처리 중 오류가 발생했습니다.')); } finally { setBusy(false); }
+    setBusy(true); clearMessage();
+    try { await action(); } catch (nextError) { showMessage(messageOf(nextError, '처리 중 오류가 발생했습니다.'), 'error'); } finally { setBusy(false); }
   }
 
   async function refreshBriefing() {
@@ -199,7 +210,7 @@ export default function HomeScreen() {
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password || busy) return;
     if (authMode === 'signUp' && password.length < 8) {
-      setMessage('가입용 비밀번호는 8자 이상 입력해주세요.');
+      showMessage('가입용 비밀번호는 8자 이상 입력해주세요.', 'error');
       return;
     }
     await run(async () => {
@@ -208,7 +219,7 @@ export default function HomeScreen() {
         return;
       }
       const outcome = await signUp(normalizedEmail, password);
-      if (outcome === 'confirmationRequired') setMessage('가입 확인 이메일을 보냈습니다. 이메일을 확인한 뒤 로그인해 주세요.');
+      if (outcome === 'confirmationRequired') showMessage('가입 확인 이메일을 보냈습니다. 이메일을 확인한 뒤 로그인해 주세요.', 'success');
     });
   }
 
@@ -228,9 +239,9 @@ export default function HomeScreen() {
       setLastDirectSave(feedback);
       if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
       const dueLabel = formatSavedDue(feedback.dueStart);
-      setMessage(feedback.scheduleCreated
+      showMessage(feedback.scheduleCreated
         ? `업무 저장 완료 · 일정 생성됨${dueLabel ? ` · ${dueLabel}` : ''}`
-        : '업무 저장 완료 · 브리핑에 반영했습니다.');
+        : '업무 저장 완료 · 브리핑에 반영했습니다.', 'success');
       setScreen('home');
       await refreshBriefing();
     });
@@ -240,7 +251,7 @@ export default function HomeScreen() {
     if (!session || !selectedTask?.task.pageId || busy) return;
     await run(async () => {
       await updateWorklogStatus(session.access_token, selectedTask.task.pageId!, status);
-      setMessage(`업무 상태를 ${status}(으)로 변경했습니다.`);
+      showMessage(`업무 상태를 ${status}(으)로 변경했습니다.`, 'success');
       setSelectedTask(null); setScreen('home');
       await refreshBriefing();
     });
@@ -250,13 +261,13 @@ export default function HomeScreen() {
     if (!session || !task.pageId || taskBusyId) return;
     const previousStatus: WorkStatus = task.status === '대기' || task.status === '확인필요' || task.status === '진행중' ? task.status : '진행중';
     setTaskBusyId(task.pageId);
-    setMessage('');
+    clearMessage();
     try {
       await updateWorklogStatus(session.access_token, task.pageId, '완료');
       setUndoTask({ pageId: task.pageId, status: previousStatus, title: task.title || '업무' });
       await refreshBriefing();
     } catch (nextError) {
-      setMessage(messageOf(nextError, '업무 완료 처리에 실패했습니다.'));
+      showMessage(messageOf(nextError, '업무 완료 처리에 실패했습니다.'), 'error');
     } finally {
       setTaskBusyId(null);
     }
@@ -265,14 +276,14 @@ export default function HomeScreen() {
   async function undoCompletedTask() {
     if (!session || !undoTask || taskBusyId) return;
     setTaskBusyId(undoTask.pageId);
-    setMessage('');
+    clearMessage();
     try {
       await updateWorklogStatus(session.access_token, undoTask.pageId, undoTask.status);
-      setMessage(`${undoTask.title} 완료 처리를 되돌렸습니다.`);
+      showMessage(`${undoTask.title} 완료 처리를 되돌렸습니다.`, 'success');
       setUndoTask(null);
       await refreshBriefing();
     } catch (nextError) {
-      setMessage(messageOf(nextError, '완료 처리를 되돌리지 못했습니다.'));
+      showMessage(messageOf(nextError, '완료 처리를 되돌리지 못했습니다.'), 'error');
     } finally {
       setTaskBusyId(null);
     }
@@ -285,14 +296,14 @@ export default function HomeScreen() {
     setEditDate(task.dueKey || '');
     setEditTime('');
     setEditBusy(true);
-    setMessage('');
+    clearMessage();
     try {
       const details = await readWorklogDetails(session.access_token, task.pageId);
       setEditTitle(details.title || task.title || '');
       setEditDate(details.dueDate || '');
       setEditTime(details.dueTime || '');
     } catch (nextError) {
-      setMessage(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'));
+      showMessage(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'), 'error');
     } finally {
       setEditBusy(false);
     }
@@ -302,15 +313,15 @@ export default function HomeScreen() {
     if (!session || !editTaskId || editBusy) return;
     const nextTitle = editTitle.replace(/\s+/g, ' ').trim();
     if (!nextTitle) {
-      setMessage('업무명을 입력해주세요.');
+      showMessage('업무명을 입력해주세요.', 'error');
       return;
     }
     if (editTime.trim() && !editDate.trim()) {
-      setMessage('시간을 설정하려면 날짜도 입력해주세요.');
+      showMessage('시간을 설정하려면 날짜도 입력해주세요.', 'error');
       return;
     }
     setEditBusy(true);
-    setMessage('');
+    clearMessage();
     try {
       const result = await updateWorklogDetails(session.access_token, {
         pageId: editTaskId,
@@ -318,18 +329,29 @@ export default function HomeScreen() {
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
       });
-      setMessage(result.unchanged
+      showMessage(result.unchanged
         ? '변경된 내용이 없습니다.'
         : result.scheduleUpdated
           ? '업무를 수정했습니다. 연결된 일정·캘린더·알림도 최신 상태로 맞춥니다.'
-          : '업무를 수정했습니다.');
+          : '업무를 수정했습니다.', result.unchanged ? 'info' : 'success');
       setEditTaskId(null);
       await refreshBriefing();
     } catch (nextError) {
-      setMessage(messageOf(nextError, '업무 수정에 실패했습니다.'));
+      showMessage(messageOf(nextError, '업무 수정에 실패했습니다.'), 'error');
     } finally {
       setEditBusy(false);
     }
+  }
+
+  function confirmSignOut() {
+    Alert.alert(
+      '로그아웃',
+      '이 기기에서 현재 업무수첩 계정 세션을 종료할까요?',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '로그아웃', style: 'destructive', onPress: () => { void run(signOut); } },
+      ],
+    );
   }
 
   function closeTaskEditor() {
@@ -346,7 +368,7 @@ export default function HomeScreen() {
   if (!session) return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><ScrollView contentContainerStyle={[styles.loginScroll, { paddingBottom: 20 + insets.bottom }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
     <View style={styles.loginHero}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.title}>🎙 업무수첩</Text><Text style={styles.body}>말하면 기록되고, 일정까지 한눈에</Text></View>
     <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>업무를 놓치지 않는{`\n`}개인 업무수첩</Text><Text style={styles.body}>복잡한 설정 없이 계정만 만들면 바로 시작할 수 있습니다.</Text><View style={styles.welcomeBenefits}><Text style={styles.welcomeBenefit}>🎙 말하거나 직접 입력</Text><Text style={styles.welcomeBenefit}>📅 오늘·다가오는 일정 확인</Text><Text style={styles.welcomeBenefit}>✓ 저장 후 브리핑에서 바로 확인</Text></View></View>
-    <View style={styles.card}><Text style={styles.sectionTitle}>{authMode === 'signIn' ? '내 업무공간' : '무료로 시작하기'}</Text><Text style={styles.body}>Google 계정으로 가장 빠르게 시작할 수 있습니다.</Text><AuthAction title="Google로 시작" variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} /><View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View><TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} /><View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View><View style={styles.authActions}><AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '무료로 시작'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} /><AuthAction title={authMode === 'signIn' ? '무료로 시작' : '로그인'} variant="secondary" disabled={busy} onPress={() => { setAuthMode((value) => value === 'signIn' ? 'signUp' : 'signIn'); setMessage(''); clearAuthError(); }} /></View><Text style={styles.authHint}>{authMode === 'signIn' ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.' : '가입하면 개인 업무공간이 자동으로 만들어집니다. 이메일 확인이 필요할 수 있습니다.'}</Text>{message || authError ? <Text style={message ? styles.successText : styles.errorText}>{message || authError}</Text> : null}</View></ScrollView></KeyboardAvoidingView></View>;
+    <View style={styles.card}><Text style={styles.sectionTitle}>{authMode === 'signIn' ? '내 업무공간' : '무료로 시작하기'}</Text><Text style={styles.body}>Google 계정으로 가장 빠르게 시작할 수 있습니다.</Text><AuthAction title="Google로 시작" variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} /><View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View><TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} /><View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View><View style={styles.authActions}><AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '무료로 시작'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} /><AuthAction title={authMode === 'signIn' ? '무료로 시작' : '로그인'} variant="secondary" disabled={busy} onPress={() => { setAuthMode((value) => value === 'signIn' ? 'signUp' : 'signIn'); clearMessage(); clearAuthError(); }} /></View><Text style={styles.authHint}>{authMode === 'signIn' ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.' : '가입하면 개인 업무공간이 자동으로 만들어집니다. 이메일 확인이 필요할 수 있습니다.'}</Text>{message || authError ? <Text style={authError || messageTone === 'error' ? styles.errorText : messageTone === 'success' ? styles.successText : styles.infoText}>{authError || message}</Text> : null}</View></ScrollView></KeyboardAvoidingView></View>;
 
   const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
@@ -393,16 +415,16 @@ export default function HomeScreen() {
       </View> : null}
 
       <View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무를 바로 저장</Text></Pressable></View>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {message ? <Text style={[styles.message, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}
     </> : null}
 
     {screen === 'recordSearch' ? <View style={styles.card}><PanelHead eyebrow="업무" title="과거 기록 전체 검색" onClose={() => setScreen('home')} />{client ? <WorkRecordSearch client={client} accessToken={session.access_token} /> : <Text style={styles.errorText}>검색 세션을 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
 
-    {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View>{message ? <Text style={styles.messageInline}>{message}</Text> : null}</View> : null}
+    {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View>{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
-    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>입력한 원문을 기존 업무수첩에 저장합니다.</Text><TextInput accessibilityLabel="업무 내용" multiline placeholder="예: 내일 오후 3시 김과장에게 계약서 확인 전화" style={[styles.input, styles.multiline]} value={draft} onChangeText={setDraft} textAlignVertical="top" /><Button title={busy ? '저장 중...' : '저장'} disabled={busy || !draft.trim()} onPress={() => void persistDraft()} />{message ? <Text style={styles.messageInline}>{message}</Text> : null}</View> : null}
+    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>입력한 원문을 기존 업무수첩에 저장합니다.</Text><TextInput accessibilityLabel="업무 내용" multiline placeholder="예: 내일 오후 3시 김과장에게 계약서 확인 전화" style={[styles.input, styles.multiline]} value={draft} onChangeText={setDraft} textAlignVertical="top" /><Button title={busy ? '저장 중...' : '저장'} disabled={busy || !draft.trim()} onPress={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
-    {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={() => void run(signOut)} /></View></View> : null}
+    {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><CalendarConnectionSummary compact onPressManage={() => setScreen('scheduleSettings')} /><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={confirmSignOut} /></View></View> : null}
     {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text><CalendarConnectionSummary />{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>{screen === 'home' ? <View style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, releaseProvider: releaseQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing, updateSavedWorklog: (recordId, transcript) => updateWorklogTitle(session.access_token, recordId, transcript) }} /></View> : null}</View></View>;
@@ -464,6 +486,7 @@ const styles = StyleSheet.create({
   saveFeedbackMeta: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   errorText: { color: mobileTheme.colors.danger, lineHeight: 20 },
   successText: { color: mobileTheme.colors.success, lineHeight: 20, backgroundColor: '#eaf4ea', padding: 10, borderRadius: mobileTheme.radius.compact },
+  infoText: { color: mobileTheme.colors.textSecondary, lineHeight: 20, backgroundColor: mobileTheme.colors.neutralBackground, padding: 10, borderRadius: mobileTheme.radius.compact },
   emptyText: { color: mobileTheme.colors.textMuted, lineHeight: 20, paddingVertical: 4 },
   emptyAction: { gap: 10, paddingTop: 8 },
   actionGrid: { flexDirection: 'row', gap: 12 },
@@ -550,6 +573,8 @@ const styles = StyleSheet.create({
   patchNoteItem: { fontSize: 14, color: '#4b515c', lineHeight: 21 },
   message: { padding: 14, borderRadius: 12, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
   messageInline: { padding: 12, borderRadius: 10, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
+  messageError: { backgroundColor: '#fff0f0', color: mobileTheme.colors.danger },
+  messageInfo: { backgroundColor: mobileTheme.colors.neutralBackground, color: mobileTheme.colors.textSecondary },
 });
 
 const countToneStyles = {
