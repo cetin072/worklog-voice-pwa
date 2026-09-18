@@ -204,7 +204,6 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput }: VoiceR
           <Text style={styles.meta}>형식: {completed.mimeType}</Text>
           <Text style={styles.meta}>입력: {completed.sourceKind}</Text>
           <Text style={styles.notice}>이 녹음 파일은 기기에 보존됐습니다. 업무 기록·브리핑에는 자동 등록되지 않습니다.</Text>
-          {mode === 'quick' && onOpenWorklogInput ? <Button title="업무 직접 입력으로 기록하기" onPress={onOpenWorklogInput} /> : null}
         </View>
       ) : null}
     </View>
