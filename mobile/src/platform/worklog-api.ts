@@ -211,7 +211,7 @@ export async function updateWorklogTitle(accessToken: string, recordId: string, 
     },
     body: JSON.stringify({ pageId: normalizedRecordId, title: normalizedTitle }),
   });
-  return readJson(response) as Promise<WorklogUpdateResult>;
+  return readJson(response);
 }
 
 export async function updateWorklogStatus(accessToken: string, recordId: string, status: '완료' | '진행중' | '대기' | '확인필요') {
@@ -283,5 +283,5 @@ export async function updateWorklogDetails(
       dueTime: input.dueTime,
     }),
   });
-  return readJson(response);
+  return readJson(response) as Promise<WorklogUpdateResult>;
 }
