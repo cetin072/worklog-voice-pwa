@@ -73,7 +73,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Check Expo dependency compatibility
         working-directory: mobile
-        run: npx expo install --check
+        run: EXPO_OFFLINE=1 npx expo install --check
       - name: Typecheck mobile app
         working-directory: mobile
         run: npm run typecheck
