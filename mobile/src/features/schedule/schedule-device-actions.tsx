@@ -181,11 +181,13 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
   }
 
   const selectedCalendar = calendarOptions.find((calendar) => calendar.id === calendarId);
+  const mappedCalendarOption = calendarOptions.find((calendar) => calendar.id === calendarMapping?.calendarId);
   const hasGoogleCalendar = calendarOptions.some((calendar) => calendar.isGoogle);
+  const selectionMatchesMapping = Boolean(calendarMapping && calendarId && calendarMapping.calendarId === calendarId);
   const connectedCalendarLabel = calendarMapping
-    ? calendarMapping.calendarIsGoogle
-      ? `✓ Google Calendar · ${calendarMapping.calendarOwnerAccount || calendarMapping.calendarTitle || '연결됨'}`
-      : `✓ ${calendarMapping.calendarTitle || calendarMapping.calendarSourceName || '휴대폰 캘린더'}`
+    ? (calendarMapping.calendarIsGoogle ?? mappedCalendarOption?.isGoogle)
+      ? `✓ Google Calendar · ${calendarMapping.calendarOwnerAccount || mappedCalendarOption?.ownerAccount || calendarMapping.calendarTitle || mappedCalendarOption?.title || '연결됨'}`
+      : `✓ ${calendarMapping.calendarTitle || mappedCalendarOption?.title || calendarMapping.calendarSourceName || mappedCalendarOption?.sourceName || '휴대폰 캘린더'}`
     : '미연결';
   const reminderSummary = reminders.length
     ? `🔔 이 일정 알림: ${reminders.map((reminder) => REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`).join(' · ')}`
@@ -212,7 +214,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
           <Text style={styles.choiceTitle}>{calendar.isGoogle ? 'G · ' : ''}{calendar.title}{calendar.isPrimary ? ' · 기본' : ''}</Text>
           <Text style={styles.choiceMeta}>{calendarSubtitle(calendar)}</Text>
         </Pressable>)}
-        {calendarLoaded && selectedCalendar ? <Button title={busy ? '동기화 중...' : calendarSynced ? '선택한 캘린더와 다시 동기화' : '이 일정 캘린더에 추가'} disabled={busy} onPress={() => void syncCalendar()} /> : null}
+        {calendarLoaded && selectedCalendar ? <Button title={busy ? '동기화 중...' : calendarMapping ? selectionMatchesMapping ? '연결된 캘린더와 다시 동기화' : '선택한 캘린더로 이동' : '이 일정 캘린더에 추가'} disabled={busy} onPress={() => void syncCalendar()} /> : null}
         {calendarSynced ? <Button title="캘린더에서 이 일정 제거" disabled={busy} onPress={() => void removeCalendarEvent()} /> : null}
       </View>
 
