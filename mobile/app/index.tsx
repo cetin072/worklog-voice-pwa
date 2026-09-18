@@ -87,10 +87,10 @@ function InlineTaskEditor({ title, date, time, busy, onTitle, onDate, onTime, on
     <Text style={styles.inlineEditorTitle}>업무 수정</Text>
     <TextInput accessibilityLabel="수정할 업무명" placeholder="업무명" style={styles.input} value={title} onChangeText={onTitle} />
     <View style={styles.inlineEditorDateRow}>
-      <TextInput accessibilityLabel="수정할 날짜" placeholder="YYYY-MM-DD" style={[styles.input, styles.inlineEditorDateInput]} value={date} onChangeText={onDate} />
-      <TextInput accessibilityLabel="수정할 시간" placeholder="HH:MM" style={[styles.input, styles.inlineEditorDateInput]} value={time} onChangeText={onTime} />
+      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>날짜</Text><TextInput accessibilityLabel="수정할 날짜" placeholder="YYYY-MM-DD" style={styles.input} value={date} onChangeText={onDate} /></View>
+      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>시간</Text><TextInput accessibilityLabel="수정할 시간" placeholder="HH:MM" style={styles.input} value={time} onChangeText={onTime} /></View>
     </View>
-    <Text style={styles.helpText}>날짜를 비우면 기한 없는 업무가 됩니다. 시간만 입력하려면 날짜도 필요합니다.</Text>
+    {!date && !time ? <Text style={styles.helpText}>현재 기한 없음 · 날짜를 입력하면 기한이 생깁니다.</Text> : <Text style={styles.helpText}>날짜를 비우면 기한 없는 업무가 됩니다. 시간만 입력하려면 날짜도 필요합니다.</Text>}
     <View style={styles.inlineEditorActions}><Pressable accessibilityRole="button" style={styles.secondaryAction} disabled={busy} onPress={onCancel}><Text style={styles.secondaryActionText}>취소</Text></Pressable><Pressable accessibilityRole="button" style={styles.primaryAction} disabled={busy || !title.trim()} onPress={onSave}><Text style={styles.primaryActionText}>{busy ? '저장 중…' : '저장'}</Text></Pressable></View>
   </View>;
 }
@@ -526,6 +526,8 @@ const styles = StyleSheet.create({
   inlineEditorTitle: { fontSize: 14, fontWeight: '800', color: '#1f2937' },
   inlineEditorDateRow: { flexDirection: 'row', gap: 8 },
   inlineEditorDateInput: { flex: 1 },
+  inlineEditorField: { flex: 1, gap: 6 },
+  inlineEditorFieldLabel: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.textSecondary },
   inlineEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
   primaryAction: { minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
   primaryActionText: { color: '#fff', fontSize: 13, fontWeight: '800' },
