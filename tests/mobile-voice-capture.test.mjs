@@ -49,9 +49,12 @@ test('Briefing App Shell shows progress plus typed result or error next to the a
   assert.match(homeSource, /briefingError/);
 });
 
-test('Quick voice memo distinguishes device-file completion from worklog registration', () => {
+test('Quick voice memo uses a bottom dock while still distinguishing file save from future STT registration', () => {
+  assert.match(recorderSource, /quickDock/);
+  assert.match(recorderSource, /quickMic/);
   assert.match(recorderSource, /✅ 음성 메모 파일 저장 완료/);
-  assert.match(recorderSource, /업무 기록·브리핑에는 자동 등록되지 않습니다/);
-  assert.match(recorderSource, /업무 직접 입력으로 기록하기/);
+  assert.match(recorderSource, /업무·브리핑 자동 등록은 Quick Voice STT 단계에서 연결합니다/);
+  assert.match(recorderSource, /업무 직접 입력 열기/);
+  assert.match(homeSource, /quickDockShell/);
   assert.match(homeSource, /onOpenWorklogInput=\{\(\) => setScreen\('input'\)\}/);
 });
