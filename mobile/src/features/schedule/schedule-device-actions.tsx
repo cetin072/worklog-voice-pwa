@@ -7,7 +7,6 @@ import {
   listWritableCalendarOptions,
   removeScheduleFromCalendar,
   setPreferredCalendarId,
-  synchronizeMappedScheduleToCalendar,
   synchronizeScheduleToPreferredCalendar,
   syncScheduleToCalendar,
   type WritableCalendarOption,
