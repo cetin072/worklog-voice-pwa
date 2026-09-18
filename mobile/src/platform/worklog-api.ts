@@ -211,7 +211,7 @@ export async function updateWorklogTitle(accessToken: string, recordId: string, 
     },
     body: JSON.stringify({ pageId: normalizedRecordId, title: normalizedTitle }),
   });
-  return readJson(response);
+  return readJson(response) as Promise<WorklogUpdateResult>;
 }
 
 export async function updateWorklogStatus(accessToken: string, recordId: string, status: '완료' | '진행중' | '대기' | '확인필요') {
@@ -235,6 +235,16 @@ export type WorklogEditDetails = {
   mode?: string;
 };
 
+export type WorklogUpdateResult = Readonly<{
+  pageId?: string;
+  title?: string;
+  dueDate?: string;
+  dueTime?: string;
+  scheduleUpdated?: boolean;
+  unchanged?: boolean;
+  mode?: string;
+}>;
+
 export async function readWorklogDetails(accessToken: string, pageId: string): Promise<WorklogEditDetails> {
   const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
     method: 'POST',
@@ -257,7 +267,7 @@ export async function readWorklogDetails(accessToken: string, pageId: string): P
 export async function updateWorklogDetails(
   accessToken: string,
   input: { pageId: string; title: string; dueDate: string; dueTime: string },
-) {
+): Promise<WorklogUpdateResult> {
   const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
     method: 'POST',
     headers: {
