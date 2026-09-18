@@ -44,3 +44,13 @@ test('Quick Voice PCM path remains unchanged beside prepared file transcription'
   assert.match(whisper, /input\.context\.transcribeData/);
   assert.match(whisper, /16kHz mono int16 PCM/);
 });
+
+
+test('Long-audio preprocessing uses derived file checkpoints instead of replacing the source', () => {
+  assert.match(preprocessor, /PreparedAudioCheckpoint/);
+  assert.match(preprocessor, /createPreparedAudioCheckpoint/);
+  assert.match(preprocessor, /result\.uri === recording\.uri/);
+  assert.match(preprocessor, /prepared\.uri === recording\.uri/);
+  assert.match(preprocessor, /원본 회의 녹음/);
+  assert.doesNotMatch(preprocessor, /ArrayBuffer/);
+});
