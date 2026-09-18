@@ -1,10 +1,11 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   deleteMeetingRecording,
   listMeetingRecordings,
+  renameMeetingRecording,
   type MeetingRecordingEntry,
 } from './meeting-recordings';
 import { mobileTheme } from '@/src/ui/theme';
@@ -77,6 +78,8 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
   const [items, setItems] = useState<readonly MeetingRecordingEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameTitle, setRenameTitle] = useState('');
 
   function reload() {
     try {
@@ -93,6 +96,30 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
     () => items.find((item) => item.id === selectedId) || null,
     [items, selectedId],
   );
+
+  function beginRename(recording: MeetingRecordingEntry) {
+    setRenameId(recording.id);
+    setRenameTitle(recording.title || '');
+    setSelectedId(recording.id);
+    setError('');
+  }
+
+  function saveRename() {
+    if (!renameId) return;
+    try {
+      renameMeetingRecording(renameId, renameTitle);
+      setRenameId(null);
+      setRenameTitle('');
+      reload();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : '회의 녹음 이름을 변경하지 못했습니다.');
+    }
+  }
+
+  function cancelRename() {
+    setRenameId(null);
+    setRenameTitle('');
+  }
 
   function confirmDelete(recording: MeetingRecordingEntry) {
     Alert.alert(
@@ -141,7 +168,7 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
         >
           <View style={styles.recordingIcon}><Text style={styles.recordingIconText}>🎙</Text></View>
           <View style={styles.recordingCopy}>
-            <Text style={styles.recordingTitle}>회의 녹음 · {formatRecordedAt(recording.createdAt)}</Text>
+            <Text style={styles.recordingTitle}>{recording.title || `회의 녹음 · ${formatRecordedAt(recording.createdAt)}`}</Text>
             <Text style={styles.recordingMeta}>{formatDuration(recording.durationMs)} · {formatBytes(recording.sizeBytes)} · {recording.mimeType}</Text>
             <Text style={styles.recordingFile} numberOfLines={1}>{recording.fileName}</Text>
           </View>
@@ -150,9 +177,27 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
 
         {active && selected ? <MeetingRecordingPlayer recording={selected} /> : null}
 
-        <Pressable accessibilityRole="button" style={styles.deleteAction} onPress={() => confirmDelete(recording)}>
-          <Text style={styles.deleteText}>삭제</Text>
-        </Pressable>
+        {renameId === recording.id ? <View style={styles.renameEditor}>
+          <TextInput
+            accessibilityLabel="회의 녹음 이름"
+            placeholder="예: 태장 홈페이지 개발회의"
+            value={renameTitle}
+            onChangeText={setRenameTitle}
+            style={styles.renameInput}
+            maxLength={120}
+          />
+          <View style={styles.renameActions}>
+            <Pressable accessibilityRole="button" style={styles.renameSecondary} onPress={cancelRename}><Text style={styles.renameSecondaryText}>취소</Text></Pressable>
+            <Pressable accessibilityRole="button" style={styles.renamePrimary} onPress={saveRename}><Text style={styles.renamePrimaryText}>이름 저장</Text></Pressable>
+          </View>
+        </View> : <View style={styles.rowActions}>
+          <Pressable accessibilityRole="button" style={styles.renameAction} onPress={() => beginRename(recording)}>
+            <Text style={styles.renameActionText}>이름 바꾸기</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={styles.deleteAction} onPress={() => confirmDelete(recording)}>
+            <Text style={styles.deleteText}>삭제</Text>
+          </Pressable>
+        </View>}
       </View>;
     })}
   </View>;
@@ -182,6 +227,16 @@ const styles = StyleSheet.create({
   smallActionText: { fontSize: 12, fontWeight: '700', color: mobileTheme.colors.textSecondary },
   playAction: { minHeight: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.primary },
   playActionText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.primaryText },
+  rowActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 },
+  renameAction: { minHeight: 34, paddingHorizontal: 10, justifyContent: 'center' },
+  renameActionText: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.link },
+  renameEditor: { gap: 8, paddingTop: 4 },
+  renameInput: { minHeight: 42, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.compact, paddingHorizontal: 11, backgroundColor: mobileTheme.colors.surface, color: mobileTheme.colors.text },
+  renameActions: { flexDirection: 'row', gap: 8 },
+  renameSecondary: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: mobileTheme.radius.compact, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  renameSecondaryText: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.textSecondary },
+  renamePrimary: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: mobileTheme.radius.compact, backgroundColor: mobileTheme.colors.primary },
+  renamePrimaryText: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.primaryText },
   deleteAction: { alignSelf: 'flex-end', minHeight: 34, paddingHorizontal: 10, justifyContent: 'center' },
   deleteText: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.danger },
   emptyText: { fontSize: 13, color: mobileTheme.colors.textMuted, lineHeight: 19, paddingVertical: 8 },
