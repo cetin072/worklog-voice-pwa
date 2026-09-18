@@ -60,3 +60,12 @@ test('Android digest hashes model bytes through a TypedArray instead of a bare A
   assert.match(downloader, /Crypto\.digest\(Crypto\.CryptoDigestAlgorithm\.SHA256, bytes\)/);
   assert.doesNotMatch(downloader, /Crypto\.digest\(Crypto\.CryptoDigestAlgorithm\.SHA256, await file\.arrayBuffer\(\)\)/);
 });
+
+
+test('Quick Voice accuracy checkpoint uses the larger multilingual base model outside the APK', () => {
+  assert.match(runtime, /whisper\.cpp-base-multilingual/);
+  assert.match(runtime, /ggml-base\.bin/);
+  assert.match(runtime, /147_951_465/);
+  assert.match(runtime, /60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe/);
+  assert.doesNotMatch(runtime, /ggml-tiny\.bin/);
+});
