@@ -5,6 +5,7 @@ import test from 'node:test';
 const packageJson = JSON.parse(fs.readFileSync('mobile/package.json', 'utf8'));
 const readme = fs.readFileSync('mobile/README.md', 'utf8');
 const plan = fs.readFileSync('docs/planning/MOBILE_QA_FAST_LOOP_V1.md', 'utf8');
+const workflow = fs.readFileSync('.github/workflows/mobile-foundation.yml', 'utf8');
 
 test('Mobile QA fast loop exposes local device scripts without adding a new native dependency', () => {
   assert.equal(packageJson.scripts['android:device'], 'expo run:android --device');
@@ -20,4 +21,14 @@ test('Mobile QA docs distinguish Metro reuse from native rebuild boundaries', ()
   assert.match(plan, /development build 재생성/);
   assert.match(plan, /Human QA 차등 검수/);
   assert.match(plan, /production OTA/);
+});
+
+
+test('Mobile CI skips the standalone APK for JS-only PR changes and keeps an explicit manual build path', () => {
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /Detect native Android build scope/);
+  assert.match(workflow, /needs\.changes\.outputs\.android == 'true'/);
+  assert.match(workflow, /mobile\/\(app\\\.json/);
+  assert.match(workflow, /package-lock\\\.json/);
+  assert.match(workflow, /Build standalone ARM64 APK/);
 });
