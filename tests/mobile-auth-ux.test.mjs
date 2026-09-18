@@ -81,3 +81,21 @@ test('Only the non-sensitive email identifier is remembered by the app', () => {
   assert.match(authPreferencesSource, /SecureStore\.setItemAsync/);
   assert.doesNotMatch(authPreferencesSource, /password/i);
 });
+
+
+test('Login and settings keep truthful success and error feedback', () => {
+  assert.match(homeSource, /messageTone/);
+  assert.match(homeSource, /showMessage\(messageOf\(nextError, '처리 중 오류가 발생했습니다\.'\), 'error'\)/);
+  assert.match(homeSource, /authError \|\| messageTone === 'error'/);
+  assert.match(homeSource, /messageTone === 'success' \? styles\.successText : styles\.infoText/);
+  assert.match(homeSource, /function clearMessage\(\) \{[\s\S]*setMessage\(''\);[\s\S]*setMessageTone\('info'\)/);
+  assert.doesNotMatch(homeSource, /function clearMessage\(\) \{\s*clearMessage\(\)/);
+});
+
+test('Settings surfaces Calendar connection state and confirms destructive logout', () => {
+  assert.match(homeSource, /CalendarConnectionSummary compact onPressManage/);
+  assert.match(homeSource, /function confirmSignOut\(\)/);
+  assert.match(homeSource, /Alert\.alert\(/);
+  assert.match(homeSource, /이 기기에서 현재 업무수첩 계정 세션을 종료할까요/);
+  assert.match(homeSource, /destructive onPress=\{confirmSignOut\}/);
+});
