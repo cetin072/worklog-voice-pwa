@@ -34,6 +34,8 @@ test('Recording output is adapted to common AudioInput metadata', () => {
   assert.match(audioInputSource, /durationMs/);
   assert.match(audioInputSource, /mimeType/);
   assert.match(audioInputSource, /createdAt/);
+  assert.match(audioInputSource, /QuickVoicePcmSignal/);
+  assert.match(audioInputSource, /signal:/);
 });
 
 test('Authenticated mobile home surfaces the recorder without replacing Data Core smoke paths', () => {
