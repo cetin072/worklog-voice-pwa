@@ -12,12 +12,18 @@ test('Mobile work status reuses the authenticated Data Core briefing mutation co
   assert.match(apiSource, /authorization: `Bearer \$\{accessToken\}`/);
 });
 
-test('Mobile work parity exposes completion and undo inline on the home briefing', () => {
+test('Mobile work parity exposes completion, undo, and editing inline on the home briefing', () => {
   assert.match(homeSource, /completeTaskInline/);
   assert.match(homeSource, /onComplete=\{\(\) => void completeTaskInline\(task\)\}/);
   assert.match(homeSource, /undoCompletedTask/);
   assert.match(homeSource, /실행 취소/);
   assert.match(homeSource, /updateWorklogStatus\(session\.access_token, task\.pageId, '완료'\)/);
+  assert.match(homeSource, /openTaskEditor/);
+  assert.match(homeSource, /InlineTaskEditor/);
+  assert.match(homeSource, /updateWorklogDetails/);
+  assert.match(apiSource, /\/api\/worklog-edit/);
+  assert.match(apiSource, /action: 'read'/);
+  assert.match(apiSource, /action: 'update'/);
   assert.match(homeSource, /업무 상세/);
   assert.match(homeSource, /상태 변경/);
 });
