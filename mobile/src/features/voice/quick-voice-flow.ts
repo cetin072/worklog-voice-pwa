@@ -6,16 +6,19 @@ import {
 } from './transcription-provider';
 
 export type QuickVoiceFlowStage = 'transcribe' | 'save';
+export type QuickVoiceFlowProgress = 'transcribing' | 'saving' | 'refreshing';
 
 export class QuickVoiceFlowError extends Error {
   readonly stage: QuickVoiceFlowStage;
   readonly causeValue: unknown;
+  readonly transcript: MobileTranscriptV1 | null;
 
-  constructor(stage: QuickVoiceFlowStage, message: string, causeValue: unknown) {
+  constructor(stage: QuickVoiceFlowStage, message: string, causeValue: unknown, transcript: MobileTranscriptV1 | null = null) {
     super(message);
     this.name = 'QuickVoiceFlowError';
     this.stage = stage;
     this.causeValue = causeValue;
+    this.transcript = transcript;
   }
 }
 
@@ -55,6 +58,7 @@ export async function runQuickVoiceFastPath<TSave>(input: {
     recordedAt: string;
   }): Promise<TSave>;
   refreshBriefing(): Promise<unknown>;
+  onProgress?: (stage: QuickVoiceFlowProgress) => void;
   language?: string;
 }): Promise<QuickVoiceFastPathResult<TSave>> {
   const clientRequestId = input.clientRequestId.trim();
@@ -64,6 +68,7 @@ export async function runQuickVoiceFastPath<TSave>(input: {
 
   let transcript: MobileTranscriptV1;
   try {
+    input.onProgress?.('transcribing');
     transcript = await transcribeQuickVoice(
       input.provider,
       input.audio,
@@ -74,26 +79,47 @@ export async function runQuickVoiceFastPath<TSave>(input: {
     throw new QuickVoiceFlowError('transcribe', cause.message, causeValue);
   }
 
+  return saveQuickVoiceTranscript({
+    transcript,
+    clientRequestId,
+    recordedAt: input.audio.createdAt,
+    saveWorklog: input.saveWorklog,
+    refreshBriefing: input.refreshBriefing,
+    onProgress: input.onProgress,
+  });
+}
+
+/** Reuses a confirmed transcript for a retry without invoking STT or changing its idempotency key. */
+export async function saveQuickVoiceTranscript<TSave>(input: {
+  transcript: MobileTranscriptV1;
+  clientRequestId: string;
+  recordedAt: string;
+  saveWorklog(transcript: string, options: { clientRequestId: string; recordedAt: string }): Promise<TSave>;
+  refreshBriefing(): Promise<unknown>;
+  onProgress?: (stage: QuickVoiceFlowProgress) => void;
+}): Promise<QuickVoiceFastPathResult<TSave>> {
+  const clientRequestId = input.clientRequestId.trim();
+  if (!clientRequestId) throw new Error('Quick Voice clientRequestId가 필요합니다.');
+
   let saveResult: TSave;
   try {
-    saveResult = await input.saveWorklog(transcript.text, {
-      clientRequestId,
-      recordedAt: input.audio.createdAt,
-    });
+    input.onProgress?.('saving');
+    saveResult = await input.saveWorklog(input.transcript.text, { clientRequestId, recordedAt: input.recordedAt });
   } catch (causeValue) {
     const cause = errorOf(causeValue, '업무를 저장하지 못했습니다.');
-    throw new QuickVoiceFlowError('save', cause.message, causeValue);
+    throw new QuickVoiceFlowError('save', cause.message, causeValue, input.transcript);
   }
 
   let briefingRefreshError: Error | null = null;
   try {
+    input.onProgress?.('refreshing');
     await input.refreshBriefing();
   } catch (causeValue) {
     briefingRefreshError = errorOf(causeValue, '브리핑을 새로고침하지 못했습니다.');
   }
 
   return Object.freeze({
-    transcript,
+    transcript: input.transcript,
     saveResult,
     clientRequestId,
     briefingRefreshError,

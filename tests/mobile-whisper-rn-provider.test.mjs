@@ -27,7 +27,7 @@ test('only the provider composition runtime references the concrete whisper.rn p
   const sourceRoot = 'mobile/src';
   const concreteReferences = fs.readdirSync(sourceRoot, { recursive: true })
     .filter((entry) => typeof entry === 'string' && /\.tsx?$/.test(entry))
-    .map((entry) => path.join(sourceRoot, entry))
+    .map((entry) => path.join(sourceRoot, entry).replaceAll(path.sep, '/'))
     .filter((file) => /['"]whisper\.rn\/index['"]/.test(fs.readFileSync(file, 'utf8')));
 
   assert.deepEqual(concreteReferences, [runtimePath]);

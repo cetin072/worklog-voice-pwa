@@ -136,6 +136,12 @@ export type SaveWorklogOptions = Readonly<{
   recordedAt?: string;
 }>;
 
+export type SavedWorklog = Readonly<{
+  pageId?: string;
+  dataCoreWorkRecordId?: string;
+  cleanTranscript?: string;
+}>;
+
 function normalizedRecordedAt(value?: string) {
   if (!value) return new Date().toISOString();
   const date = new Date(value);
@@ -160,7 +166,7 @@ export async function saveWorklog(
   accessToken: string,
   transcript: string,
   options: SaveWorklogOptions = {},
-) {
+): Promise<SavedWorklog> {
   const normalizedTranscript = transcript.trim();
   if (!normalizedTranscript) throw new Error('저장할 업무 원문이 없습니다.');
 
@@ -181,6 +187,25 @@ export async function saveWorklog(
       clientRequestId,
       recordedAt: normalizedRecordedAt(options.recordedAt),
     }),
+  });
+  return readJson(response) as Promise<SavedWorklog>;
+}
+
+/** Reuses the canonical worklog edit endpoint for post-transcription correction. */
+export async function updateWorklogTitle(accessToken: string, recordId: string, title: string) {
+  const normalizedRecordId = recordId.trim();
+  const normalizedTitle = title.trim();
+  if (!normalizedRecordId) throw new Error('수정할 업무 식별자가 없습니다.');
+  if (!normalizedTitle) throw new Error('수정할 업무 원문이 없습니다.');
+
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ pageId: normalizedRecordId, title: normalizedTitle }),
   });
   return readJson(response);
 }

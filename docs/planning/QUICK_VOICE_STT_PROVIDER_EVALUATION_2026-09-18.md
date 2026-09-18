@@ -127,3 +127,39 @@ Already prepared in #358:
 Concrete package import/init belongs in composition/native integration only.
 
 whisper.rn을 제거하더라도 위 Core 계약은 유지되어야 한다.
+
+## 8. 2026-09-18 implementation checkpoint
+
+`whisper.rn 0.7.2`의 Android ARM64 release build는 PR #358의
+`android-standalone` job에서 성공했다. 이 결과는 native binding이 현재 Expo
+57 / React Native 0.86 조합에서 build-time 후보 조건을 충족한다는 근거이며,
+한국어 품질 채택 판정은 아니다.
+
+Quick Voice의 현재 runtime path는 아래와 같다.
+
+```text
+first microphone tap
+→ runtime download of ggml tiny multilingual model
+→ available-space check + SHA-256 verification
+→ verified local cache only
+→ whisper.rn context
+→ 16kHz mono signed-int16 PCM transcribeData()
+→ canonical saveWorklog()
+→ refreshBriefing()
+```
+
+The initial model candidate is `ggml-tiny.bin` (multilingual, 77,691,713
+bytes) from the upstream `ggerganov/whisper.cpp` model distribution. It is
+never bundled in the base APK; the runtime cache only promotes a download after
+the expected SHA-256 matches. A partial, wrong-sized, or checksum-failed file
+is removed.
+
+Still required before adoption:
+
+- Android device Korean 10/30-second entity benchmark
+- first model-load and transcription latency measurements
+- RAM, thermal, and battery observations
+- final APK delta for the end-to-end commit
+
+Until these measurements exist, the provider remains a PoC candidate rather
+than a permanent default.
