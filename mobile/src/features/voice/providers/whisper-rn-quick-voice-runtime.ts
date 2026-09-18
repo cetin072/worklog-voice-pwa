@@ -1,4 +1,4 @@
-import { defineDownloadableSttModel, createExpoSttModelResolver } from '../stt-model-download';
+import { defineDownloadableSttModel, createExpoSttModelResolver, type SttModelDownloadProgress } from '../stt-model-download';
 import { defineSttModel } from '../stt-model';
 import type { MobileTranscriptionProvider } from '../transcription-provider';
 import {
@@ -23,12 +23,29 @@ export const QUICK_VOICE_WHISPER_MODEL = defineDownloadableSttModel({
   fileName: 'ggml-tiny-multilingual-be07e048e1e5.bin',
 });
 
-const modelResolver = createExpoSttModelResolver({ models: [QUICK_VOICE_WHISPER_MODEL] });
+export type QuickVoiceModelDownloadProgress = Readonly<{
+  bytesWritten: number;
+  totalBytes: number | null;
+}>;
+
+const progressListeners = new Set<(progress: QuickVoiceModelDownloadProgress) => void>();
+const modelResolver = createExpoSttModelResolver({
+  models: [QUICK_VOICE_WHISPER_MODEL],
+  onProgress(progress: SttModelDownloadProgress) {
+    if (progress.modelId !== QUICK_VOICE_WHISPER_MODEL.descriptor.id) return;
+    for (const listener of progressListeners) {
+      listener({ bytesWritten: progress.bytesWritten, totalBytes: progress.totalBytes });
+    }
+  },
+});
 let runtimePromise: Promise<WhisperRnRuntime> | null = null;
 let activeRuntime: WhisperRnRuntime | null = null;
 
 /** The app composition root for the first replaceable Quick Voice provider. */
-export async function prepareQuickVoiceWhisperProvider(): Promise<MobileTranscriptionProvider> {
+export async function prepareQuickVoiceWhisperProvider(
+  onProgress?: (progress: QuickVoiceModelDownloadProgress) => void,
+): Promise<MobileTranscriptionProvider> {
+  if (onProgress) progressListeners.add(onProgress);
   if (!runtimePromise) {
     runtimePromise = (async () => {
       const model = await modelResolver.ensureAvailable(QUICK_VOICE_WHISPER_MODEL.descriptor);
@@ -40,7 +57,11 @@ export async function prepareQuickVoiceWhisperProvider(): Promise<MobileTranscri
       throw error;
     });
   }
-  return (await runtimePromise).provider;
+  try {
+    return (await runtimePromise).provider;
+  } finally {
+    if (onProgress) progressListeners.delete(onProgress);
+  }
 }
 
 export async function releaseQuickVoiceWhisperProvider() {

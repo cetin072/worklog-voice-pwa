@@ -12,7 +12,7 @@ type RecorderPhase = 'idle' | 'recording' | 'paused' | 'stopping';
 type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transcribing' | 'saving' | 'refreshing' | 'saved' | 'transcript_error' | 'save_error' | 'refresh_error';
 type QuickVoiceSaveResult = Readonly<{ recordId?: string }>;
 type QuickVoiceProps = Readonly<{
-  ensureProvider(): Promise<MobileTranscriptionProvider>;
+  ensureProvider(onProgress?: (progress: { bytesWritten: number; totalBytes: number | null }) => void): Promise<MobileTranscriptionProvider>;
   releaseProvider?(): Promise<void>;
   saveWorklog(transcript: string, options: { clientRequestId: string; recordedAt: string }): Promise<QuickVoiceSaveResult>;
   refreshBriefing(): Promise<unknown>;
@@ -25,6 +25,7 @@ function formatDuration(durationMs: number) {
   return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
 function messageOf(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback; }
+function formatBytes(bytes: number) { return `${(Math.max(0, bytes) / (1024 * 1024)).toFixed(1)}MB`; }
 function quickStatus(phase: QuickVoicePhase) {
   return ({ idle: '대기', preparing: '음성 모델 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
 }
@@ -42,6 +43,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   const [quickSave, setQuickSave] = useState<QuickVoiceSaveResult | null>(null);
   const [editableTranscript, setEditableTranscript] = useState('');
   const [editingTranscript, setEditingTranscript] = useState(false);
+  const [modelDownload, setModelDownload] = useState<{ bytesWritten: number; totalBytes: number | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const quickProvider = useRef<MobileTranscriptionProvider | null>(null);
@@ -66,9 +68,9 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 
   async function startQuickVoice() {
     if (!quickVoice || inFlight.current || quickPhase === 'recording') return;
-    inFlight.current = true; setError(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setEditingTranscript(false); setQuickPhase('preparing');
+    inFlight.current = true; setError(null); setModelDownload(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setEditingTranscript(false); setQuickPhase('preparing');
     try {
-      quickProvider.current = await quickVoice.ensureProvider();
+      quickProvider.current = await quickVoice.ensureProvider((progress) => setModelDownload(progress));
       await quickCapture.start();
       clientRequestId.current = createQuickVoiceClientRequestId();
       setQuickPhase('recording');
@@ -137,6 +139,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     <Text style={styles.sectionTitle}>{mode === 'meeting' ? '회의 녹음' : '빠른 음성 메모'}</Text>
     <Text style={styles.body}>{mode === 'meeting' ? '긴 회의도 로컬에 보존합니다. 화면을 잠그거나 다른 앱으로 이동해도 녹음이 계속됩니다.' : '짧게 말하면 한국어 전사 후 기존 업무 저장과 홈 브리핑 갱신까지 자동으로 진행합니다.'}</Text>
     <View style={styles.statusRow}><Text style={styles.timer}>{mode === 'meeting' ? formatDuration(recorderState.durationMillis) : '🎙'}</Text><Text style={styles.status}>{mode === 'meeting' ? (phase === 'recording' ? '녹음 중' : phase === 'paused' ? '일시정지' : phase === 'stopping' ? '저장 중' : '대기') : quickStatus(quickPhase)}</Text></View>
+    {mode === 'quick' && quickPhase === 'preparing' && modelDownload ? <Text style={styles.notice}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
     {mode === 'quick' && !quickActive ? <Button title={quickPhase === 'idle' ? '녹음 시작' : '새 음성 메모 시작'} onPress={() => void startQuickVoice()} /> : null}
     {mode === 'quick' && quickPhase === 'recording' ? <Button title="녹음 종료 · 업무로 저장" onPress={() => void stopQuickVoice()} /> : null}
     {mode === 'meeting' && !meetingActive ? <Button title="녹음 시작" onPress={() => void startMeetingRecording()} /> : null}

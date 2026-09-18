@@ -8,7 +8,7 @@ const downloader = fs.readFileSync('mobile/src/features/voice/stt-model-download
 const runtime = fs.readFileSync('mobile/src/features/voice/providers/whisper-rn-quick-voice-runtime.ts', 'utf8');
 
 test('Quick Voice UI stays provider-neutral while executing capture, STT, canonical save, and briefing refresh', () => {
-  assert.match(card, /ensureProvider\(\): Promise<MobileTranscriptionProvider>/);
+  assert.match(card, /ensureProvider\(onProgress\?: .*Promise<MobileTranscriptionProvider>/);
   assert.match(card, /useQuickVoicePcmCapture/);
   assert.match(card, /runQuickVoiceFastPath/);
   assert.match(card, /saveQuickVoiceTranscript/);
@@ -32,5 +32,7 @@ test('runtime model resolver removes incomplete downloads and promotes only SHA-
   assert.match(downloader, /await downloaded\.move\(finalFile\)/);
   assert.match(downloader, /Paths\.availableDiskSpace/);
   assert.match(runtime, /downloadBytes/);
+  assert.match(runtime, /progressListeners/);
+  assert.match(card, /음성 모델 받는 중/);
   assert.match(runtime, /huggingface\.co\/ggerganov\/whisper\.cpp/);
 });
