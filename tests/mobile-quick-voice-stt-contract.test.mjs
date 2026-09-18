@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 const source = fs.readFileSync('mobile/src/features/voice/transcription-provider.ts', 'utf8');
+const audioInput = fs.readFileSync('mobile/src/features/voice/audio-input.ts', 'utf8');
 
 test('Quick Voice STT contract stays provider-neutral behind an explicit stt/transcribe boundary', () => {
   assert.match(source, /service: 'stt'/);
@@ -13,12 +14,18 @@ test('Quick Voice STT contract stays provider-neutral behind an explicit stt/tra
   assert.doesNotMatch(source, /whisper\.rn|sherpa|faster-whisper|openai|clova/i);
 });
 
-test('Quick Voice transcript inherits trusted mobile AudioInput evidence instead of provider-spoofed references', () => {
-  assert.match(source, /audio\.sourceKind !== 'mobile-recording'/);
-  assert.match(source, /const localRef = audio\.uri\.trim\(\)/);
+test('Quick Voice transcript inherits trusted file or PCM evidence instead of provider-spoofed references', () => {
+  assert.match(source, /MobileSttAudioInput/);
+  assert.match(source, /audio\.sourceKind === 'mobile-recording'/);
+  assert.match(source, /audio\.data instanceof ArrayBuffer/);
+  assert.match(source, /trustedAudioLocalRef\(audio\)/);
   assert.match(source, /sourceAudioRef: Object\.freeze\(\{ localRef \}\)/);
   assert.match(source, /durationMs: Math\.max\(0, Math\.round\(audio\.durationMs\)\)/);
   assert.match(source, /createdAt: new Date\(audio\.createdAt\)\.toISOString\(\)/);
+
+  assert.match(audioInput, /sourceKind: 'quick-voice-pcm'/);
+  assert.match(audioInput, /createQuickVoicePcmAudioInput/);
+  assert.match(audioInput, /trustedAudioLocalRef/);
 });
 
 test('Quick Voice transcript keeps Transcript V1-compatible text, segments, language, provider, and model fields', () => {
