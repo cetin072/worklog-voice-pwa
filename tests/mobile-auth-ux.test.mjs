@@ -93,7 +93,7 @@ test('Login and settings keep truthful success and error feedback', () => {
 });
 
 test('Settings surfaces Calendar connection state and confirms destructive logout', () => {
-  assert.match(homeSource, /CalendarConnectionSummary compact onPressManage/);
+  assert.match(homeSource, /CalendarConnectionSummary compact[^>]*onPressManage/);
   assert.match(homeSource, /function confirmSignOut\(\)/);
   assert.match(homeSource, /Alert\.alert\(/);
   assert.match(homeSource, /이 기기에서 현재 업무수첩 계정 세션을 종료할까요/);
