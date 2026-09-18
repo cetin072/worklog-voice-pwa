@@ -66,6 +66,26 @@ jobs:
             echo "android=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Preserve exact PR source for reproducible verification
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/worklog-source"
+          git rev-parse --verify "${SOURCE_SHA}^{commit}" > "$RUNNER_TEMP/worklog-source/SOURCE_SHA.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/worklog-source/CI_CHECKOUT_SHA.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/worklog-source/source.tar.gz" "$SOURCE_SHA"
+          git ls-tree -r "$SOURCE_SHA" > "$RUNNER_TEMP/worklog-source/SOURCE_TREE.txt"
+          (cd "$RUNNER_TEMP/worklog-source" && sha256sum source.tar.gz > SHA256SUMS)
+      - name: Upload exact source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-mobile-source-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/worklog-source/
+          if-no-files-found: error
+          retention-days: 7
+
   typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 10
