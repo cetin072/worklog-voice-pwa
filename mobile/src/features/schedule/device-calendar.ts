@@ -29,6 +29,10 @@ type CalendarEventMapping = Record<string, {
   calendarId: string;
   eventId: string;
   fingerprint: string;
+  calendarTitle?: string;
+  calendarOwnerAccount?: string;
+  calendarSourceName?: string;
+  calendarIsGoogle?: boolean;
   pendingCleanup?: CalendarEventCleanup[];
 }>;
 type ExpoCalendar = Awaited<ReturnType<typeof Calendar.getCalendars>>[number];
@@ -134,6 +138,13 @@ export async function syncScheduleToCalendar(calendarId: string, schedule: Devic
   const calendars = await listWritableCalendars();
   const calendar = calendars.find((candidate) => candidate.id === calendarId);
   if (!calendar) throw new Error('선택한 캘린더를 찾을 수 없거나 수정할 수 없습니다. 다른 캘린더를 선택해주세요.');
+  const calendarOption = optionOf(calendar);
+  const calendarMetadata = {
+    calendarTitle: calendarOption.title,
+    calendarOwnerAccount: calendarOption.ownerAccount,
+    calendarSourceName: calendarOption.sourceName,
+    calendarIsGoogle: calendarOption.isGoogle,
+  };
   await setPreferredCalendarId(calendarId);
 
   const mappings = await readMappings();
@@ -151,7 +162,7 @@ export async function syncScheduleToCalendar(calendarId: string, schedule: Devic
       updated = true;
     } catch { /* A deleted or detached OS event is recreated below. */ }
     if (current.calendarId === calendarId && updated) {
-      mappings[schedule.scheduleId] = { calendarId, eventId: current.eventId, fingerprint: nextFingerprint, pendingCleanup: current.pendingCleanup };
+      mappings[schedule.scheduleId] = { calendarId, eventId: current.eventId, fingerprint: nextFingerprint, ...calendarMetadata, pendingCleanup: current.pendingCleanup };
       await writeMappings(mappings);
       return { eventId: current.eventId, created: false };
     }
@@ -177,7 +188,7 @@ export async function syncScheduleToCalendar(calendarId: string, schedule: Devic
       throw new Error('기존 캘린더 일정을 제거하지 못해 이동을 취소했습니다. 잠시 후 다시 시도해주세요.');
     }
   }
-  mappings[schedule.scheduleId] = { calendarId, eventId: event.id, fingerprint: nextFingerprint, pendingCleanup: current?.pendingCleanup };
+  mappings[schedule.scheduleId] = { calendarId, eventId: event.id, fingerprint: nextFingerprint, ...calendarMetadata, pendingCleanup: current?.pendingCleanup };
   await writeMappings(mappings);
   return { eventId: event.id, created: true };
 }
