@@ -1,17 +1,14 @@
-import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { createMobileRecordingAudioInput, type MobileRecordingAudioInput, type QuickVoicePcmAudioInput } from '@/src/features/voice/audio-input';
+import { type QuickVoicePcmAudioInput } from '@/src/features/voice/audio-input';
 import { createQuickVoiceClientRequestId, QuickVoiceFlowError, runQuickVoiceFastPath, saveQuickVoiceTranscript, type QuickVoiceFlowTimings } from '@/src/features/voice/quick-voice-flow';
 import { MeetingRecordingLibrary } from '@/src/features/voice/meeting-recording-library';
-import { rememberMeetingRecording } from '@/src/features/voice/meeting-recordings';
+import { useMeetingRecordingSession } from '@/src/features/voice/meeting-recording-provider';
 import { useQuickVoicePcmCapture } from '@/src/features/voice/quick-voice-pcm';
 import type { MobileTranscriptV1, MobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
-const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, directory: 'document' as const };
-type RecorderPhase = 'idle' | 'recording' | 'paused' | 'stopping';
 type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transcribing' | 'saving' | 'refreshing' | 'saved' | 'transcript_error' | 'save_error' | 'refresh_error';
 type QuickVoiceSaveResult = Readonly<{ recordId?: string; scheduleDetected?: boolean; scheduleCreated?: boolean; scheduleId?: string; dueStart?: string }>;
 type QuickVoiceProps = Readonly<{
@@ -47,14 +44,9 @@ function quickStatus(phase: QuickVoicePhase) {
 }
 
 export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoice }: VoiceRecorderCardProps) {
-  const recorder = useAudioRecorder(RECORDING_OPTIONS);
-  const recorderState = useAudioRecorderState(recorder, 250);
+  const meeting = useMeetingRecordingSession();
   const quickCapture = useQuickVoicePcmCapture();
-  const [phase, setPhase] = useState<RecorderPhase>('idle');
   const [quickPhase, setQuickPhase] = useState<QuickVoicePhase>('idle');
-  const [recordingStartedAt, setRecordingStartedAt] = useState<string | null>(null);
-  const [completed, setCompleted] = useState<MobileRecordingAudioInput | null>(null);
-  const [meetingLibraryVersion, setMeetingLibraryVersion] = useState(0);
   const [quickAudio, setQuickAudio] = useState<QuickVoicePcmAudioInput | null>(null);
   const [quickTranscript, setQuickTranscript] = useState<MobileTranscriptV1 | null>(null);
   const [quickSave, setQuickSave] = useState<QuickVoiceSaveResult | null>(null);
@@ -69,21 +61,6 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   const clientRequestId = useRef<string | null>(null);
 
   useEffect(() => () => { if (mode === 'quick') void quickVoice?.releaseProvider?.(); }, [mode]);
-
-  async function startMeetingRecording() {
-    setError(null);
-    try {
-      const permission = await AudioModule.requestRecordingPermissionsAsync();
-      if (!permission.granted) throw new Error('마이크 권한이 필요합니다. Android 설정에서 업무수첩의 마이크 권한을 허용해주세요.');
-      if (Platform.OS === 'android') {
-        const notificationPermission = await AudioModule.requestNotificationPermissionsAsync();
-        if (!notificationPermission.granted) throw new Error('백그라운드 녹음에는 알림 권한이 필요합니다. Android 설정에서 업무수첩의 알림을 허용해주세요.');
-      }
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true, allowsBackgroundRecording: true });
-      await recorder.prepareToRecordAsync(); recorder.record();
-      setRecordingStartedAt(new Date().toISOString()); setCompleted(null); setPhase('recording');
-    } catch (nextError) { setPhase('idle'); setError(messageOf(nextError, '녹음을 시작하지 못했습니다.')); }
-  }
 
   async function startQuickVoice() {
     if (!quickVoice || inFlight.current || quickPhase === 'recording') return;
@@ -143,21 +120,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     finally { inFlight.current = false; }
   }
 
-  async function stopMeetingRecording() {
-    if (phase === 'idle' || phase === 'stopping') return;
-    setError(null); setPhase('stopping');
-    try {
-      await recorder.stop(); const status = await recorder.getStatus(); const uri = recorder.uri || status.url;
-      if (!uri) throw new Error('녹음은 종료됐지만 로컬 파일 경로를 확인하지 못했습니다.');
-      const recording = createMobileRecordingAudioInput({ uri, durationMs: status.durationMillis || recorderState.durationMillis, createdAt: recordingStartedAt || undefined });
-      rememberMeetingRecording(recording);
-      setCompleted(recording);
-      setMeetingLibraryVersion((value) => value + 1);
-      setRecordingStartedAt(null); setPhase('idle'); await setAudioModeAsync({ allowsRecording: false, allowsBackgroundRecording: false });
-    } catch (nextError) { setPhase('idle'); setError(messageOf(nextError, '녹음을 종료하지 못했습니다.')); }
-  }
-
-  const meetingActive = phase === 'recording' || phase === 'paused' || phase === 'stopping';
+  const meetingActive = meeting.active;
   const quickActive = ['recording', 'preparing', 'captured', 'transcribing', 'saving', 'refreshing'].includes(quickPhase);
 
   if (mode === 'quick') {
@@ -209,15 +172,15 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   return <View style={styles.card}>
     <Text style={styles.sectionTitle}>회의 녹음</Text>
     <Text style={styles.body}>긴 회의도 로컬에 보존합니다. 화면을 잠그거나 다른 앱으로 이동해도 녹음이 계속됩니다.</Text>
-    <View style={styles.statusRow}><Text style={styles.timer}>{formatDuration(recorderState.durationMillis)}</Text><Text style={styles.status}>{phase === 'recording' ? '녹음 중' : phase === 'paused' ? '일시정지' : phase === 'stopping' ? '저장 중' : '대기'}</Text></View>
-    {!meetingActive ? <Button title="녹음 시작" onPress={() => void startMeetingRecording()} /> : null}
-    {phase === 'recording' ? <Button title="일시정지" onPress={() => { recorder.pause(); setPhase('paused'); }} /> : null}
-    {phase === 'paused' ? <Button title="녹음 재개" onPress={() => { recorder.record(); setPhase('recording'); }} /> : null}
-    {meetingActive ? <Button title={phase === 'stopping' ? '저장 중...' : '녹음 종료'} disabled={phase === 'stopping'} onPress={() => void stopMeetingRecording()} /> : null}
-    {meetingActive ? <Text style={styles.notice}>Android에서는 녹음 중 시스템의 지속 알림이 표시됩니다.</Text> : null}
-    {error ? <Text style={styles.errorText}>{error}</Text> : null}
-    {completed ? <View style={styles.result}><Text style={styles.resultTitle}>✅ 회의 녹음 파일 저장 완료</Text><Text style={styles.meta}>파일: {completed.fileName}</Text><Text style={styles.meta}>길이: {formatDuration(completed.durationMs)}</Text><Text style={styles.meta}>형식: {completed.mimeType}</Text><Text style={styles.notice}>회의 녹음 파일은 기기에 보존됐습니다. 아래 목록에서 바로 재생할 수 있습니다.</Text></View> : null}
-    <MeetingRecordingLibrary refreshToken={meetingLibraryVersion} />
+    <View style={styles.statusRow}><Text style={styles.timer}>{formatDuration(meeting.durationMs)}</Text><Text style={styles.status}>{meeting.phase === 'recording' ? '녹음 중' : meeting.phase === 'paused' ? '일시정지' : meeting.phase === 'stopping' ? '저장 중' : '대기'}</Text></View>
+    {!meetingActive ? <Button title="녹음 시작" onPress={() => void meeting.start()} /> : null}
+    {meeting.phase === 'recording' ? <Button title="일시정지" onPress={meeting.pause} /> : null}
+    {meeting.phase === 'paused' ? <Button title="녹음 재개" onPress={meeting.resume} /> : null}
+    {meetingActive ? <Button title={meeting.phase === 'stopping' ? '저장 중...' : '녹음 종료'} disabled={meeting.phase === 'stopping'} onPress={() => void meeting.stop()} /> : null}
+    {meetingActive ? <Text style={styles.notice}>Android에서는 녹음 중 시스템의 지속 알림이 표시됩니다. 홈으로 돌아가도 녹음 상태를 확인할 수 있습니다.</Text> : null}
+    {meeting.error ? <Text style={styles.errorText}>{meeting.error}</Text> : null}
+    {meeting.completed ? <View style={styles.result}><Text style={styles.resultTitle}>✅ 회의 녹음 파일 저장 완료</Text><Text style={styles.meta}>파일: {meeting.completed.fileName}</Text><Text style={styles.meta}>길이: {formatDuration(meeting.completed.durationMs)}</Text><Text style={styles.meta}>형식: {meeting.completed.mimeType}</Text><Text style={styles.notice}>회의 녹음 파일은 기기에 보존됐습니다. 아래 목록에서 바로 재생할 수 있습니다.</Text></View> : null}
+    <MeetingRecordingLibrary refreshToken={meeting.libraryVersion} />
   </View>;
 }
 
