@@ -149,7 +149,8 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
           {!editing ? <Pressable accessibilityRole="button" style={styles.editAction} disabled={editBusy} onPress={() => void openEditor(item)}><Text style={styles.editActionText}>{editBusy && selectedId === item.workRecordId ? '불러오는 중…' : '✏️ 이 업무 수정'}</Text></Pressable> : null}
           {editing ? <View style={styles.editor}>
             <TextInput accessibilityLabel="검색 결과 업무명 수정" placeholder="업무명" style={styles.input} value={editTitle} onChangeText={setEditTitle} />
-            <View style={styles.dateRow}><TextInput accessibilityLabel="검색 결과 날짜 수정" placeholder="YYYY-MM-DD" style={[styles.input, styles.dateInput]} value={editDate} onChangeText={setEditDate} /><TextInput accessibilityLabel="검색 결과 시간 수정" placeholder="HH:MM" style={[styles.input, styles.dateInput]} value={editTime} onChangeText={setEditTime} /></View>
+            <View style={styles.dateRow}><View style={styles.field}><Text style={styles.fieldLabel}>날짜</Text><TextInput accessibilityLabel="검색 결과 날짜 수정" placeholder="YYYY-MM-DD" style={styles.input} value={editDate} onChangeText={setEditDate} /></View><View style={styles.field}><Text style={styles.fieldLabel}>시간</Text><TextInput accessibilityLabel="검색 결과 시간 수정" placeholder="HH:MM" style={styles.input} value={editTime} onChangeText={setEditTime} /></View></View>
+            {!editDate && !editTime ? <Text style={styles.detailMeta}>현재 기한 없음</Text> : null}
             <View style={styles.editorActions}><Pressable accessibilityRole="button" style={styles.secondaryAction} disabled={editBusy} onPress={cancelEditor}><Text style={styles.secondaryText}>취소</Text></Pressable><Pressable accessibilityRole="button" style={styles.primaryAction} disabled={editBusy || !editTitle.trim()} onPress={() => void saveEditor()}><Text style={styles.primaryText}>{editBusy ? '저장 중…' : '저장'}</Text></Pressable></View>
           </View> : null}
         </View> : null}
@@ -181,6 +182,8 @@ const styles = StyleSheet.create({
   editor: { gap: 8 },
   dateRow: { flexDirection: 'row', gap: 8 },
   dateInput: { flex: 1 },
+  field: { flex: 1, gap: 6 },
+  fieldLabel: { fontSize: 12, fontWeight: '800', color: '#4b515c' },
   editorActions: { flexDirection: 'row', gap: 8 },
   secondaryAction: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#cfd5dd', backgroundColor: '#fff' },
   secondaryText: { fontSize: 13, fontWeight: '800', color: '#4b515c' },
