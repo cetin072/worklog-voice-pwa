@@ -33,3 +33,13 @@ test('Top-level work search remains directly accessible without a dedicated work
   assert.match(homeSource, /setScreen\('recordSearch'\)/);
   assert.doesNotMatch(homeSource, /PrimaryNavigation/);
 });
+
+
+test('Inline work edit surfaces schedule reconciliation and refreshes Home for device Calendar sync', () => {
+  assert.match(apiSource, /WorklogUpdateResult/);
+  assert.match(apiSource, /scheduleUpdated\?: boolean/);
+  assert.match(homeSource, /const result = await updateWorklogDetails/);
+  assert.match(homeSource, /result\.scheduleUpdated/);
+  assert.match(homeSource, /연결된 일정·캘린더·알림도 최신 상태로 맞춥니다/);
+  assert.match(homeSource, /await refreshBriefing\(\)/);
+});
