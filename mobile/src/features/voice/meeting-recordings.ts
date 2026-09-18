@@ -13,6 +13,7 @@ export type MeetingRecordingEntry = Readonly<{
   durationMs: number;
   createdAt: string;
   sizeBytes: number | null;
+  title: string;
 }>;
 
 function indexFile() {
@@ -35,6 +36,7 @@ function normalizedEntry(value: unknown): MeetingRecordingEntry | null {
   const createdAt = normalizedDate(row.createdAt);
   const durationMs = Number(row.durationMs);
   const sizeBytes = row.sizeBytes === null || row.sizeBytes === undefined ? null : Number(row.sizeBytes);
+  const title = typeof row.title === 'string' ? row.title.trim().slice(0, 120) : '';
 
   if (!id || !uri || !fileName || !mimeType || !createdAt || !Number.isFinite(durationMs) || durationMs < 0) {
     return null;
@@ -48,6 +50,7 @@ function normalizedEntry(value: unknown): MeetingRecordingEntry | null {
     durationMs: Math.round(durationMs),
     createdAt,
     sizeBytes: sizeBytes !== null && Number.isFinite(sizeBytes) && sizeBytes >= 0 ? Math.round(sizeBytes) : null,
+    title,
   });
 }
 
@@ -118,6 +121,7 @@ export function rememberMeetingRecording(recording: MobileRecordingAudioInput) {
     durationMs: recording.durationMs,
     createdAt: recording.createdAt,
     sizeBytes: fileSize(recording.uri),
+    title: '',
   } satisfies MeetingRecordingEntry);
 
   const existing = readIndexRaw().filter((entry) => entry.uri !== next.uri && entry.id !== next.id);
@@ -147,4 +151,25 @@ export function deleteMeetingRecording(recordingId: string) {
   const remaining = stored.filter((entry) => entry.id !== id && fileExists(entry.uri));
   writeIndex(remaining);
   return Boolean(target);
+}
+
+
+export function renameMeetingRecording(recordingId: string, title: string) {
+  const id = recordingId.trim();
+  if (!id) throw new Error('이름을 바꿀 회의 녹음 식별자가 없습니다.');
+
+  const normalizedTitle = title.replace(/\s+/g, ' ').trim();
+  if (normalizedTitle.length > 120) {
+    throw new Error('회의 녹음 이름은 120자 이하로 입력해주세요.');
+  }
+
+  const stored = readIndexRaw();
+  const target = stored.find((entry) => entry.id === id);
+  if (!target) throw new Error('이름을 바꿀 회의 녹음을 찾지 못했습니다.');
+
+  const updated = stored.map((entry) => entry.id === id
+    ? Object.freeze({ ...entry, title: normalizedTitle })
+    : entry);
+  writeIndex(updated);
+  return updated.find((entry) => entry.id === id) || null;
 }
