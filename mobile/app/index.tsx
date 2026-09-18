@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -67,6 +68,27 @@ function taskNote(bucket: BriefingBucket, task: BriefingTask) {
   return '기한 없음';
 }
 
+function pickerValue(date: string, time: string) {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!dateMatch) return new Date();
+  return new Date(
+    Number(dateMatch[1]),
+    Number(dateMatch[2]) - 1,
+    Number(dateMatch[3]),
+    timeMatch ? Number(timeMatch[1]) : 9,
+    timeMatch ? Number(timeMatch[2]) : 0,
+  );
+}
+
+function pickerDateValue(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
+function pickerTimeValue(value: Date) {
+  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+}
+
 function TaskRow({ bucket, task, onOpen, onEdit, onComplete, completing = false }: { bucket: BriefingBucket; task: BriefingTask; onOpen: () => void; onEdit?: () => void; onComplete?: () => void; completing?: boolean }) {
   return <View style={styles.taskRow}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} style={styles.taskMain} onPress={onOpen}>
@@ -83,14 +105,27 @@ function TaskRow({ bucket, task, onOpen, onEdit, onComplete, completing = false 
 }
 
 function InlineTaskEditor({ title, date, time, busy, onTitle, onDate, onTime, onSave, onCancel }: { title: string; date: string; time: string; busy: boolean; onTitle: (value: string) => void; onDate: (value: string) => void; onTime: (value: string) => void; onSave: () => void; onCancel: () => void }) {
+  const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
+  const selectedValue = pickerValue(date, time);
+
+  function selectDateTime(value?: Date) {
+    if (!value) return;
+    if (pickerMode === 'date') {
+      onDate(pickerDateValue(value));
+      return;
+    }
+    if (pickerMode === 'time') onTime(pickerTimeValue(value));
+  }
+
   return <View style={styles.inlineEditor}>
     <Text style={styles.inlineEditorTitle}>업무 수정</Text>
     <TextInput accessibilityLabel="수정할 업무명" placeholder="업무명" style={styles.input} value={title} onChangeText={onTitle} />
     <View style={styles.inlineEditorDateRow}>
-      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>날짜</Text><TextInput accessibilityLabel="수정할 날짜" placeholder="YYYY-MM-DD" style={styles.input} value={date} onChangeText={onDate} /></View>
-      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>시간</Text><TextInput accessibilityLabel="수정할 시간" placeholder="HH:MM" style={styles.input} value={time} onChangeText={onTime} /></View>
+      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>날짜</Text><Pressable accessibilityRole="button" accessibilityLabel="수정할 날짜 선택" disabled={busy} style={[styles.pickerTrigger, busy ? styles.pickerTriggerDisabled : null]} onPress={() => setPickerMode((current) => current === 'date' ? null : 'date')}><Text style={[styles.pickerTriggerText, date ? null : styles.pickerTriggerPlaceholder]}>{date || '날짜 선택'}</Text></Pressable></View>
+      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>시간</Text><Pressable accessibilityRole="button" accessibilityLabel="수정할 시간 선택" disabled={busy || !date} style={[styles.pickerTrigger, busy || !date ? styles.pickerTriggerDisabled : null]} onPress={() => setPickerMode((current) => current === 'time' ? null : 'time')}><Text style={[styles.pickerTriggerText, time ? null : styles.pickerTriggerPlaceholder]}>{time || '시간 선택'}</Text></Pressable></View>
     </View>
-    {!date && !time ? <Text style={styles.helpText}>현재 기한 없음 · 날짜를 입력하면 기한이 생깁니다.</Text> : <Text style={styles.helpText}>날짜를 비우면 기한 없는 업무가 됩니다. 시간만 입력하려면 날짜도 필요합니다.</Text>}
+    {pickerMode ? <View style={styles.dateTimePicker}><DateTimePicker value={selectedValue} mode={pickerMode} display={Platform.OS === 'ios' ? 'spinner' : 'default'} locale="ko-KR" is24Hour onChange={(_, value) => { if (Platform.OS === 'android') setPickerMode(null); selectDateTime(value); }} /></View> : null}
+    {!date && !time ? <Text style={styles.helpText}>현재 기한 없음 · 날짜 선택을 누르면 기한이 생깁니다.</Text> : <View style={styles.dueHelpRow}><Text style={styles.helpText}>날짜와 시간은 선택기로 바꿉니다.</Text><Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={busy} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDueText}>기한 없음</Text></Pressable></View>}
     <View style={styles.inlineEditorActions}><Pressable accessibilityRole="button" style={styles.secondaryAction} disabled={busy} onPress={onCancel}><Text style={styles.secondaryActionText}>취소</Text></Pressable><Pressable accessibilityRole="button" style={styles.primaryAction} disabled={busy || !title.trim()} onPress={onSave}><Text style={styles.primaryActionText}>{busy ? '저장 중…' : '저장'}</Text></Pressable></View>
   </View>;
 }
@@ -529,6 +564,13 @@ const styles = StyleSheet.create({
   inlineEditorDateInput: { flex: 1 },
   inlineEditorField: { flex: 1, gap: 6 },
   inlineEditorFieldLabel: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.textSecondary },
+  pickerTrigger: { minHeight: mobileTheme.size.input, justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, backgroundColor: mobileTheme.colors.surface },
+  pickerTriggerDisabled: { opacity: 0.5 },
+  pickerTriggerText: { fontSize: 16, color: mobileTheme.colors.text },
+  pickerTriggerPlaceholder: { color: mobileTheme.colors.textMuted },
+  dateTimePicker: { borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, overflow: 'hidden', backgroundColor: mobileTheme.colors.surface },
+  dueHelpRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  clearDueText: { color: mobileTheme.colors.link, fontSize: 12, fontWeight: '800', padding: 4 },
   inlineEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
   primaryAction: { minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
   primaryActionText: { color: '#fff', fontSize: 13, fontWeight: '800' },

@@ -53,3 +53,14 @@ test('Mobile search result can be expanded and edited through the existing workl
   assert.match(mobileSearchUi, /업무를 수정했습니다/);
   assert.match(mobileHome, /accessToken=\{session\.access_token\}/);
 });
+
+test('Mobile task editing selects due dates and times with the native picker instead of typing formats', () => {
+  assert.match(mobileHome, /@react-native-community\/datetimepicker/);
+  assert.match(mobileHome, /accessibilityLabel="수정할 날짜 선택"/);
+  assert.match(mobileHome, /accessibilityLabel="수정할 시간 선택"/);
+  assert.match(mobileHome, /<DateTimePicker value=\{selectedValue\} mode=\{pickerMode\}/);
+  assert.match(mobileHome, /mode=\{pickerMode\}/);
+  assert.match(mobileHome, /기한 없음으로 변경/);
+  assert.doesNotMatch(mobileHome, /placeholder="YYYY-MM-DD"/);
+  assert.doesNotMatch(mobileHome, /placeholder="HH:MM"/);
+});
