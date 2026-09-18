@@ -36,3 +36,17 @@ test('runtime model resolver removes incomplete downloads and promotes only SHA-
   assert.match(card, /음성 모델 받는 중/);
   assert.match(runtime, /huggingface\.co\/ggerganov\/whisper\.cpp/);
 });
+
+
+test('Quick Voice exposes device timing metrics for human benchmark without provider leakage', () => {
+  assert.match(flow, /QuickVoiceFlowTimings/);
+  assert.match(flow, /transcribeStartedAt = Date\.now\(\)/);
+  assert.match(flow, /saveStartedAt = Date\.now\(\)/);
+  assert.match(flow, /refreshStartedAt = Date\.now\(\)/);
+  assert.match(card, /providerPrepareMs/);
+  assert.match(card, /실기기 측정/);
+  assert.match(card, /PCM \{quickAudio\.sampleRate\}Hz/);
+  assert.match(card, /모델 준비 \{formatMs\(providerPrepareMs\)\}/);
+  assert.match(card, /전사 \{formatMs\(flowTimings\?\.transcribeMs/);
+  assert.doesNotMatch(card, /whisper\.rn|initWhisper|transcribeData/);
+});
