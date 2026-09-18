@@ -77,3 +77,10 @@ test('Meeting recorder is owned by an app-wide session instead of the meeting ca
   assert.match(banner, /진행 중인 회의 녹음으로 돌아가기/);
   assert.match(homeSource, /MeetingRecordingBanner onOpen=\{\(\) => setScreen\('meeting'\)\}/);
 });
+
+
+test('Home reserves measured space for the variable-height Quick Voice dock', () => {
+  assert.match(homeSource, /quickDockHeight/);
+  assert.match(homeSource, /onLayout=\{\(event\) => setQuickDockHeight/);
+  assert.match(homeSource, /quickDockHeight \+ 24/);
+});
