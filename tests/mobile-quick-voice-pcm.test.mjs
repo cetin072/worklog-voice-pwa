@@ -44,3 +44,13 @@ test('Quick Voice PCM remains foreground-only and permission-gated for the short
   assert.match(source, /stream\.stream\.start\(\)/);
   assert.match(source, /stream\.stream\.stop\(\)/);
 });
+
+
+test('Quick Voice PCM measures signal quality and rejects near-silence before STT', () => {
+  assert.match(source, /analyzePcm16Signal/);
+  assert.match(source, /signal\.peak/);
+  assert.match(source, /signal\.rms/);
+  assert.match(source, /nonZeroRatio/);
+  assert.match(source, /마이크 입력이 거의 감지되지 않았습니다/);
+  assert.match(source, /녹음된 음성 신호가 너무 적습니다/);
+});
