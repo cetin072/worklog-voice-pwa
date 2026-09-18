@@ -43,7 +43,18 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(notificationSource, /triggerAt/);
   assert.match(notificationSource, /이미 지났습니다/);
   assert.doesNotMatch(notificationSource, /08:30|09:00|16:30/);
-  assert.match(scheduleActionsSource, /Google Calendar \/ 휴대폰 캘린더/);
+  assert.match(scheduleActionsSource, /connectedCalendarLabel/);
+  assert.match(scheduleActionsSource, /synchronizeMappedScheduleToCalendar/);
+  assert.match(calendarSource, /getCalendarPermissions/);
+  assert.match(calendarSource, /reason: 'not-connected'/);
+  assert.match(scheduleActionsSource, /선택한 캘린더로 이동/);
+  assert.match(scheduleActionsSource, /selectionMatchesMapping/);
+  assert.match(scheduleActionsSource, /✓ Google Calendar/);
+  assert.match(scheduleActionsSource, /이 일정 알림:/);
+  assert.match(scheduleActionsSource, /이 일정 알림 없음/);
+  assert.match(scheduleActionsSource, /설정 ▾/);
+  assert.match(calendarSource, /calendarTitle/);
+  assert.match(calendarSource, /calendarOwnerAccount/);
   assert.match(scheduleActionsSource, /REMINDER_PRESETS/);
   assert.match(scheduleActionsSource, /이 일정 알림 모두 취소/);
   assert.match(scheduleActionsSource, /이 일정 취소/);
@@ -51,7 +62,7 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(cancellationSource, /reconcileCanceledScheduleArtifacts/);
 });
 
-test('Notifications reconcile after app restart, open the linked schedule, and consume the cold-start response', () => {
+test('Notifications reconcile after app restart and route the linked schedule into the home schedule section', () => {
   assert.match(notificationSource, /reconcileScheduleReminders/);
   assert.match(notificationSource, /getAllScheduledNotificationsAsync/);
   assert.match(notificationSource, /target: 'schedule'/);
@@ -70,6 +81,7 @@ test('Notifications reconcile after app restart, open the linked schedule, and c
   assert.ok(reminderCleanup > calendarCleanup, 'reminder reconcile runs after all calendar cleanup');
   assert.match(homeSource, /\+ 새 일정/);
   assert.match(homeSource, /setScreen\('input'\)/);
-  assert.match(homeSource, /알림.*일정/);
-  assert.match(homeSource, /setScreen\('calendar'\)/);
+  assert.match(homeSource, /setNotificationScheduleId\(payload\.scheduleId\)/);
+  assert.match(homeSource, /setScreen\('home'\)/);
+  assert.doesNotMatch(homeSource, /setScreen\('calendar'\)/);
 });
