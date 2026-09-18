@@ -8,6 +8,7 @@ import {
   removeScheduleFromCalendar,
   setPreferredCalendarId,
   synchronizeMappedScheduleToCalendar,
+  synchronizeScheduleToPreferredCalendar,
   syncScheduleToCalendar,
   type WritableCalendarOption,
 } from './device-calendar';
@@ -69,7 +70,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
         location: schedule.location,
       };
       await synchronizeScheduleReminders({ scheduleId, title: deviceSchedule.title, scheduleStartsAt: startsAt }).catch(() => undefined);
-      await synchronizeMappedScheduleToCalendar(deviceSchedule).catch(() => undefined);
+      await synchronizeScheduleToPreferredCalendar(deviceSchedule).catch(() => undefined);
       const [preferred, mapping, savedReminders] = await Promise.all([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]);
       setCalendarId(mapping?.calendarId || preferred);
       setCalendarSynced(Boolean(mapping));
