@@ -47,11 +47,49 @@
 - 기존 Issue / PR이 있으면 새로 시작하지 말고 해당 범위 안에서 이어간다.
 - Notion DB 스키마와 Netlify 환경변수 이름을 임의로 바꾸지 않는다.
 
-## 브랜치 / PR
+## 브랜치 / PR — 위험도 기반 운영
 
-- 일반 패치는 기능 브랜치에서 작업한다.
-- Draft PR로 검수한다.
-- 사용자 승인 없이 main 병합 또는 production 구조 변경을 하지 않는다.
+개발 속도와 안전성을 같이 잡기 위해 모든 수정에 PR을 강제하지 않는다.
+
+### A. Lightweight Main Path — main 직접 반영 가능
+
+아래 조건을 모두 만족하면 Codex/개발자는 별도 PR 없이 최신 `main`에 직접 반영할 수 있다.
+
+- 문서, 오탈자, 문구, 주석, 테스트 보강, 단순 스타일/레이아웃 수정
+- 또는 한 기능 안의 작고 국소적인 버그 수정
+- DB schema / migration / 인증 / 권한 / 결제 / 비밀값 / 외부 API 계약을 바꾸지 않음
+- native dependency / Expo config / Android permission / 앱 배포 설정을 바꾸지 않음
+- 데이터 삭제·변환 등 비가역 작업이 없음
+- 기존 사용자 데이터의 의미를 바꾸지 않음
+- 변경이 쉽게 되돌릴 수 있음
+- 관련 자동검사 또는 최소 회귀검사가 통과함
+
+직접 main 반영 후에는 커밋 메시지에 변경 목적이 드러나게 하고, 문제가 발견되면 즉시 후속 커밋으로 수정하거나 revert한다.
+
+### B. Branch + PR 필수
+
+다음은 기능 브랜치 + PR로 작업한다.
+
+- 신규 기능 또는 여러 화면/모듈에 걸친 변경
+- STT/OCR/AI provider, Calendar/Notification, auth 등 외부 경계 변경
+- DB migration / schema / RLS / RPC 변경
+- native dependency, Expo config, Android/iOS 권한 또는 빌드 설정 변경
+- production 동작, 배포, 비용, 보안에 영향이 있는 변경
+- 삭제/대량수정/데이터 이동 등 되돌리기 어려운 변경
+- 정확한 영향범위를 바로 설명하기 어려운 변경
+
+### C. PR 누적 방지
+
+- PR이 원래 목적을 넘어 다른 기능까지 포함하기 시작하면 새 작업을 더 넣지 않는다.
+- 검증 가능한 체크포인트가 되면 Green + 필요한 Human QA 후 가능한 빨리 main에 병합한다.
+- 미병합 PR 위에 또 다른 제품 PR을 연속으로 쌓는 stacked chain은 최소화한다.
+- 현재 수정 대상 코드가 아직 open PR에만 존재하면 그 수정은 해당 PR에서 끝낸다. main에 일부만 복제하지 않는다.
+- 큰 PR을 끝낸 뒤에는 다시 작은 `Issue → Branch/PR → QA → Merge` 주기로 돌아간다.
+
+### D. 승인 경계
+
+- Lightweight Main Path의 저위험 변경은 별도 병합 승인 없이 진행 가능하다.
+- 큰 기능 PR, production 구조 변경, 유료 서비스, production secret, Play Store 제출, 비가역 데이터 변경은 사용자 승인 없이 진행하지 않는다.
 
 ## User Acceptance Ready
 
