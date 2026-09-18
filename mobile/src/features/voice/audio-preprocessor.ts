@@ -6,6 +6,15 @@ import {
 
 const PREPROCESSOR_BRAND = Symbol('worklog.mobile.audio-preprocessor.v1');
 
+export type PreparedAudioCheckpoint = Readonly<{
+  sourceUri: string;
+  preparedUri: string;
+  sampleRate: number;
+  channels: number;
+  durationMs: number;
+  createdAt: string;
+}>;
+
 export type AudioPreprocessorResult = Readonly<{
   uri: string;
   sampleRate: number;
@@ -28,6 +37,25 @@ function providerName(value: string) {
     throw new Error('Audio preprocessor 이름 형식이 올바르지 않습니다.');
   }
   return normalized;
+}
+
+export function assertStreamingSafePreprocessorResult(
+  result: AudioPreprocessorResult,
+  recording: MobileRecordingAudioInput,
+) {
+  if (!result.uri?.trim()) throw new Error('STT 전처리 결과 파일 경로가 없습니다.');
+  if (result.uri === recording.uri) {
+    throw new Error('STT 전처리 파일은 원본 회의 녹음과 다른 경로에 저장해야 합니다.');
+  }
+  if (!Number.isFinite(result.sampleRate) || result.sampleRate <= 0) {
+    throw new Error('STT 전처리 sampleRate가 올바르지 않습니다.');
+  }
+  if (!Number.isInteger(result.channels) || result.channels <= 0) {
+    throw new Error('STT 전처리 channels가 올바르지 않습니다.');
+  }
+  if (!Number.isFinite(result.durationMs) || result.durationMs < 0) {
+    throw new Error('STT 전처리 durationMs가 올바르지 않습니다.');
+  }
 }
 
 export function createConfiguredMobileAudioPreprocessor(config: {
@@ -81,11 +109,30 @@ export async function prepareRecordingForStt(
   if (!recording.uri.trim()) throw new Error('전처리할 모바일 녹음 파일이 없습니다.');
 
   const result = await preprocessor.prepare(Object.freeze({ ...recording }));
+  assertStreamingSafePreprocessorResult(result, recording);
   return createPreparedPcmFileAudioInput({
     uri: result.uri,
     sampleRate: result.sampleRate,
     channels: result.channels,
     durationMs: result.durationMs || recording.durationMs,
     createdAt: recording.createdAt,
+  });
+}
+
+
+export function createPreparedAudioCheckpoint(
+  recording: MobileRecordingAudioInput,
+  prepared: PreparedPcmFileAudioInput,
+): PreparedAudioCheckpoint {
+  if (prepared.uri === recording.uri) {
+    throw new Error('전처리 checkpoint가 원본 회의 녹음을 덮어쓸 수 없습니다.');
+  }
+  return Object.freeze({
+    sourceUri: recording.uri,
+    preparedUri: prepared.uri,
+    sampleRate: prepared.sampleRate,
+    channels: prepared.channels,
+    durationMs: prepared.durationMs,
+    createdAt: new Date().toISOString(),
   });
 }
