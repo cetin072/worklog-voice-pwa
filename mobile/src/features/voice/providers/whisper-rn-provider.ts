@@ -12,6 +12,16 @@ export type WhisperRnTranscribeResult = Readonly<{
 }>;
 
 export type WhisperRnContextLike = Readonly<{
+  transcribe(
+    filePath: string,
+    options: {
+      language: string;
+      maxThreads?: number;
+    },
+  ): {
+    stop(): Promise<void>;
+    promise: Promise<WhisperRnTranscribeResult>;
+  };
   transcribeData(
     data: ArrayBuffer,
     options: {
@@ -44,6 +54,40 @@ export function pcm16LittleEndianToFloat32Buffer(data: ArrayBuffer) {
   return output.buffer;
 }
 
+function normalizedWhisperResult(
+  result: WhisperRnTranscribeResult,
+  language: string,
+  modelId: string,
+) {
+  if (result.isAborted) {
+    throw new Error('whisper.rn 전사가 취소되었습니다.');
+  }
+
+  const segmentText = (result.segments || [])
+    .map((segment) => typeof segment.text === 'string' ? segment.text.trim() : '')
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  const resultText = typeof result.result === 'string' ? result.result.trim() : '';
+
+  return {
+    text: segmentText && segmentText.length >= resultText.length ? segmentText : resultText,
+    segments: (result.segments || []).flatMap((segment) => {
+      const text = typeof segment.text === 'string' ? segment.text.trim() : '';
+      if (!text) return [];
+      const start = Number(segment.t0);
+      const end = Number(segment.t1);
+      return [{
+        text,
+        startMs: Number.isFinite(start) ? Math.max(0, Math.round(start * 10)) : undefined,
+        endMs: Number.isFinite(end) ? Math.max(0, Math.round(end * 10)) : undefined,
+      }];
+    }),
+    language: result.language || language,
+    model: modelId,
+  };
+}
+
 /**
  * Adapter only. The concrete whisper.rn import/initWhisper call belongs in the
  * mobile composition root so replacing whisper.rn never changes Core/UI/Data Core.
@@ -64,9 +108,21 @@ export function createWhisperRnTranscriptionProvider(input: {
   return createConfiguredMobileTranscriptionProvider({
     provider: 'whisper-rn',
     async transcribe({ audio, language }) {
-      if (audio.sourceKind !== 'quick-voice-pcm') {
-        throw new Error('whisper.rn Quick Voice PoC는 raw PCM 입력이 필요합니다.');
+      if (audio.sourceKind === 'mobile-recording') {
+        throw new Error('whisper.rn Android 파일 전사는 PCM WAV가 필요합니다. 회의 녹음을 먼저 STT용 WAV로 전처리해주세요.');
       }
+
+      if (audio.sourceKind === 'prepared-pcm-file') {
+        if (audio.mimeType !== 'audio/wav' || audio.encoding !== 'pcm16-wav') {
+          throw new Error('whisper.rn 파일 전사는 16-bit PCM WAV 입력이 필요합니다.');
+        }
+        const task = input.context.transcribe(audio.uri, {
+          language,
+          ...(maxThreads ? { maxThreads } : {}),
+        });
+        return normalizedWhisperResult(await task.promise, language, input.model.descriptor.id);
+      }
+
       if (audio.sampleRate !== 16_000 || audio.channels !== 1 || audio.encoding !== 'int16') {
         throw new Error('whisper.rn Quick Voice PoC는 16kHz mono int16 PCM 입력만 허용합니다.');
       }
@@ -76,35 +132,7 @@ export function createWhisperRnTranscriptionProvider(input: {
         language,
         ...(maxThreads ? { maxThreads } : {}),
       });
-      const result = await task.promise;
-
-      if (result.isAborted) {
-        throw new Error('whisper.rn 전사가 취소되었습니다.');
-      }
-
-      const segmentText = (result.segments || [])
-        .map((segment) => typeof segment.text === 'string' ? segment.text.trim() : '')
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-      const resultText = typeof result.result === 'string' ? result.result.trim() : '';
-
-      return {
-        text: segmentText && segmentText.length >= resultText.length ? segmentText : resultText,
-        segments: (result.segments || []).flatMap((segment) => {
-          const text = typeof segment.text === 'string' ? segment.text.trim() : '';
-          if (!text) return [];
-          const start = Number(segment.t0);
-          const end = Number(segment.t1);
-          return [{
-            text,
-            startMs: Number.isFinite(start) ? Math.max(0, Math.round(start * 10)) : undefined,
-            endMs: Number.isFinite(end) ? Math.max(0, Math.round(end * 10)) : undefined,
-          }];
-        }),
-        language: result.language || language,
-        model: input.model.descriptor.id,
-      };
+      return normalizedWhisperResult(await task.promise, language, input.model.descriptor.id);
     },
   });
 }
