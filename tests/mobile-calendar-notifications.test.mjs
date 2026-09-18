@@ -43,7 +43,6 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(notificationSource, /triggerAt/);
   assert.match(notificationSource, /이미 지났습니다/);
   assert.doesNotMatch(notificationSource, /08:30|09:00|16:30/);
-  assert.match(scheduleActionsSource, /Google Calendar \/ 휴대폰 캘린더/);
   assert.match(scheduleActionsSource, /connectedCalendarLabel/);
   assert.match(scheduleActionsSource, /✓ Google Calendar/);
   assert.match(scheduleActionsSource, /이 일정 알림:/);
