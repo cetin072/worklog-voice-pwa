@@ -6,6 +6,8 @@ const home = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 const voice = fs.readFileSync('mobile/src/features/voice/voice-recorder-card.tsx', 'utf8');
 const meetingLibrary = fs.readFileSync('mobile/src/features/voice/meeting-recording-library.tsx', 'utf8');
 const meetingRepo = fs.readFileSync('mobile/src/features/voice/meeting-recordings.ts', 'utf8');
+const meetingProvider = fs.readFileSync('mobile/src/features/voice/meeting-recording-provider.tsx', 'utf8');
+const meetingBanner = fs.readFileSync('mobile/src/features/voice/meeting-recording-banner.tsx', 'utf8');
 const calendarSummary = fs.readFileSync('mobile/src/features/schedule/calendar-connection-summary.tsx', 'utf8');
 const search = fs.readFileSync('mobile/src/features/search/work-record-search.tsx', 'utf8');
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
@@ -22,6 +24,8 @@ test('Visible feature gate keeps Quick Voice fail-closed and result-visible', ()
 
 test('Visible feature gate keeps meeting recording inspectable after capture', () => {
   assert.match(voice, /MeetingRecordingLibrary/);
+  assert.match(meetingProvider, /MeetingRecordingSession/);
+  assert.match(meetingBanner, /진행 중인 회의 녹음으로 돌아가기/);
   assert.match(meetingRepo, /meeting-recordings-v1\.json/);
   assert.match(meetingLibrary, /최근 회의 녹음/);
   assert.match(meetingLibrary, /▶ 재생/);
