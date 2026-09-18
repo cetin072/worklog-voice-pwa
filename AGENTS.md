@@ -30,6 +30,19 @@
 - 특정 provider 실패 시 Core를 재작성하지 말고 Adapter 구현만 교체하여 다음 후보를 검증한다.
 - Quick Voice STT #353/#358 작업은 `docs/planning/CODEX_QUICK_VOICE_STT_EXECUTION_V1.md`를 실행 기준으로 추가 참조한다.
 
+
+## Mobile 개발·검수 Fast Loop
+
+- 모바일 UI/JS/TS 변경의 기본 검수 경로는 **Development Build 1회 설치 + Metro/Fast Refresh**다.
+- 작은 화면/버튼/문구/StyleSheet/일반 TypeScript 변경마다 standalone Release APK를 다시 만들거나 사용자에게 재설치를 요구하지 않는다.
+- 로컬 개발 기기 최초 설치는 `cd mobile && npm ci && npm run android:device`를 사용한다.
+- 이후 native runtime이 그대로라면 `cd mobile && npm run start:device`로 Metro를 실행해 반복 검수한다.
+- development build 재생성은 native dependency, Expo config plugin, Android permission/manifest, scheme/deep-link native config, Expo/RN native version, STT native runtime이 바뀔 때만 기본으로 한다.
+- standalone ARM64 Release APK는 native-change checkpoint, milestone Human QA, release candidate에서만 생성한다.
+- CI도 JS/TS-only 변경에서는 typecheck/contract regression을 우선하고 standalone APK 반복 생성을 피한다. 필요 시 manual workflow dispatch로 Release APK를 강제 생성한다.
+- 이미 PASS했고 영향 파일/native contract가 바뀌지 않은 영역은 Human QA를 반복하지 않는다.
+- 세부 기준은 `docs/planning/MOBILE_QA_FAST_LOOP_V1.md`를 따른다.
+
 ## 공통 웹 아키텍처 기준
 
 - 웹 제작 공통 source of truth는 `cetin072/ai-development-system`의 `docs/WEB_ARCHITECTURE_STANDARD_V1.md`다.
