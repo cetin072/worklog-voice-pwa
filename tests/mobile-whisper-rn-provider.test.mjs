@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 
-const source = fs.readFileSync(
-  'mobile/src/features/voice/providers/whisper-rn-provider.ts',
-  'utf8',
-);
+const adapterPath = 'mobile/src/features/voice/providers/whisper-rn-provider.ts';
+const runtimePath = 'mobile/src/features/voice/providers/whisper-rn-runtime.ts';
+const source = fs.readFileSync(adapterPath, 'utf8');
+const runtime = fs.readFileSync(runtimePath, 'utf8');
 
 test('whisper.rn stays isolated in a provider adapter and consumes raw PCM through transcribeData', () => {
   assert.match(source, /createWhisperRnTranscriptionProvider/);
@@ -18,10 +19,18 @@ test('whisper.rn stays isolated in a provider adapter and consumes raw PCM throu
   assert.match(source, /audio\.encoding !== 'int16'/);
 });
 
-test('whisper.rn concrete package import does not leak into the adapter contract', () => {
+test('only the provider composition runtime imports the concrete whisper.rn package', () => {
   assert.doesNotMatch(source, /from ['"]whisper\.rn/);
-  assert.match(source, /WhisperRnContextLike/);
-  assert.match(source, /ResolvedSttModel/);
+  assert.match(runtime, /from 'whisper\.rn'/);
+  assert.match(runtime, /initializeWhisperRnRuntime/);
+
+  const sourceRoot = 'mobile/src';
+  const concreteImports = fs.readdirSync(sourceRoot, { recursive: true })
+    .filter((entry) => typeof entry === 'string' && /\.tsx?$/.test(entry))
+    .map((entry) => path.join(sourceRoot, entry))
+    .filter((file) => /from ['"]whisper\.rn['"]/.test(fs.readFileSync(file, 'utf8')));
+
+  assert.deepEqual(concreteImports, [runtimePath]);
 });
 
 test('whisper.rn adapter reports model identity through the provider-neutral transcript result', () => {
