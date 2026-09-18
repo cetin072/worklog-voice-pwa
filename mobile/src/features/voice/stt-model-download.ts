@@ -8,6 +8,11 @@ import {
 } from './stt-model';
 import { IncrementalSha256 } from './incremental-sha256';
 
+const DOWNLOAD_ATTEMPTS = 3;
+const DOWNLOAD_RETRY_DELAY_MS = [0, 900, 2200] as const;
+
+function delay(ms: number) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
 export type DownloadableSttModel = Readonly<{
   descriptor: SttModelDescriptor;
   downloadUrl: string;
@@ -116,29 +121,40 @@ export function createExpoSttModelResolver(input: {
         throw new Error('음성 모델을 받을 저장 공간이 부족합니다.');
       }
 
-      if (partialFile.exists) partialFile.delete();
-      try {
-        const downloaded = await File.downloadFileAsync(registered.downloadUrl, partialFile, {
-          onProgress: ({ bytesWritten, totalBytes }) => input.onProgress?.({
-            modelId: descriptor.id,
-            bytesWritten,
-            totalBytes: totalBytes > 0 ? totalBytes : expectedBytes,
-          }),
-        });
-        if (expectedBytes !== null && downloaded.size !== expectedBytes) {
-          throw new Error('받은 음성 모델 크기가 예상값과 다릅니다.');
-        }
-        const actualHash = await sha256(downloaded);
-        if (actualHash !== descriptor.sha256) {
-          throw new Error('받은 음성 모델의 SHA-256 검증에 실패했습니다.');
-        }
-        await downloaded.move(finalFile);
-        return validateResolvedSttModel(descriptor, { descriptor, localPath: finalFile.uri });
-      } catch (error) {
+      let lastDownloadError: unknown = null;
+      for (let attempt = 0; attempt < DOWNLOAD_ATTEMPTS; attempt += 1) {
+        if (attempt > 0) await delay(DOWNLOAD_RETRY_DELAY_MS[attempt] || 2000);
         if (partialFile.exists) partialFile.delete();
-        if (finalFile.exists) finalFile.delete();
-        throw error;
+
+        try {
+          const downloaded = await File.downloadFileAsync(registered.downloadUrl, partialFile, {
+            onProgress: ({ bytesWritten, totalBytes }) => input.onProgress?.({
+              modelId: descriptor.id,
+              bytesWritten,
+              totalBytes: totalBytes > 0 ? totalBytes : expectedBytes,
+            }),
+          });
+          if (expectedBytes !== null && downloaded.size !== expectedBytes) {
+            throw new Error('받은 음성 모델 크기가 예상값과 다릅니다.');
+          }
+          const actualHash = await sha256(downloaded);
+          if (actualHash !== descriptor.sha256) {
+            throw new Error('받은 음성 모델의 SHA-256 검증에 실패했습니다.');
+          }
+          await downloaded.move(finalFile);
+          return validateResolvedSttModel(descriptor, { descriptor, localPath: finalFile.uri });
+        } catch (error) {
+          lastDownloadError = error;
+          if (partialFile.exists) partialFile.delete();
+          if (finalFile.exists) finalFile.delete();
+        }
       }
+
+      const detail = lastDownloadError instanceof Error ? lastDownloadError.message : '';
+      if (/SocketException|connection abort|network|timeout|downloadFileAsync/i.test(detail)) {
+        throw new Error('음성 모델 다운로드가 중간에 끊겼습니다. 인터넷 연결을 확인한 뒤 음성 기록을 다시 눌러주세요.');
+      }
+      throw lastDownloadError instanceof Error ? lastDownloadError : new Error('음성 모델을 받지 못했습니다. 잠시 후 다시 시도해주세요.');
     })();
 
     inFlight.set(descriptor.id, task);
