@@ -40,6 +40,8 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /app-release\.apk/);
   assert.match(smokeScript, /uiautomator dump/);
   assert.match(smokeScript, /rendered accessibility tree/);
+  assert.match(smokeScript, /for attempt in 1 2 3/);
+  assert.match(smokeScript, /Quickstep isn't responding/);
   assert.match(smokeScript, /업무수첩\|연결을 확인해주세요/);
   assert.match(smokeScript, /Android runtime smoke PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);

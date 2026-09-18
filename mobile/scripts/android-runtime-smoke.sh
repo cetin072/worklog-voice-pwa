@@ -22,16 +22,28 @@ adb shell pidof "$PACKAGE"
 # window-focus dump label varies across emulator images, so the reliable UI
 # assertion is the rendered accessibility tree below instead of an internal
 # focus field.
-adb shell uiautomator dump /sdcard/worklog-window.xml >/dev/null
-adb pull /sdcard/worklog-window.xml /tmp/worklog-window.xml >/dev/null
+WINDOW_XML=/tmp/worklog-window.xml
+for attempt in 1 2 3; do
+  adb shell uiautomator dump /sdcard/worklog-window.xml >/dev/null
+  adb pull /sdcard/worklog-window.xml "$WINDOW_XML" >/dev/null
 
-if ! grep -Eq '업무수첩|연결을 확인해주세요' /tmp/worklog-window.xml; then
-  echo "Expected first-screen text was not found."
-  echo "---- Window XML ----"
-  cat /tmp/worklog-window.xml
-  echo "---- Recent logcat ----"
-  adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime" || true
-  exit 1
-fi
+  if grep -Eq '업무수첩|연결을 확인해주세요' "$WINDOW_XML"; then
+    echo "Android runtime smoke PASS: app process alive and first screen rendered."
+    exit 0
+  fi
 
-echo "Android runtime smoke PASS: app process alive and first screen rendered."
+  # API 35's launcher can show a transient Quickstep ANR dialog while the
+  # newly installed app takes foreground. Dismiss only that system dialog,
+  # then re-read the app UI; any app error still fails below.
+  if grep -q "Quickstep isn't responding" "$WINDOW_XML"; then
+    adb shell input keyevent 4
+  fi
+  sleep 3
+done
+
+echo "Expected first-screen text was not found after retrying the rendered UI."
+echo "---- Window XML ----"
+cat "$WINDOW_XML"
+echo "---- Recent logcat ----"
+adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime" || true
+exit 1
