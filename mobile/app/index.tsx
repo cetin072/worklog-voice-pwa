@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
+import { MeetingRecordingBanner } from '@/src/features/voice/meeting-recording-banner';
 import { prepareQuickVoiceWhisperProvider, releaseQuickVoiceWhisperProvider } from '@/src/features/voice/providers/whisper-rn-quick-voice-runtime';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-actions';
@@ -378,6 +379,7 @@ export default function HomeScreen() {
 
   return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? 190 + insets.bottom : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
     {screen === 'home' ? <>
+      <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
         <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>✅ 업무 저장 완료</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
         <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
