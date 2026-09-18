@@ -47,7 +47,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
   const [calendarId, setCalendarId] = useState<string | null>(null);
   const [calendarLoaded, setCalendarLoaded] = useState(false);
   const [calendarSynced, setCalendarSynced] = useState(false);
-  const [calendarMapping, setCalendarMapping] = useState<Awaited<ReturnType<typeof getScheduleCalendarMapping>>>(null);
+  const [calendarMapping, setCalendarMapping] = useState<Awaited<ReturnType<typeof getScheduleCalendarMapping>> | null>(null);
   const [reminders, setReminders] = useState<ScheduleReminder[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
