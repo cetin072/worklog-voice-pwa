@@ -67,11 +67,13 @@ test('Android resizes the app above the software keyboard during login', () => {
   assert.match(appShellSource, /keyboardDismissMode="on-drag"/);
 });
 
-test('App shell applies the installed safe-area provider to login and bottom navigation', () => {
+test('App shell applies safe-area insets without depending on a bottom navigation bar', () => {
   assert.match(rootLayoutSource, /SafeAreaProvider/);
   assert.match(appShellSource, /useSafeAreaInsets/);
-  assert.match(appShellSource, /bottomInset/);
-  assert.match(appShellSource, /Math\.max\(10, bottomInset\)/);
+  assert.match(appShellSource, /paddingTop: insets\.top/);
+  assert.match(appShellSource, /quickDockShell/);
+  assert.match(appShellSource, /paddingBottom: Math\.max\(insets\.bottom, 8\)/);
+  assert.doesNotMatch(appShellSource, /PrimaryNavigation/);
 });
 
 test('Only the non-sensitive email identifier is remembered by the app', () => {
