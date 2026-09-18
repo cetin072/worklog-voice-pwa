@@ -47,3 +47,10 @@ test('Quick Voice keeps the web-like transparent floating treatment and Home kee
   assert.match(scheduleActions, /compactOnly/);
   assert.match(scheduleActions, /connectedCalendarLabel/);
 });
+
+
+test('settings keeps Calendar truth visible before entering detailed controls', () => {
+  assert.match(mobileHome, /CalendarConnectionSummary compact onPressManage=\{\(\) => setScreen\('scheduleSettings'\)\}/);
+  assert.match(mobileHome, /일정·알림 관리/);
+  assert.match(mobileHome, /로그아웃/);
+});
