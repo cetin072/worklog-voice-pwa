@@ -32,6 +32,7 @@ test('Visible feature gate keeps meeting recording inspectable after capture', (
   assert.match(meetingLibrary, /⏸ 일시정지/);
   assert.match(meetingLibrary, /15초/);
   assert.match(meetingLibrary, /삭제/);
+  assert.match(meetingLibrary, /이름 바꾸기/);
 });
 
 test('Visible feature gate keeps direct input and schedule creation truth explicit', () => {
