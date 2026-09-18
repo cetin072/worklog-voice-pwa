@@ -45,7 +45,7 @@ GitHub PR #358의 **최신 HEAD와 정확히 일치하는 Mobile App ARM64 APK a
 
 홈의 **빠른 음성 메모 → 녹음 시작**을 누른다.
 
-첫 실행에서는 약 77.7MB multilingual tiny Whisper model이 runtime download될 수 있다.
+현재 accuracy checkpoint에서는 약 148MB multilingual Whisper base model이 runtime download될 수 있다. tiny multilingual은 target Samsung Human QA에서 `[S]` 특수토큰만 반환해 기본 후보에서 제외했다.
 
 ### PASS
 
@@ -308,10 +308,10 @@ whisper.rn을 영구 기본 Provider로 확정하기 전에 최소 아래를 본
 
 날짜/시간/금액의 반복 오인식은 Provider 교체 또는 더 나은 모델 비교 사유다.
 
-tiny model 정확도가 부족하면 Core/UI를 수정하지 않고 다음을 검토한다.
+현재 Whisper base multilingual을 1차 accuracy checkpoint로 사용한다. Core/UI를 수정하지 않고 다음 Provider와 동일 fixture로 비교한다.
 
-1. 더 큰 multilingual Whisper model
-2. sherpa-onnx / SenseVoice Provider
+1. whisper.rn / Whisper base multilingual
+2. sherpa-onnx / SenseVoice int8
 3. faster-whisper server baseline
 
 ---
