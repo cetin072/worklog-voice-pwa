@@ -1,4 +1,4 @@
-import { initWhisper } from 'whisper.rn';
+import { initWhisper } from 'whisper.rn/index';
 
 import type { MobileTranscriptionProvider } from '../transcription-provider';
 import type { ResolvedSttModel } from '../stt-model';
