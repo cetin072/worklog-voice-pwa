@@ -53,7 +53,10 @@ function hex(buffer: ArrayBuffer) {
 }
 
 async function sha256(file: File) {
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, await file.arrayBuffer());
+  // Android expo-crypto bridges TypedArray reliably; passing a bare
+  // ArrayBuffer can fail with "no ArrayBuffer attached".
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
   return hex(digest);
 }
 
