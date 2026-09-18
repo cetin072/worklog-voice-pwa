@@ -24,6 +24,14 @@ export type WritableCalendarOption = {
   isPrimary: boolean;
 };
 
+export type CalendarConnectionStatus = Readonly<{
+  state: 'connected' | 'permission-required' | 'not-selected' | 'unavailable';
+  label: string;
+  detail: string;
+  calendarId: string | null;
+  isGoogle: boolean;
+}>;
+
 type CalendarEventCleanup = { calendarId: string; eventId: string };
 type CalendarEventMapping = Record<string, {
   calendarId: string;
@@ -118,6 +126,63 @@ export async function resolvePreferredCalendar() {
   if (!selected) return null;
   await setPreferredCalendarId(selected.id);
   return optionOf(selected);
+}
+
+
+export async function readCalendarConnectionStatus(): Promise<CalendarConnectionStatus> {
+  const permission = await Calendar.getCalendarPermissions();
+  if (!permission.granted) {
+    return Object.freeze({
+      state: 'permission-required',
+      label: '캘린더 권한 필요',
+      detail: '설정에서 캘린더 권한을 허용해주세요.',
+      calendarId: null,
+      isGoogle: false,
+    });
+  }
+
+  const calendars = (await Calendar.getCalendars())
+    .filter((calendar) => calendar.allowsModifications && calendar.isVisible !== false)
+    .map(optionOf)
+    .sort((left, right) => Number(right.isGoogle) - Number(left.isGoogle) || Number(right.isPrimary) - Number(left.isPrimary) || left.title.localeCompare(right.title, 'ko-KR'));
+
+  if (!calendars.length) {
+    return Object.freeze({
+      state: 'unavailable',
+      label: '사용 가능한 캘린더 없음',
+      detail: '휴대폰에 Google 또는 수정 가능한 캘린더를 추가해주세요.',
+      calendarId: null,
+      isGoogle: false,
+    });
+  }
+
+  const preferredId = await getPreferredCalendarId();
+  const preferred = calendars.find((calendar) => calendar.id === preferredId) || null;
+  if (!preferred) {
+    const suggested = calendars.find((calendar) => calendar.isGoogle && calendar.isPrimary)
+      || calendars.find((calendar) => calendar.isGoogle)
+      || calendars.find((calendar) => calendar.isPrimary)
+      || calendars[0];
+    return Object.freeze({
+      state: 'not-selected',
+      label: '캘린더 미선택',
+      detail: suggested?.isGoogle
+        ? `연결 가능: Google Calendar · ${suggested.ownerAccount || suggested.title}`
+        : `연결 가능: ${suggested?.title || '휴대폰 캘린더'}`,
+      calendarId: null,
+      isGoogle: Boolean(suggested?.isGoogle),
+    });
+  }
+
+  return Object.freeze({
+    state: 'connected',
+    label: preferred.isGoogle ? 'Google Calendar 연결됨' : '휴대폰 캘린더 연결됨',
+    detail: preferred.isGoogle
+      ? `${preferred.ownerAccount || preferred.title}${preferred.title && preferred.title !== preferred.ownerAccount ? ` · ${preferred.title}` : ''}`
+      : `${preferred.title}${preferred.ownerAccount ? ` · ${preferred.ownerAccount}` : ''}`,
+    calendarId: preferred.id,
+    isGoogle: preferred.isGoogle,
+  });
 }
 
 export async function getScheduleCalendarMapping(scheduleId: string) {
