@@ -97,9 +97,6 @@ export function createExpoSttModelResolver(input: {
       const finalFile = new File(directory, registered.fileName);
       const partialFile = new File(directory, `${registered.fileName}.partial`);
       const expectedBytes = descriptor.downloadBytes;
-      if (expectedBytes !== null && Paths.availableDiskSpace < expectedBytes) {
-        throw new Error('음성 모델을 받을 저장 공간이 부족합니다.');
-      }
 
       if (finalFile.exists) {
         const actualHash = await sha256(finalFile);
@@ -107,6 +104,10 @@ export function createExpoSttModelResolver(input: {
           return validateResolvedSttModel(descriptor, { descriptor, localPath: finalFile.uri });
         }
         finalFile.delete();
+      }
+
+      if (expectedBytes !== null && Paths.availableDiskSpace < expectedBytes) {
+        throw new Error('음성 모델을 받을 저장 공간이 부족합니다.');
       }
 
       if (partialFile.exists) partialFile.delete();
