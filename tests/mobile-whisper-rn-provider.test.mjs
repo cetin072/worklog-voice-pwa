@@ -45,7 +45,8 @@ test('release Metro bundle includes whisper.rn\'s explicit buffer polyfill', () 
 });
 
 test('whisper.rn adapter reports model identity through the provider-neutral transcript result', () => {
-  assert.match(source, /model: input\.model\.descriptor\.id/);
+  assert.match(source, /model: modelId/);
+  assert.match(source, /normalizedWhisperResult\([^)]*input\.model\.descriptor\.id/s);
   assert.match(source, /language: result\.language \|\| language/);
   assert.match(source, /result\.isAborted/);
   assert.match(source, /result\.segments/);
