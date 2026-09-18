@@ -140,6 +140,9 @@ export type SavedWorklog = Readonly<{
   pageId?: string;
   dataCoreWorkRecordId?: string;
   cleanTranscript?: string;
+  scheduleDetected?: boolean;
+  scheduleId?: string;
+  dueStart?: string;
 }>;
 
 function normalizedRecordedAt(value?: string) {
