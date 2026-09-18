@@ -5,6 +5,8 @@ import test from 'node:test';
 const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 const apiSource = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 const recorderSource = fs.readFileSync('mobile/src/features/voice/voice-recorder-card.tsx', 'utf8');
+const meetingProviderSource = fs.readFileSync('mobile/src/features/voice/meeting-recording-provider.tsx', 'utf8');
+const rootLayoutSource = fs.readFileSync('mobile/app/_layout.tsx', 'utf8');
 
 test('Mobile App Shell preserves the PWA briefing information structure through the existing Data Core endpoint', () => {
   for (const label of ['지난 것', '오늘 할 일', '다가오는 업무', '기한 없는 업무']) {
@@ -22,7 +24,9 @@ test('Mobile home keeps quick voice memo primary while meeting recording reuses 
   assert.match(homeSource, /VoiceRecorderCard mode="meeting"/);
   assert.match(homeSource, /회의 녹음/);
   assert.match(recorderSource, /mode = 'quick'/);
-  assert.match(recorderSource, /startMeetingRecording/);
+  assert.match(recorderSource, /useMeetingRecordingSession/);
+  assert.match(meetingProviderSource, /async function start\(\)/);
+  assert.match(rootLayoutSource, /MeetingRecordingProvider/);
   assert.doesNotMatch(homeSource, /WebView/);
 });
 
