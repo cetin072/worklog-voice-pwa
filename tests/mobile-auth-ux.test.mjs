@@ -56,7 +56,7 @@ test('Login UI exposes Google first plus password visibility and autofill hints'
   assert.match(homeSource, /보기/);
   assert.match(homeSource, /숨기기/);
   assert.match(homeSource, /autoComplete="email"/);
-  assert.match(homeSource, /autoComplete="current-password"/);
+  assert.match(homeSource, /autoComplete=\{authMode === 'signUp' \? 'new-password' : 'current-password'\}/);
   assert.match(homeSource, /importantForAutofill="yes"/);
 });
 

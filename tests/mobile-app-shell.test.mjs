@@ -50,7 +50,7 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
 
 
 test('Calendar and reminder management live under Settings while schedule summaries stay on Home', () => {
-  assert.match(homeSource, /일정·알림 설정/);
+  assert.match(homeSource, /일정·알림 관리/);
   assert.match(homeSource, /screen === 'scheduleSettings'/);
   assert.match(homeSource, /휴대폰\/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다/);
   assert.match(homeSource, /showDeviceActions/);

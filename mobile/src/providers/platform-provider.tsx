@@ -28,6 +28,7 @@ type PlatformContextValue = {
   reload: () => void;
   clearAuthError: () => void;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<'signedIn' | 'confirmationRequired'>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -153,6 +154,15 @@ export function PlatformProvider({ children }: PropsWithChildren) {
         if (signInError) throw signInError;
         setRememberedEmail(email);
         void saveRememberedLoginEmail(email).catch(() => undefined);
+      },
+      signUp: async (email, password) => {
+        if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');
+        setAuthError('');
+        const { data, error: signUpError } = await client.auth.signUp({ email, password });
+        if (signUpError) throw signUpError;
+        setRememberedEmail(email);
+        void saveRememberedLoginEmail(email).catch(() => undefined);
+        return data.session ? 'signedIn' : 'confirmationRequired';
       },
       signInWithGoogle: async () => {
         if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');

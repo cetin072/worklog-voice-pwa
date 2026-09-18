@@ -6,6 +6,7 @@ import { createMobileRecordingAudioInput, type MobileRecordingAudioInput, type Q
 import { createQuickVoiceClientRequestId, QuickVoiceFlowError, runQuickVoiceFastPath, saveQuickVoiceTranscript, type QuickVoiceFlowTimings } from '@/src/features/voice/quick-voice-flow';
 import { useQuickVoicePcmCapture } from '@/src/features/voice/quick-voice-pcm';
 import type { MobileTranscriptV1, MobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
+import { mobileTheme } from '@/src/ui/theme';
 
 const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, directory: 'document' as const };
 type RecorderPhase = 'idle' | 'recording' | 'paused' | 'stopping';
@@ -201,17 +202,17 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 }
 
 const styles = StyleSheet.create({
-  quickDock: { backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#e1e5ea', paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8, gap: 7 },
+  quickDock: { backgroundColor: mobileTheme.colors.surface, borderTopWidth: 1, borderTopColor: mobileTheme.colors.borderSubtle, paddingHorizontal: 18, paddingTop: mobileTheme.spacing.compact, paddingBottom: mobileTheme.spacing.compact, gap: 7 },
   quickStatusBubble: { alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: '#f1f5f9' },
   quickStatusBubbleText: { fontSize: 11, fontWeight: '800', color: '#475569' },
   quickProgress: { textAlign: 'center', fontSize: 11, color: '#475569' },
   quickControls: { minHeight: 82, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22 },
-  quickMic: { width: 96, height: 96, marginTop: -20, borderRadius: 48, alignItems: 'center', justifyContent: 'center', gap: 2, backgroundColor: '#111827', borderWidth: 5, borderColor: '#fff', shadowColor: '#111827', shadowOpacity: 0.24, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
-  quickMicActive: { backgroundColor: '#b42318' },
+  quickMic: { width: 96, height: 96, marginTop: -20, borderRadius: 48, alignItems: 'center', justifyContent: 'center', gap: 2, backgroundColor: mobileTheme.colors.primary, borderWidth: 5, borderColor: mobileTheme.colors.surface, shadowColor: mobileTheme.colors.primary, shadowOpacity: 0.24, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  quickMicActive: { backgroundColor: mobileTheme.colors.danger },
   quickMicBusy: { opacity: 0.65 },
   quickMicIcon: { fontSize: 26, color: '#fff' },
   quickMicLabel: { fontSize: 12, fontWeight: '900', color: '#fff' },
-  quickSideAction: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: '#d7dae0', backgroundColor: '#fff' },
+  quickSideAction: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
   quickSideActionDisabled: { opacity: 0.4 },
   quickSideStatus: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: '#d7dae0', backgroundColor: '#f8fafc' },
   quickSideIcon: { fontSize: 18 },
@@ -219,15 +220,15 @@ const styles = StyleSheet.create({
   quickSideLabel: { fontSize: 10, fontWeight: '800', color: '#374151' },
   quickHint: { textAlign: 'center', fontSize: 11, color: '#737985', lineHeight: 16 },
   quickResult: { gap: 6, paddingHorizontal: 4, paddingBottom: 2 },
-  quickResultTitle: { textAlign: 'center', fontSize: 12, fontWeight: '800', color: '#245c2a' },
-  card: { backgroundColor: '#ffffff', borderRadius: 20, padding: 20, gap: 14 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#17191d' },
-  body: { fontSize: 14, color: '#4b515c', lineHeight: 20 },
+  quickResultTitle: { textAlign: 'center', fontSize: 12, fontWeight: '800', color: mobileTheme.colors.success },
+  card: { backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.card, padding: mobileTheme.spacing.card, gap: 14 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: mobileTheme.colors.text },
+  body: { fontSize: 14, color: mobileTheme.colors.textSecondary, lineHeight: 20 },
   statusRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   timer: { fontSize: 30, fontWeight: '800', color: '#17191d', fontVariant: ['tabular-nums'] },
   status: { fontSize: 14, fontWeight: '700', color: '#4b515c' },
   notice: { fontSize: 12, color: '#737985', lineHeight: 18 },
-  errorText: { color: '#b42318', lineHeight: 20, fontSize: 12 },
+  errorText: { color: mobileTheme.colors.danger, lineHeight: 20, fontSize: 12 },
   result: { borderWidth: 1, borderColor: '#e0e3e8', borderRadius: 12, padding: 14, gap: 8 },
   resultTitle: { fontSize: 15, fontWeight: '700', color: '#17191d' },
   meta: { fontSize: 11, color: '#737985', lineHeight: 16 },

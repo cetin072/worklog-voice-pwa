@@ -25,6 +25,7 @@ import {
 import { cancelScheduleWithDeviceCleanup } from './schedule-cancellation';
 import type { BriefingSchedule } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
+import { mobileTheme } from '@/src/ui/theme';
 
 function reminderTime(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -245,14 +246,14 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
 
 const styles = StyleSheet.create({
   root: { gap: 10, paddingTop: 8 },
-  compactSummary: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: '#e1e5ea', borderRadius: 12, backgroundColor: '#f8fafc' },
+  compactSummary: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: mobileTheme.colors.borderSubtle, borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.neutralBackground },
   summaryText: { flex: 1, minWidth: 0, gap: 4 },
   connectionStatus: { fontSize: 12, fontWeight: '800', lineHeight: 17 },
-  connectionOn: { color: '#245c2a' },
-  connectionOff: { color: '#737985' },
-  reminderStatus: { fontSize: 12, color: '#4b515c', lineHeight: 17 },
-  expandButton: { flexShrink: 0, minHeight: 36, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d7dae0' },
-  expandText: { fontSize: 12, fontWeight: '800', color: '#275daf' },
+  connectionOn: { color: mobileTheme.colors.success },
+  connectionOff: { color: mobileTheme.colors.textMuted },
+  reminderStatus: { fontSize: 12, color: mobileTheme.colors.textSecondary, lineHeight: 17 },
+  expandButton: { flexShrink: 0, minHeight: 36, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: mobileTheme.radius.compact, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border },
+  expandText: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.link },
   expanded: { gap: 14 },
   section: { gap: 8, borderTopWidth: 1, borderTopColor: '#eceef1', paddingTop: 12 },
   heading: { fontSize: 14, fontWeight: '800', color: '#30343b' },

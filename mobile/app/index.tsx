@@ -14,10 +14,12 @@ import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifi
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, readWorklogDetails, saveWorklog, updateWorklogDetails, updateWorklogStatus, updateWorklogTitle } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
+import { mobileTheme } from '@/src/ui/theme';
 
 type AppScreen = 'home' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'scheduleSettings' | 'patchNotes';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
+type AuthMode = 'signIn' | 'signUp';
 
 const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' }> = [
   { key: 'overdue', label: '지난 것', tone: 'danger' },
@@ -76,12 +78,26 @@ function ScheduleRows({ schedules, empty, showDeviceActions = false }: { schedul
   return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{showDeviceActions ? <ScheduleDeviceActions schedule={schedule} /> : null}</View>);
 }
 
+function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary' | 'secondary'; disabled?: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" disabled={disabled} style={[styles.authAction, variant === 'google' ? styles.authGoogleAction : variant === 'primary' ? styles.authPrimaryAction : styles.authSecondaryAction, disabled ? styles.authActionDisabled : null]} onPress={onPress}>
+    <Text style={[styles.authActionText, variant === 'primary' ? styles.authPrimaryActionText : null]}>{title}</Text>
+  </Pressable>;
+}
+
+function SettingsMenuItem({ eyebrow, title, description, onPress, destructive = false }: { eyebrow: string; title: string; description: string; onPress: () => void; destructive?: boolean }) {
+  return <Pressable accessibilityRole="button" style={[styles.settingsMenuItem, destructive ? styles.settingsMenuItemDestructive : null]} onPress={onPress}>
+    <View style={styles.settingsMenuCopy}><Text style={styles.settingsMenuEyebrow}>{eyebrow}</Text><Text style={[styles.settingsMenuTitle, destructive ? styles.settingsMenuTitleDestructive : null]}>{title}</Text><Text style={styles.settingsMenuDescription}>{description}</Text></View>
+    <Text style={[styles.settingsMenuChevron, destructive ? styles.settingsMenuTitleDestructive : null]}>›</Text>
+  </Pressable>;
+}
+
 export default function HomeScreen() {
-  const { phase, session, error, authError, rememberedEmail, reload, clearAuthError, signIn, signInWithGoogle, signOut, config, client } = usePlatform();
+  const { phase, session, error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut, config, client } = usePlatform();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('signIn');
   const [draft, setDraft] = useState('');
   const [screen, setScreen] = useState<AppScreen>('home');
   const [selectedTask, setSelectedTask] = useState<{ bucket: BriefingBucket; task: BriefingTask } | null>(null);
@@ -159,7 +175,18 @@ export default function HomeScreen() {
   async function runEmailSignIn() {
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password || busy) return;
-    await run(() => signIn(normalizedEmail, password));
+    if (authMode === 'signUp' && password.length < 8) {
+      setMessage('가입용 비밀번호는 8자 이상 입력해주세요.');
+      return;
+    }
+    await run(async () => {
+      if (authMode === 'signIn') {
+        await signIn(normalizedEmail, password);
+        return;
+      }
+      const outcome = await signUp(normalizedEmail, password);
+      if (outcome === 'confirmationRequired') setMessage('가입 확인 이메일을 보냈습니다. 이메일을 확인한 뒤 로그인해 주세요.');
+    });
   }
 
   async function persistDraft() {
@@ -274,7 +301,10 @@ export default function HomeScreen() {
   if (phase === 'loading') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><ActivityIndicator size="large" /><Text style={styles.statusText}>업무수첩을 연결하고 있습니다.</Text></View>;
   if (phase === 'error') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><Text style={styles.title}>연결을 확인해주세요</Text><Text style={styles.errorText}>{error}</Text><Button title="다시 시도" onPress={reload} /></View>;
 
-  if (!session) return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><ScrollView contentContainerStyle={[styles.loginScroll, { paddingBottom: 20 + insets.bottom }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><View style={styles.loginHero}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.title}>🎙 업무수첩</Text><Text style={styles.body}>말하면 기록되고, 일정까지 한눈에</Text></View><View style={styles.card}><Text style={styles.sectionTitle}>바로 시작하기</Text><Text style={styles.body}>Google 계정으로 가장 빠르게 시작할 수 있습니다.</Text><Button title="Google로 시작" disabled={busy} onPress={() => void run(signInWithGoogle)} /><View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View><TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="이메일" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} /><View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete="current-password" autoCorrect={false} importantForAutofill="yes" placeholder="비밀번호" returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType="password" value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View><Button title={busy ? '로그인 중...' : '이메일로 로그인'} disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} /><Text style={styles.authHint}>이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.</Text>{message || authError ? <Text style={styles.errorText}>{message || authError}</Text> : null}</View></ScrollView></KeyboardAvoidingView></View>;
+  if (!session) return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><ScrollView contentContainerStyle={[styles.loginScroll, { paddingBottom: 20 + insets.bottom }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
+    <View style={styles.loginHero}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.title}>🎙 업무수첩</Text><Text style={styles.body}>말하면 기록되고, 일정까지 한눈에</Text></View>
+    <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>업무를 놓치지 않는{`\n`}개인 업무수첩</Text><Text style={styles.body}>복잡한 설정 없이 계정만 만들면 바로 시작할 수 있습니다.</Text><View style={styles.welcomeBenefits}><Text style={styles.welcomeBenefit}>🎙 말하거나 직접 입력</Text><Text style={styles.welcomeBenefit}>📅 오늘·다가오는 일정 확인</Text><Text style={styles.welcomeBenefit}>✓ 저장 후 브리핑에서 바로 확인</Text></View></View>
+    <View style={styles.card}><Text style={styles.sectionTitle}>{authMode === 'signIn' ? '내 업무공간' : '무료로 시작하기'}</Text><Text style={styles.body}>Google 계정으로 가장 빠르게 시작할 수 있습니다.</Text><AuthAction title="Google로 시작" variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} /><View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View><TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} /><View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View><View style={styles.authActions}><AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '무료로 시작'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} /><AuthAction title={authMode === 'signIn' ? '무료로 시작' : '로그인'} variant="secondary" disabled={busy} onPress={() => { setAuthMode((value) => value === 'signIn' ? 'signUp' : 'signIn'); setMessage(''); clearAuthError(); }} /></View><Text style={styles.authHint}>{authMode === 'signIn' ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.' : '가입하면 개인 업무공간이 자동으로 만들어집니다. 이메일 확인이 필요할 수 있습니다.'}</Text>{message || authError ? <Text style={message ? styles.successText : styles.errorText}>{message || authError}</Text> : null}</View></ScrollView></KeyboardAvoidingView></View>;
 
   const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
@@ -323,7 +353,7 @@ export default function HomeScreen() {
 
     {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>입력한 원문을 기존 업무수첩에 저장합니다.</Text><TextInput accessibilityLabel="업무 내용" multiline placeholder="예: 내일 오후 3시 김과장에게 계약서 확인 전화" style={[styles.input, styles.multiline]} value={draft} onChangeText={setDraft} textAlignVertical="top" /><Button title={busy ? '저장 중...' : '저장'} disabled={busy || !draft.trim()} onPress={() => void persistDraft()} />{message ? <Text style={styles.messageInline}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
-    {screen === 'settings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text><Button title="🔔 일정·알림 설정" onPress={() => setScreen('scheduleSettings')} /><Button title="📝 업데이트 내역" onPress={() => setScreen('patchNotes')} /><Button title="로그아웃" disabled={busy} onPress={() => void run(signOut)} /></View> : null}
+    {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={() => void run(signOut)} /></View></View> : null}
     {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text>{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>{screen === 'home' ? <View style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, releaseProvider: releaseQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); return { recordId: saved.dataCoreWorkRecordId || saved.pageId }; }, refreshBriefing, updateSavedWorklog: (recordId, transcript) => updateWorklogTitle(session.access_token, recordId, transcript) }} /></View> : null}</View></View>;
@@ -334,29 +364,33 @@ function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#f4f5f7' },
+  page: { flex: 1, backgroundColor: mobileTheme.colors.background },
   flex: { flex: 1 },
   authenticatedShell: { flex: 1 },
   contentScroll: { flex: 1 },
-  quickDockShell: { flexShrink: 0, backgroundColor: '#fff' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, backgroundColor: '#f4f5f7' },
-  scroll: { padding: 20, gap: 16, paddingBottom: 28 },
-  loginScroll: { flexGrow: 1, justifyContent: 'center', padding: 20, gap: 16 },
+  quickDockShell: { flexShrink: 0, backgroundColor: mobileTheme.colors.surface },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: mobileTheme.spacing.section, padding: 24, backgroundColor: mobileTheme.colors.background },
+  scroll: { padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section, paddingBottom: 28 },
+  loginScroll: { flexGrow: 1, justifyContent: 'center', padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 4 },
   headerTitleWrap: { flex: 1, minWidth: 0 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#17191d', flexShrink: 1 },
   headerActions: { flexDirection: 'row', gap: 8 },
-  headerButton: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d7dae0', borderRadius: 14, backgroundColor: '#fff' },
+  headerButton: { width: mobileTheme.size.touchTarget, height: mobileTheme.size.touchTarget, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 14, backgroundColor: mobileTheme.colors.surface },
   headerButtonIcon: { fontSize: 21 },
-  loginHero: { gap: 8, padding: 8 },
-  card: { backgroundColor: '#ffffff', borderRadius: 20, padding: 20, gap: 14 },
+  loginHero: { gap: mobileTheme.spacing.compact, padding: mobileTheme.spacing.compact },
+  welcomeCard: { gap: 12, padding: mobileTheme.spacing.card, borderRadius: mobileTheme.radius.card, backgroundColor: mobileTheme.colors.neutralBackground, borderWidth: 1, borderColor: mobileTheme.colors.neutralBorder },
+  welcomeTitle: { fontSize: 23, fontWeight: '800', color: mobileTheme.colors.text, lineHeight: 31 },
+  welcomeBenefits: { gap: 7, paddingTop: 2 },
+  welcomeBenefit: { color: mobileTheme.colors.textSecondary, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  card: { backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.card, padding: mobileTheme.spacing.card, gap: 14 },
   panel: { gap: 12 },
   eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: '#5f6570' },
-  title: { fontSize: 28, fontWeight: '800', color: '#17191d' },
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: '#17191d' },
-  body: { fontSize: 15, color: '#4b515c', lineHeight: 22 },
-  meta: { fontSize: 13, color: '#737985' },
-  statusText: { fontSize: 15, color: '#4b515c' },
+  title: { fontSize: 28, fontWeight: '800', color: mobileTheme.colors.text },
+  sectionTitle: { fontSize: 20, fontWeight: '800', color: mobileTheme.colors.text },
+  body: { fontSize: 15, color: mobileTheme.colors.textSecondary, lineHeight: 22 },
+  meta: { fontSize: 13, color: mobileTheme.colors.textMuted },
+  statusText: { fontSize: 15, color: mobileTheme.colors.textSecondary },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   sectionHeadText: { flex: 1, minWidth: 0 },
   closeButton: { flexShrink: 0, minWidth: 48, alignItems: 'center' },
@@ -371,8 +405,9 @@ const styles = StyleSheet.create({
   countValue: { fontSize: 30, fontWeight: '800', color: '#17191d' },
   loadingInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16 },
   errorPanel: { gap: 10 },
-  errorText: { color: '#b42318', lineHeight: 20 },
-  emptyText: { color: '#737985', lineHeight: 20, paddingVertical: 4 },
+  errorText: { color: mobileTheme.colors.danger, lineHeight: 20 },
+  successText: { color: mobileTheme.colors.success, lineHeight: 20, backgroundColor: '#eaf4ea', padding: 10, borderRadius: mobileTheme.radius.compact },
+  emptyText: { color: mobileTheme.colors.textMuted, lineHeight: 20, paddingVertical: 4 },
   emptyAction: { gap: 10, paddingTop: 8 },
   actionGrid: { flexDirection: 'row', gap: 12 },
   actionCard: { flex: 1, minHeight: 132, borderRadius: 18, padding: 16, gap: 6, backgroundColor: '#fff' },
@@ -382,10 +417,10 @@ const styles = StyleSheet.create({
   detailSection: { gap: 8, borderTopWidth: 1, borderTopColor: '#eceef1', paddingTop: 16 },
   detailTitle: { fontSize: 16, fontWeight: '800', color: '#17191d' },
   briefingSection: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 8 },
-  sectionDanger: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
-  sectionWarning: { backgroundColor: '#fffbeb', borderColor: '#fde68a' },
-  sectionInfo: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
-  sectionNeutral: { backgroundColor: '#f9fafb', borderColor: '#d1d5db' },
+  sectionDanger: { backgroundColor: mobileTheme.colors.overdueBackground, borderColor: mobileTheme.colors.overdueBorder },
+  sectionWarning: { backgroundColor: mobileTheme.colors.todayBackground, borderColor: mobileTheme.colors.todayBorder },
+  sectionInfo: { backgroundColor: mobileTheme.colors.upcomingBackground, borderColor: mobileTheme.colors.upcomingBorder },
+  sectionNeutral: { backgroundColor: mobileTheme.colors.neutralBackground, borderColor: mobileTheme.colors.neutralBorder },
   briefingSectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   briefingSectionTitle: { fontSize: 17, fontWeight: '800', color: '#1f2937' },
   moreButton: { minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
@@ -424,7 +459,7 @@ const styles = StyleSheet.create({
   statusButtonText: { fontSize: 14, fontWeight: '700', color: '#30343b' },
   scheduleRow: { gap: 3, borderLeftWidth: 3, borderLeftColor: '#80a9e8', paddingLeft: 10, paddingVertical: 5 },
   scheduleDate: { fontSize: 13, fontWeight: '700', color: '#275daf' },
-  input: { borderWidth: 1, borderColor: '#d7dae0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, backgroundColor: '#fff' },
+  input: { minHeight: mobileTheme.size.input, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, backgroundColor: mobileTheme.colors.surface },
   multiline: { minHeight: 150 },
   passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   passwordInput: { flex: 1 },
@@ -433,7 +468,28 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#e1e4e8' },
   dividerText: { fontSize: 12, fontWeight: '700', color: '#8a9099' },
+  authActions: { flexDirection: 'row', gap: 8 },
+  authAction: { flex: 1, minHeight: mobileTheme.size.touchTarget, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: mobileTheme.radius.control, borderWidth: 1 },
+  authGoogleAction: { borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  authPrimaryAction: { borderColor: mobileTheme.colors.primary, backgroundColor: mobileTheme.colors.primary },
+  authSecondaryAction: { borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  authActionDisabled: { opacity: 0.5 },
+  authActionText: { color: mobileTheme.colors.text, fontSize: 14, fontWeight: '800' },
+  authPrimaryActionText: { color: mobileTheme.colors.primaryText },
   authHint: { fontSize: 12, color: '#737985', lineHeight: 18 },
+  settingsPanel: { gap: mobileTheme.spacing.section, paddingBottom: mobileTheme.spacing.page },
+  settingsGroup: { gap: 8 },
+  settingsGroupTitle: { color: mobileTheme.colors.textMuted, fontSize: 12, fontWeight: '800', letterSpacing: 0.9, paddingHorizontal: 4 },
+  settingsAccount: { gap: 5, backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.control, padding: mobileTheme.spacing.control },
+  settingsMenuItem: { minHeight: 86, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.control, padding: mobileTheme.spacing.control },
+  settingsMenuItemDestructive: { backgroundColor: '#fff7f7', borderWidth: 1, borderColor: '#fecaca' },
+  settingsMenuCopy: { flex: 1, minWidth: 0, gap: 3 },
+  settingsMenuEyebrow: { color: mobileTheme.colors.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 0.7 },
+  settingsMenuTitle: { color: mobileTheme.colors.text, fontSize: 16, fontWeight: '800' },
+  settingsMenuTitleDestructive: { color: mobileTheme.colors.danger },
+  settingsMenuDescription: { color: mobileTheme.colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  settingsMenuChevron: { color: mobileTheme.colors.link, fontSize: 26, fontWeight: '400' },
+  settingsMeta: { color: mobileTheme.colors.textMuted, fontSize: 11, paddingHorizontal: 4 },
   patchNoteItem: { fontSize: 14, color: '#4b515c', lineHeight: 21 },
   message: { padding: 14, borderRadius: 12, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
   messageInline: { padding: 12, borderRadius: 10, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
