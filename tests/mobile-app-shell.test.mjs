@@ -22,7 +22,7 @@ test('Mobile home keeps quick voice memo primary while meeting recording reuses 
   assert.match(homeSource, /VoiceRecorderCard mode="meeting"/);
   assert.match(homeSource, /회의 녹음/);
   assert.match(recorderSource, /mode = 'quick'/);
-  assert.match(recorderSource, /mode === 'meeting'/);
+  assert.match(recorderSource, /startMeetingRecording/);
   assert.doesNotMatch(homeSource, /WebView/);
 });
 
