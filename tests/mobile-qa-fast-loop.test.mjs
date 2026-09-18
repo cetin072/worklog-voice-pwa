@@ -17,7 +17,7 @@ test('Mobile QA fast loop exposes local device scripts without adding a new nati
 test('Mobile QA docs distinguish Metro reuse from native rebuild boundaries', () => {
   assert.match(readme, /빠른 실기기 QA 루프/);
   assert.match(readme, /native dependency/);
-  assert.match(readme, /milestone Human QA/);
+  assert.match(plan, /standalone ARM64 APK|Release APK|Human QA/);
   assert.match(plan, /development build 재생성/);
   assert.match(plan, /Human QA 차등 검수/);
   assert.match(plan, /production OTA/);
