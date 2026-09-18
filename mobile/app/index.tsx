@@ -23,6 +23,7 @@ type AuthMode = 'signIn' | 'signUp';
 type DirectSaveFeedback = Readonly<{
   transcript: string;
   scheduleDetected: boolean;
+  scheduleCreated: boolean;
   scheduleId: string;
   dueStart: string;
 }>;
@@ -218,6 +219,7 @@ export default function HomeScreen() {
       const feedback = {
         transcript: saved.cleanTranscript?.trim() || original,
         scheduleDetected: Boolean(saved.scheduleDetected),
+        scheduleCreated: Boolean(saved.scheduleCreated),
         scheduleId: saved.scheduleId?.trim() || '',
         dueStart: saved.dueStart?.trim() || '',
       };
@@ -225,7 +227,7 @@ export default function HomeScreen() {
       setLastDirectSave(feedback);
       if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
       const dueLabel = formatSavedDue(feedback.dueStart);
-      setMessage(feedback.scheduleDetected
+      setMessage(feedback.scheduleCreated
         ? `업무 저장 완료 · 일정 생성됨${dueLabel ? ` · ${dueLabel}` : ''}`
         : '업무 저장 완료 · 브리핑에 반영했습니다.');
       setScreen('home');
@@ -350,7 +352,7 @@ export default function HomeScreen() {
       {lastDirectSave ? <View style={styles.saveFeedback}>
         <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>✅ 업무 저장 완료</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
         <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
-        {lastDirectSave.scheduleDetected ? <Text style={styles.saveFeedbackSchedule}>📅 일정 생성 완료{formatSavedDue(lastDirectSave.dueStart) ? ` · ${formatSavedDue(lastDirectSave.dueStart)}` : ''}</Text> : <Text style={styles.saveFeedbackMeta}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
+        {lastDirectSave.scheduleCreated ? <Text style={styles.saveFeedbackSchedule}>📅 일정 생성 완료{formatSavedDue(lastDirectSave.dueStart) ? ` · ${formatSavedDue(lastDirectSave.dueStart)}` : ''}</Text> : <Text style={styles.saveFeedbackMeta}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
       </View> : null}
 
       <View style={styles.card}>
@@ -397,7 +399,7 @@ export default function HomeScreen() {
     {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={() => void run(signOut)} /></View></View> : null}
     {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text>{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
-  </ScrollView>{screen === 'home' ? <View style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, releaseProvider: releaseQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing, updateSavedWorklog: (recordId, transcript) => updateWorklogTitle(session.access_token, recordId, transcript) }} /></View> : null}</View></View>;
+  </ScrollView>{screen === 'home' ? <View style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, releaseProvider: releaseQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing, updateSavedWorklog: (recordId, transcript) => updateWorklogTitle(session.access_token, recordId, transcript) }} /></View> : null}</View></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
