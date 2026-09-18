@@ -164,7 +164,7 @@ export function createUnconfiguredMobileTranscriptionProvider(provider: string):
   });
 }
 
-export async function transcribeQuickVoice(
+export async function transcribeMobileAudio(
   provider: MobileTranscriptionProvider,
   audio: MobileSttAudioInput,
   language = 'ko',
@@ -174,7 +174,7 @@ export async function transcribeQuickVoice(
   }
   if (!provider.configured) throw new Error('연결된 STT provider가 필요합니다.');
 
-  if (audio.sourceKind === 'mobile-recording') {
+  if (audio.sourceKind === 'mobile-recording' || audio.sourceKind === 'prepared-pcm-file') {
     if (!audio.uri.trim()) throw new Error('검증된 모바일 녹음 AudioInput이 필요합니다.');
   } else {
     if (!(audio.data instanceof ArrayBuffer) || !audio.data.byteLength) {
@@ -208,4 +208,13 @@ export async function transcribeQuickVoice(
     sourceAudioRef,
     createdAt: new Date(audio.createdAt).toISOString(),
   });
+}
+
+
+export async function transcribeQuickVoice(
+  provider: MobileTranscriptionProvider,
+  audio: MobileSttAudioInput,
+  language = 'ko',
+): Promise<MobileTranscriptV1> {
+  return transcribeMobileAudio(provider, audio, language);
 }
