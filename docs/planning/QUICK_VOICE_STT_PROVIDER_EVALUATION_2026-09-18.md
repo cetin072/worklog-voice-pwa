@@ -159,7 +159,20 @@ Still required before adoption:
 - Android device Korean 10/30-second entity benchmark
 - first model-load and transcription latency measurements
 - RAM, thermal, and battery observations
-- final APK delta for the end-to-end commit
+
+## 9. ARM64 release size checkpoint
+
+The end-to-end commit `cf10a2a` passed the Mobile App Android standalone
+release workflow (run `35300670285`). The uploaded ARM64 APK is
+**51,328,008 bytes (48.95 MiB)**.
+
+- STT-before baseline: 46,053,076 bytes
+- APK delta: +5,274,932 bytes (+11.45%)
+- Runtime model download: 77,691,713 bytes, separate from the APK
+
+This is a release-build size checkpoint, not a Korean quality/adoption
+decision. The runtime model remains download-on-demand and is not embedded in
+the APK.
 
 Until these measurements exist, the provider remains a PoC candidate rather
 than a permanent default.
