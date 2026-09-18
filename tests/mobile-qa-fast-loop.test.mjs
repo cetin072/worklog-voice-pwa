@@ -34,6 +34,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d/);
   assert.match(workflow, /bash mobile\/scripts\/android-runtime-smoke\.sh/);
   assert.match(smokeScript, /adb shell am start -W -n "\$ACTIVITY"/);
+  assert.match(smokeScript, /dumpsys window windows \| grep -q "mCurrentFocus\.\*\$PACKAGE"/);
   assert.match(smokeScript, /업무수첩\|연결을 확인해주세요/);
   assert.match(smokeScript, /Android runtime smoke PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);

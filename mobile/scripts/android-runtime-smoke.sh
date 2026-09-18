@@ -16,7 +16,9 @@ adb shell am start -W -n "$ACTIVITY"
 sleep 8
 
 adb shell pidof "$PACKAGE"
-adb shell dumpsys activity activities | grep -q "mResumedActivity.*$PACKAGE"
+# Android's activity dump label varies by platform release. Window focus is the
+# stable signal that the activity we launched is foregrounded on the emulator.
+adb shell dumpsys window windows | grep -q "mCurrentFocus.*$PACKAGE"
 
 adb shell uiautomator dump /sdcard/worklog-window.xml >/dev/null
 adb pull /sdcard/worklog-window.xml /tmp/worklog-window.xml >/dev/null
