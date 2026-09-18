@@ -8,6 +8,7 @@ export type WhisperRnTranscribeResult = Readonly<{
   result?: string;
   language?: string;
   isAborted?: boolean;
+  segments?: readonly Readonly<{ text?: string; t0?: number; t1?: number }>[];
 }>;
 
 export type WhisperRnContextLike = Readonly<{
@@ -81,8 +82,26 @@ export function createWhisperRnTranscriptionProvider(input: {
         throw new Error('whisper.rn 전사가 취소되었습니다.');
       }
 
+      const segmentText = (result.segments || [])
+        .map((segment) => typeof segment.text === 'string' ? segment.text.trim() : '')
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      const resultText = typeof result.result === 'string' ? result.result.trim() : '';
+
       return {
-        text: result.result,
+        text: segmentText && segmentText.length >= resultText.length ? segmentText : resultText,
+        segments: (result.segments || []).flatMap((segment) => {
+          const text = typeof segment.text === 'string' ? segment.text.trim() : '';
+          if (!text) return [];
+          const start = Number(segment.t0);
+          const end = Number(segment.t1);
+          return [{
+            text,
+            startMs: Number.isFinite(start) ? Math.max(0, Math.round(start * 10)) : undefined,
+            endMs: Number.isFinite(end) ? Math.max(0, Math.round(end * 10)) : undefined,
+          }];
+        }),
         language: result.language || language,
         model: input.model.descriptor.id,
       };
