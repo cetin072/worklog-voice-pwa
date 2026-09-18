@@ -37,3 +37,13 @@ test('settings mirrors the web grouping instead of rendering a flat action list'
   assert.match(mobileHome, /SettingsMenuItem/);
   assert.match(mobileHome, /settingsGroup/);
 });
+
+
+test('Quick Voice keeps the web-like transparent floating treatment and Home keeps Calendar truth visible', () => {
+  assert.match(mobileHome, /quickDockShell: \{ position: 'absolute'/);
+  assert.match(mobileHome, /backgroundColor: 'transparent'/);
+  assert.match(voiceDock, /quickDock: \{ backgroundColor: 'transparent'/);
+  assert.match(mobileHome, /showDeviceStatus/);
+  assert.match(scheduleActions, /compactOnly/);
+  assert.match(scheduleActions, /connectedCalendarLabel/);
+});
