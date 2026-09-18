@@ -9,6 +9,7 @@ const meetingRepo = fs.readFileSync('mobile/src/features/voice/meeting-recording
 const meetingProvider = fs.readFileSync('mobile/src/features/voice/meeting-recording-provider.tsx', 'utf8');
 const meetingBanner = fs.readFileSync('mobile/src/features/voice/meeting-recording-banner.tsx', 'utf8');
 const calendarSummary = fs.readFileSync('mobile/src/features/schedule/calendar-connection-summary.tsx', 'utf8');
+const deviceCalendar = fs.readFileSync('mobile/src/features/schedule/device-calendar.ts', 'utf8');
 const search = fs.readFileSync('mobile/src/features/search/work-record-search.tsx', 'utf8');
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 
@@ -44,9 +45,10 @@ test('Visible feature gate keeps direct input and schedule creation truth explic
 });
 
 test('Visible feature gate keeps Calendar state visible without requiring a schedule row', () => {
-  assert.match(calendarSummary, /Google Calendar 연결됨/);
-  assert.match(calendarSummary, /캘린더 권한 필요/);
-  assert.match(calendarSummary, /캘린더 미선택/);
+  assert.match(deviceCalendar, /Google Calendar 연결됨/);
+  assert.match(deviceCalendar, /캘린더 권한 필요/);
+  assert.match(deviceCalendar, /캘린더 미선택/);
+  assert.match(calendarSummary, /readCalendarConnectionStatus/);
   assert.match(home, /CalendarConnectionSummary compact/);
 });
 
