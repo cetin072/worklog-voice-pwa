@@ -111,3 +111,33 @@ local development build + Metro가 충분하지 않을 때만 다음을 추가 �
 - Human QA 차등검수 적용
 - 실패 시 기존 standalone APK workflow로 안전하게 fallback 가능
 
+
+
+## 9. CI Fast Path
+
+`.github/workflows/mobile-foundation.yml`도 같은 원칙을 따른다.
+
+PR에서 다음만 바뀐 경우:
+- `mobile/**/*.ts`
+- `mobile/**/*.tsx`
+- mobile contract tests
+- 일반 UI/상태 로직
+
+기본 실행:
+- Expo dependency compatibility
+- TypeScript
+- mobile contract tests
+
+standalone ARM64 APK는 자동으로 생략한다.
+
+다음 변경은 native build를 자동 실행한다.
+- `mobile/app.json`
+- `mobile/app.config.js|ts`
+- `mobile/package-lock.json`
+- `mobile/android/**`
+- `mobile/ios/**`
+- mobile workflow 자체
+
+또한 `workflow_dispatch`에서 사람이 명시적으로 Android APK build를 요청할 수 있다.
+
+이 정책은 release 검증을 없애는 것이 아니라 **작은 JS/UI 커밋마다 동일한 Gradle 빌드를 반복하지 않는 것**이 목적이다.
