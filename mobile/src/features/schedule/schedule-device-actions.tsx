@@ -7,6 +7,7 @@ import {
   listWritableCalendarOptions,
   removeScheduleFromCalendar,
   setPreferredCalendarId,
+  synchronizeMappedScheduleToCalendar,
   syncScheduleToCalendar,
   type WritableCalendarOption,
 } from './device-calendar';
@@ -59,7 +60,15 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
   useEffect(() => {
     if (!scheduleId) return;
     void (async () => {
-      await synchronizeScheduleReminders({ scheduleId, title: schedule.title || '업무수첩 일정', scheduleStartsAt: startsAt }).catch(() => undefined);
+      const deviceSchedule = {
+        scheduleId,
+        title: schedule.title || '업무수첩 일정',
+        startsAt,
+        allDay: schedule.allDay,
+        location: schedule.location,
+      };
+      await synchronizeScheduleReminders({ scheduleId, title: deviceSchedule.title, scheduleStartsAt: startsAt }).catch(() => undefined);
+      await synchronizeMappedScheduleToCalendar(deviceSchedule).catch(() => undefined);
       const [preferred, mapping, savedReminders] = await Promise.all([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]);
       setCalendarId(mapping?.calendarId || preferred);
       setCalendarSynced(Boolean(mapping));
