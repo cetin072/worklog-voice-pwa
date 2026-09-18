@@ -24,11 +24,14 @@ test('Mobile QA docs distinguish Metro reuse from native rebuild boundaries', ()
 });
 
 
-test('Mobile CI skips the standalone APK for JS-only PR changes and keeps an explicit manual build path', () => {
+test('Mobile CI bundles and runtime-smokes app code changes while retaining manual build control', () => {
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /Detect native Android build scope/);
-  assert.match(workflow, /needs\.changes\.outputs\.android == 'true'/);
-  assert.match(workflow, /mobile\/\(app\\\.json/);
-  assert.match(workflow, /package-lock\\\.json/);
+  assert.match(workflow, /mobile\/\(app\/\|src\//);
+  assert.match(workflow, /Bundle Android app with Metro/);
+  assert.match(workflow, /android-runtime-smoke:/);
+  assert.match(workflow, /android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d/);
+  assert.match(workflow, /adb shell am start -W -n com\.cetin072\.worklog\/\.MainActivity/);
+  assert.match(workflow, /grep -Eq '업무수첩\|연결을 확인해주세요'/);
   assert.match(workflow, /Build standalone ARM64 APK/);
 });
