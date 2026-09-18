@@ -6,21 +6,22 @@ import {
   type WhisperRnRuntime,
 } from './whisper-rn-runtime';
 
-// This is the multilingual tiny Whisper model. It is intentionally fetched at
-// first use rather than bundled into the APK. Its checksum is the SHA-256
-// published with the model artifact.
+// Human QA showed the multilingual tiny model returning unusable special-token
+// output on the target Samsung device. Keep the same replaceable whisper.rn
+// provider boundary but raise the default runtime model to multilingual base.
+// The model is still fetched on first use and remains outside the APK.
 export const QUICK_VOICE_WHISPER_MODEL = defineDownloadableSttModel({
   descriptor: defineSttModel({
-    id: 'whisper.cpp-tiny-multilingual',
+    id: 'whisper.cpp-base-multilingual',
     provider: 'whisper-rn',
-    version: 'ggml-tiny-be07e048e1e5',
+    version: 'ggml-base-60ed5bc3dd14',
     language: 'multilingual',
     format: 'ggml',
-    sha256: 'be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21',
-    downloadBytes: 77_691_713,
+    sha256: '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe',
+    downloadBytes: 147_951_465,
   }),
-  downloadUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
-  fileName: 'ggml-tiny-multilingual-be07e048e1e5.bin',
+  downloadUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+  fileName: 'ggml-base-multilingual-60ed5bc3dd14.bin',
 });
 
 export type QuickVoiceModelDownloadProgress = Readonly<{
