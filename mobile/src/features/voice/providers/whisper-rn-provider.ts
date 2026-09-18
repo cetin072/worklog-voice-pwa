@@ -23,6 +23,26 @@ export type WhisperRnContextLike = Readonly<{
   };
 }>;
 
+
+
+/**
+ * Expo AudioStream int16 is little-endian signed PCM. whisper.rn Whisper
+ * transcribeData consumes float32 PCM samples, so normalize at the provider
+ * boundary instead of leaking a provider-specific audio format into Core.
+ */
+export function pcm16LittleEndianToFloat32Buffer(data: ArrayBuffer) {
+  if (data.byteLength === 0 || data.byteLength % 2 !== 0) {
+    throw new Error('whisper.rn 변환용 PCM16 데이터 길이가 올바르지 않습니다.');
+  }
+
+  const input = new DataView(data);
+  const output = new Float32Array(data.byteLength / 2);
+  for (let index = 0; index < output.length; index += 1) {
+    output[index] = input.getInt16(index * 2, true) / 32_768;
+  }
+  return output.buffer;
+}
+
 /**
  * Adapter only. The concrete whisper.rn import/initWhisper call belongs in the
  * mobile composition root so replacing whisper.rn never changes Core/UI/Data Core.
@@ -47,10 +67,11 @@ export function createWhisperRnTranscriptionProvider(input: {
         throw new Error('whisper.rn Quick Voice PoC는 raw PCM 입력이 필요합니다.');
       }
       if (audio.sampleRate !== 16_000 || audio.channels !== 1 || audio.encoding !== 'int16') {
-        throw new Error('whisper.rn Quick Voice PoC는 16kHz mono int16 PCM만 허용합니다.');
+        throw new Error('whisper.rn Quick Voice PoC는 16kHz mono int16 PCM 입력만 허용합니다.');
       }
 
-      const task = input.context.transcribeData(audio.data, {
+      const whisperPcm = pcm16LittleEndianToFloat32Buffer(audio.data);
+      const task = input.context.transcribeData(whisperPcm, {
         language,
         ...(maxThreads ? { maxThreads } : {}),
       });
