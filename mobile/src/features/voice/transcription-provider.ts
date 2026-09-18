@@ -1,4 +1,7 @@
-import type { MobileRecordingAudioInput } from './audio-input';
+import {
+  trustedAudioLocalRef,
+  type MobileSttAudioInput,
+} from './audio-input';
 
 const PROVIDER_BRAND = Symbol('worklog.mobile.transcription-provider.v1');
 const MAX_TRANSCRIPT_TEXT = 500_000;
@@ -48,8 +51,8 @@ export type MobileTranscriptV1 = {
   createdAt: string;
 };
 
-type ProviderInput = {
-  audio: MobileRecordingAudioInput;
+export type MobileTranscriptionProviderInput = {
+  audio: MobileSttAudioInput;
   language: string;
 };
 
@@ -59,7 +62,7 @@ export type MobileTranscriptionProvider = Readonly<{
   provider: string;
   configured: boolean;
   [PROVIDER_BRAND]: true;
-  transcribe(input: ProviderInput): Promise<ProviderTranscriptResult>;
+  transcribe(input: MobileTranscriptionProviderInput): Promise<ProviderTranscriptResult>;
 }>;
 
 function cleanText(value: unknown, max: number, label: string) {
@@ -119,7 +122,7 @@ function providerName(value: string) {
 
 export function createConfiguredMobileTranscriptionProvider(config: {
   provider: string;
-  transcribe(input: ProviderInput): Promise<ProviderTranscriptResult>;
+  transcribe(input: MobileTranscriptionProviderInput): Promise<ProviderTranscriptResult>;
 }): MobileTranscriptionProvider {
   if (typeof config.transcribe !== 'function') throw new Error('STT transcribe 함수가 필요합니다.');
   return Object.freeze({
@@ -148,15 +151,23 @@ export function createUnconfiguredMobileTranscriptionProvider(provider: string):
 
 export async function transcribeQuickVoice(
   provider: MobileTranscriptionProvider,
-  audio: MobileRecordingAudioInput,
+  audio: MobileSttAudioInput,
   language = 'ko',
 ): Promise<MobileTranscriptV1> {
   if (!provider || provider[PROVIDER_BRAND] !== true || provider.service !== 'stt' || provider.operation !== 'transcribe') {
     throw new Error('업무수첩 Mobile STT Adapter로 생성된 provider가 필요합니다.');
   }
   if (!provider.configured) throw new Error('연결된 STT provider가 필요합니다.');
-  if (audio.sourceKind !== 'mobile-recording' || !audio.uri.trim()) {
-    throw new Error('검증된 모바일 녹음 AudioInput이 필요합니다.');
+
+  if (audio.sourceKind === 'mobile-recording') {
+    if (!audio.uri.trim()) throw new Error('검증된 모바일 녹음 AudioInput이 필요합니다.');
+  } else {
+    if (!(audio.data instanceof ArrayBuffer) || !audio.data.byteLength) {
+      throw new Error('검증된 Quick Voice PCM AudioInput이 필요합니다.');
+    }
+    if (!audio.localRef.trim() || audio.encoding !== 'int16') {
+      throw new Error('검증된 Quick Voice PCM 메타데이터가 필요합니다.');
+    }
   }
 
   const result = await provider.transcribe(Object.freeze({
@@ -167,7 +178,7 @@ export async function transcribeQuickVoice(
   const text = cleanText(result.text ?? result.transcript, MAX_TRANSCRIPT_TEXT, 'transcript.text');
   if (!text) throw new Error('STT 전사 원문이 필요합니다.');
 
-  const localRef = audio.uri.trim();
+  const localRef = trustedAudioLocalRef(audio);
   const sourceAudioRef = Object.freeze({ localRef });
   const segments = Object.freeze((result.segments || []).map((segment, index) => normalizeSegment(segment, index, localRef)));
 
