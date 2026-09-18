@@ -33,6 +33,42 @@ export function concatenatePcmBuffers(chunks: readonly Uint8Array[]) {
   return merged.buffer;
 }
 
+export function analyzePcm16Signal(data: ArrayBuffer) {
+  if (!data.byteLength || data.byteLength % 2 !== 0) {
+    throw new Error('Quick Voice PCM 신호 길이가 올바르지 않습니다.');
+  }
+
+  const view = new DataView(data);
+  const sampleCount = data.byteLength / 2;
+  let peak = 0;
+  let squareSum = 0;
+  let nonZeroSamples = 0;
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sample = view.getInt16(index * 2, true);
+    const normalized = sample / 32_768;
+    const absolute = Math.abs(normalized);
+    if (absolute > peak) peak = absolute;
+    squareSum += normalized * normalized;
+    if (Math.abs(sample) >= 32) nonZeroSamples += 1;
+  }
+
+  return Object.freeze({
+    peak,
+    rms: Math.sqrt(squareSum / sampleCount),
+    nonZeroRatio: nonZeroSamples / sampleCount,
+  });
+}
+
+export function assertQuickVoiceSignal(signal: { peak: number; rms: number; nonZeroRatio: number }) {
+  if (signal.peak < 0.002 && signal.rms < 0.0005) {
+    throw new Error('마이크 입력이 거의 감지되지 않았습니다. 마이크 가까이에서 다시 말씀해주세요.');
+  }
+  if (signal.nonZeroRatio < 0.01) {
+    throw new Error('녹음된 음성 신호가 너무 적습니다. 다시 말씀해주세요.');
+  }
+}
+
 export function assertQuickVoicePcmFormat(input: { sampleRate: number; channels: number }) {
   if (input.sampleRate !== QUICK_VOICE_PCM_SAMPLE_RATE) {
     throw new Error(`Quick Voice STT는 현재 16kHz PCM이 필요합니다. 이 기기의 실제 입력은 ${input.sampleRate}Hz입니다.`);
@@ -108,6 +144,8 @@ export function useQuickVoicePcmCapture() {
 
     const data = concatenatePcmBuffers(chunks.current);
     if (!data.byteLength) throw new Error('녹음된 PCM 데이터가 없습니다.');
+    const signal = analyzePcm16Signal(data);
+    assertQuickVoiceSignal(signal);
 
     const bytesPerSample = 2;
     const samplesPerChannel = data.byteLength / bytesPerSample / channels;
@@ -123,6 +161,7 @@ export function useQuickVoicePcmCapture() {
       sampleRate,
       channels,
       durationMs,
+      signal,
     });
   }
 
