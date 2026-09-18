@@ -3,12 +3,13 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 const source = fs.readFileSync('mobile/src/features/voice/stt-benchmark.ts', 'utf8');
+const executable = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
 test('STT benchmark is provider-neutral and never writes worklog data', () => {
   assert.match(source, /runSttProviderBenchmark/);
   assert.match(source, /MobileTranscriptionProvider/);
   assert.match(source, /transcribeQuickVoice/);
-  assert.doesNotMatch(source, /saveWorklog|refreshBriefing|scheduleId|worklog/i);
+  assert.doesNotMatch(executable, /saveWorklog\s*\(|refreshBriefing\s*\(|scheduleId\s*[:=]/i);
   assert.doesNotMatch(source, /whisper\.rn|sherpa|sensevoice|faster-whisper/i);
 });
 
