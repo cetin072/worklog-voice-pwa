@@ -38,7 +38,15 @@ test('Quick Voice transcript keeps Transcript V1-compatible text, segments, lang
 
 test('Quick Voice STT fails closed for unconfigured adapters and invalid transcript data', () => {
   assert.match(source, /if \(!provider\.configured\)/);
-  assert.match(source, /STT 전사 원문이 필요합니다/);
+  assert.match(source, /음성에서 사용할 수 있는 전사 문장을 찾지 못했습니다/);
   assert.match(source, /종료시각이 시작시각보다 빠릅니다/);
   assert.match(source, /confidence가 올바르지 않습니다/);
+});
+
+
+test('Quick Voice rejects Whisper special-token-only text before canonical save', () => {
+  assert.match(source, /normalizeTranscriptText/);
+  assert.match(source, /BLANK_AUDIO/);
+  assert.match(source, /SILENCE/);
+  assert.match(source, /\[\(\?:S\|BLANK_AUDIO/);
 });
