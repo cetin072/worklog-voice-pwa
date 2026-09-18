@@ -43,4 +43,7 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
   assert.match(homeSource, /오늘과 다가오는 일정/);
   assert.match(homeSource, /\+ 새 일정/);
   assert.match(homeSource, /briefingBuckets\.map/);
+  assert.match(homeSource, /tasks\.slice\(0, 3\)/);
+  assert.match(homeSource, /개 더 보기/);
+  assert.match(homeSource, /quickDockShell/);
 });
