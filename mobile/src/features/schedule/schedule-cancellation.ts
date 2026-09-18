@@ -23,6 +23,33 @@ async function savePendingScheduleIds(scheduleIds: readonly string[]) {
   return secureSessionStorage.setItem(PENDING_SCHEDULE_CLEANUP_KEY, JSON.stringify(unique));
 }
 
+function isMissingCancelRpc(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message || '';
+  return error?.code === 'PGRST202'
+    || /Could not find the function public\.cancel_my_schedule/i.test(message)
+    || /cancel_my_schedule.*schema cache/i.test(message);
+}
+
+async function cancelScheduleDirectly(client: PlatformSupabaseClient, scheduleId: string) {
+  const { data: userData, error: userError } = await client.auth.getUser();
+  const userId = userData.user?.id;
+  if (userError || !userId) throw new Error('일정 취소를 위한 로그인 정보를 확인하지 못했습니다.');
+
+  const { data, error } = await client
+    .from('schedules')
+    .update({ status: 'cancelled' })
+    .eq('id', scheduleId)
+    .eq('created_by_user_id', userId)
+    .in('status', ['confirmed', 'tentative'])
+    .select('id, status')
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || '일정을 취소하지 못했습니다.');
+  if (!data?.id || data.status !== 'cancelled') {
+    throw new Error('취소할 일정을 찾지 못했거나 이미 변경된 일정입니다.');
+  }
+}
+
 async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
   const results = await Promise.allSettled([
     removeScheduleFromCalendar(scheduleId),
@@ -41,7 +68,10 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
   if (!UUID_PATTERN.test(scheduleId)) throw new Error('취소할 일정 정보를 확인하지 못했습니다.');
 
   const { error } = await client.rpc('cancel_my_schedule', { p_schedule_id: scheduleId });
-  if (error) throw new Error(error.message || '일정을 취소하지 못했습니다.');
+  if (error) {
+    if (!isMissingCancelRpc(error)) throw new Error(error.message || '일정을 취소하지 못했습니다.');
+    await cancelScheduleDirectly(client, scheduleId);
+  }
 
   const pending = await pendingScheduleIds();
   await savePendingScheduleIds([...pending, scheduleId]);
