@@ -1,4 +1,3 @@
-import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import {
@@ -7,6 +6,7 @@ import {
   type SttModelResolver,
   validateResolvedSttModel,
 } from './stt-model';
+import { IncrementalSha256 } from './incremental-sha256';
 
 export type DownloadableSttModel = Readonly<{
   descriptor: SttModelDescriptor;
@@ -48,16 +48,19 @@ export function defineDownloadableSttModel(input: {
   });
 }
 
-function hex(buffer: ArrayBuffer) {
-  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
 async function sha256(file: File) {
-  // Android expo-crypto bridges TypedArray reliably; passing a bare
-  // ArrayBuffer can fail with "no ArrayBuffer attached".
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
-  return hex(digest);
+  const hasher = new IncrementalSha256();
+  const reader = file.readableStream().getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value?.byteLength) hasher.update(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return hasher.digestHex();
 }
 
 function matchingDescriptor(expected: SttModelDescriptor, actual: SttModelDescriptor) {
