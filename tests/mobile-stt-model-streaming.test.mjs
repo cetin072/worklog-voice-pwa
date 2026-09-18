@@ -17,3 +17,11 @@ test('incremental SHA-256 keeps bounded 64-byte internal buffering', () => {
   assert.match(hasher, /process\(data: Uint8Array/);
   assert.match(hasher, /digestHex\(\)/);
 });
+
+
+test('interrupted model downloads retry and hide raw native network exceptions', () => {
+  assert.match(downloader, /DOWNLOAD_ATTEMPTS = 3/);
+  assert.match(downloader, /for \(let attempt = 0; attempt < DOWNLOAD_ATTEMPTS/);
+  assert.match(downloader, /SocketException\|connection abort\|network\|timeout/);
+  assert.match(downloader, /음성 모델 다운로드가 중간에 끊겼습니다/);
+});
