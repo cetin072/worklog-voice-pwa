@@ -5,6 +5,7 @@ import test from 'node:test';
 const packageJson = JSON.parse(fs.readFileSync('mobile/package.json', 'utf8'));
 const appJson = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
 const recorderSource = fs.readFileSync('mobile/src/features/voice/voice-recorder-card.tsx', 'utf8');
+const meetingProviderSource = fs.readFileSync('mobile/src/features/voice/meeting-recording-provider.tsx', 'utf8');
 const audioInputSource = fs.readFileSync('mobile/src/features/voice/audio-input.ts', 'utf8');
 const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 
@@ -21,12 +22,12 @@ test('Expo config enables explicit background recording support', () => {
 });
 
 test('Recorder remains local-first and requests required permissions at user action', () => {
-  assert.match(recorderSource, /requestRecordingPermissionsAsync/);
-  assert.match(recorderSource, /requestNotificationPermissionsAsync/);
-  assert.match(recorderSource, /directory:\s*'document'/);
-  assert.match(recorderSource, /allowsBackgroundRecording:\s*true/);
-  assert.match(recorderSource, /recorder\.pause\(\)/);
-  assert.match(recorderSource, /recorder\.stop\(\)/);
+  assert.match(meetingProviderSource, /requestRecordingPermissionsAsync/);
+  assert.match(meetingProviderSource, /requestNotificationPermissionsAsync/);
+  assert.match(meetingProviderSource, /directory:\s*'document'/);
+  assert.match(meetingProviderSource, /allowsBackgroundRecording:\s*true/);
+  assert.match(meetingProviderSource, /recorder\.pause\(\)/);
+  assert.match(meetingProviderSource, /recorder\.stop\(\)/);
 });
 
 test('Recording output is adapted to common AudioInput metadata', () => {
@@ -64,4 +65,15 @@ test('Quick voice memo uses the home bottom dock and the canonical STT save path
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
   assert.match(homeSource, /saveWorklog: async \(transcript, options\)/);
   assert.match(homeSource, /refreshBriefing/);
+});
+
+
+test('Meeting recorder is owned by an app-wide session instead of the meeting card lifecycle', () => {
+  const rootLayout = fs.readFileSync('mobile/app/_layout.tsx', 'utf8');
+  const banner = fs.readFileSync('mobile/src/features/voice/meeting-recording-banner.tsx', 'utf8');
+  assert.match(rootLayout, /MeetingRecordingProvider/);
+  assert.match(recorderSource, /useMeetingRecordingSession/);
+  assert.doesNotMatch(recorderSource, /useAudioRecorder\(/);
+  assert.match(banner, /진행 중인 회의 녹음으로 돌아가기/);
+  assert.match(homeSource, /MeetingRecordingBanner onOpen=\{\(\) => setScreen\('meeting'\)\}/);
 });
