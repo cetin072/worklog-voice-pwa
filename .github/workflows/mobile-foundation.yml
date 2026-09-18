@@ -6,6 +6,13 @@ on:
       - 'mobile/**'
       - 'tests/mobile-*.test.mjs'
       - '.github/workflows/mobile-foundation.yml'
+  workflow_dispatch:
+    inputs:
+      build_android:
+        description: 'Build and upload standalone ARM64 APK'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: mobile-app-${{ github.ref }}
@@ -15,6 +22,42 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.scope.outputs.android }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scope
+        name: Detect native Android build scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FORCE_ANDROID: ${{ inputs.build_android }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "${FORCE_ANDROID:-true}" == "true" ]]; then
+              echo "android=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "android=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee /tmp/mobile-changed-files.txt
+
+          if grep -Eq '^(mobile/(app\.json|app\.config\.(js|ts)|package-lock\.json|android/|ios/)|\.github/workflows/mobile-foundation\.yml)' /tmp/mobile-changed-files.txt; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "android=false" >> "$GITHUB_OUTPUT"
+          fi
+
   typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -38,7 +81,10 @@ jobs:
         run: node --test tests/mobile-*.test.mjs
 
   android-standalone:
-    needs: typecheck
+    needs:
+      - changes
+      - typecheck
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
