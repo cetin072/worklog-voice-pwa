@@ -29,6 +29,10 @@ test('runtime model resolver removes incomplete downloads and promotes only SHA-
   assert.match(downloader, /CryptoDigestAlgorithm\.SHA256/);
   assert.match(downloader, /if \(finalFile\.exists\)/);
   assert.match(downloader, /actualHash === descriptor\.sha256/);
+  assert.ok(
+    downloader.indexOf('if (finalFile.exists)') < downloader.indexOf('Paths.availableDiskSpace'),
+    'verified cached model is reused before checking download free space',
+  );
   assert.match(downloader, /await downloaded\.move\(finalFile\)/);
   assert.match(downloader, /Paths\.availableDiskSpace/);
   assert.match(runtime, /downloadBytes/);
