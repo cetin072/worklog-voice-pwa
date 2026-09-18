@@ -54,5 +54,7 @@ test('Calendar and reminder management live under Settings while schedule summar
   assert.match(homeSource, /screen === 'scheduleSettings'/);
   assert.match(homeSource, /휴대폰\/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다/);
   assert.match(homeSource, /showDeviceActions/);
+  assert.match(homeSource, /showDeviceStatus/);
+  assert.match(homeSource, /compactOnly/);
   assert.doesNotMatch(homeSource, /type PrimaryTab/);
 });
