@@ -101,3 +101,17 @@ test('Home keeps global Calendar connection truth visible even when there are no
   assert.match(homeSource, /<CalendarConnectionSummary compact onPressManage/);
   assert.match(homeSource, /screen === 'scheduleSettings'/);
 });
+
+
+test('Settings has a standalone Calendar manager even when no schedule exists', () => {
+  const managerSource = fs.readFileSync('mobile/src/features/schedule/calendar-connection-manager.tsx', 'utf8');
+  assert.match(managerSource, /CalendarConnectionManager/);
+  assert.match(managerSource, /listWritableCalendarOptions/);
+  assert.match(managerSource, /setPreferredCalendarId/);
+  assert.match(managerSource, /연결·선택/);
+  assert.match(managerSource, /일정 저장 캘린더/);
+  assert.match(managerSource, /Google Calendar 기본 저장 대상으로 선택했습니다/);
+  assert.match(homeSource, /CalendarConnectionManager onChanged/);
+  assert.match(homeSource, /calendarConnectionVersion/);
+  assert.match(homeSource, /refreshKey=\{calendarConnectionVersion\}/);
+});
