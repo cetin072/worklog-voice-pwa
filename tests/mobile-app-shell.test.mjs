@@ -47,3 +47,12 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
   assert.match(homeSource, /개 더 보기/);
   assert.match(homeSource, /quickDockShell/);
 });
+
+
+test('Calendar and reminder management live under Settings while schedule summaries stay on Home', () => {
+  assert.match(homeSource, /일정·알림 설정/);
+  assert.match(homeSource, /screen === 'scheduleSettings'/);
+  assert.match(homeSource, /휴대폰\/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다/);
+  assert.match(homeSource, /showDeviceActions/);
+  assert.doesNotMatch(homeSource, /type PrimaryTab/);
+});
