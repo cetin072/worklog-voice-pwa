@@ -49,13 +49,17 @@ test('Briefing App Shell shows progress plus typed result or error next to the a
   assert.match(homeSource, /briefingError/);
 });
 
-test('Quick voice memo captures PCM then uses the injected canonical save and briefing path', () => {
+test('Quick voice memo uses the home bottom dock and the canonical STT save path', () => {
   assert.match(recorderSource, /useQuickVoicePcmCapture/);
   assert.match(recorderSource, /runQuickVoiceFastPath/);
-  assert.match(recorderSource, /녹음 종료 · 업무로 저장/);
+  assert.match(recorderSource, /quickDock/);
+  assert.match(recorderSource, /quickMic/);
+  assert.match(recorderSource, /종료·저장/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.doesNotMatch(recorderSource, /업무 기록·브리핑에는 자동 등록되지 않습니다/);
-  assert.match(recorderSource, /업무 직접 입력으로 기록하기/);
+  assert.match(recorderSource, /업무 직접 입력 열기/);
+  assert.match(homeSource, /quickDockShell/);
+  assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
   assert.match(homeSource, /saveWorklog: async \(transcript, options\)/);
   assert.match(homeSource, /refreshBriefing/);
 });
