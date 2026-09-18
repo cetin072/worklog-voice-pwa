@@ -126,6 +126,21 @@ export async function getScheduleCalendarMapping(scheduleId: string) {
 }
 
 /**
+ * Keeps an already-authorized schedule mapping aligned without prompting for
+ * Calendar permission. A user who never connected this schedule is untouched.
+ */
+export async function synchronizeMappedScheduleToCalendar(schedule: DeviceSchedule) {
+  const mapping = await getScheduleCalendarMapping(schedule.scheduleId);
+  if (!mapping) return { updated: false, reason: 'not-connected' as const };
+
+  const permission = await Calendar.getCalendarPermissions();
+  if (!permission.granted) return { updated: false, reason: 'permission' as const };
+
+  await syncScheduleToCalendar(mapping.calendarId, schedule);
+  return { updated: true, reason: 'synced' as const };
+}
+
+/**
  * Returns every schedule for which this device still owns a Calendar event.
  * Startup cancellation recovery uses these durable local references to repair
  * a server-cancelled schedule when the cancellation marker itself was lost.
