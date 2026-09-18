@@ -61,3 +61,11 @@ test('Meeting recording library can rename saved recordings for later identifica
   assert.match(library, /이름 저장/);
   assert.match(library, /renameMeetingRecording/);
 });
+
+
+test('Meeting playback restores speaker playback mode after recording', () => {
+  assert.match(library, /setAudioModeAsync/);
+  assert.match(library, /allowsRecording:\s*false/);
+  assert.match(library, /shouldRouteThroughEarpiece:\s*false/);
+  assert.match(library, /playsInSilentMode:\s*true/);
+});
