@@ -191,7 +191,7 @@ export default function HomeScreen() {
   }
 
   function clearMessage() {
-    clearMessage();
+    setMessage('');
     setMessageTone('info');
   }
 
