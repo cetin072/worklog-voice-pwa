@@ -1,4 +1,4 @@
-import type { MobileRecordingAudioInput } from './audio-input';
+import type { MobileSttAudioInput } from './audio-input';
 import {
   transcribeQuickVoice,
   type MobileTranscriptV1,
@@ -48,7 +48,7 @@ export function createQuickVoiceClientRequestId(now = Date.now(), random = Math.
  */
 export async function runQuickVoiceFastPath<TSave>(input: {
   provider: MobileTranscriptionProvider;
-  audio: MobileRecordingAudioInput;
+  audio: MobileSttAudioInput;
   clientRequestId: string;
   saveWorklog(transcript: string, options: {
     clientRequestId: string;
