@@ -141,6 +141,7 @@ export type SavedWorklog = Readonly<{
   dataCoreWorkRecordId?: string;
   cleanTranscript?: string;
   scheduleDetected?: boolean;
+  scheduleCreated?: boolean;
   scheduleId?: string;
   dueStart?: string;
 }>;
