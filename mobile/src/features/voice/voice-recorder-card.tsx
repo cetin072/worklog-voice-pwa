@@ -4,6 +4,8 @@ import { Button, Platform, Pressable, StyleSheet, Text, TextInput, View } from '
 
 import { createMobileRecordingAudioInput, type MobileRecordingAudioInput, type QuickVoicePcmAudioInput } from '@/src/features/voice/audio-input';
 import { createQuickVoiceClientRequestId, QuickVoiceFlowError, runQuickVoiceFastPath, saveQuickVoiceTranscript, type QuickVoiceFlowTimings } from '@/src/features/voice/quick-voice-flow';
+import { MeetingRecordingLibrary } from '@/src/features/voice/meeting-recording-library';
+import { rememberMeetingRecording } from '@/src/features/voice/meeting-recordings';
 import { useQuickVoicePcmCapture } from '@/src/features/voice/quick-voice-pcm';
 import type { MobileTranscriptV1, MobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { mobileTheme } from '@/src/ui/theme';
@@ -40,6 +42,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   const [quickPhase, setQuickPhase] = useState<QuickVoicePhase>('idle');
   const [recordingStartedAt, setRecordingStartedAt] = useState<string | null>(null);
   const [completed, setCompleted] = useState<MobileRecordingAudioInput | null>(null);
+  const [meetingLibraryVersion, setMeetingLibraryVersion] = useState(0);
   const [quickAudio, setQuickAudio] = useState<QuickVoicePcmAudioInput | null>(null);
   const [quickTranscript, setQuickTranscript] = useState<MobileTranscriptV1 | null>(null);
   const [quickSave, setQuickSave] = useState<QuickVoiceSaveResult | null>(null);
@@ -134,7 +137,10 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     try {
       await recorder.stop(); const status = await recorder.getStatus(); const uri = recorder.uri || status.url;
       if (!uri) throw new Error('녹음은 종료됐지만 로컬 파일 경로를 확인하지 못했습니다.');
-      setCompleted(createMobileRecordingAudioInput({ uri, durationMs: status.durationMillis || recorderState.durationMillis, createdAt: recordingStartedAt || undefined }));
+      const recording = createMobileRecordingAudioInput({ uri, durationMs: status.durationMillis || recorderState.durationMillis, createdAt: recordingStartedAt || undefined });
+      rememberMeetingRecording(recording);
+      setCompleted(recording);
+      setMeetingLibraryVersion((value) => value + 1);
       setRecordingStartedAt(null); setPhase('idle'); await setAudioModeAsync({ allowsRecording: false, allowsBackgroundRecording: false });
     } catch (nextError) { setPhase('idle'); setError(messageOf(nextError, '녹음을 종료하지 못했습니다.')); }
   }
@@ -197,7 +203,8 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     {meetingActive ? <Button title={phase === 'stopping' ? '저장 중...' : '녹음 종료'} disabled={phase === 'stopping'} onPress={() => void stopMeetingRecording()} /> : null}
     {meetingActive ? <Text style={styles.notice}>Android에서는 녹음 중 시스템의 지속 알림이 표시됩니다.</Text> : null}
     {error ? <Text style={styles.errorText}>{error}</Text> : null}
-    {completed ? <View style={styles.result}><Text style={styles.resultTitle}>✅ 회의 녹음 파일 저장 완료</Text><Text style={styles.meta}>파일: {completed.fileName}</Text><Text style={styles.meta}>길이: {formatDuration(completed.durationMs)}</Text><Text style={styles.meta}>형식: {completed.mimeType}</Text><Text style={styles.notice}>회의 녹음 파일은 기기에 보존됐습니다.</Text></View> : null}
+    {completed ? <View style={styles.result}><Text style={styles.resultTitle}>✅ 회의 녹음 파일 저장 완료</Text><Text style={styles.meta}>파일: {completed.fileName}</Text><Text style={styles.meta}>길이: {formatDuration(completed.durationMs)}</Text><Text style={styles.meta}>형식: {completed.mimeType}</Text><Text style={styles.notice}>회의 녹음 파일은 기기에 보존됐습니다. 아래 목록에서 바로 재생할 수 있습니다.</Text></View> : null}
+    <MeetingRecordingLibrary refreshToken={meetingLibraryVersion} />
   </View>;
 }
 
