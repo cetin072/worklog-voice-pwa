@@ -50,3 +50,14 @@ test('Meeting recording session survives route-level screen changes and stays vi
   assert.match(banner, /meeting\.durationMs/);
   assert.match(banner, /회의 녹음 중/);
 });
+
+
+test('Meeting recording library can rename saved recordings for later identification', () => {
+  assert.match(repository, /renameMeetingRecording/);
+  assert.match(repository, /title: string/);
+  assert.match(repository, /title: ''/);
+  assert.match(library, /이름 바꾸기/);
+  assert.match(library, /회의 녹음 이름/);
+  assert.match(library, /이름 저장/);
+  assert.match(library, /renameMeetingRecording/);
+});
