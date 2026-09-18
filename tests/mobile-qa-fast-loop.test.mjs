@@ -28,6 +28,8 @@ test('Mobile QA docs distinguish Metro reuse from native rebuild boundaries', ()
 test('Mobile CI bundles and runtime-smokes app code changes while retaining manual build control', () => {
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /Detect native Android build scope/);
+  assert.match(workflow, /'mobile\/app\/\*\*'/);
+  assert.match(workflow, /'mobile\/src\/\*\*'/);
   assert.match(workflow, /mobile\/\(app\/\|src\//);
   assert.match(workflow, /Bundle Android app with Metro/);
   assert.match(workflow, /android-runtime-smoke:/);

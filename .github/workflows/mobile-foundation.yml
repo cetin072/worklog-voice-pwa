@@ -4,6 +4,14 @@ on:
   pull_request:
     paths:
       - 'mobile/**'
+      - 'mobile/app/**'
+      - 'mobile/src/**'
+      - 'mobile/android/**'
+      - 'mobile/ios/**'
+      - 'mobile/app.json'
+      - 'mobile/app.config.js'
+      - 'mobile/app.config.ts'
+      - 'mobile/package-lock.json'
       - 'tests/mobile-*.test.mjs'
       - '.github/workflows/mobile-foundation.yml'
   workflow_dispatch:

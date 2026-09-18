@@ -7,11 +7,12 @@ const flow = fs.readFileSync('mobile/src/features/voice/quick-voice-flow.ts', 'u
 const downloader = fs.readFileSync('mobile/src/features/voice/stt-model-download.ts', 'utf8');
 const runtime = fs.readFileSync('mobile/src/features/voice/providers/whisper-rn-quick-voice-runtime.ts', 'utf8');
 
-test('Quick Voice UI stays provider-neutral while executing capture, STT, canonical save, and briefing refresh', () => {
+test('Quick Voice source contract stays provider-neutral while separating capture, STT confirmation, save, and briefing refresh', () => {
   assert.match(card, /ensureProvider\(onProgress\?: .*Promise<MobileTranscriptionProvider>/);
   assert.match(card, /useQuickVoicePcmCapture/);
-  assert.match(card, /runQuickVoiceFastPath/);
+  assert.match(card, /transcribeQuickVoiceCapture/);
   assert.match(card, /saveQuickVoiceTranscript/);
+  assert.match(card, /전사문을 확인한 뒤 저장하세요/);
   assert.match(card, /clientRequestId/);
   assert.doesNotMatch(card, /whisper\.rn|initWhisper|transcribeData/);
 });
@@ -23,8 +24,9 @@ test('Quick Voice retries save with its retained transcript and retries briefing
   assert.match(card, /await quickVoice\.refreshBriefing\(\)/);
 });
 
-test('runtime model resolver removes incomplete downloads and promotes only SHA-256 verified files', () => {
-  assert.match(downloader, /File\.downloadFileAsync/);
+test('runtime model resolver preserves resumable partial downloads and promotes only SHA-256 verified files', () => {
+  assert.match(downloader, /fetch\(input\.url/);
+  assert.match(downloader, /Range: `bytes=\$\{resumeFrom\}-`/);
   assert.match(downloader, /\.partial/);
   assert.match(downloader, /IncrementalSha256/);
   assert.match(downloader, /readableStream\(\)\.getReader\(\)/);

@@ -4,6 +4,9 @@ import test from 'node:test';
 
 const source = fs.readFileSync('mobile/src/features/voice/transcription-provider.ts', 'utf8');
 const audioInput = fs.readFileSync('mobile/src/features/voice/audio-input.ts', 'utf8');
+const whisperProvider = fs.readFileSync('mobile/src/features/voice/providers/whisper-rn-provider.ts', 'utf8');
+const flow = fs.readFileSync('mobile/src/features/voice/quick-voice-flow.ts', 'utf8');
+const recorder = fs.readFileSync('mobile/src/features/voice/voice-recorder-card.tsx', 'utf8');
 
 test('Quick Voice STT contract stays provider-neutral behind an explicit stt/transcribe boundary', () => {
   assert.match(source, /service: 'stt'/);
@@ -48,5 +51,25 @@ test('Quick Voice rejects Whisper special-token-only text before canonical save'
   assert.match(source, /normalizeTranscriptText/);
   assert.match(source, /BLANK_AUDIO/);
   assert.match(source, /SILENCE/);
-  assert.match(source, /\[\(\?:S\|BLANK_AUDIO/);
+  assert.match(source, /_BEG_/);
+  assert.match(source, /_TT_\\d\+/);
+  assert.match(source, /음악\|박수\|웃음/);
+  assert.match(source, /♪\+/);
+  assert.match(source, /flatMap\(\(segment, index\)/);
+  assert.match(whisperProvider, /normalizeWhisperText/);
+});
+
+test('Quick Voice requires explicit transcript confirmation before the persistence path', () => {
+  assert.match(flow, /transcribeQuickVoiceCapture/);
+  assert.match(recorder, /setQuickPhase\('review'\)/);
+  assert.match(recorder, /title="저장"/);
+  assert.match(recorder, /title="다시 녹음"/);
+  assert.match(recorder, /title="버리기"/);
+  assert.match(recorder, /saveQuickVoiceTranscript\(\{/);
+  assert.doesNotMatch(recorder, /runQuickVoiceFastPath/);
+});
+
+test('Quick Voice runtime is not released merely because its home card unmounts', () => {
+  assert.doesNotMatch(recorder, /releaseProvider/);
+  assert.doesNotMatch(recorder, /useEffect\(\(\) => \(\) =>/);
 });

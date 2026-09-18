@@ -1,5 +1,6 @@
 import {
   createConfiguredMobileTranscriptionProvider,
+  normalizeTranscriptText,
   type MobileTranscriptionProvider,
 } from '../transcription-provider';
 import type { ResolvedSttModel } from '../stt-model';
@@ -63,17 +64,21 @@ function normalizedWhisperResult(
     throw new Error('whisper.rn 전사가 취소되었습니다.');
   }
 
+  const normalizeWhisperText = (value: unknown) => {
+    try { return normalizeTranscriptText(value); }
+    catch { return ''; }
+  };
   const segmentText = (result.segments || [])
-    .map((segment) => typeof segment.text === 'string' ? segment.text.trim() : '')
+    .map((segment) => normalizeWhisperText(segment.text))
     .filter(Boolean)
     .join(' ')
     .trim();
-  const resultText = typeof result.result === 'string' ? result.result.trim() : '';
+  const resultText = normalizeWhisperText(result.result);
 
   return {
     text: segmentText && segmentText.length >= resultText.length ? segmentText : resultText,
     segments: (result.segments || []).flatMap((segment) => {
-      const text = typeof segment.text === 'string' ? segment.text.trim() : '';
+      const text = normalizeWhisperText(segment.text);
       if (!text) return [];
       const start = Number(segment.t0);
       const end = Number(segment.t1);

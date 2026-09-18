@@ -71,13 +71,19 @@ function cleanText(value: unknown, max: number, label: string) {
   return text;
 }
 
-export function normalizeTranscriptText(value: unknown) {
+function normalizeTranscriptFragment(value: unknown) {
   const raw = cleanText(value, MAX_TRANSCRIPT_TEXT, 'transcript.text');
-  const withoutWhisperControlTokens = raw
+  return raw
     .replace(/<\|[^|>]+\|>/g, ' ')
-    .replace(/\[(?:S|BLANK_AUDIO|SILENCE|MUSIC|APPLAUSE|LAUGHTER)\]/gi, ' ')
+    .replace(/\[\s*(?:_BEG_|BEG|_TT_\d+|S|BLANK_AUDIO|SILENCE|MUSIC|APPLAUSE|LAUGHTER|음악|박수|웃음)\s*\]/gi, ' ')
+    .replace(/\(\s*(?:silence|music|applause|laughter|음악|박수|웃음)\s*\)/gi, ' ')
+    .replace(/♪+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+export function normalizeTranscriptText(value: unknown) {
+  const withoutWhisperControlTokens = normalizeTranscriptFragment(value);
 
   if (!withoutWhisperControlTokens) {
     throw new Error('음성에서 사용할 수 있는 전사 문장을 찾지 못했습니다. 다시 말씀해주세요.');
@@ -99,9 +105,11 @@ function milliseconds(milliseconds: unknown, seconds: unknown) {
   return value === null ? null : value * 1000;
 }
 
-function normalizeSegment(segment: ProviderSegment, index: number, localRef: string): MobileTranscriptSegment {
-  const text = cleanText(segment.text ?? segment.transcript, MAX_SEGMENT_TEXT, `segments[${index}].text`);
-  if (!text) throw new Error(`segments[${index}].text가 필요합니다.`);
+function normalizeSegment(segment: ProviderSegment, index: number, localRef: string): MobileTranscriptSegment | null {
+  const rawText = cleanText(segment.text ?? segment.transcript, MAX_SEGMENT_TEXT, `segments[${index}].text`);
+  if (!rawText) throw new Error(`segments[${index}].text가 필요합니다.`);
+  const text = normalizeTranscriptFragment(rawText);
+  if (!text) return null;
 
   const startMs = milliseconds(segment.startMs, segment.startSeconds);
   const endMs = milliseconds(segment.endMs, segment.endSeconds);
@@ -194,7 +202,10 @@ export async function transcribeMobileAudio(
 
   const localRef = trustedAudioLocalRef(audio);
   const sourceAudioRef = Object.freeze({ localRef });
-  const segments = Object.freeze((result.segments || []).map((segment, index) => normalizeSegment(segment, index, localRef)));
+  const segments = Object.freeze((result.segments || []).flatMap((segment, index) => {
+    const normalized = normalizeSegment(segment, index, localRef);
+    return normalized ? [normalized] : [];
+  }));
 
   return Object.freeze({
     schemaVersion: 'v1' as const,

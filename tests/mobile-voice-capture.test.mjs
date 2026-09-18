@@ -52,12 +52,15 @@ test('Briefing App Shell shows progress plus typed result or error next to the a
   assert.match(homeSource, /briefingError/);
 });
 
-test('Quick voice memo uses the home bottom dock and the canonical STT save path', () => {
+test('Quick voice memo uses the home bottom dock and requires confirmation before the canonical save path', () => {
   assert.match(recorderSource, /useQuickVoicePcmCapture/);
-  assert.match(recorderSource, /runQuickVoiceFastPath/);
+  assert.match(recorderSource, /transcribeQuickVoiceCapture/);
+  assert.match(recorderSource, /saveQuickVoiceTranscript/);
+  assert.match(recorderSource, /전사문을 확인한 뒤 저장하세요/);
+  assert.doesNotMatch(recorderSource, /runQuickVoiceFastPath/);
   assert.match(recorderSource, /quickDock/);
   assert.match(recorderSource, /quickMic/);
-  assert.match(recorderSource, /종료·저장/);
+  assert.match(recorderSource, /종료·확인/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.doesNotMatch(recorderSource, /업무 기록·브리핑에는 자동 등록되지 않습니다/);
   assert.match(recorderSource, /업무 직접 입력 열기/);

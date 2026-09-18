@@ -19,9 +19,13 @@ test('incremental SHA-256 keeps bounded 64-byte internal buffering', () => {
 });
 
 
-test('interrupted model downloads retry and hide raw native network exceptions', () => {
+test('interrupted model downloads preserve partial bytes, resume with Range, and hide raw network exceptions', () => {
   assert.match(downloader, /DOWNLOAD_ATTEMPTS = 3/);
   assert.match(downloader, /for \(let attempt = 0; attempt < DOWNLOAD_ATTEMPTS/);
-  assert.match(downloader, /SocketException\|connection abort\|network\|timeout/);
+  assert.match(downloader, /Range: `bytes=\$\{resumeFrom\}-`/);
+  assert.match(downloader, /partialFile\.write\(value, \{ append: bytesWritten > 0 \}\)/);
+  assert.match(downloader, /ModelDownloadIntegrityError/);
+  assert.match(downloader, /if \(!isRetryableDownloadError\(error\)\) break/);
+  assert.match(downloader, /connection reset\|network\|timeout/);
   assert.match(downloader, /음성 모델 다운로드가 중간에 끊겼습니다/);
 });

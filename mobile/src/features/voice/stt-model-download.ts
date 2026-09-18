@@ -75,6 +75,68 @@ function matchingDescriptor(expected: SttModelDescriptor, actual: SttModelDescri
     && expected.sha256 === actual.sha256;
 }
 
+class ModelDownloadIntegrityError extends Error {}
+class ModelDownloadHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`음성 모델 서버가 HTTP ${status}를 반환했습니다.`);
+  }
+}
+
+function responseTotalBytes(response: Response, resumeFrom: number) {
+  const contentRange = response.headers.get('content-range');
+  const rangeTotal = contentRange?.match(/\/(\d+)$/)?.[1];
+  if (rangeTotal) return Number(rangeTotal);
+  const contentLength = Number(response.headers.get('content-length'));
+  return Number.isFinite(contentLength) && contentLength >= 0 ? resumeFrom + contentLength : null;
+}
+
+async function downloadPartialWithRange(input: {
+  url: string;
+  partialFile: File;
+  expectedBytes: number | null;
+  onProgress?: (bytesWritten: number, totalBytes: number | null) => void;
+}) {
+  let resumeFrom = input.partialFile.exists ? input.partialFile.size : 0;
+  const response = await fetch(input.url, {
+    headers: resumeFrom > 0 ? { Range: `bytes=${resumeFrom}-` } : undefined,
+  });
+  if (!response.ok) throw new ModelDownloadHttpError(response.status);
+
+  // A server that does not honour Range may return the entire object. Start a
+  // fresh partial in that case; never append a duplicate payload.
+  if (resumeFrom > 0 && response.status !== 206) {
+    input.partialFile.delete();
+    resumeFrom = 0;
+  }
+
+  const body = response.body;
+  if (!body) throw new Error('음성 모델 다운로드 응답 본문이 없습니다.');
+
+  const totalBytes = responseTotalBytes(response, resumeFrom) ?? input.expectedBytes;
+  let bytesWritten = resumeFrom;
+  input.onProgress?.(bytesWritten, totalBytes);
+  const reader = body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+      input.partialFile.write(value, { append: bytesWritten > 0 });
+      bytesWritten += value.byteLength;
+      input.onProgress?.(bytesWritten, totalBytes);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return input.partialFile;
+}
+
+function isRetryableDownloadError(error: unknown) {
+  if (error instanceof ModelDownloadIntegrityError) return false;
+  if (error instanceof ModelDownloadHttpError) return error.status >= 500 || error.status === 408 || error.status === 429;
+  return true;
+}
+
 /**
  * Generic Expo-backed model cache. The download is written to a temporary
  * filename and only promoted after the expected SHA-256 has been verified.
@@ -121,37 +183,50 @@ export function createExpoSttModelResolver(input: {
         throw new Error('음성 모델을 받을 저장 공간이 부족합니다.');
       }
 
+      // A completed partial can be promoted without another network request.
+      if (partialFile.exists && expectedBytes !== null && partialFile.size === expectedBytes) {
+        const partialHash = await sha256(partialFile);
+        if (partialHash === descriptor.sha256) {
+          await partialFile.move(finalFile);
+          return validateResolvedSttModel(descriptor, { descriptor, localPath: finalFile.uri });
+        }
+        throw new ModelDownloadIntegrityError('받은 음성 모델의 SHA-256 검증에 실패했습니다.');
+      }
+
       let lastDownloadError: unknown = null;
       for (let attempt = 0; attempt < DOWNLOAD_ATTEMPTS; attempt += 1) {
         if (attempt > 0) await delay(DOWNLOAD_RETRY_DELAY_MS[attempt] || 2000);
-        if (partialFile.exists) partialFile.delete();
 
         try {
-          const downloaded = await File.downloadFileAsync(registered.downloadUrl, partialFile, {
-            onProgress: ({ bytesWritten, totalBytes }) => input.onProgress?.({
+          const downloaded = await downloadPartialWithRange({
+            url: registered.downloadUrl,
+            partialFile,
+            expectedBytes,
+            onProgress: (bytesWritten, totalBytes) => input.onProgress?.({
               modelId: descriptor.id,
               bytesWritten,
-              totalBytes: totalBytes > 0 ? totalBytes : expectedBytes,
+              totalBytes: totalBytes && totalBytes > 0 ? totalBytes : expectedBytes,
             }),
           });
           if (expectedBytes !== null && downloaded.size !== expectedBytes) {
-            throw new Error('받은 음성 모델 크기가 예상값과 다릅니다.');
+            throw new ModelDownloadIntegrityError('받은 음성 모델 크기가 예상값과 다릅니다.');
           }
           const actualHash = await sha256(downloaded);
           if (actualHash !== descriptor.sha256) {
-            throw new Error('받은 음성 모델의 SHA-256 검증에 실패했습니다.');
+            throw new ModelDownloadIntegrityError('받은 음성 모델의 SHA-256 검증에 실패했습니다.');
           }
           await downloaded.move(finalFile);
           return validateResolvedSttModel(descriptor, { descriptor, localPath: finalFile.uri });
         } catch (error) {
           lastDownloadError = error;
-          if (partialFile.exists) partialFile.delete();
-          if (finalFile.exists) finalFile.delete();
+          if (!isRetryableDownloadError(error)) break;
         }
       }
 
       const detail = lastDownloadError instanceof Error ? lastDownloadError.message : '';
-      if (/SocketException|connection abort|network|timeout|downloadFileAsync/i.test(detail)) {
+      if (lastDownloadError instanceof ModelDownloadIntegrityError) throw lastDownloadError;
+      if (lastDownloadError instanceof ModelDownloadHttpError) throw lastDownloadError;
+      if (/SocketException|connection abort|connection reset|network|timeout|abort|fetch/i.test(detail)) {
         throw new Error('음성 모델 다운로드가 중간에 끊겼습니다. 인터넷 연결을 확인한 뒤 음성 기록을 다시 눌러주세요.');
       }
       throw lastDownloadError instanceof Error ? lastDownloadError : new Error('음성 모델을 받지 못했습니다. 잠시 후 다시 시도해주세요.');

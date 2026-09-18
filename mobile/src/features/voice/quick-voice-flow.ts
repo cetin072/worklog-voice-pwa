@@ -36,6 +36,11 @@ export type QuickVoiceFastPathResult<TSave = unknown> = Readonly<{
   timings: QuickVoiceFlowTimings;
 }>;
 
+export type QuickVoiceTranscriptionResult = Readonly<{
+  transcript: MobileTranscriptV1;
+  transcribeMs: number;
+}>;
+
 function errorOf(value: unknown, fallback: string) {
   return value instanceof Error ? value : new Error(fallback);
 }
@@ -45,6 +50,33 @@ export function createQuickVoiceClientRequestId(now = Date.now(), random = Math.
     .toString(36)
     .padStart(8, '0');
   return `mobile-quick-voice-${now}-${randomPart}`;
+}
+
+/**
+ * Transcribes a captured Quick Voice input without crossing the persistence
+ * boundary. UI must present this transcript for user confirmation before it
+ * calls saveQuickVoiceTranscript.
+ */
+export async function transcribeQuickVoiceCapture(input: {
+  provider: MobileTranscriptionProvider;
+  audio: MobileSttAudioInput;
+  language?: string;
+}): Promise<QuickVoiceTranscriptionResult> {
+  try {
+    const transcribeStartedAt = Date.now();
+    const transcript = await transcribeQuickVoice(
+      input.provider,
+      input.audio,
+      input.language || 'ko',
+    );
+    return Object.freeze({
+      transcript,
+      transcribeMs: Math.max(0, Date.now() - transcribeStartedAt),
+    });
+  } catch (causeValue) {
+    const cause = errorOf(causeValue, '음성을 전사하지 못했습니다.');
+    throw new QuickVoiceFlowError('transcribe', cause.message, causeValue);
+  }
 }
 
 /**
@@ -73,21 +105,8 @@ export async function runQuickVoiceFastPath<TSave>(input: {
     throw new Error('Quick Voice clientRequestId가 필요합니다.');
   }
 
-  let transcript: MobileTranscriptV1;
-  let transcribeMs = 0;
-  try {
-    input.onProgress?.('transcribing');
-    const transcribeStartedAt = Date.now();
-    transcript = await transcribeQuickVoice(
-      input.provider,
-      input.audio,
-      input.language || 'ko',
-    );
-    transcribeMs = Math.max(0, Date.now() - transcribeStartedAt);
-  } catch (causeValue) {
-    const cause = errorOf(causeValue, '음성을 전사하지 못했습니다.');
-    throw new QuickVoiceFlowError('transcribe', cause.message, causeValue);
-  }
+  input.onProgress?.('transcribing');
+  const { transcript, transcribeMs } = await transcribeQuickVoiceCapture(input);
 
   return saveQuickVoiceTranscript({
     transcript,
