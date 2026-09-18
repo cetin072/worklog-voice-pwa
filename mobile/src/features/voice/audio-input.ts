@@ -7,6 +7,12 @@ export type MobileRecordingAudioInput = {
   createdAt: string;
 };
 
+export type QuickVoicePcmSignal = Readonly<{
+  peak: number;
+  rms: number;
+  nonZeroRatio: number;
+}>;
+
 export type QuickVoicePcmAudioInput = {
   sourceKind: 'quick-voice-pcm';
   localRef: string;
@@ -16,6 +22,7 @@ export type QuickVoicePcmAudioInput = {
   encoding: 'int16';
   durationMs: number;
   createdAt: string;
+  signal: QuickVoicePcmSignal;
 };
 
 export type MobileSttAudioInput = MobileRecordingAudioInput | QuickVoicePcmAudioInput;
@@ -74,6 +81,7 @@ export function createQuickVoicePcmAudioInput(input: {
   sampleRate: number;
   channels: number;
   durationMs: number;
+  signal: QuickVoicePcmSignal;
   createdAt?: string;
 }): QuickVoicePcmAudioInput {
   const localRef = input.localRef.trim();
@@ -97,6 +105,11 @@ export function createQuickVoicePcmAudioInput(input: {
     encoding: 'int16' as const,
     durationMs: Math.max(0, Math.round(input.durationMs)),
     createdAt: normalizedCreatedAt(input.createdAt),
+    signal: Object.freeze({
+      peak: Math.max(0, Math.min(1, Number(input.signal.peak) || 0)),
+      rms: Math.max(0, Math.min(1, Number(input.signal.rms) || 0)),
+      nonZeroRatio: Math.max(0, Math.min(1, Number(input.signal.nonZeroRatio) || 0)),
+    }),
   });
 }
 
