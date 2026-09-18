@@ -46,7 +46,7 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(scheduleActionsSource, /connectedCalendarLabel/);
   assert.match(scheduleActionsSource, /compactOnly/);
   assert.match(homeSource, /showDeviceStatus/);
-  assert.match(scheduleActionsSource, /synchronizeMappedScheduleToCalendar/);
+  assert.match(scheduleActionsSource, /synchronizeScheduleToPreferredCalendar/);
   assert.match(calendarSource, /getCalendarPermissions/);
   assert.match(calendarSource, /reason: 'not-connected'/);
   assert.match(scheduleActionsSource, /선택한 캘린더로 이동/);
@@ -114,4 +114,13 @@ test('Settings has a standalone Calendar manager even when no schedule exists', 
   assert.match(homeSource, /CalendarConnectionManager onChanged/);
   assert.match(homeSource, /calendarConnectionVersion/);
   assert.match(homeSource, /refreshKey=\{calendarConnectionVersion\}/);
+});
+
+
+test('new schedules auto-sync into the selected preferred Calendar', () => {
+  assert.match(calendarSource, /synchronizeScheduleToPreferredCalendar/);
+  assert.match(calendarSource, /mapping\?\.calendarId \|\| preferredId/);
+  assert.match(calendarSource, /scheduleSyncInFlight/);
+  assert.match(calendarSource, /syncScheduleToCalendar\(calendarId, schedule\)/);
+  assert.match(scheduleActionsSource, /synchronizeScheduleToPreferredCalendar\(deviceSchedule\)/);
 });
