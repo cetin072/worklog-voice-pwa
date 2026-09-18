@@ -4,6 +4,7 @@ import { secureSessionStorage } from '@/src/platform/secure-storage';
 
 const CALENDAR_MAPPING_KEY = 'worklog.mobile.calendar-event-mappings.v1';
 const PREFERRED_CALENDAR_KEY = 'worklog.mobile.preferred-calendar.v1';
+const scheduleSyncInFlight = new Map<string, Promise<{ eventId: string; created: boolean }>>();
 
 export type DeviceSchedule = {
   scheduleId: string;
@@ -203,6 +204,42 @@ export async function synchronizeMappedScheduleToCalendar(schedule: DeviceSchedu
 
   await syncScheduleToCalendar(mapping.calendarId, schedule);
   return { updated: true, reason: 'synced' as const };
+}
+
+
+/**
+ * Keeps every schedule aligned with the user's selected default Calendar.
+ * Existing mappings stay on their mapped calendar; new schedules are created
+ * automatically only after the user has explicitly selected a preferred
+ * calendar and granted Calendar permission.
+ */
+export async function synchronizeScheduleToPreferredCalendar(schedule: DeviceSchedule) {
+  if (!schedule.scheduleId || !schedule.startsAt) {
+    return { updated: false, reason: 'invalid-schedule' as const };
+  }
+
+  const existingTask = scheduleSyncInFlight.get(schedule.scheduleId);
+  if (existingTask) {
+    const result = await existingTask;
+    return { updated: true, reason: result.created ? 'created' as const : 'synced' as const };
+  }
+
+  const permission = await Calendar.getCalendarPermissions();
+  if (!permission.granted) return { updated: false, reason: 'permission' as const };
+
+  const mapping = await getScheduleCalendarMapping(schedule.scheduleId);
+  const preferredId = await getPreferredCalendarId();
+  const calendarId = mapping?.calendarId || preferredId;
+  if (!calendarId) return { updated: false, reason: 'not-connected' as const };
+
+  const task = syncScheduleToCalendar(calendarId, schedule);
+  scheduleSyncInFlight.set(schedule.scheduleId, task);
+  try {
+    const result = await task;
+    return { updated: true, reason: result.created ? 'created' as const : 'synced' as const };
+  } finally {
+    scheduleSyncInFlight.delete(schedule.scheduleId);
+  }
 }
 
 /**
