@@ -1,4 +1,4 @@
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -37,14 +37,22 @@ function MeetingRecordingPlayer({ recording }: { recording: MeetingRecordingEntr
   const durationSeconds = status.duration || Math.max(0, recording.durationMs / 1000);
   const currentSeconds = Math.min(status.currentTime || 0, durationSeconds || Number.MAX_SAFE_INTEGER);
 
-  function togglePlayback() {
+  async function togglePlayback() {
     if (status.playing) {
       player.pause();
       return;
     }
+
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: false,
+      allowsBackgroundRecording: false,
+      shouldPlayInBackground: false,
+      shouldRouteThroughEarpiece: false,
+    });
+
     if (status.didJustFinish && durationSeconds > 0) {
-      void player.seekTo(0).then(() => player.play());
-      return;
+      await player.seekTo(0);
     }
     player.play();
   }
@@ -63,7 +71,7 @@ function MeetingRecordingPlayer({ recording }: { recording: MeetingRecordingEntr
       <Pressable accessibilityRole="button" style={styles.smallAction} onPress={() => seekBy(-15)}>
         <Text style={styles.smallActionText}>↶ 15초</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" style={styles.playAction} onPress={togglePlayback}>
+      <Pressable accessibilityRole="button" style={styles.playAction} onPress={() => { void togglePlayback(); }}>
         <Text style={styles.playActionText}>{status.playing ? '⏸ 일시정지' : status.didJustFinish ? '↻ 다시 듣기' : '▶ 재생'}</Text>
       </Pressable>
       <Pressable accessibilityRole="button" style={styles.smallAction} onPress={() => seekBy(15)}>
