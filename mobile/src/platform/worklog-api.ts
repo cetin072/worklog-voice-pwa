@@ -131,6 +131,20 @@ function requestId() {
   return `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+export type SaveWorklogOptions = Readonly<{
+  clientRequestId?: string;
+  recordedAt?: string;
+}>;
+
+function normalizedRecordedAt(value?: string) {
+  if (!value) return new Date().toISOString();
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error('업무 기록 시각이 올바르지 않습니다.');
+  }
+  return date.toISOString();
+}
+
 export async function loadBriefing(accessToken: string) {
   const response = await fetch(`${getApiBaseUrl()}/api/briefing-fast`, {
     method: 'GET',
@@ -142,7 +156,19 @@ export async function loadBriefing(accessToken: string) {
   return readJson(response) as Promise<MobileBriefing>;
 }
 
-export async function saveWorklog(accessToken: string, transcript: string) {
+export async function saveWorklog(
+  accessToken: string,
+  transcript: string,
+  options: SaveWorklogOptions = {},
+) {
+  const normalizedTranscript = transcript.trim();
+  if (!normalizedTranscript) throw new Error('저장할 업무 원문이 없습니다.');
+
+  const clientRequestId = options.clientRequestId?.trim() || requestId();
+  if (clientRequestId.length > 200) {
+    throw new Error('업무 저장 요청 ID가 너무 깁니다.');
+  }
+
   const response = await fetch(`${getApiBaseUrl()}/api/worklog`, {
     method: 'POST',
     headers: {
@@ -151,9 +177,9 @@ export async function saveWorklog(accessToken: string, transcript: string) {
       authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
-      transcript,
-      clientRequestId: requestId(),
-      recordedAt: new Date().toISOString(),
+      transcript: normalizedTranscript,
+      clientRequestId,
+      recordedAt: normalizedRecordedAt(options.recordedAt),
     }),
   });
   return readJson(response);
