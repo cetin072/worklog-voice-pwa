@@ -202,8 +202,8 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 }
 
 const styles = StyleSheet.create({
-  quickDock: { backgroundColor: mobileTheme.colors.surface, borderTopWidth: 1, borderTopColor: mobileTheme.colors.borderSubtle, paddingHorizontal: 18, paddingTop: mobileTheme.spacing.compact, paddingBottom: mobileTheme.spacing.compact, gap: 7 },
-  quickStatusBubble: { alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: '#f1f5f9' },
+  quickDock: { backgroundColor: 'transparent', borderTopWidth: 0, paddingHorizontal: 18, paddingTop: mobileTheme.spacing.compact, paddingBottom: mobileTheme.spacing.compact, gap: 7 },
+  quickStatusBubble: { alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.92)' },
   quickStatusBubbleText: { fontSize: 11, fontWeight: '800', color: '#475569' },
   quickProgress: { textAlign: 'center', fontSize: 11, color: '#475569' },
   quickControls: { minHeight: 82, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22 },
@@ -212,9 +212,9 @@ const styles = StyleSheet.create({
   quickMicBusy: { opacity: 0.65 },
   quickMicIcon: { fontSize: 26, color: '#fff' },
   quickMicLabel: { fontSize: 12, fontWeight: '900', color: '#fff' },
-  quickSideAction: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  quickSideAction: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.92)' },
   quickSideActionDisabled: { opacity: 0.4 },
-  quickSideStatus: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: '#d7dae0', backgroundColor: '#f8fafc' },
+  quickSideStatus: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(248,250,252,0.92)' },
   quickSideIcon: { fontSize: 18 },
   quickStatusIcon: { fontSize: 16, fontWeight: '900', color: '#245c2a' },
   quickSideLabel: { fontSize: 10, fontWeight: '800', color: '#374151' },
