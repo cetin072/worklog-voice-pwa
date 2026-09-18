@@ -27,7 +27,7 @@ test('Schedule detail reconciles saved reminders when the schedule time or title
   assert.match(notifications, /export async function synchronizeScheduleReminders/);
   assert.match(notifications, /reminderTriggerAt\(scheduleStartsAt, reminder\.offsetMinutes\)/);
   assert.match(notifications, /cancelScheduleReminder\(scheduleId, reminder\.offsetMinutes\)/);
-  assert.match(actions, /synchronizeScheduleReminders\(\{ scheduleId, title: schedule\.title/);
+  assert.match(actions, /synchronizeScheduleReminders\(\{ scheduleId, title: deviceSchedule\.title/);
   assert.match(actions, /\[scheduleId, startsAt, schedule\.title\]/);
   assert.match(actions, /finally \{ await refreshReminders\(\)\.catch\(\(\) => undefined\); setBusy\(false\); \}/);
 });
