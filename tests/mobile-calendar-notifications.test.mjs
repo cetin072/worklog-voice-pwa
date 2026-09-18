@@ -87,3 +87,17 @@ test('Notifications reconcile after app restart and route the linked schedule in
   assert.match(homeSource, /setScreen\('home'\)/);
   assert.doesNotMatch(homeSource, /setScreen\('calendar'\)/);
 });
+
+
+test('Home keeps global Calendar connection truth visible even when there are no schedule rows', () => {
+  const summarySource = fs.readFileSync('mobile/src/features/schedule/calendar-connection-summary.tsx', 'utf8');
+  assert.match(calendarSource, /readCalendarConnectionStatus/);
+  assert.match(calendarSource, /permission-required/);
+  assert.match(calendarSource, /not-selected/);
+  assert.match(calendarSource, /Google Calendar 연결됨/);
+  assert.match(summarySource, /캘린더 연결 상태 및 설정 열기/);
+  assert.match(summarySource, /관리 ›/);
+  assert.match(homeSource, /CalendarConnectionSummary/);
+  assert.match(homeSource, /<CalendarConnectionSummary compact onPressManage/);
+  assert.match(homeSource, /screen === 'scheduleSettings'/);
+});
