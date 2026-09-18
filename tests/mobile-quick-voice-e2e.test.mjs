@@ -26,7 +26,8 @@ test('Quick Voice retries save with its retained transcript and retries briefing
 test('runtime model resolver removes incomplete downloads and promotes only SHA-256 verified files', () => {
   assert.match(downloader, /File\.downloadFileAsync/);
   assert.match(downloader, /\.partial/);
-  assert.match(downloader, /CryptoDigestAlgorithm\.SHA256/);
+  assert.match(downloader, /IncrementalSha256/);
+  assert.match(downloader, /readableStream\(\)\.getReader\(\)/);
   assert.match(downloader, /if \(finalFile\.exists\)/);
   assert.match(downloader, /actualHash === descriptor\.sha256/);
   assert.ok(
@@ -55,10 +56,11 @@ test('Quick Voice exposes device timing metrics for human benchmark without prov
 });
 
 
-test('Android digest hashes model bytes through a TypedArray instead of a bare ArrayBuffer', () => {
-  assert.match(downloader, /const bytes = new Uint8Array\(await file\.arrayBuffer\(\)\)/);
-  assert.match(downloader, /Crypto\.digest\(Crypto\.CryptoDigestAlgorithm\.SHA256, bytes\)/);
-  assert.doesNotMatch(downloader, /Crypto\.digest\(Crypto\.CryptoDigestAlgorithm\.SHA256, await file\.arrayBuffer\(\)\)/);
+test('Android digest streams large model bytes without whole-file allocation', () => {
+  assert.match(downloader, /readableStream\(\)\.getReader\(\)/);
+  assert.match(downloader, /reader\.read\(\)/);
+  assert.match(downloader, /hasher\.update\(value\)/);
+  assert.doesNotMatch(downloader, /file\.arrayBuffer\(\)|file\.bytes\(\)/);
 });
 
 
