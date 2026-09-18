@@ -19,18 +19,18 @@ test('whisper.rn stays isolated in a provider adapter and consumes raw PCM throu
   assert.match(source, /audio\.encoding !== 'int16'/);
 });
 
-test('only the provider composition runtime imports the concrete whisper.rn package', () => {
-  assert.doesNotMatch(source, /from ['"]whisper\.rn/);
-  assert.match(runtime, /from 'whisper\.rn\/index'/);
+test('only the provider composition runtime references the concrete whisper.rn package', () => {
+  assert.doesNotMatch(source, /whisper\.rn\/index/);
+  assert.match(runtime, /require\('whisper\.rn\/index'\)/);
   assert.match(runtime, /initializeWhisperRnRuntime/);
 
   const sourceRoot = 'mobile/src';
-  const concreteImports = fs.readdirSync(sourceRoot, { recursive: true })
+  const concreteReferences = fs.readdirSync(sourceRoot, { recursive: true })
     .filter((entry) => typeof entry === 'string' && /\.tsx?$/.test(entry))
     .map((entry) => path.join(sourceRoot, entry))
-    .filter((file) => /from ['"]whisper\.rn(?:\/index)?['"]/.test(fs.readFileSync(file, 'utf8')));
+    .filter((file) => /['"]whisper\.rn\/index['"]/.test(fs.readFileSync(file, 'utf8')));
 
-  assert.deepEqual(concreteImports, [runtimePath]);
+  assert.deepEqual(concreteReferences, [runtimePath]);
 });
 
 test('whisper.rn adapter reports model identity through the provider-neutral transcript result', () => {
