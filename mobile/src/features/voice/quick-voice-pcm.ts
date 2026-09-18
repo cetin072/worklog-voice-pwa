@@ -6,18 +6,17 @@ import {
 } from 'expo-audio';
 import { useRef } from 'react';
 
+import {
+  createQuickVoicePcmAudioInput,
+  type QuickVoicePcmAudioInput,
+} from './audio-input';
+
 export const QUICK_VOICE_PCM_SAMPLE_RATE = 16_000;
 export const QUICK_VOICE_PCM_CHANNELS = 1;
 export const QUICK_VOICE_PCM_ENCODING = 'int16' as const;
 const MAX_CAPTURE_BYTES = 12 * 1024 * 1024;
 
-export type QuickVoicePcmCapture = Readonly<{
-  data: ArrayBuffer;
-  sampleRate: number;
-  channels: number;
-  encoding: 'int16';
-  durationMs: number;
-}>;
+export type QuickVoicePcmCapture = QuickVoicePcmAudioInput;
 
 function copyBuffer(buffer: ArrayBuffer) {
   return new Uint8Array(buffer.slice(0));
@@ -48,6 +47,7 @@ export function useQuickVoicePcmCapture() {
   const capturedBytes = useRef(0);
   const overflowed = useRef(false);
   const latestFormat = useRef({ sampleRate: 0, channels: 0 });
+  const captureIdentity = useRef<{ localRef: string; createdAt: string } | null>(null);
 
   const stream = useAudioStream({
     sampleRate: QUICK_VOICE_PCM_SAMPLE_RATE,
@@ -72,10 +72,16 @@ export function useQuickVoicePcmCapture() {
     capturedBytes.current = 0;
     overflowed.current = false;
     latestFormat.current = { sampleRate: 0, channels: 0 };
+    captureIdentity.current = null;
   }
 
   async function start() {
     reset();
+    const createdAt = new Date().toISOString();
+    captureIdentity.current = {
+      localRef: `quick-voice-pcm://${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
+      createdAt,
+    };
     const permission = await AudioModule.requestRecordingPermissionsAsync();
     if (!permission.granted) {
       throw new Error('마이크 권한이 필요합니다. 휴대폰 설정에서 업무수첩의 마이크 권한을 허용해주세요.');
@@ -107,11 +113,15 @@ export function useQuickVoicePcmCapture() {
     const samplesPerChannel = data.byteLength / bytesPerSample / channels;
     const durationMs = Math.round(samplesPerChannel / sampleRate * 1000);
 
-    return Object.freeze({
+    const identity = captureIdentity.current;
+    if (!identity) throw new Error('Quick Voice PCM capture identity가 없습니다.');
+
+    return createQuickVoicePcmAudioInput({
+      localRef: identity.localRef,
+      createdAt: identity.createdAt,
       data,
       sampleRate,
       channels,
-      encoding: QUICK_VOICE_PCM_ENCODING,
       durationMs,
     });
   }
