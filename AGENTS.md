@@ -91,14 +91,16 @@
 - Lightweight Main Path의 저위험 변경은 별도 병합 승인 없이 진행 가능하다.
 - 큰 기능 PR, production 구조 변경, 유료 서비스, production secret, Play Store 제출, 비가역 데이터 변경은 사용자 승인 없이 진행하지 않는다.
 
-## User Acceptance Ready
+## User Acceptance Ready — Web / Mobile 분리
 
 - 사용자 Preview 검수 직전 공통 기준은 `cetin072/ai-development-system/docs/USER_ACCEPTANCE_READY_GATE.md`다.
-- `.github/workflows/user-acceptance-ready.yml`의 `User Acceptance Ready` 체크가 GREEN이 아니면 사용자에게 Preview/실사용 검수를 요청하지 않는다.
-- UAR는 정적·회귀검사, 최소 초기상태 UI 계약, 정확한 PR HEAD Deploy Preview, 실제 Preview 환경 정합성, 실제 Preview 대표 smoke를 모두 통과해야 한다.
-- Netlify `Deploy Preview ready`나 일반 `npm test` 성공만으로 사람 검수를 요청하지 않는다.
-- 사람이 발견한 메뉴 누락, 로딩 실패, 버튼 미연결, 핵심 API 오류 등 기계적 문제는 QA Escape로 보고 회귀검사를 추가한 뒤 UAR 전체를 다시 실행한다.
-- UAR 검사 자체는 실제 Notion/Kakao 데이터 쓰기나 Production 변경을 하지 않는 읽기 전용·비파괴 검증을 기본으로 한다.
+- `.github/workflows/user-acceptance-ready.yml`의 `User Acceptance Ready`는 **Netlify Web/PWA Preview 준비 상태를 검증하는 Web gate**다.
+- Web UAR GREEN을 Android/iOS 앱의 실행 가능성·버튼 동작·네이티브 API 안정성에 대한 보증으로 해석하지 않는다.
+- Web/PWA 검수 요청 전에는 Web UAR GREEN이 필요하다.
+- Mobile 실기기 검수 요청 전에는 별도의 Mobile gate가 필요하다: TypeScript + Android bundle/native build + runtime smoke + exact-head artifact.
+- Netlify Deploy Preview나 일반 `npm test` 성공만으로 Mobile 실기기 검수를 요청하지 않는다.
+- 사람이 발견한 메뉴 누락, 로딩 실패, 버튼 미연결, 핵심 API 오류 등은 QA Escape로 기록하되, 회귀검사는 실제 실패 계층과 같은 수준으로 추가한다. 런타임 문제를 source-text 정규식 검사만으로 닫지 않는다.
+- UAR/Smoke는 실제 사용자 데이터 쓰기나 Production 변경을 하지 않는 읽기 전용·비파괴 검증을 기본으로 한다.
 
 ## 보안
 
