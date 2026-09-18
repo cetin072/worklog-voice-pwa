@@ -222,3 +222,52 @@ export async function updateWorklogStatus(accessToken: string, recordId: string,
   });
   return readJson(response);
 }
+
+
+export type WorklogEditDetails = {
+  title: string;
+  dueDate: string;
+  dueTime: string;
+  mode?: string;
+};
+
+export async function readWorklogDetails(accessToken: string, pageId: string): Promise<WorklogEditDetails> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ action: 'read', pageId }),
+  });
+  const body = await readJson(response);
+  return {
+    title: typeof body.title === 'string' ? body.title : '',
+    dueDate: typeof body.dueDate === 'string' ? body.dueDate : '',
+    dueTime: typeof body.dueTime === 'string' ? body.dueTime : '',
+    mode: typeof body.mode === 'string' ? body.mode : undefined,
+  };
+}
+
+export async function updateWorklogDetails(
+  accessToken: string,
+  input: { pageId: string; title: string; dueDate: string; dueTime: string },
+) {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      action: 'update',
+      pageId: input.pageId,
+      title: input.title,
+      dueDate: input.dueDate,
+      dueTime: input.dueTime,
+    }),
+  });
+  return readJson(response);
+}
