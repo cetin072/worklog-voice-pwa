@@ -31,6 +31,13 @@ test('Quick Voice PCM bounds in-memory capture and derives duration from actual 
   assert.match(source, /durationMs/);
 });
 
+test('Quick Voice PCM returns trusted audio evidence for provider-neutral STT', () => {
+  assert.match(source, /createQuickVoicePcmAudioInput/);
+  assert.match(source, /quick-voice-pcm:\/\//);
+  assert.match(source, /captureIdentity/);
+  assert.match(source, /createdAt/);
+});
+
 test('Quick Voice PCM remains foreground-only and permission-gated for the short memo path', () => {
   assert.match(source, /requestRecordingPermissionsAsync/);
   assert.match(source, /allowsBackgroundRecording: false/);
