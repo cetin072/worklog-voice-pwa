@@ -6,7 +6,7 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import { useState } from 'react';
-import { Button, Platform, StyleSheet, Text, View } from 'react-native';
+import { Button, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   createMobileRecordingAudioInput,
@@ -130,6 +130,37 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput }: VoiceR
 
   const active = phase === 'recording' || phase === 'paused' || phase === 'stopping';
 
+  if (mode === 'quick') {
+    return <View style={styles.quickDock}>
+      {active ? <View style={styles.quickTimerBubble}><Text style={styles.quickTimer}>{formatDuration(recorderState.durationMillis)}</Text><Text style={styles.quickTimerState}>{phase === 'stopping' ? '저장 중' : '녹음 중'}</Text></View> : null}
+
+      <View style={styles.quickControls}>
+        <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || active} style={[styles.quickSideAction, active ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
+          <Text style={styles.quickSideIcon}>✏️</Text>
+          <Text style={styles.quickSideLabel}>메모</Text>
+        </Pressable>
+
+        <Pressable accessibilityRole="button" accessibilityLabel={active ? '음성 기록 종료 후 저장' : '음성 기록 시작'} disabled={phase === 'stopping'} style={[styles.quickMic, active ? styles.quickMicActive : null]} onPress={() => void (active ? stopRecording() : startRecording())}>
+          <Text style={styles.quickMicIcon}>{active ? '■' : '🎙'}</Text>
+          <Text style={styles.quickMicLabel}>{phase === 'stopping' ? '저장 중' : active ? '종료' : '음성 기록'}</Text>
+        </Pressable>
+
+        <View style={styles.quickSideStatus}>
+          <Text style={styles.quickStatusIcon}>{completed ? '✓' : '●'}</Text>
+          <Text style={styles.quickSideLabel}>{completed ? '저장됨' : active ? '녹음 중' : '대기'}</Text>
+        </View>
+      </View>
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      {completed ? <View style={styles.quickResult}>
+        <Text style={styles.quickResultTitle}>✅ 음성 메모 파일 저장 완료</Text>
+        <Text style={styles.meta}>{formatDuration(completed.durationMs)} · {completed.fileName}</Text>
+        <Text style={styles.notice}>현재는 기기 파일 저장 단계입니다. 업무·브리핑 자동 등록은 Quick Voice STT 단계에서 연결합니다.</Text>
+      </View> : <Text style={styles.quickHint}>{active ? '말씀을 마치면 가운데 종료를 누르세요.' : '가운데 마이크를 누르면 바로 녹음합니다.'}</Text>}
+    </View>;
+  }
+
   return (
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>{mode === 'meeting' ? '회의 녹음' : '빠른 음성 메모'}</Text>
@@ -181,6 +212,84 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput }: VoiceR
 }
 
 const styles = StyleSheet.create({
+  quickDock: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e1e5ea',
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 8,
+  },
+  quickControls: {
+    minHeight: 92,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 22,
+  },
+  quickMic: {
+    width: 104,
+    height: 104,
+    marginTop: -28,
+    borderRadius: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    backgroundColor: '#111827',
+    borderWidth: 5,
+    borderColor: '#fff',
+    shadowColor: '#111827',
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  quickMicActive: { backgroundColor: '#b42318' },
+  quickMicIcon: { fontSize: 28, color: '#fff' },
+  quickMicLabel: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  quickSideAction: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    borderWidth: 1,
+    borderColor: '#d7dae0',
+    backgroundColor: '#fff',
+  },
+  quickSideActionDisabled: { opacity: 0.4 },
+  quickSideStatus: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    borderWidth: 1,
+    borderColor: '#d7dae0',
+    backgroundColor: '#f8fafc',
+  },
+  quickSideIcon: { fontSize: 19 },
+  quickStatusIcon: { fontSize: 16, fontWeight: '900', color: '#245c2a' },
+  quickSideLabel: { fontSize: 10, fontWeight: '800', color: '#374151' },
+  quickTimerBubble: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: -4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+  },
+  quickTimer: { fontSize: 13, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] },
+  quickTimerState: { fontSize: 11, fontWeight: '800', color: '#e5e7eb' },
+  quickHint: { textAlign: 'center', fontSize: 11, color: '#737985', lineHeight: 16 },
+  quickResult: { gap: 3, paddingHorizontal: 4, paddingBottom: 2 },
+  quickResultTitle: { textAlign: 'center', fontSize: 12, fontWeight: '800', color: '#245c2a' },
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
