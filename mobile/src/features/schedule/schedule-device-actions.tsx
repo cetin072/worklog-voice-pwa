@@ -47,7 +47,9 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
   const [calendarId, setCalendarId] = useState<string | null>(null);
   const [calendarLoaded, setCalendarLoaded] = useState(false);
   const [calendarSynced, setCalendarSynced] = useState(false);
+  const [calendarMapping, setCalendarMapping] = useState<Awaited<ReturnType<typeof getScheduleCalendarMapping>>>(null);
   const [reminders, setReminders] = useState<ScheduleReminder[]>([]);
+  const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -61,6 +63,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
       const [preferred, mapping, savedReminders] = await Promise.all([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]);
       setCalendarId(mapping?.calendarId || preferred);
       setCalendarSynced(Boolean(mapping));
+      setCalendarMapping(mapping);
       setReminders(savedReminders);
     })().catch(() => undefined);
   }, [scheduleId, startsAt, schedule.title]);
@@ -102,6 +105,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
         location: schedule.location,
       });
       setCalendarSynced(true);
+      setCalendarMapping(await getScheduleCalendarMapping(scheduleId));
       setMessage(result.created ? '선택한 캘린더에 일정을 추가했습니다.' : '선택한 캘린더 일정이 최신 상태입니다.');
     } catch (error) { setMessage(error instanceof Error ? error.message : '캘린더 동기화에 실패했습니다.'); } finally { setBusy(false); }
   }
@@ -111,6 +115,7 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
     try {
       const removed = await removeScheduleFromCalendar(scheduleId);
       setCalendarSynced(false);
+      setCalendarMapping(null);
       setMessage(removed ? '휴대폰/Google Calendar에서 이 일정을 제거했습니다.' : '연결된 캘린더 일정이 없습니다.');
     } catch (error) { setMessage(error instanceof Error ? error.message : '캘린더 일정 제거에 실패했습니다.'); } finally { setBusy(false); }
   }
@@ -150,6 +155,9 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
     setBusy(true); setMessage('');
     try {
       await cancelScheduleWithDeviceCleanup(client, scheduleId);
+      setCalendarSynced(false);
+      setCalendarMapping(null);
+      setReminders([]);
       setMessage('일정을 취소하고 연결된 Calendar 이벤트와 알림을 정리했습니다. 브리핑을 다시 정리하면 목록에서 사라집니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '일정을 취소하지 못했습니다.');
@@ -165,47 +173,76 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
 
   const selectedCalendar = calendarOptions.find((calendar) => calendar.id === calendarId);
   const hasGoogleCalendar = calendarOptions.some((calendar) => calendar.isGoogle);
+  const connectedCalendarLabel = calendarMapping
+    ? calendarMapping.calendarIsGoogle
+      ? `✓ Google Calendar · ${calendarMapping.calendarOwnerAccount || calendarMapping.calendarTitle || '연결됨'}`
+      : `✓ ${calendarMapping.calendarTitle || calendarMapping.calendarSourceName || '휴대폰 캘린더'}`
+    : '미연결';
+  const reminderSummary = reminders.length
+    ? `🔔 이 일정 알림: ${reminders.map((reminder) => REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`).join(' · ')}`
+    : '🔕 이 일정 알림 없음';
 
   return <View style={styles.root}>
-    <View style={styles.section}>
-      <Text style={styles.heading}>Google Calendar / 휴대폰 캘린더</Text>
-      <Text style={styles.help}>기기에 동기화된 Google Calendar를 선택하면 이 일정이 해당 계정으로 동기화됩니다.</Text>
-      {!calendarLoaded ? <Button title={busy ? '캘린더 확인 중...' : '캘린더 연결·선택'} disabled={busy} onPress={() => void loadCalendars()} /> : null}
-      {calendarLoaded && !hasGoogleCalendar ? <Text style={styles.warning}>Google Calendar가 보이지 않습니다. Android 설정 → 계정에서 Google 계정을 추가하고 Calendar 동기화를 켜주세요.</Text> : null}
-      {calendarOptions.map((calendar) => <Pressable key={calendar.id} accessibilityRole="button" style={[styles.choice, calendar.id === calendarId ? styles.choiceActive : null]} disabled={busy} onPress={() => void chooseCalendar(calendar)}>
-        <Text style={styles.choiceTitle}>{calendar.isGoogle ? 'G · ' : ''}{calendar.title}{calendar.isPrimary ? ' · 기본' : ''}</Text>
-        <Text style={styles.choiceMeta}>{calendarSubtitle(calendar)}</Text>
-      </Pressable>)}
-      {calendarLoaded && selectedCalendar ? <Button title={busy ? '동기화 중...' : calendarSynced ? '선택한 캘린더와 다시 동기화' : '이 일정 캘린더에 추가'} disabled={busy} onPress={() => void syncCalendar()} /> : null}
-      {calendarSynced ? <Button title="캘린더에서 이 일정 제거" disabled={busy} onPress={() => void removeCalendarEvent()} /> : null}
+    <View style={styles.compactSummary}>
+      <View style={styles.summaryText}>
+        <Text style={[styles.connectionStatus, calendarSynced ? styles.connectionOn : styles.connectionOff]}>{connectedCalendarLabel}</Text>
+        <Text style={styles.reminderStatus}>{reminderSummary}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={expanded ? '이 일정 설정 접기' : '이 일정 설정 펼치기'} style={styles.expandButton} onPress={() => setExpanded((value) => !value)}>
+        <Text style={styles.expandText}>{expanded ? '설정 접기 ▴' : '설정 ▾'}</Text>
+      </Pressable>
     </View>
 
-    <View style={styles.section}>
-      <Text style={styles.heading}>일정 알림</Text>
-      <Text style={styles.help}>필요한 알림을 여러 개 동시에 선택할 수 있습니다. 다시 누르면 해당 알림만 취소됩니다.</Text>
-      <View style={styles.presetGrid}>{REMINDER_PRESETS.map((preset) => {
-        const active = reminders.some((reminder) => reminder.offsetMinutes === preset.offsetMinutes);
-        const triggerAt = reminderTriggerAt(startsAt, preset.offsetMinutes);
-        const available = triggerAt.getTime() > Date.now();
-        return <Pressable key={preset.offsetMinutes} accessibilityRole="button" disabled={busy || !available} style={[styles.preset, active ? styles.presetActive : null, !available ? styles.presetDisabled : null]} onPress={() => void toggleReminder(preset.offsetMinutes)}>
-          <Text style={[styles.presetText, active ? styles.presetTextActive : null]}>{active ? '✓ ' : ''}{preset.label}</Text>
-        </Pressable>;
-      })}</View>
-      {reminders.length ? <View style={styles.reminderSummary}><Text style={styles.summaryTitle}>예약된 알림</Text>{reminders.map((reminder) => <Text key={`${reminder.offsetMinutes}-${reminder.identifier}`} style={styles.summaryLine}>• {REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`} · {reminderTime(reminder.triggerAt)}</Text>)}<Button title="이 일정 알림 모두 취소" disabled={busy} onPress={() => void clearReminders()} /></View> : <Text style={styles.muted}>예약된 알림이 없습니다.</Text>}
-    </View>
+    {expanded ? <View style={styles.expanded}>
+      <View style={styles.section}>
+        <Text style={styles.heading}>캘린더 연결</Text>
+        <Text style={styles.help}>이 일정만 선택한 휴대폰/Google Calendar와 동기화합니다.</Text>
+        {!calendarLoaded ? <Button title={busy ? '캘린더 확인 중...' : '캘린더 연결·선택'} disabled={busy} onPress={() => void loadCalendars()} /> : null}
+        {calendarLoaded && !hasGoogleCalendar ? <Text style={styles.warning}>Google Calendar가 보이지 않습니다. Android 설정 → 계정에서 Google 계정을 추가하고 Calendar 동기화를 켜주세요.</Text> : null}
+        {calendarOptions.map((calendar) => <Pressable key={calendar.id} accessibilityRole="button" style={[styles.choice, calendar.id === calendarId ? styles.choiceActive : null]} disabled={busy} onPress={() => void chooseCalendar(calendar)}>
+          <Text style={styles.choiceTitle}>{calendar.isGoogle ? 'G · ' : ''}{calendar.title}{calendar.isPrimary ? ' · 기본' : ''}</Text>
+          <Text style={styles.choiceMeta}>{calendarSubtitle(calendar)}</Text>
+        </Pressable>)}
+        {calendarLoaded && selectedCalendar ? <Button title={busy ? '동기화 중...' : calendarSynced ? '선택한 캘린더와 다시 동기화' : '이 일정 캘린더에 추가'} disabled={busy} onPress={() => void syncCalendar()} /> : null}
+        {calendarSynced ? <Button title="캘린더에서 이 일정 제거" disabled={busy} onPress={() => void removeCalendarEvent()} /> : null}
+      </View>
 
-    <View style={styles.section}>
-      <Text style={styles.heading}>일정 관리</Text>
-      <Text style={styles.help}>업무 기록은 보존하고 일정만 취소합니다. 취소된 일정은 브리핑에 다시 표시되지 않습니다.</Text>
-      <Button title="이 일정 취소" color="#b42318" disabled={busy} onPress={confirmScheduleCancellation} />
-    </View>
+      <View style={styles.section}>
+        <Text style={styles.heading}>이 일정 알림</Text>
+        <Text style={styles.help}>아래 선택은 이 일정에만 적용됩니다. 필요한 알림을 여러 개 동시에 선택할 수 있습니다.</Text>
+        <View style={styles.presetGrid}>{REMINDER_PRESETS.map((preset) => {
+          const active = reminders.some((reminder) => reminder.offsetMinutes === preset.offsetMinutes);
+          const triggerAt = reminderTriggerAt(startsAt, preset.offsetMinutes);
+          const available = triggerAt.getTime() > Date.now();
+          return <Pressable key={preset.offsetMinutes} accessibilityRole="button" disabled={busy || !available} style={[styles.preset, active ? styles.presetActive : null, !available ? styles.presetDisabled : null]} onPress={() => void toggleReminder(preset.offsetMinutes)}>
+            <Text style={[styles.presetText, active ? styles.presetTextActive : null]}>{active ? '✓ ' : ''}{preset.label}</Text>
+          </Pressable>;
+        })}</View>
+        {reminders.length ? <View style={styles.reminderSummary}><Text style={styles.summaryTitle}>예약된 알림</Text>{reminders.map((reminder) => <Text key={`${reminder.offsetMinutes}-${reminder.identifier}`} style={styles.summaryLine}>• {REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`} · {reminderTime(reminder.triggerAt)}</Text>)}<Button title="이 일정 알림 모두 취소" disabled={busy} onPress={() => void clearReminders()} /></View> : <Text style={styles.muted}>예약된 알림이 없습니다.</Text>}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>일정 관리</Text>
+        <Text style={styles.help}>업무 기록은 보존하고 일정만 취소합니다. 취소된 일정은 브리핑에 다시 표시되지 않습니다.</Text>
+        <Button title="이 일정 취소" color="#b42318" disabled={busy} onPress={confirmScheduleCancellation} />
+      </View>
+    </View> : null}
 
     {message ? <Text style={styles.message}>{message}</Text> : null}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 14, paddingTop: 8 },
+  root: { gap: 10, paddingTop: 8 },
+  compactSummary: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: '#e1e5ea', borderRadius: 12, backgroundColor: '#f8fafc' },
+  summaryText: { flex: 1, minWidth: 0, gap: 4 },
+  connectionStatus: { fontSize: 12, fontWeight: '800', lineHeight: 17 },
+  connectionOn: { color: '#245c2a' },
+  connectionOff: { color: '#737985' },
+  reminderStatus: { fontSize: 12, color: '#4b515c', lineHeight: 17 },
+  expandButton: { flexShrink: 0, minHeight: 36, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d7dae0' },
+  expandText: { fontSize: 12, fontWeight: '800', color: '#275daf' },
+  expanded: { gap: 14 },
   section: { gap: 8, borderTopWidth: 1, borderTopColor: '#eceef1', paddingTop: 12 },
   heading: { fontSize: 14, fontWeight: '800', color: '#30343b' },
   help: { fontSize: 12, color: '#737985', lineHeight: 18 },
