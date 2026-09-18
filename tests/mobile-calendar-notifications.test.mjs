@@ -98,7 +98,7 @@ test('Home keeps global Calendar connection truth visible even when there are no
   assert.match(summarySource, /캘린더 연결 상태 및 설정 열기/);
   assert.match(summarySource, /관리 ›/);
   assert.match(homeSource, /CalendarConnectionSummary/);
-  assert.match(homeSource, /<CalendarConnectionSummary compact onPressManage/);
+  assert.match(homeSource, /<CalendarConnectionSummary compact[^>]*onPressManage/);
   assert.match(homeSource, /screen === 'scheduleSettings'/);
 });
 
