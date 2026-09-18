@@ -36,6 +36,8 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d/);
   assert.match(workflow, /bash mobile\/scripts\/android-runtime-smoke\.sh/);
   assert.match(smokeScript, /adb shell am start -W -n "\$ACTIVITY"/);
+  assert.match(smokeScript, /assembleRelease/);
+  assert.match(smokeScript, /app-release\.apk/);
   assert.match(smokeScript, /uiautomator dump/);
   assert.match(smokeScript, /rendered accessibility tree/);
   assert.match(smokeScript, /업무수첩\|연결을 확인해주세요/);

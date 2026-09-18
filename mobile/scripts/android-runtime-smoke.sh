@@ -3,12 +3,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ANDROID_DIR="$ROOT/mobile/android"
-APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+APK="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
 PACKAGE="com.cetin072.worklog"
 ACTIVITY="$PACKAGE/.MainActivity"
 
 cd "$ANDROID_DIR"
-./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+# A debug APK expects a Metro server. The release APK packages the JavaScript
+# bundle, so this is an actual offline app-runtime check in CI.
+./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
 
 adb install -r "$APK"
 adb shell am force-stop "$PACKAGE" || true
