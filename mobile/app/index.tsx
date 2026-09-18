@@ -20,6 +20,12 @@ type AppScreen = 'home' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'setti
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
 type AuthMode = 'signIn' | 'signUp';
+type DirectSaveFeedback = Readonly<{
+  transcript: string;
+  scheduleDetected: boolean;
+  scheduleId: string;
+  dueStart: string;
+}>;
 
 const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' }> = [
   { key: 'overdue', label: '지난 것', tone: 'danger' },
@@ -36,6 +42,18 @@ function formatSchedule(schedule: BriefingSchedule) {
   if (schedule.allDay) return `${schedule.dateKey || '날짜 미정'} · 종일`;
   if (!schedule.startsAt) return schedule.dateKey || '시간 미정';
   return new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(schedule.startsAt));
+}
+
+function formatSavedDue(value: string) {
+  const date = new Date(value);
+  if (!value || !Number.isFinite(date.getTime())) return '';
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
 }
 
 function taskNote(bucket: BriefingBucket, task: BriefingTask) {
@@ -115,6 +133,7 @@ export default function HomeScreen() {
   const [editTime, setEditTime] = useState('');
   const [editBusy, setEditBusy] = useState(false);
   const [expandedBuckets, setExpandedBuckets] = useState<Partial<Record<BriefingBucket, boolean>>>({});
+  const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
@@ -191,9 +210,23 @@ export default function HomeScreen() {
 
   async function persistDraft() {
     if (!session || !draft.trim() || busy) return;
+    const original = draft.trim();
     await run(async () => {
-      await saveWorklog(session.access_token, draft.trim());
-      setDraft(''); setMessage('업무를 저장했습니다. 브리핑을 최신 상태로 불러옵니다.'); setScreen('home');
+      const saved = await saveWorklog(session.access_token, original);
+      const feedback = {
+        transcript: saved.cleanTranscript?.trim() || original,
+        scheduleDetected: Boolean(saved.scheduleDetected),
+        scheduleId: saved.scheduleId?.trim() || '',
+        dueStart: saved.dueStart?.trim() || '',
+      };
+      setDraft('');
+      setLastDirectSave(feedback);
+      if (feedback.scheduleId) setNotificationScheduleId(feedback.scheduleId);
+      const dueLabel = formatSavedDue(feedback.dueStart);
+      setMessage(feedback.scheduleDetected
+        ? `업무 저장 완료 · 일정 생성됨${dueLabel ? ` · ${dueLabel}` : ''}`
+        : '업무 저장 완료 · 브리핑에 반영했습니다.');
+      setScreen('home');
       await refreshBriefing();
     });
   }
@@ -312,6 +345,12 @@ export default function HomeScreen() {
 
   return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? 190 + insets.bottom : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
     {screen === 'home' ? <>
+      {lastDirectSave ? <View style={styles.saveFeedback}>
+        <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>✅ 업무 저장 완료</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
+        <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
+        {lastDirectSave.scheduleDetected ? <Text style={styles.saveFeedbackSchedule}>📅 일정 생성 완료{formatSavedDue(lastDirectSave.dueStart) ? ` · ${formatSavedDue(lastDirectSave.dueStart)}` : ''}</Text> : <Text style={styles.saveFeedbackMeta}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
+      </View> : null}
+
       <View style={styles.card}>
         <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>오늘의 브리핑</Text><Text style={styles.sectionTitle}>지금 확인할 것</Text></View><Pressable accessibilityRole="button" onPress={() => void refreshBriefing()}><Text style={styles.linkText}>{briefingBusy ? '정리 중…' : '새로고침'}</Text></Pressable></View>
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
@@ -356,7 +395,7 @@ export default function HomeScreen() {
     {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={() => void run(signOut)} /></View></View> : null}
     {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text>{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
-  </ScrollView>{screen === 'home' ? <View style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, releaseProvider: releaseQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); return { recordId: saved.dataCoreWorkRecordId || saved.pageId }; }, refreshBriefing, updateSavedWorklog: (recordId, transcript) => updateWorklogTitle(session.access_token, recordId, transcript) }} /></View> : null}</View></View>;
+  </ScrollView>{screen === 'home' ? <View style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, releaseProvider: releaseQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) setNotificationScheduleId(saved.scheduleId); return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing, updateSavedWorklog: (recordId, transcript) => updateWorklogTitle(session.access_token, recordId, transcript) }} /></View> : null}</View></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
@@ -405,6 +444,14 @@ const styles = StyleSheet.create({
   countValue: { fontSize: 30, fontWeight: '800', color: '#17191d' },
   loadingInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16 },
   errorPanel: { gap: 10 },
+  saveFeedback: { gap: 8, padding: 14, borderRadius: mobileTheme.radius.control, backgroundColor: '#eef8f0', borderWidth: 1, borderColor: '#bbdfc2' },
+  saveFeedbackHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  saveFeedbackEyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 0.7, color: mobileTheme.colors.textMuted },
+  saveFeedbackTitle: { fontSize: 17, fontWeight: '800', color: mobileTheme.colors.success, marginTop: 2 },
+  saveFeedbackClose: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.link, padding: 6 },
+  saveFeedbackText: { fontSize: 14, lineHeight: 20, color: mobileTheme.colors.text },
+  saveFeedbackSchedule: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.link, lineHeight: 19 },
+  saveFeedbackMeta: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   errorText: { color: mobileTheme.colors.danger, lineHeight: 20 },
   successText: { color: mobileTheme.colors.success, lineHeight: 20, backgroundColor: '#eaf4ea', padding: 10, borderRadius: mobileTheme.radius.compact },
   emptyText: { color: mobileTheme.colors.textMuted, lineHeight: 20, paddingVertical: 4 },
