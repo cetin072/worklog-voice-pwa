@@ -71,6 +71,21 @@ function cleanText(value: unknown, max: number, label: string) {
   return text;
 }
 
+export function normalizeTranscriptText(value: unknown) {
+  const raw = cleanText(value, MAX_TRANSCRIPT_TEXT, 'transcript.text');
+  const withoutWhisperControlTokens = raw
+    .replace(/<\|[^|>]+\|>/g, ' ')
+    .replace(/\[(?:S|BLANK_AUDIO|SILENCE|MUSIC|APPLAUSE|LAUGHTER)\]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!withoutWhisperControlTokens) {
+    throw new Error('음성에서 사용할 수 있는 전사 문장을 찾지 못했습니다. 다시 말씀해주세요.');
+  }
+
+  return withoutWhisperControlTokens;
+}
+
 function finiteNumber(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -175,8 +190,7 @@ export async function transcribeQuickVoice(
     language: cleanText(language, 24, 'language') || 'ko',
   }));
 
-  const text = cleanText(result.text ?? result.transcript, MAX_TRANSCRIPT_TEXT, 'transcript.text');
-  if (!text) throw new Error('STT 전사 원문이 필요합니다.');
+  const text = normalizeTranscriptText(result.text ?? result.transcript);
 
   const localRef = trustedAudioLocalRef(audio);
   const sourceAudioRef = Object.freeze({ localRef });
