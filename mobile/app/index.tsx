@@ -97,6 +97,7 @@ export default function HomeScreen() {
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editBusy, setEditBusy] = useState(false);
+  const [expandedBuckets, setExpandedBuckets] = useState<Partial<Record<BriefingBucket, boolean>>>({});
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
@@ -289,12 +290,16 @@ export default function HomeScreen() {
 
       {briefing ? briefingBuckets.map((bucket) => {
         const tasks = structure[bucket.key] || [];
+        const expanded = expandedBuckets[bucket.key] === true;
+        const visibleTasks = expanded ? tasks : tasks.slice(0, 3);
+        const extra = Math.max(0, tasks.length - 3);
         return <View key={bucket.key} style={[styles.briefingSection, sectionToneStyles[bucket.tone]]}>
           <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>{bucket.key === 'overdue' ? '🔴' : bucket.key === 'today' ? '🟠' : bucket.key === 'upcoming' ? '🔵' : '⚪'} {bucket.label}</Text><Text style={styles.sectionCount}>{tasks.length}</Text></View>
-          {tasks.length ? tasks.map((task, index) => <View key={task.pageId || `${bucket.key}-${index}`}>
+          {tasks.length ? visibleTasks.map((task, index) => <View key={task.pageId || `${bucket.key}-${index}`}>
             <TaskRow bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onEdit={() => void openTaskEditor(task)} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />
             {task.pageId && editTaskId === task.pageId ? <InlineTaskEditor title={editTitle} date={editDate} time={editTime} busy={editBusy} onTitle={setEditTitle} onDate={setEditDate} onTime={setEditTime} onSave={() => void saveTaskEditor()} onCancel={closeTaskEditor} /> : null}
           </View>) : <Text style={styles.emptyText}>해당 업무가 없습니다.</Text>}
+          {extra ? <Pressable accessibilityRole="button" accessibilityLabel={expanded ? `${bucket.label} 접기` : `${bucket.label} ${extra}개 더 보기`} style={styles.moreButton} onPress={() => setExpandedBuckets((value) => ({ ...value, [bucket.key]: !expanded }))}><Text style={styles.moreButtonText}>{expanded ? '접기' : `${extra}개 더 보기`}</Text></Pressable> : null}
         </View>;
       }) : null}
 
@@ -380,6 +385,8 @@ const styles = StyleSheet.create({
   sectionNeutral: { backgroundColor: '#f9fafb', borderColor: '#d1d5db' },
   briefingSectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   briefingSectionTitle: { fontSize: 17, fontWeight: '800', color: '#1f2937' },
+  moreButton: { minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
+  moreButtonText: { fontSize: 12, fontWeight: '800', color: '#374151' },
   sectionCount: { minWidth: 26, height: 26, textAlign: 'center', textAlignVertical: 'center', borderRadius: 13, overflow: 'hidden', backgroundColor: '#e5e7eb', color: '#374151', fontSize: 12, fontWeight: '800' },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.15)' },
   taskMain: { flex: 1, minWidth: 0, gap: 3 },
