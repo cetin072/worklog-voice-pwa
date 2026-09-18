@@ -69,3 +69,10 @@ test('Quick Voice accuracy checkpoint uses the larger multilingual base model ou
   assert.match(runtime, /60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe/);
   assert.doesNotMatch(runtime, /ggml-tiny\.bin/);
 });
+
+
+test('Quick Voice displays actual schedule creation truth instead of parser detection alone', () => {
+  assert.match(card, /scheduleCreated/);
+  assert.match(card, /일정 생성 완료/);
+  assert.doesNotMatch(card, /quickSave\?\.scheduleDetected \? <Text style=\{styles\.scheduleSuccess\}/);
+});
