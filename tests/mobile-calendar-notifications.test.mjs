@@ -44,6 +44,11 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(notificationSource, /이미 지났습니다/);
   assert.doesNotMatch(notificationSource, /08:30|09:00|16:30/);
   assert.match(scheduleActionsSource, /connectedCalendarLabel/);
+  assert.match(scheduleActionsSource, /synchronizeMappedScheduleToCalendar/);
+  assert.match(calendarSource, /getCalendarPermissions/);
+  assert.match(calendarSource, /reason: 'not-connected'/);
+  assert.match(scheduleActionsSource, /선택한 캘린더로 이동/);
+  assert.match(scheduleActionsSource, /selectionMatchesMapping/);
   assert.match(scheduleActionsSource, /✓ Google Calendar/);
   assert.match(scheduleActionsSource, /이 일정 알림:/);
   assert.match(scheduleActionsSource, /이 일정 알림 없음/);
