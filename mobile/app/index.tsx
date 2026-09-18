@@ -11,7 +11,7 @@ import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/sche
 import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-calendar';
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
-import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, saveWorklog, updateWorklogStatus } from '@/src/platform/worklog-api';
+import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, readWorklogDetails, saveWorklog, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 
 type AppScreen = 'home' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'patchNotes';
@@ -42,7 +42,7 @@ function taskNote(bucket: BriefingBucket, task: BriefingTask) {
   return '기한 없음';
 }
 
-function TaskRow({ bucket, task, onOpen, onComplete, completing = false }: { bucket: BriefingBucket; task: BriefingTask; onOpen: () => void; onComplete?: () => void; completing?: boolean }) {
+function TaskRow({ bucket, task, onOpen, onEdit, onComplete, completing = false }: { bucket: BriefingBucket; task: BriefingTask; onOpen: () => void; onEdit?: () => void; onComplete?: () => void; completing?: boolean }) {
   return <View style={styles.taskRow}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} style={styles.taskMain} onPress={onOpen}>
       <Text style={styles.taskTitle}>{task.title || '제목 없는 업무'}</Text>
@@ -50,7 +50,23 @@ function TaskRow({ bucket, task, onOpen, onComplete, completing = false }: { buc
       {task.institution ? <Text style={styles.taskBadge}>{task.institution}</Text> : null}
       {task.followUp ? <Text style={styles.followUp}>↳ {task.followUp}</Text> : null}
     </Pressable>
-    {task.pageId && onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 완료 처리`} disabled={completing} style={[styles.inlineComplete, completing ? styles.inlineCompleteBusy : null]} onPress={onComplete}><Text style={styles.inlineCompleteText}>{completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+    {task.pageId ? <View style={styles.taskActions}>
+      {onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 수정`} disabled={completing} style={styles.inlineEdit} onPress={onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
+      {onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 완료 처리`} disabled={completing} style={[styles.inlineComplete, completing ? styles.inlineCompleteBusy : null]} onPress={onComplete}><Text style={styles.inlineCompleteText}>{completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+    </View> : null}
+  </View>;
+}
+
+function InlineTaskEditor({ title, date, time, busy, onTitle, onDate, onTime, onSave, onCancel }: { title: string; date: string; time: string; busy: boolean; onTitle: (value: string) => void; onDate: (value: string) => void; onTime: (value: string) => void; onSave: () => void; onCancel: () => void }) {
+  return <View style={styles.inlineEditor}>
+    <Text style={styles.inlineEditorTitle}>업무 수정</Text>
+    <TextInput accessibilityLabel="수정할 업무명" placeholder="업무명" style={styles.input} value={title} onChangeText={onTitle} />
+    <View style={styles.inlineEditorDateRow}>
+      <TextInput accessibilityLabel="수정할 날짜" placeholder="YYYY-MM-DD" style={[styles.input, styles.inlineEditorDateInput]} value={date} onChangeText={onDate} />
+      <TextInput accessibilityLabel="수정할 시간" placeholder="HH:MM" style={[styles.input, styles.inlineEditorDateInput]} value={time} onChangeText={onTime} />
+    </View>
+    <Text style={styles.helpText}>날짜를 비우면 기한 없는 업무가 됩니다. 시간만 입력하려면 날짜도 필요합니다.</Text>
+    <View style={styles.inlineEditorActions}><Pressable accessibilityRole="button" style={styles.secondaryAction} disabled={busy} onPress={onCancel}><Text style={styles.secondaryActionText}>취소</Text></Pressable><Pressable accessibilityRole="button" style={styles.primaryAction} disabled={busy || !title.trim()} onPress={onSave}><Text style={styles.primaryActionText}>{busy ? '저장 중…' : '저장'}</Text></Pressable></View>
   </View>;
 }
 
@@ -76,6 +92,11 @@ export default function HomeScreen() {
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string } | null>(null);
+  const [editTaskId, setEditTaskId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
@@ -190,6 +211,64 @@ export default function HomeScreen() {
     }
   }
 
+  async function openTaskEditor(task: BriefingTask) {
+    if (!session || !task.pageId || editBusy) return;
+    setEditTaskId(task.pageId);
+    setEditTitle(task.title || '');
+    setEditDate(task.dueKey || '');
+    setEditTime('');
+    setEditBusy(true);
+    setMessage('');
+    try {
+      const details = await readWorklogDetails(session.access_token, task.pageId);
+      setEditTitle(details.title || task.title || '');
+      setEditDate(details.dueDate || '');
+      setEditTime(details.dueTime || '');
+    } catch (nextError) {
+      setMessage(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function saveTaskEditor() {
+    if (!session || !editTaskId || editBusy) return;
+    const nextTitle = editTitle.replace(/\s+/g, ' ').trim();
+    if (!nextTitle) {
+      setMessage('업무명을 입력해주세요.');
+      return;
+    }
+    if (editTime.trim() && !editDate.trim()) {
+      setMessage('시간을 설정하려면 날짜도 입력해주세요.');
+      return;
+    }
+    setEditBusy(true);
+    setMessage('');
+    try {
+      await updateWorklogDetails(session.access_token, {
+        pageId: editTaskId,
+        title: nextTitle,
+        dueDate: editDate.trim(),
+        dueTime: editTime.trim(),
+      });
+      setMessage('업무를 수정했습니다.');
+      setEditTaskId(null);
+      await refreshBriefing();
+    } catch (nextError) {
+      setMessage(messageOf(nextError, '업무 수정에 실패했습니다.'));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  function closeTaskEditor() {
+    if (editBusy) return;
+    setEditTaskId(null);
+    setEditTitle('');
+    setEditDate('');
+    setEditTime('');
+  }
+
   if (phase === 'loading') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><ActivityIndicator size="large" /><Text style={styles.statusText}>업무수첩을 연결하고 있습니다.</Text></View>;
   if (phase === 'error') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><Text style={styles.title}>연결을 확인해주세요</Text><Text style={styles.errorText}>{error}</Text><Button title="다시 시도" onPress={reload} /></View>;
 
@@ -212,7 +291,10 @@ export default function HomeScreen() {
         const tasks = structure[bucket.key] || [];
         return <View key={bucket.key} style={[styles.briefingSection, sectionToneStyles[bucket.tone]]}>
           <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>{bucket.key === 'overdue' ? '🔴' : bucket.key === 'today' ? '🟠' : bucket.key === 'upcoming' ? '🔵' : '⚪'} {bucket.label}</Text><Text style={styles.sectionCount}>{tasks.length}</Text></View>
-          {tasks.length ? tasks.map((task, index) => <TaskRow key={task.pageId || `${bucket.key}-${index}`} bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />) : <Text style={styles.emptyText}>해당 업무가 없습니다.</Text>}
+          {tasks.length ? tasks.map((task, index) => <View key={task.pageId || `${bucket.key}-${index}`}>
+            <TaskRow bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onEdit={() => void openTaskEditor(task)} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />
+            {task.pageId && editTaskId === task.pageId ? <InlineTaskEditor title={editTitle} date={editDate} time={editTime} busy={editBusy} onTitle={setEditTitle} onDate={setEditDate} onTime={setEditTime} onSave={() => void saveTaskEditor()} onCancel={closeTaskEditor} /> : null}
+          </View>) : <Text style={styles.emptyText}>해당 업무가 없습니다.</Text>}
         </View>;
       }) : null}
 
@@ -301,13 +383,26 @@ const styles = StyleSheet.create({
   sectionCount: { minWidth: 26, height: 26, textAlign: 'center', textAlignVertical: 'center', borderRadius: 13, overflow: 'hidden', backgroundColor: '#e5e7eb', color: '#374151', fontSize: 12, fontWeight: '800' },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.15)' },
   taskMain: { flex: 1, minWidth: 0, gap: 3 },
+  taskActions: { flexShrink: 0, gap: 6, alignItems: 'stretch' },
   taskTitle: { fontSize: 15, fontWeight: '700', color: '#30343b', lineHeight: 21 },
   taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 },
   taskBadge: { alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', color: '#374151', backgroundColor: '#e5e7eb', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   followUp: { fontSize: 13, color: '#4b515c', lineHeight: 18 },
+  inlineEdit: { minHeight: 36, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db' },
+  inlineEditText: { fontSize: 15 },
   inlineComplete: { minHeight: 38, minWidth: 54, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
   inlineCompleteBusy: { opacity: 0.55 },
   inlineCompleteText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  inlineEditor: { gap: 9, padding: 12, marginBottom: 8, borderRadius: 14, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
+  inlineEditorTitle: { fontSize: 14, fontWeight: '800', color: '#1f2937' },
+  inlineEditorDateRow: { flexDirection: 'row', gap: 8 },
+  inlineEditorDateInput: { flex: 1 },
+  inlineEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  primaryAction: { minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
+  primaryActionText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  secondaryAction: { minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
+  secondaryActionText: { color: '#374151', fontSize: 13, fontWeight: '800' },
+  helpText: { fontSize: 12, color: '#737985', lineHeight: 18 },
   undoBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, borderRadius: 14, backgroundColor: '#111827' },
   undoText: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
   undoAction: { color: '#fff', fontSize: 13, fontWeight: '900', textDecorationLine: 'underline' },
