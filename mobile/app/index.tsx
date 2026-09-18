@@ -311,13 +311,17 @@ export default function HomeScreen() {
     setEditBusy(true);
     setMessage('');
     try {
-      await updateWorklogDetails(session.access_token, {
+      const result = await updateWorklogDetails(session.access_token, {
         pageId: editTaskId,
         title: nextTitle,
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
       });
-      setMessage('업무를 수정했습니다.');
+      setMessage(result.unchanged
+        ? '변경된 내용이 없습니다.'
+        : result.scheduleUpdated
+          ? '업무를 수정했습니다. 연결된 일정·캘린더·알림도 최신 상태로 맞춥니다.'
+          : '업무를 수정했습니다.');
       setEditTaskId(null);
       await refreshBriefing();
     } catch (nextError) {
