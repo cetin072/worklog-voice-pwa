@@ -79,3 +79,63 @@ Supabase URL이나 publishable key를 모바일 저장소에 복사하지 않는
 - 인증/권한의 최종 판정은 기존 서버/DB/RLS가 맡는다.
 - 세션은 SecureStore adapter에 저장하며 큰 세션 값은 안전한 크기로 분할한다.
 - 녹음 원본은 사용자 승인 없는 자동 업로드를 하지 않는다.
+
+
+## 빠른 실기기 QA 루프
+
+모바일 UI/TypeScript 변경을 확인할 때마다 release APK를 다시 내려받아 설치하지 않는다.
+
+### 1) 개발 빌드 1회 설치
+
+Android 기기를 USB로 연결하고 USB 디버깅을 허용한 뒤:
+
+```bash
+cd mobile
+npm ci
+npm run android:device
+```
+
+이 명령은 현재 native 구성(whisper.rn, Calendar, Notifications, background recording 포함)으로 Android development build를 생성해 연결된 기기에 설치한다.
+
+새 native dependency, Expo config plugin, Android permission/manifest, Expo/RN native version이 바뀌지 않는 한 매 UI 수정마다 다시 설치하지 않는다.
+
+### 2) 이후 JS/TS/UI 변경 반복 확인
+
+```bash
+cd mobile
+npm run start:device
+```
+
+설치된 development build를 실행하면 Metro의 최신 JS/TS bundle을 받아 Fast Refresh/Reload로 확인한다.
+
+대표적인 재설치 불필요 변경:
+- 로그인/Home/브리핑/설정 UI
+- 버튼/문구/색상/레이아웃
+- 일반 TypeScript business logic
+- API 요청/응답 처리
+- Quick Voice 상태 UI
+- Calendar/notification 화면 문구와 상태 표시
+
+### 3) development build를 다시 만들어야 하는 경우
+
+다음 변경이 있을 때만 `npm run android:device`로 development build를 다시 설치한다.
+
+- native npm package 추가/제거/업데이트
+- Expo config plugin 변경
+- Android permission/manifest 변경
+- scheme/deep-link native config 변경
+- whisper.rn 등 STT native runtime 변경
+- Expo/RN native version 변경
+
+### 4) Release APK 생성 시점
+
+standalone ARM64 release APK는 작은 UI 수정마다 만들지 않는다.
+
+- native 변경 checkpoint
+- milestone 종료
+- 최종 Human QA
+- release 후보
+
+에서만 생성한다.
+
+개발용 Metro loop와 production 배포는 분리하며, production OTA/Play Store/production credential 변경은 별도 승인 없이는 수행하지 않는다.
