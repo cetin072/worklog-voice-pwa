@@ -48,4 +48,8 @@ test('whisper.rn adapter reports model identity through the provider-neutral tra
   assert.match(source, /model: input\.model\.descriptor\.id/);
   assert.match(source, /language: result\.language \|\| language/);
   assert.match(source, /result\.isAborted/);
+  assert.match(source, /result\.segments/);
+  assert.match(source, /segmentText/);
+  assert.match(source, /startMs:/);
+  assert.match(source, /endMs:/);
 });
