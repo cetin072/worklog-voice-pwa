@@ -7,6 +7,7 @@ const adapterPath = 'mobile/src/features/voice/providers/whisper-rn-provider.ts'
 const runtimePath = 'mobile/src/features/voice/providers/whisper-rn-runtime.ts';
 const source = fs.readFileSync(adapterPath, 'utf8');
 const runtime = fs.readFileSync(runtimePath, 'utf8');
+const mobilePackage = JSON.parse(fs.readFileSync('mobile/package.json', 'utf8'));
 
 test('whisper.rn stays isolated in a provider adapter and consumes raw PCM through transcribeData', () => {
   assert.match(source, /createWhisperRnTranscriptionProvider/);
@@ -31,6 +32,11 @@ test('only the provider composition runtime references the concrete whisper.rn p
     .filter((file) => /['"]whisper\.rn\/index['"]/.test(fs.readFileSync(file, 'utf8')));
 
   assert.deepEqual(concreteReferences, [runtimePath]);
+});
+
+test('release Metro bundle includes whisper.rn\'s explicit buffer polyfill', () => {
+  // safe-buffer imports `buffer`, which Metro cannot resolve from Node built-ins.
+  assert.equal(mobilePackage.dependencies.buffer, '6.0.3');
 });
 
 test('whisper.rn adapter reports model identity through the provider-neutral transcript result', () => {
