@@ -13,6 +13,18 @@ export type QuickVoicePcmSignal = Readonly<{
   nonZeroRatio: number;
 }>;
 
+export type PreparedPcmFileAudioInput = {
+  sourceKind: 'prepared-pcm-file';
+  uri: string;
+  fileName: string;
+  mimeType: 'audio/wav';
+  sampleRate: number;
+  channels: number;
+  encoding: 'pcm16-wav';
+  durationMs: number;
+  createdAt: string;
+};
+
 export type QuickVoicePcmAudioInput = {
   sourceKind: 'quick-voice-pcm';
   localRef: string;
@@ -25,7 +37,7 @@ export type QuickVoicePcmAudioInput = {
   signal: QuickVoicePcmSignal;
 };
 
-export type MobileSttAudioInput = MobileRecordingAudioInput | QuickVoicePcmAudioInput;
+export type MobileSttAudioInput = MobileRecordingAudioInput | PreparedPcmFileAudioInput | QuickVoicePcmAudioInput;
 
 function fileNameFromUri(uri: string) {
   const cleanUri = uri.split(/[?#]/, 1)[0];
@@ -75,6 +87,39 @@ export function createMobileRecordingAudioInput(input: {
   };
 }
 
+export function createPreparedPcmFileAudioInput(input: {
+  uri: string;
+  sampleRate: number;
+  channels: number;
+  durationMs: number;
+  createdAt?: string;
+}): PreparedPcmFileAudioInput {
+  const uri = input.uri.trim();
+  if (!uri) throw new Error('전처리된 PCM/WAV 파일 경로가 없습니다.');
+  if (!Number.isFinite(input.sampleRate) || input.sampleRate <= 0) {
+    throw new Error('전처리된 PCM/WAV sampleRate가 올바르지 않습니다.');
+  }
+  if (!Number.isInteger(input.channels) || input.channels <= 0) {
+    throw new Error('전처리된 PCM/WAV channels가 올바르지 않습니다.');
+  }
+  const fileName = fileNameFromUri(uri);
+  if (!fileName.toLowerCase().endsWith('.wav')) {
+    throw new Error('STT 전처리 결과는 WAV 파일이어야 합니다.');
+  }
+
+  return Object.freeze({
+    sourceKind: 'prepared-pcm-file' as const,
+    uri,
+    fileName,
+    mimeType: 'audio/wav' as const,
+    sampleRate: Math.round(input.sampleRate),
+    channels: input.channels,
+    encoding: 'pcm16-wav' as const,
+    durationMs: Math.max(0, Math.round(input.durationMs)),
+    createdAt: normalizedCreatedAt(input.createdAt),
+  });
+}
+
 export function createQuickVoicePcmAudioInput(input: {
   localRef: string;
   data: ArrayBuffer;
@@ -114,7 +159,7 @@ export function createQuickVoicePcmAudioInput(input: {
 }
 
 export function trustedAudioLocalRef(audio: MobileSttAudioInput) {
-  if (audio.sourceKind === 'mobile-recording') {
+  if (audio.sourceKind === 'mobile-recording' || audio.sourceKind === 'prepared-pcm-file') {
     const uri = audio.uri.trim();
     if (!uri) throw new Error('검증된 모바일 녹음 경로가 필요합니다.');
     return uri;
