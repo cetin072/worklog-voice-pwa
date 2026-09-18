@@ -43,7 +43,7 @@ function calendarSubtitle(calendar: WritableCalendarOption) {
   return account || calendar.sourceName || '휴대폰 캘린더';
 }
 
-export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule }) {
+export function ScheduleDeviceActions({ schedule, compactOnly = false }: { schedule: BriefingSchedule; compactOnly?: boolean }) {
   const { client } = usePlatform();
   const [calendarOptions, setCalendarOptions] = useState<WritableCalendarOption[]>([]);
   const [calendarId, setCalendarId] = useState<string | null>(null);
@@ -200,12 +200,12 @@ export function ScheduleDeviceActions({ schedule }: { schedule: BriefingSchedule
         <Text style={[styles.connectionStatus, calendarSynced ? styles.connectionOn : styles.connectionOff]}>{connectedCalendarLabel}</Text>
         <Text style={styles.reminderStatus}>{reminderSummary}</Text>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={expanded ? '이 일정 설정 접기' : '이 일정 설정 펼치기'} style={styles.expandButton} onPress={() => setExpanded((value) => !value)}>
+      {!compactOnly ? <Pressable accessibilityRole="button" accessibilityLabel={expanded ? '이 일정 설정 접기' : '이 일정 설정 펼치기'} style={styles.expandButton} onPress={() => setExpanded((value) => !value)}>
         <Text style={styles.expandText}>{expanded ? '설정 접기 ▴' : '설정 ▾'}</Text>
-      </Pressable>
+      </Pressable> : null}
     </View>
 
-    {expanded ? <View style={styles.expanded}>
+    {!compactOnly && expanded ? <View style={styles.expanded}>
       <View style={styles.section}>
         <Text style={styles.heading}>캘린더 연결</Text>
         <Text style={styles.help}>이 일정만 선택한 휴대폰/Google Calendar와 동기화합니다.</Text>
