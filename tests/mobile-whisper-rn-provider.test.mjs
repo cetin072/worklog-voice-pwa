@@ -9,12 +9,17 @@ const source = fs.readFileSync(adapterPath, 'utf8');
 const runtime = fs.readFileSync(runtimePath, 'utf8');
 const mobilePackage = JSON.parse(fs.readFileSync('mobile/package.json', 'utf8'));
 
-test('whisper.rn stays isolated in a provider adapter and consumes raw PCM through transcribeData', () => {
+test('whisper.rn stays isolated in a provider adapter and converts Expo PCM16 before transcribeData', () => {
   assert.match(source, /createWhisperRnTranscriptionProvider/);
+  assert.match(source, /pcm16LittleEndianToFloat32Buffer/);
+  assert.match(source, /new DataView\(data\)/);
+  assert.match(source, /new Float32Array\(data\.byteLength \/ 2\)/);
+  assert.match(source, /getInt16\(index \* 2, true\) \/ 32_768/);
   assert.match(source, /createConfiguredMobileTranscriptionProvider/);
   assert.match(source, /provider: 'whisper-rn'/);
   assert.match(source, /transcribeData/);
-  assert.match(source, /audio\.data/);
+  assert.match(source, /const whisperPcm = pcm16LittleEndianToFloat32Buffer\(audio\.data\)/);
+  assert.match(source, /transcribeData\(whisperPcm/);
   assert.match(source, /16_000/);
   assert.match(source, /audio\.channels !== 1/);
   assert.match(source, /audio\.encoding !== 'int16'/);
