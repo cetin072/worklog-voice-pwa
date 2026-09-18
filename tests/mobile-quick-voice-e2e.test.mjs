@@ -48,9 +48,8 @@ test('Quick Voice exposes device timing metrics for human benchmark without prov
   assert.match(flow, /saveStartedAt = Date\.now\(\)/);
   assert.match(flow, /refreshStartedAt = Date\.now\(\)/);
   assert.match(card, /providerPrepareMs/);
-  assert.match(card, /실기기 측정/);
   assert.match(card, /PCM \{quickAudio\.sampleRate\}Hz/);
-  assert.match(card, /모델 준비 \{formatMs\(providerPrepareMs\)\}/);
+  assert.match(card, /모델 \{formatMs\(providerPrepareMs\)\}/);
   assert.match(card, /전사 \{formatMs\(flowTimings\?\.transcribeMs/);
   assert.doesNotMatch(card, /whisper\.rn|initWhisper|transcribeData/);
 });
