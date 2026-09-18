@@ -53,3 +53,10 @@ test('Quick Voice exposes device timing metrics for human benchmark without prov
   assert.match(card, /전사 \{formatMs\(flowTimings\?\.transcribeMs/);
   assert.doesNotMatch(card, /whisper\.rn|initWhisper|transcribeData/);
 });
+
+
+test('Android digest hashes model bytes through a TypedArray instead of a bare ArrayBuffer', () => {
+  assert.match(downloader, /const bytes = new Uint8Array\(await file\.arrayBuffer\(\)\)/);
+  assert.match(downloader, /Crypto\.digest\(Crypto\.CryptoDigestAlgorithm\.SHA256, bytes\)/);
+  assert.doesNotMatch(downloader, /Crypto\.digest\(Crypto\.CryptoDigestAlgorithm\.SHA256, await file\.arrayBuffer\(\)\)/);
+});
