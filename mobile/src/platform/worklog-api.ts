@@ -46,6 +46,37 @@ export type MobileBriefing = {
   scheduleEnabled?: boolean;
 };
 
+export type WorkJournalRecord = {
+  pageId?: string;
+  title?: string;
+  institution?: string;
+  status?: string;
+  followUp?: string;
+  journalDate?: string;
+  dueAt?: string;
+  completedAt?: string;
+  recordedAt?: string;
+};
+
+export type WorkJournalNote = {
+  pageId?: string;
+  title?: string;
+  institution?: string;
+  briefingState?: string;
+  journalDate?: string;
+  recordedAt?: string;
+  editedAt?: string;
+};
+
+export type WorkJournalDay = {
+  targetDate: string;
+  today: string;
+  schedules: BriefingSchedule[];
+  completed: WorkJournalRecord[];
+  notes: WorkJournalNote[];
+  openTasks: WorkJournalRecord[];
+};
+
 export type WorkRecordSearchStatus = 'completed' | 'in_progress' | 'waiting' | 'needs_review';
 
 export type WorkRecordSearchResult = {
@@ -204,6 +235,41 @@ export async function loadBriefing(accessToken: string) {
     },
   });
   return parseMobileBriefing(await readJson(response));
+}
+
+export function parseWorkJournalDay(body: Record<string, unknown>): WorkJournalDay {
+  const targetDate = asText(body.targetDate);
+  const today = asText(body.today);
+  const schedules = Array.isArray(body.schedules) ? body.schedules : null;
+  const completed = Array.isArray(body.completed) ? body.completed : null;
+  const notes = Array.isArray(body.notes) ? body.notes : null;
+  const openTasks = Array.isArray(body.openTasks) ? body.openTasks : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(today)
+    || !schedules || !completed || !notes || !openTasks) {
+    throw new Error('업무일지 응답을 확인하지 못했습니다.');
+  }
+  return {
+    targetDate,
+    today,
+    schedules: schedules as BriefingSchedule[],
+    completed: completed as WorkJournalRecord[],
+    notes: notes as WorkJournalNote[],
+    openTasks: openTasks as WorkJournalRecord[],
+  };
+}
+
+export async function loadWorkJournalDay(accessToken: string, date: string): Promise<WorkJournalDay> {
+  const target = date.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(target)) throw new Error('업무일지 날짜가 올바르지 않습니다.');
+  const response = await fetch(`${getApiBaseUrl()}/api/work-journal?date=${encodeURIComponent(target)}`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+  return parseWorkJournalDay(await readJson(response));
 }
 
 export async function saveWorklog(
