@@ -13,6 +13,8 @@ on:
       - 'mobile/app.config.ts'
       - 'mobile/package-lock.json'
       - 'tests/mobile-*.test.mjs'
+      - 'tests/helpers/**'
+      - 'scripts/verify-mobile-device-mutations.mjs'
       - '.github/workflows/mobile-foundation.yml'
   workflow_dispatch:
     inputs:
@@ -110,8 +112,18 @@ jobs:
         env:
           CI: '1'
         run: npx expo export --platform android --output-dir /tmp/worklog-mobile-android-export --clear
-      - name: Run mobile contract tests
+      - name: Run mobile contract and production-source runtime tests
         run: node --test tests/mobile-*.test.mjs
+      - name: Verify device-state tests reject broken implementations
+        run: node scripts/verify-mobile-device-mutations.mjs "$RUNNER_TEMP/device-state-mutations"
+      - name: Upload device-state mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-device-state-mutations
+          path: ${{ runner.temp }}/device-state-mutations/
+          if-no-files-found: ignore
+          retention-days: 7
 
   android-standalone:
     needs:

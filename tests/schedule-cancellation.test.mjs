@@ -20,7 +20,7 @@ test('Mobile cancellation records recoverable cleanup only after the server canc
   assert.match(mobileCancellation, /PENDING_SCHEDULE_CLEANUP_KEY/);
   assert.match(mobileCancellation, /client\.rpc\('cancel_my_schedule'/);
   const rpc = mobileCancellation.indexOf("client.rpc('cancel_my_schedule'");
-  const pending = mobileCancellation.indexOf('savePendingScheduleIds([...pending, scheduleId]);');
+  const pending = mobileCancellation.indexOf('updatePendingScheduleIds((ids) => [...ids, scheduleId]);');
   const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId);');
   assert.ok(rpc >= 0);
   assert.ok(pending > rpc, 'pending cleanup must be saved after a successful server RPC');

@@ -215,9 +215,12 @@ export default function HomeScreen() {
     if (client && session) {
       void (async () => {
         await reconcileCanceledScheduleArtifacts(client);
-        await reconcileCalendarEventCleanup();
-        await reconcileScheduleReminders();
-      })().catch(() => undefined);
+        const calendarRecovery = await reconcileCalendarEventCleanup();
+        const reminderRecovery = await reconcileScheduleReminders();
+        if (calendarRecovery.remaining || reminderRecovery.failed || reminderRecovery.pending || reminderRecovery.untracked) {
+          showMessage('일부 캘린더·알림은 복구 또는 확인이 필요합니다. 일정별 상태와 다시 확인 버튼을 확인해주세요.', 'error');
+        }
+      })().catch((error) => showMessage(messageOf(error, '기기 일정 복구를 완료하지 못했습니다.'), 'error'));
     }
     void Notifications.getLastNotificationResponseAsync().then(handleNotificationResponse).catch(() => undefined);
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => { void handleNotificationResponse(response); });

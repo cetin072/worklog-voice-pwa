@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { configureScheduleNotificationHandler } from '@/src/features/schedule/local-notifications';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -6,6 +8,7 @@ import { MeetingRecordingProvider } from '@/src/features/voice/meeting-recording
 import { AppErrorBoundary } from '@/src/ui/app-error-boundary';
 
 export default function RootLayout() {
+  useEffect(() => { configureScheduleNotificationHandler(); }, []);
   return (
     <AppErrorBoundary>
       <SafeAreaProvider>

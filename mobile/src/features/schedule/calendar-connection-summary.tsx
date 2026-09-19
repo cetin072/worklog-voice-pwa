@@ -39,11 +39,11 @@ export function CalendarConnectionSummary({
     return () => { active = false; };
   }, [refreshKey]);
 
-  const connected = status.state === 'connected';
+  const connected = !error && status.state === 'connected';
   const body = <View style={[styles.root, compact ? styles.rootCompact : null, connected ? styles.rootConnected : null]}>
     <View style={styles.iconWrap}><Text style={styles.icon}>{connected ? '✓' : status.state === 'permission-required' ? '!' : '○'}</Text></View>
     <View style={styles.copy}>
-      <Text style={[styles.label, connected ? styles.labelConnected : null]}>{status.label}</Text>
+      <Text style={[styles.label, connected ? styles.labelConnected : null]}>{error ? '캘린더 확인 실패' : status.label}</Text>
       <Text style={styles.detail}>{error || status.detail}</Text>
     </View>
     {onPressManage ? <Text style={styles.action}>관리 ›</Text> : null}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -6,7 +6,6 @@ import {
   getScheduleCalendarMapping,
   listWritableCalendarOptions,
   removeScheduleFromCalendar,
-  setPreferredCalendarId,
   synchronizeScheduleToPreferredCalendar,
   syncScheduleToCalendar,
   type WritableCalendarOption,
@@ -22,6 +21,7 @@ import {
   type ReminderOffsetMinutes,
   type ScheduleReminder,
 } from './local-notifications';
+import { CHECKING_DEVICE_SYNC, collectDeviceSyncResult, type DeviceSyncResult } from './device-sync-result';
 import { cancelScheduleWithDeviceCleanup } from './schedule-cancellation';
 import type { BriefingSchedule } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
@@ -54,58 +54,72 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [syncResult, setSyncResult] = useState<DeviceSyncResult>(CHECKING_DEVICE_SYNC);
+  const [retryKey, setRetryKey] = useState(0);
+  const requestVersion = useRef(0);
 
   const scheduleId = schedule.scheduleId || '';
   const startsAt = schedule.startsAt || '';
 
   useEffect(() => {
     if (!scheduleId) return;
+    const version = ++requestVersion.current;
+    setBusy(true); setSyncResult(CHECKING_DEVICE_SYNC); setCalendarSynced(false);
     void (async () => {
-      const deviceSchedule = {
-        scheduleId,
-        title: schedule.title || '업무수첩 일정',
-        startsAt,
-        allDay: schedule.allDay,
-        location: schedule.location,
-      };
-      await synchronizeScheduleReminders({ scheduleId, title: deviceSchedule.title, scheduleStartsAt: startsAt }).catch(() => undefined);
-      await synchronizeScheduleToPreferredCalendar(deviceSchedule).catch(() => undefined);
-      const [preferred, mapping, savedReminders] = await Promise.all([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]);
-      setCalendarId(mapping?.calendarId || preferred);
-      setCalendarSynced(Boolean(mapping));
-      setCalendarMapping(mapping);
-      setReminders(savedReminders);
-    })().catch(() => undefined);
-  }, [scheduleId, startsAt, schedule.title]);
+      const deviceSchedule = { scheduleId, title: schedule.title || '업무수첩 일정', startsAt, allDay: schedule.allDay, location: schedule.location };
+      const result = await collectDeviceSyncResult({
+        reminders: () => synchronizeScheduleReminders({ scheduleId, title: deviceSchedule.title, scheduleStartsAt: startsAt }),
+        calendar: () => synchronizeScheduleToPreferredCalendar(deviceSchedule),
+      });
+      const [preferred, mapping, savedReminders] = await Promise.allSettled([getPreferredCalendarId(), getScheduleCalendarMapping(scheduleId), listScheduleReminders(scheduleId)]);
+      if (version !== requestVersion.current) return;
+      if (mapping.status === 'fulfilled') {
+        setCalendarMapping(mapping.value);
+        setCalendarId(mapping.value?.calendarId || (preferred.status === 'fulfilled' ? preferred.value : null));
+      } else {
+        result.calendar = { status: 'error', message: '캘린더 연결 기록을 읽지 못했습니다. 반영 완료로 표시하지 않습니다.' };
+      }
+      if (preferred.status === 'rejected') result.calendar = { status: 'error', message: '기본 캘린더 설정을 확인하지 못했습니다.' };
+      if (savedReminders.status === 'fulfilled') setReminders(savedReminders.value);
+      else result.reminders = { status: 'error', message: '알림 예약 기록을 읽지 못했습니다. 다시 확인해주세요.' };
+      setCalendarSynced(result.calendar.status === 'synced' && mapping.status === 'fulfilled' && Boolean(mapping.value));
+      setSyncResult(result); setBusy(false);
+    })().catch((error) => {
+      if (version !== requestVersion.current) return;
+      const text = error instanceof Error ? error.message : '기기 동기화 상태를 확인하지 못했습니다.';
+      setBusy(false); setCalendarSynced(false);
+      setSyncResult({ reminders: { status: 'error', message: text }, calendar: { status: 'error', message: text } });
+    });
+    return () => { if (requestVersion.current === version) requestVersion.current += 1; };
+  }, [scheduleId, startsAt, schedule.title, schedule.allDay, schedule.location, retryKey]);
 
   if (!scheduleId || !startsAt) return null;
 
   async function loadCalendars() {
-    setBusy(true); setMessage('');
+    requestVersion.current += 1; setBusy(true); setMessage('');
     try {
       const calendars = await listWritableCalendarOptions();
       setCalendarOptions(calendars);
       setCalendarLoaded(true);
       if (!calendars.length) throw new Error('수정 가능한 휴대폰 캘린더가 없습니다. Android 설정에서 Google 계정을 추가하고 Calendar 동기화를 켜주세요.');
       const current = calendars.find((calendar) => calendar.id === calendarId);
-      const selected = current || calendars.find((calendar) => calendar.isGoogle && calendar.isPrimary) || calendars.find((calendar) => calendar.isGoogle) || calendars.find((calendar) => calendar.isPrimary) || calendars[0];
-      setCalendarId(selected.id);
-      await setPreferredCalendarId(selected.id);
-      setMessage(selected.isGoogle ? `${selected.title} Google Calendar를 선택했습니다.` : `${selected.title} 캘린더를 선택했습니다.`);
+      // Opening a list does not select an account or grant sync consent.
+      setCalendarId(current?.id || null);
+      setMessage('이 일정에 사용할 계정과 캘린더를 직접 선택해주세요. 기본값은 변경하지 않습니다.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '캘린더 목록을 불러오지 못했습니다.');
+      const text = error instanceof Error ? error.message : '캘린더 목록을 불러오지 못했습니다.';
+      setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } }));
     } finally { setBusy(false); }
   }
 
-  async function chooseCalendar(calendar: WritableCalendarOption) {
+  function chooseCalendar(calendar: WritableCalendarOption) {
     setCalendarId(calendar.id);
-    await setPreferredCalendarId(calendar.id);
-    setMessage(calendar.isGoogle ? `${calendar.title} Google Calendar를 기본 대상으로 선택했습니다.` : `${calendar.title} 캘린더를 선택했습니다.`);
+    setMessage(`${calendar.ownerAccount || calendar.title} · 이 일정의 전송 대상으로 선택했습니다. 기본 캘린더는 바뀌지 않습니다.`);
   }
 
   async function syncCalendar() {
     if (!calendarId) return;
-    setBusy(true); setMessage('');
+    requestVersion.current += 1; setBusy(true); setMessage('');
     try {
       const result = await syncScheduleToCalendar(calendarId, {
         scheduleId,
@@ -115,27 +129,33 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
         location: schedule.location,
       });
       setCalendarSynced(true);
+      setSyncResult((s) => ({ ...s, calendar: { status: 'synced', message: '' } }));
       setCalendarMapping(await getScheduleCalendarMapping(scheduleId));
       setMessage(result.created ? '선택한 캘린더에 일정을 추가했습니다.' : '선택한 캘린더 일정이 최신 상태입니다.');
-    } catch (error) { setMessage(error instanceof Error ? error.message : '캘린더 동기화에 실패했습니다.'); } finally { setBusy(false); }
+    } catch (error) { const text = error instanceof Error ? error.message : '캘린더 동기화에 실패했습니다.'; setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } })); } finally { setBusy(false); }
   }
 
   async function removeCalendarEvent() {
-    setBusy(true); setMessage('');
+    requestVersion.current += 1; setBusy(true); setMessage('');
     try {
       const removed = await removeScheduleFromCalendar(scheduleId);
       setCalendarSynced(false);
       setCalendarMapping(null);
+      setSyncResult((s) => ({ ...s, calendar: { status: 'not-connected', message: '이 일정의 캘린더 연결을 해제했습니다.' } }));
       setMessage(removed ? '휴대폰/Google Calendar에서 이 일정을 제거했습니다.' : '연결된 캘린더 일정이 없습니다.');
-    } catch (error) { setMessage(error instanceof Error ? error.message : '캘린더 일정 제거에 실패했습니다.'); } finally { setBusy(false); }
+    } catch (error) { const text = error instanceof Error ? error.message : '캘린더 일정 제거에 실패했습니다.'; setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } })); } finally { setBusy(false); }
   }
 
   async function refreshReminders() {
-    setReminders(await listScheduleReminders(scheduleId));
+    try { setReminders(await listScheduleReminders(scheduleId)); }
+    catch (error) {
+      const text = error instanceof Error ? error.message : '알림 기록을 확인하지 못했습니다.';
+      setSyncResult((s) => ({ ...s, reminders: { status: 'error', message: text } }));
+    }
   }
 
   async function toggleReminder(offsetMinutes: ReminderOffsetMinutes) {
-    setBusy(true); setMessage('');
+    requestVersion.current += 1; setBusy(true); setMessage('');
     try {
       const active = reminders.some((reminder) => reminder.offsetMinutes === offsetMinutes);
       if (active) {
@@ -145,16 +165,28 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
         await scheduleReminder({ scheduleId, title: schedule.title || '업무수첩 일정', scheduleStartsAt: startsAt, offsetMinutes });
         setMessage('일정 알림을 예약했습니다.');
       }
-    } catch (error) { setMessage(error instanceof Error ? error.message : '일정 알림을 변경하지 못했습니다.'); } finally { await refreshReminders().catch(() => undefined); setBusy(false); }
+      const verified = await synchronizeScheduleReminders({ scheduleId, title: schedule.title || '업무수첩 일정', scheduleStartsAt: startsAt });
+      if (verified.failed) throw new Error(`요청한 알림 작업은 반영했지만 다른 알림 ${verified.failed}개 확인이 필요합니다.`);
+      setSyncResult((s) => ({ ...s, reminders: { status: 'synced', message: '' } }));
+    } catch (error) {
+      const text = error instanceof Error ? error.message : '일정 알림을 변경하지 못했습니다.';
+      setMessage(text); setSyncResult((s) => ({ ...s, reminders: { status: 'error', message: text } }));
+    } finally { await refreshReminders(); setBusy(false); }
   }
 
   async function clearReminders() {
-    setBusy(true); setMessage('');
+    requestVersion.current += 1; setBusy(true); setMessage('');
     try {
       const count = await cancelAllScheduleReminders(scheduleId);
       setReminders([]);
+      const verified = await synchronizeScheduleReminders({ scheduleId, title: schedule.title || '업무수첩 일정', scheduleStartsAt: startsAt });
+      if (verified.failed) throw new Error(`요청한 알림 작업은 반영했지만 다른 알림 ${verified.failed}개 확인이 필요합니다.`);
+      setSyncResult((s) => ({ ...s, reminders: { status: 'synced', message: '' } }));
       setMessage(count ? `${count}개의 일정 알림을 모두 취소했습니다.` : '예약된 일정 알림이 없습니다.');
-    } catch (error) { setMessage(error instanceof Error ? error.message : '일정 알림을 취소하지 못했습니다.'); } finally { await refreshReminders().catch(() => undefined); setBusy(false); }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : '일정 알림을 취소하지 못했습니다.';
+      setMessage(text); setSyncResult((s) => ({ ...s, reminders: { status: 'error', message: text } }));
+    } finally { await refreshReminders(); setBusy(false); }
   }
 
   async function cancelSchedule() {
@@ -162,15 +194,18 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       setMessage('일정 취소 세션을 확인하지 못했습니다. 다시 로그인해 주세요.');
       return;
     }
-    setBusy(true); setMessage('');
+    requestVersion.current += 1; setBusy(true); setMessage('');
     try {
       await cancelScheduleWithDeviceCleanup(client, scheduleId);
       setCalendarSynced(false);
       setCalendarMapping(null);
       setReminders([]);
+      setSyncResult({ reminders: { status: 'synced', message: '' }, calendar: { status: 'not-connected', message: '' } });
       setMessage('일정을 취소하고 연결된 Calendar 이벤트와 알림을 정리했습니다. 브리핑을 다시 정리하면 목록에서 사라집니다.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '일정을 취소하지 못했습니다.');
+      const text = error instanceof Error ? error.message : '일정을 취소하지 못했습니다.';
+      setMessage(text); setCalendarSynced(false);
+      setSyncResult({ reminders: { status: 'error', message: text }, calendar: { status: 'error', message: text } });
     } finally { setBusy(false); }
   }
 
@@ -185,12 +220,12 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
   const mappedCalendarOption = calendarOptions.find((calendar) => calendar.id === calendarMapping?.calendarId);
   const hasGoogleCalendar = calendarOptions.some((calendar) => calendar.isGoogle);
   const selectionMatchesMapping = Boolean(calendarMapping && calendarId && calendarMapping.calendarId === calendarId);
-  const connectedCalendarLabel = calendarMapping
+  const connectedCalendarLabel = calendarSynced && calendarMapping
     ? (calendarMapping.calendarIsGoogle ?? mappedCalendarOption?.isGoogle)
       ? `✓ Google Calendar · ${calendarMapping.calendarOwnerAccount || mappedCalendarOption?.ownerAccount || calendarMapping.calendarTitle || mappedCalendarOption?.title || '연결됨'}`
       : `✓ ${calendarMapping.calendarTitle || mappedCalendarOption?.title || calendarMapping.calendarSourceName || mappedCalendarOption?.sourceName || '휴대폰 캘린더'}`
-    : '미연결';
-  const reminderSummary = reminders.length
+    : syncResult.calendar.status === 'checking' ? '캘린더 확인 중' : syncResult.calendar.status === 'error' ? '⚠ 캘린더 반영 확인 필요' : '미연결';
+  const reminderSummary = syncResult.reminders.status !== 'synced' ? (syncResult.reminders.status === 'checking' ? '알림 확인 중' : '⚠ 알림 예약 확인 필요') : reminders.length
     ? `🔔 이 일정 알림: ${reminders.map((reminder) => REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`).join(' · ')}`
     : '🔕 이 일정 알림 없음';
 
@@ -205,6 +240,9 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       </Pressable> : null}
     </View>
 
+    {syncResult.calendar.message && syncResult.calendar.status !== 'checking' ? <Text style={styles.warning}>{syncResult.calendar.message}</Text> : null}
+    {syncResult.reminders.message && syncResult.reminders.status === 'error' ? <Text style={styles.warning}>{syncResult.reminders.message}</Text> : null}
+    {syncResult.reminders.status === 'error' || syncResult.calendar.status === 'error' || syncResult.calendar.status === 'permission' ? <Button title="기기 반영 다시 확인" disabled={busy} onPress={() => setRetryKey((v) => v + 1)} /> : null}
     {!compactOnly && expanded ? <View style={styles.expanded}>
       <View style={styles.section}>
         <Text style={styles.heading}>캘린더 연결</Text>
@@ -216,7 +254,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
           <Text style={styles.choiceMeta}>{calendarSubtitle(calendar)}</Text>
         </Pressable>)}
         {calendarLoaded && selectedCalendar ? <Button title={busy ? '동기화 중...' : calendarMapping ? selectionMatchesMapping ? '연결된 캘린더와 다시 동기화' : '선택한 캘린더로 이동' : '이 일정 캘린더에 추가'} disabled={busy} onPress={() => void syncCalendar()} /> : null}
-        {calendarSynced ? <Button title="캘린더에서 이 일정 제거" disabled={busy} onPress={() => void removeCalendarEvent()} /> : null}
+        {calendarMapping ? <Button title="캘린더에서 이 일정 제거" disabled={busy} onPress={() => void removeCalendarEvent()} /> : null}
       </View>
 
       <View style={styles.section}>
@@ -226,11 +264,11 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
           const active = reminders.some((reminder) => reminder.offsetMinutes === preset.offsetMinutes);
           const triggerAt = reminderTriggerAt(startsAt, preset.offsetMinutes);
           const available = triggerAt.getTime() > Date.now();
-          return <Pressable key={preset.offsetMinutes} accessibilityRole="button" disabled={busy || !available} style={[styles.preset, active ? styles.presetActive : null, !available ? styles.presetDisabled : null]} onPress={() => void toggleReminder(preset.offsetMinutes)}>
-            <Text style={[styles.presetText, active ? styles.presetTextActive : null]}>{active ? '✓ ' : ''}{preset.label}</Text>
+          return <Pressable key={preset.offsetMinutes} accessibilityRole="button" disabled={busy || (!available && !active)} style={[styles.preset, active ? styles.presetActive : null, !available ? styles.presetDisabled : null]} onPress={() => void toggleReminder(preset.offsetMinutes)}>
+            <Text style={[styles.presetText, active ? styles.presetTextActive : null]}>{active ? syncResult.reminders.status === 'synced' ? '✓ ' : '? ' : ''}{preset.label}</Text>
           </Pressable>;
         })}</View>
-        {reminders.length ? <View style={styles.reminderSummary}><Text style={styles.summaryTitle}>예약된 알림</Text>{reminders.map((reminder) => <Text key={`${reminder.offsetMinutes}-${reminder.identifier}`} style={styles.summaryLine}>• {REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`} · {reminderTime(reminder.triggerAt)}</Text>)}<Button title="이 일정 알림 모두 취소" disabled={busy} onPress={() => void clearReminders()} /></View> : <Text style={styles.muted}>예약된 알림이 없습니다.</Text>}
+        {reminders.length ? <View style={styles.reminderSummary}><Text style={styles.summaryTitle}>{syncResult.reminders.status === 'synced' ? '예약 확인된 알림' : '마지막 저장된 알림 정보'}</Text>{reminders.map((reminder) => <Text key={`${reminder.offsetMinutes}-${reminder.identifier}`} style={styles.summaryLine}>• {REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`} · {reminderTime(reminder.triggerAt)}</Text>)}<Button title="이 일정 알림 모두 취소" disabled={busy} onPress={() => void clearReminders()} /></View> : <Text style={styles.muted}>{syncResult.reminders.status === 'synced' ? '예약된 알림이 없습니다.' : '알림 확인이 끝나지 않았습니다.'}</Text>}
       </View>
 
       <View style={styles.section}>
@@ -240,7 +278,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       </View>
     </View> : null}
 
-    {message ? <Text style={styles.message}>{message}</Text> : null}
+    {message ? <Text style={syncResult.reminders.status === 'error' || syncResult.calendar.status === 'error' ? styles.warning : styles.message}>{message}</Text> : null}
   </View>;
 }
 
