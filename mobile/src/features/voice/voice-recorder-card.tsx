@@ -9,7 +9,7 @@ import { useQuickVoicePcmCapture } from '@/src/features/voice/quick-voice-pcm';
 import type { MobileTranscriptV1, MobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
-type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transcribing' | 'review' | 'saving' | 'refreshing' | 'saved' | 'transcript_error' | 'save_error' | 'refresh_error';
+type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transcribing' | 'saving' | 'refreshing' | 'saved' | 'transcript_error' | 'save_error' | 'refresh_error';
 type QuickVoiceSaveResult = Readonly<{ recordId?: string; scheduleDetected?: boolean; scheduleCreated?: boolean; scheduleId?: string; dueStart?: string }>;
 type QuickVoiceProps = Readonly<{
   ensureProvider(onProgress?: (progress: { bytesWritten: number; totalBytes: number | null }) => void): Promise<MobileTranscriptionProvider>;
@@ -38,7 +38,7 @@ function formatSavedDue(value?: string) {
   }).format(date);
 }
 function quickStatus(phase: QuickVoicePhase) {
-  return ({ idle: '대기', preparing: '음성 모델 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', review: '전사문 확인 필요', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
+  return ({ idle: '대기', preparing: '음성 모델 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
 }
 
 export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoice, navigationGuard }: VoiceRecorderCardProps) {
@@ -80,26 +80,21 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     finally { inFlight.current = false; }
   }
 
-  async function confirmTranscriptSave(audio: QuickVoicePcmAudioInput, transcript: MobileTranscriptV1) {
-    if (!quickVoice || inFlight.current || !editableTranscript.trim()) return;
-    const requestId = clientRequestId.current;
-    if (!requestId) { setQuickPhase('save_error'); setError('Quick Voice 저장 요청 ID를 확인하지 못했습니다. 새 녹음으로 다시 시도해주세요.'); return; }
+  async function retryQuickVoiceSave() {
+    if (!quickVoice || inFlight.current || !saveAttempt.current) return;
     inFlight.current = true; setError(null);
     try {
-      const onProgress = (stage: 'transcribing' | 'saving' | 'refreshing') => {
-        if (stage !== 'transcribing') setQuickPhase(stage);
-      };
-      const confirmedTranscript = { ...transcript, text: editableTranscript.trim() };
-      if (!saveAttempt.current) saveAttempt.current = createQuickVoiceSaveAttempt({ transcript: confirmedTranscript, clientRequestId: requestId, recordedAt: audio.createdAt, saveWorklog: quickVoice.saveWorklog, refreshBriefing: quickVoice.refreshBriefing, onProgress, transcribeMs: flowTimings?.transcribeMs ?? null });
-      setEditableTranscript(saveAttempt.current.text);
       const result = await saveAttempt.current.save();
       setQuickTranscript(result.transcript); setQuickSave(result.saveResult); setEditableTranscript(result.transcript.text); setFlowTimings(result.timings);
       setQuickPhase(result.briefingRefreshError ? 'refresh_error' : 'saved');
       if (result.briefingRefreshError) setError(result.briefingRefreshError.message);
     } catch (nextError) {
-      if (nextError instanceof QuickVoiceFlowError && nextError.stage === 'save') { setQuickTranscript(nextError.transcript); setEditableTranscript(nextError.transcript?.text || editableTranscript); setQuickPhase('save_error'); }
-      else setQuickPhase('transcript_error');
-      setError(messageOf(nextError, '음성 업무를 처리하지 못했습니다.'));
+      if (nextError instanceof QuickVoiceFlowError && nextError.stage === 'save') {
+        setQuickTranscript(nextError.transcript);
+        setEditableTranscript(nextError.transcript?.text || editableTranscript);
+      }
+      setQuickPhase('save_error');
+      setError(messageOf(nextError, '음성 업무 저장을 확인하지 못했습니다.'));
     } finally { inFlight.current = false; }
   }
 
@@ -112,14 +107,46 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 
   async function transcribeCapturedAudio(audio: QuickVoicePcmAudioInput) {
     if (!quickVoice || inFlight.current) return;
-    inFlight.current = true; setError(null); setQuickPhase('transcribing');
+    inFlight.current = true; setError(null); setQuickPhase('transcribing'); saveAttempt.current = null;
     try {
       const result = await transcribeQuickVoiceCapture({ provider: quickProvider.current || await quickVoice.ensureProvider(), audio });
       setQuickTranscript(result.transcript); setEditableTranscript(result.transcript.text);
       setFlowTimings({ transcribeMs: result.transcribeMs, saveMs: 0, briefingRefreshMs: 0 });
-      setQuickPhase('review');
-    } catch (nextError) { setQuickPhase('transcript_error'); setError(messageOf(nextError, '음성 전사를 처리하지 못했습니다.')); }
-    finally { inFlight.current = false; }
+
+      const requestId = clientRequestId.current;
+      if (!requestId) {
+        setQuickPhase('save_error');
+        setError('Quick Voice 저장 요청 ID를 확인하지 못했습니다. 전사문은 보존했습니다.');
+        return;
+      }
+
+      const onProgress = (stage: 'transcribing' | 'saving' | 'refreshing') => {
+        if (stage !== 'transcribing') setQuickPhase(stage);
+      };
+      saveAttempt.current = createQuickVoiceSaveAttempt({
+        transcript: result.transcript,
+        clientRequestId: requestId,
+        recordedAt: audio.createdAt,
+        saveWorklog: quickVoice.saveWorklog,
+        refreshBriefing: quickVoice.refreshBriefing,
+        onProgress,
+        transcribeMs: result.transcribeMs,
+      });
+      const saved = await saveAttempt.current.save();
+      setQuickTranscript(saved.transcript); setQuickSave(saved.saveResult); setEditableTranscript(saved.transcript.text); setFlowTimings(saved.timings);
+      setQuickPhase(saved.briefingRefreshError ? 'refresh_error' : 'saved');
+      if (saved.briefingRefreshError) setError(saved.briefingRefreshError.message);
+    } catch (nextError) {
+      if (nextError instanceof QuickVoiceFlowError && nextError.stage === 'save') {
+        setQuickTranscript(nextError.transcript);
+        setEditableTranscript(nextError.transcript?.text || editableTranscript);
+        setQuickPhase('save_error');
+        setError(messageOf(nextError, '음성 업무 저장을 확인하지 못했습니다.'));
+      } else {
+        setQuickPhase('transcript_error');
+        setError(messageOf(nextError, '음성 전사를 처리하지 못했습니다.'));
+      }
+    } finally { inFlight.current = false; }
   }
 
   function discardQuickVoice() {
@@ -144,7 +171,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   }
 
   const meetingActive = meeting.active;
-  const quickActive = ['recording', 'preparing', 'captured', 'transcribing', 'review', 'saving', 'refreshing', 'save_error', 'transcript_error'].includes(quickPhase);
+  const quickActive = ['recording', 'preparing', 'captured', 'transcribing', 'saving', 'refreshing', 'save_error', 'transcript_error'].includes(quickPhase);
 
   if (mode === 'quick') {
     const canStart = !quickActive;
@@ -162,13 +189,13 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={isRecording ? '음성 기록 종료 후 전사문 확인' : '음성 기록 시작'}
+          accessibilityLabel={isRecording ? '음성 기록 종료 후 바로 저장' : '음성 기록 시작'}
           disabled={quickActive && !isRecording}
           style={[styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
           onPress={() => void (isRecording ? stopQuickVoice() : canStart ? startQuickVoice() : undefined)}
         >
           <Text style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
-          <Text style={styles.quickMicLabel}>{isRecording ? '종료·확인' : quickActive ? '처리 중' : '음성 기록'}</Text>
+          <Text style={styles.quickMicLabel}>{isRecording ? '종료·저장' : quickActive ? '처리 중' : '음성 기록'}</Text>
         </Pressable>
 
         <View style={styles.quickSideStatus}>
@@ -181,8 +208,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 
       {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>입력 신호 · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={onOpenWorklogInput} /> : null}</View> : null}
       {quickPhase === 'transcript_error' ? <Button title="녹음 버리기" onPress={discardQuickVoice} /> : null}
-      {quickPhase === 'review' && quickAudio && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>전사문을 확인한 뒤 저장하세요.</Text><Text style={styles.meta}>저장 전에는 업무 기록이나 일정이 생성되지 않습니다.</Text><TextInput accessibilityLabel="전사문 확인 및 수정" multiline style={styles.transcriptInput} value={editableTranscript} onChangeText={setEditableTranscript} textAlignVertical="top" /><Button title="저장" disabled={!editableTranscript.trim()} onPress={() => void confirmTranscriptSave(quickAudio, quickTranscript)} /><Button title="다시 녹음" onPress={() => { discardQuickVoice(); void startQuickVoice(); }} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
-      {quickPhase === 'save_error' && quickAudio && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>전사문을 보존했습니다.</Text><TextInput accessibilityLabel="전사문 확인 및 수정" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} onChangeText={setEditableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!editableTranscript.trim()} onPress={() => void confirmTranscriptSave(quickAudio, quickTranscript)} /><Button title="버리기" onPress={discardQuickVoice} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={onOpenWorklogInput} /> : null}</View> : null}
+      {quickPhase === 'save_error' && quickAudio && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>전사문을 보존했습니다.</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 브리핑 카드의 ✏️에서 바로 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={onOpenWorklogInput} /> : null}</View> : null}
       {quickPhase === 'refresh_error' ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>✅ 저장 완료 · 브리핑 갱신 실패</Text><Button title="브리핑만 다시 불러오기" onPress={() => void retryBriefing()} /></View> : null}
       {quickTranscript && (quickPhase === 'saved' || quickPhase === 'refresh_error') ? <View style={styles.quickResult}>
         <Text style={styles.quickResultTitle}>✅ 업무 저장 완료</Text>
@@ -190,7 +216,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
         {quickSave?.scheduleCreated ? <Text style={styles.scheduleSuccess}>📅 일정 생성 완료{formatSavedDue(quickSave.dueStart) ? ` · ${formatSavedDue(quickSave.dueStart)}` : ''}</Text> : <Text style={styles.scheduleNeutral}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
         <Text style={styles.transcript}>{quickTranscript.text}</Text>
       </View> : null}
-      {!quickActive && !quickTranscript && !error ? <Text style={styles.quickHint}>가운데 마이크를 누르면 녹음·전사 후 내용을 확인하고 저장합니다.</Text> : null}
+      {!quickActive && !quickTranscript && !error ? <Text style={styles.quickHint}>가운데 마이크를 누르면 녹음·전사 후 바로 브리핑에 저장합니다. 오타는 브리핑 카드의 ✏️에서 수정하세요.</Text> : null}
     </View>;
   }
 
