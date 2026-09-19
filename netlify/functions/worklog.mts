@@ -189,6 +189,7 @@ export default async (req:Request, _context:Context) => {
     || Boolean(followUp);
   const split=splitMultiActionText(transcript);
   const canAutoSplit=primaryRequested
+    && isValidClientRequestId(requestId)
     && sourceType==="voice"
     && split.matched
     && !split.truncated
