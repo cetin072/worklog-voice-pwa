@@ -145,6 +145,9 @@ create index work_records_workspace_active_notes_idx
 create index schedules_workspace_starts_at_idx on public.schedules(workspace_id, starts_at);
 create index input_captures_workspace_recorded_at_idx
   on public.input_captures(workspace_id, recorded_at desc);
+create index input_captures_created_by_user_id_idx
+  on public.input_captures(created_by_user_id)
+  where created_by_user_id is not null;
 create index schedules_workspace_status_starts_at_idx on public.schedules(workspace_id, status, starts_at);
 create index source_refs_entity_idx on public.source_refs(workspace_id, entity_type, entity_id);
 create index source_refs_source_idx on public.source_refs(workspace_id, source_type, source_id) where source_id is not null;

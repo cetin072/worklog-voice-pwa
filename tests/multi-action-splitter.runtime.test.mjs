@@ -188,3 +188,9 @@ test("mobile Quick Voice declares voice provenance while direct input stays defa
   assert.match(mobileHome,/\{ \.\.\.options, sourceType: 'voice' \}/);
   assert.doesNotMatch(mobileHome,/persistDraft\([\s\S]{0,500}sourceType: 'voice'/);
 });
+
+test("input capture creator foreign key has a covering index",()=>{
+  const perfMigration=fs.readFileSync("supabase/migrations/20260919102000_input_captures_creator_fk_index.sql","utf8");
+  assert.match(perfMigration,/create index input_captures_created_by_user_id_idx[\s\S]*created_by_user_id/i);
+  assert.match(schema,/create index input_captures_created_by_user_id_idx[\s\S]*created_by_user_id/i);
+});
