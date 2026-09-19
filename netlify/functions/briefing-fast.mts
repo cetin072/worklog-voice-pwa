@@ -56,12 +56,16 @@ function rpcUnavailable(error:any){
 async function loadLegacyDataCore({supabaseUrl,publishableKey,accessToken,client}:{supabaseUrl:string,publishableKey:string,accessToken:string,client:any}){
   const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
   const workspaceContext=await resolver.resolve(accessToken);
-  const taskPage=await createWorklogDataCoreBriefingReader({client}).listOpenTasksWithMeta(workspaceContext);
+  const legacyReader=createWorklogDataCoreBriefingReader({client});
+  const [taskPage,notes]=await Promise.all([
+    legacyReader.listOpenTasksWithMeta(workspaceContext),
+    legacyReader.listActiveNotes(workspaceContext)
+  ]);
   const today=seoulDate();
   const schedules=dataCoreScheduleBriefingEnabled()
     ? await createWorklogDataCoreScheduleReader({client}).listForBriefing(workspaceContext,today)
     : {today:[],upcoming:[],total:0};
-  return {today,...taskPage,schedules,fastPath:false};
+  return {today,...taskPage,notes,schedules,fastPath:false};
 }
 
 async function loadFastDataCore({supabaseUrl,publishableKey,accessToken,client}:{supabaseUrl:string,publishableKey:string,accessToken:string,client:any}){
@@ -114,6 +118,7 @@ export default async (req:Request,_context:Context)=>{
       canUpdate:dataCoreBriefingMutationEnabled(),
       scheduleEnabled:dataCoreScheduleBriefingEnabled(),
       schedules,
+      notes:Array.isArray(source.notes) ? source.notes : [],
       counts:briefingV2Counts(structure),
       structure,
       fastPath:source.fastPath
