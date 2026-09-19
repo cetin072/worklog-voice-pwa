@@ -226,14 +226,17 @@ export default async (req:Request,_context:Context)=>{
       const workspaceContext=await resolver.resolve(accessToken);
       const client=createSupabaseDataCoreRestClient({supabaseUrl,publishableKey,accessToken});
       const reader=createWorklogDataCoreBriefingReader({client});
-      const taskPage=await reader.listOpenTasksWithMeta(workspaceContext);
+      const [taskPage,notes]=await Promise.all([
+        reader.listOpenTasksWithMeta(workspaceContext),
+        reader.listActiveNotes(workspaceContext)
+      ]);
       const tasks=taskPage.tasks;
       const today=seoulDate();
       const structure=classifyBriefingTasks(tasks,today);
       const schedules=dataCoreScheduleBriefingEnabled()
         ? await createWorklogDataCoreScheduleReader({client}).listForBriefing(workspaceContext,today)
         : {today:[],upcoming:[],total:0};
-      return json(200,{ok:true,ready:true,generatedAt:seoulIsoNow(),today,mode:"data_core",truncated:taskPage.truncated,completeness:taskPage.completeness,queryLimit:taskPage.queryLimit,filteredTaskCount:taskPage.filteredTaskCount,canUpdate:dataCoreBriefingMutationEnabled(),scheduleEnabled:dataCoreScheduleBriefingEnabled(),schedules,counts:briefingV2Counts(structure),structure});
+      return json(200,{ok:true,ready:true,generatedAt:seoulIsoNow(),today,mode:"data_core",truncated:taskPage.truncated,completeness:taskPage.completeness,queryLimit:taskPage.queryLimit,filteredTaskCount:taskPage.filteredTaskCount,canUpdate:dataCoreBriefingMutationEnabled(),scheduleEnabled:dataCoreScheduleBriefingEnabled(),schedules,notes,counts:briefingV2Counts(structure),structure});
     }catch(error:any){
       if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 브리핑을 열어주세요."});
       console.error("Data Core briefing v2 error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));

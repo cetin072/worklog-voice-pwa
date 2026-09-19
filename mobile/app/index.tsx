@@ -19,7 +19,7 @@ import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-ca
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
-import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, readWorklogDetails, saveWorklog, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
+import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, readWorklogDetails, saveWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
@@ -99,6 +99,28 @@ function TaskRow({ bucket, task, onOpen, onEdit, onComplete, completing = false 
   </View>;
 }
 
+function formatNoteJournalDate(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+  const date = new Date(`${value}T00:00:00+09:00`);
+  if (!Number.isFinite(date.getTime())) return '';
+  return `${new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(date)} 기록`;
+}
+
+function NoteRow({ note, onAcknowledge, acknowledging = false }: { note: BriefingNote; onAcknowledge: () => void; acknowledging?: boolean }) {
+  return <View style={styles.taskRow}>
+    <View style={styles.taskMain}>
+      <Text style={styles.taskTitle}>{note.title || '제목 없는 메모'}</Text>
+      {formatNoteJournalDate(note.journalDate) ? <Text style={styles.taskMeta}>{formatNoteJournalDate(note.journalDate)}</Text> : null}
+      {note.institution ? <Text style={styles.taskBadge}>{note.institution}</Text> : null}
+    </View>
+    {note.pageId ? <View style={styles.taskActions}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 확인했어요 처리`} disabled={acknowledging} style={[styles.inlineComplete, acknowledging ? styles.inlineCompleteBusy : null]} onPress={onAcknowledge}>
+        <Text style={styles.inlineCompleteText}>{acknowledging ? '처리 중' : '확인했어요'}</Text>
+      </Pressable>
+    </View> : null}
+  </View>;
+}
+
 function ScheduleRows({ schedules, empty, showDeviceActions = false, showDeviceStatus = false }: { schedules?: BriefingSchedule[]; empty: string; showDeviceActions?: boolean; showDeviceStatus?: boolean }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
   return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{showDeviceActions ? <ScheduleDeviceActions schedule={schedule} /> : showDeviceStatus ? <ScheduleDeviceActions schedule={schedule} compactOnly /> : null}</View>);
@@ -154,6 +176,8 @@ export default function HomeScreen() {
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string } | null>(null);
+  const [noteBusyId, setNoteBusyId] = useState<string | null>(null);
+  const [undoNote, setUndoNote] = useState<{ pageId: string; title: string } | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
@@ -164,6 +188,7 @@ export default function HomeScreen() {
   const [editStatus, setEditStatus] = useState('');
   const [editStatusTone, setEditStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [expandedBuckets, setExpandedBuckets] = useState<Partial<Record<BriefingBucket, boolean>>>({});
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
   const [calendarConnectionVersion, setCalendarConnectionVersion] = useState(0);
   const [quickDockHeight, setQuickDockHeight] = useState(220);
@@ -372,6 +397,44 @@ export default function HomeScreen() {
     }
   }
 
+  function removeVisibleNote(recordId: string) {
+    setBriefing((current) => current
+      ? { ...current, notes: (current.notes || []).filter((note) => note.pageId !== recordId) }
+      : current);
+  }
+
+  async function acknowledgeNote(note: BriefingNote) {
+    if (!session || !note.pageId || noteBusyId) return;
+    setNoteBusyId(note.pageId);
+    clearMessage();
+    try {
+      await updateBriefingNoteState(session.access_token, note.pageId, 'acknowledged');
+      removeVisibleNote(note.pageId);
+      setUndoNote({ pageId: note.pageId, title: note.title || '메모' });
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '메모 확인 처리에 실패했습니다.'), 'error');
+    } finally {
+      setNoteBusyId(null);
+    }
+  }
+
+  async function undoAcknowledgedNote() {
+    if (!session || !undoNote || noteBusyId) return;
+    const target = undoNote;
+    setNoteBusyId(target.pageId);
+    clearMessage();
+    try {
+      await updateBriefingNoteState(session.access_token, target.pageId, 'active');
+      setUndoNote(null);
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '메모 확인 처리를 되돌리지 못했습니다.'), 'error');
+    } finally {
+      setNoteBusyId(null);
+    }
+  }
+
   async function openTaskEditor(task: BriefingTask) {
     if (!session || !task.pageId || editBusy || editLoading) return;
     setEditTaskId(task.pageId);
@@ -491,6 +554,9 @@ export default function HomeScreen() {
   const briefingInfo = briefing ? briefingMetadata(briefing, briefingNow) : null;
   const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
+  const notes = briefing?.notes || [];
+  const visibleNotes = notesExpanded ? notes : notes.slice(0, 3);
+  const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
   return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? quickDockHeight + 32 : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
@@ -525,6 +591,14 @@ export default function HomeScreen() {
       }) : null}
 
       {undoTask ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoTask.title} 완료 처리</Text><Pressable accessibilityRole="button" disabled={Boolean(taskBusyId)} onPress={() => void undoCompletedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
+
+      {notes.length ? <View style={[styles.briefingSection, styles.sectionNeutral]}>
+        <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>📝 메모 · 참고</Text><Text style={styles.sectionCount}>{notes.length}</Text></View>
+        {visibleNotes.map((note, index) => <NoteRow key={note.pageId || `note-${index}`} note={note} onAcknowledge={() => void acknowledgeNote(note)} acknowledging={noteBusyId === note.pageId} />)}
+        {extraNotes ? <Pressable accessibilityRole="button" accessibilityLabel={notesExpanded ? '메모 · 참고 접기' : `메모 · 참고 ${extraNotes}개 더 보기`} style={styles.moreButton} onPress={() => setNotesExpanded((value) => !value)}><Text style={styles.moreButtonText}>{notesExpanded ? '접기' : `${extraNotes}개 더 보기`}</Text></Pressable> : null}
+      </View> : null}
+
+      {undoNote ? <View style={styles.undoBar}><Text style={styles.undoText}>메모를 브리핑에서 내렸습니다.</Text><Pressable accessibilityRole="button" disabled={Boolean(noteBusyId)} onPress={() => void undoAcknowledgedNote()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
 
       {briefing?.scheduleEnabled ? <View style={styles.card}>
         <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>📅 일정</Text><Text style={styles.sectionTitle}>오늘과 다가오는 일정</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" onPress={() => setScreen('scheduleSettings')}><Text style={styles.linkText}>알림·캘린더 설정</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setScreen('input')}><Text style={styles.linkText}>+ 새 일정</Text></Pressable></View></View>

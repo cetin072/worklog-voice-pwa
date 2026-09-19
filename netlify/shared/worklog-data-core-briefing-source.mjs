@@ -40,6 +40,17 @@ function toBriefingTask(row = {}) {
   });
 }
 
+function toBriefingNote(row = {}) {
+  return Object.freeze({
+    pageId: text(row.id, 200),
+    title: text(row.title, 200),
+    institution: text(row.institution, 60),
+    journalDate: text(row.journal_date, 10),
+    recordedAt: text(row.recorded_at, 64),
+    editedAt: text(row.updated_at || row.recorded_at, 64),
+  });
+}
+
 function toBriefingSchedule(row = {}) {
   return Object.freeze({
     scheduleId: text(row.id, 200),
@@ -74,6 +85,10 @@ export function createWorklogDataCoreBriefingSource({ client } = {}) {
       if (!Array.isArray(row?.tasks) || !Array.isArray(row?.schedules)) {
         throw sourceError("WORKLOG_DATA_CORE_BRIEFING_SOURCE_INVALID", "브리핑 데이터 형식을 확인하지 못했습니다.");
       }
+      const notes = (Array.isArray(row?.notes) ? row.notes : [])
+        .slice(0, 100)
+        .map(toBriefingNote)
+        .filter((note) => note.title);
       const tasks = row.tasks.slice(0, BRIEFING_TASK_LIMIT)
         .map(toBriefingTask)
         .filter((task) => task.title);
@@ -87,6 +102,7 @@ export function createWorklogDataCoreBriefingSource({ client } = {}) {
         workspaceId,
         today,
         tasks: Object.freeze(tasks),
+        notes: Object.freeze(notes),
         schedules: Object.freeze({
           today: Object.freeze(scheduleRows.filter((schedule) => schedule.dateKey === today)),
           upcoming: Object.freeze(scheduleRows.filter((schedule) => schedule.dateKey > today)),
