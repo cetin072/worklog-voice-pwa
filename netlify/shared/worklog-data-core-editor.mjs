@@ -34,6 +34,7 @@ function translateRpcError(error){
   if(/WORK_RECORD_TITLE_INVALID/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_TITLE_INVALID","업무명을 확인해주세요.");
   if(/WORK_RECORD_DUE_INVALID/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_DUE_INVALID","날짜와 시간을 확인해주세요.");
   if(/WORK_RECORD_ACTION_KIND_INVALID/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_ACTION_KIND_INVALID","업무 종류를 확인해주세요.");
+  if(/WORK_RECORD_ACTION_CONVERSION_UNCLASSIFIED/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_ACTION_UNCLASSIFIED","분류되지 않은 기존 기록은 할 일/메모 전환 대상이 아닙니다.");
   if(/WORK_RECORD_ACTION_CONVERSION_SCHEDULE_LINKED/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_ACTION_SCHEDULE_LINKED","일정과 연결된 기록은 할 일/메모 종류를 바꿀 수 없습니다.");
   return error;
 }
