@@ -51,7 +51,7 @@ test('Work edit sheet blocks stale typing during detail load and exposes retry i
   assert.match(homeSource, /setEditReady\(false\)/);
   assert.match(homeSource, /setEditLoading\(true\)/);
   assert.match(homeSource, /retryTaskEditor/);
-  assert.match(editSheetSource, /editable=\{ready && !busy\}/);
+  assert.match(editSheetSource, /editable=\{ready && !inputBlocked\}/);
   assert.match(editSheetSource, /!ready && !loading && onRetry/);
   assert.match(editSheetSource, /다시 불러오기/);
 });
