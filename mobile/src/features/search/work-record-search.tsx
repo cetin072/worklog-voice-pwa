@@ -39,6 +39,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editActionKind, setEditActionKind] = useState<'task' | 'note' | undefined>(undefined);
+  const [editOriginalActionKind, setEditOriginalActionKind] = useState<'task' | 'note' | undefined>(undefined);
   const [editActionConversionAllowed, setEditActionConversionAllowed] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -88,6 +89,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       setEditDate(details.dueDate || '');
       setEditTime(details.dueTime || '');
       setEditActionKind(details.actionKind);
+      setEditOriginalActionKind(details.actionKind);
       setEditActionConversionAllowed(details.actionConversionAllowed === true);
       setEditReady(true);
     } catch (error) {
@@ -106,6 +108,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditDate('');
     setEditTime('');
     setEditActionKind(undefined);
+    setEditOriginalActionKind(undefined);
     setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
@@ -147,7 +150,9 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
         title,
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
-        ...(editActionConversionAllowed && editActionKind ? { actionKind: editActionKind } : {}),
+        ...(editActionConversionAllowed && editActionKind && editOriginalActionKind && editActionKind !== editOriginalActionKind
+          ? { actionKind: editActionKind }
+          : {}),
       });
       const visibleTitle = result.title?.trim() || title;
       setItems((current) => current.map((item) => item.workRecordId === recordId ? { ...item, title: visibleTitle } : item));
@@ -181,6 +186,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditDate('');
     setEditTime('');
     setEditActionKind(undefined);
+    setEditOriginalActionKind(undefined);
     setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
