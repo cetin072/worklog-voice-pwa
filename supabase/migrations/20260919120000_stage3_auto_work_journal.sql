@@ -65,6 +65,13 @@ as $$
     where wr.status = 'completed'
       and wr.action_kind is distinct from 'note'
       and (wr.metadata #>> '{actionEngine,kind}') is distinct from 'schedule'
+      and not exists (
+        select 1
+        from public.schedules linked_schedule
+        where linked_schedule.workspace_id = wr.workspace_id
+          and linked_schedule.metadata ->> 'workRecordId' = wr.id::text
+          and linked_schedule.status <> 'cancelled'
+      )
       and (
         (
           wr.completed_at is not null
@@ -112,6 +119,13 @@ as $$
     where wr.status in ('in_progress', 'waiting', 'needs_review')
       and wr.action_kind is distinct from 'note'
       and (wr.metadata #>> '{actionEngine,kind}') is distinct from 'schedule'
+      and not exists (
+        select 1
+        from public.schedules linked_schedule
+        where linked_schedule.workspace_id = wr.workspace_id
+          and linked_schedule.metadata ->> 'workRecordId' = wr.id::text
+          and linked_schedule.status <> 'cancelled'
+      )
       and (
         case
           when wr.due_at is not null
