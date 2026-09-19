@@ -80,6 +80,22 @@ create table public.schedules (
   check (ends_at is null or ends_at >= starts_at)
 );
 
+create table public.input_captures (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  client_request_id text not null check (char_length(btrim(client_request_id)) between 16 and 100),
+  source_type text not null default 'direct' check (
+    source_type in ('direct', 'voice', 'call', 'meeting', 'mail', 'capture', 'scan', 'notion', 'import', 'other')
+  ),
+  original_text text not null default '' check (char_length(original_text) <= 10000),
+  recorded_at timestamptz not null default now(),
+  metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (workspace_id, client_request_id)
+);
+
 create table public.source_refs (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -127,6 +143,8 @@ create index work_records_workspace_active_notes_idx
   on public.work_records(workspace_id, journal_date desc, recorded_at desc)
   where action_kind = 'note' and briefing_state = 'active';
 create index schedules_workspace_starts_at_idx on public.schedules(workspace_id, starts_at);
+create index input_captures_workspace_recorded_at_idx
+  on public.input_captures(workspace_id, recorded_at desc);
 create index schedules_workspace_status_starts_at_idx on public.schedules(workspace_id, status, starts_at);
 create index source_refs_entity_idx on public.source_refs(workspace_id, entity_type, entity_id);
 create index source_refs_source_idx on public.source_refs(workspace_id, source_type, source_id) where source_id is not null;
@@ -198,6 +216,10 @@ create trigger schedules_set_updated_at
 before update on public.schedules
 for each row execute function private.set_updated_at();
 
+create trigger input_captures_set_updated_at
+before update on public.input_captures
+for each row execute function private.set_updated_at();
+
 create trigger candidates_set_updated_at
 before update on public.candidates
 for each row execute function private.set_updated_at();
@@ -253,6 +275,7 @@ alter table public.workspaces enable row level security;
 alter table public.workspace_members enable row level security;
 alter table public.work_records enable row level security;
 alter table public.schedules enable row level security;
+alter table public.input_captures enable row level security;
 alter table public.source_refs enable row level security;
 alter table public.candidates enable row level security;
 
@@ -260,6 +283,7 @@ revoke all on table public.workspaces from anon;
 revoke all on table public.workspace_members from anon;
 revoke all on table public.work_records from anon;
 revoke all on table public.schedules from anon;
+revoke all on table public.input_captures from anon;
 revoke all on table public.source_refs from anon;
 revoke all on table public.candidates from anon;
 
@@ -267,8 +291,10 @@ grant select, insert, update, delete on table public.workspaces to authenticated
 grant select, insert, update, delete on table public.workspace_members to authenticated, service_role;
 grant select, insert, update on table public.work_records to authenticated;
 grant select, insert, update on table public.schedules to authenticated;
+grant select, insert, update on table public.input_captures to authenticated;
 grant select, insert, update, delete on table public.work_records to service_role;
 grant select, insert, update, delete on table public.schedules to service_role;
+grant select, insert, update, delete on table public.input_captures to service_role;
 grant select, insert, update, delete on table public.source_refs to authenticated, service_role;
 grant select, insert, update, delete on table public.candidates to authenticated, service_role;
 
@@ -363,6 +389,31 @@ with check (
 
 create policy schedules_update_creator
 on public.schedules for update
+to authenticated
+using (
+  (select private.can_access_workspace(workspace_id))
+  and created_by_user_id = (select auth.uid())
+)
+with check (
+  (select private.can_access_workspace(workspace_id))
+  and created_by_user_id = (select auth.uid())
+);
+
+create policy input_captures_select_member
+on public.input_captures for select
+to authenticated
+using ((select private.can_access_workspace(workspace_id)));
+
+create policy input_captures_insert_creator
+on public.input_captures for insert
+to authenticated
+with check (
+  (select private.can_access_workspace(workspace_id))
+  and created_by_user_id = (select auth.uid())
+);
+
+create policy input_captures_update_creator
+on public.input_captures for update
 to authenticated
 using (
   (select private.can_access_workspace(workspace_id))
