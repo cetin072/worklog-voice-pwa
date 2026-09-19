@@ -6,6 +6,8 @@ const card = fs.readFileSync('mobile/src/features/voice/voice-recorder-card.tsx'
 const flow = fs.readFileSync('mobile/src/features/voice/quick-voice-flow.ts', 'utf8');
 const downloader = fs.readFileSync('mobile/src/features/voice/stt-model-download.ts', 'utf8');
 const runtime = fs.readFileSync('mobile/src/features/voice/providers/whisper-rn-quick-voice-runtime.ts', 'utf8');
+const draft = fs.readFileSync('mobile/src/features/voice/quick-voice-draft.ts', 'utf8');
+const home = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 
 test('Quick Voice source contract stays provider-neutral while separating capture, automatic save, and briefing refresh', () => {
   assert.match(card, /ensureProvider\(onProgress\?: .*Promise<MobileTranscriptionProvider>/);
@@ -81,4 +83,34 @@ test('Quick Voice displays actual schedule creation truth instead of parser dete
   assert.match(card, /scheduleCreated/);
   assert.match(card, /일정 생성 완료/);
   assert.doesNotMatch(card, /quickSave\?\.scheduleDetected \? <Text style=\{styles\.scheduleSuccess\}/);
+});
+
+test('Quick Voice Stage 1 hardening persists recoverable drafts and clears them after confirmed save', () => {
+  assert.match(card, /createQuickVoiceDraftStorage/);
+  assert.match(card, /draftScope/);
+  assert.match(card, /await draftStorage\(\)\?\.save/);
+  assert.match(card, /await clearQuickVoiceDraft\(\)/);
+  assert.match(card, /저장 전에 중단된 음성 기록을 복구했습니다/);
+  assert.match(draft, /quick_voice_draft_v1_/);
+  assert.match(home, /draftScope: session\.user\.id/);
+});
+
+test('Quick Voice fallback can leave the guarded voice flow only after explicitly clearing it', () => {
+  assert.match(card, /function openDirectInputFallback\(\)/);
+  assert.match(card, /navigationGuard\.current = false/);
+  assert.match(card, /onOpenWorklogInput\(\)/);
+  assert.match(card, /title="업무 직접 입력" onPress=\{openDirectInputFallback\}/);
+  assert.doesNotMatch(card, /save_error[^\n]*업무 직접 입력/s);
+});
+
+test('Quick Voice save success has immediate tactile feedback like the web fast-save flow', () => {
+  assert.match(card, /Vibration\.vibrate\(120\)/);
+  assert.match(card, /savedFeedback\(\)/);
+});
+
+test('briefing refreshes serialize instead of dropping a voice-triggered refresh while another load is busy', () => {
+  assert.match(home, /briefingRefreshQueue/);
+  assert.match(home, /briefingRefreshEpoch/);
+  assert.match(home, /briefingRefreshQueue\.current\.run/);
+  assert.doesNotMatch(home, /if \(!session \|\| briefingBusy\) return/);
 });

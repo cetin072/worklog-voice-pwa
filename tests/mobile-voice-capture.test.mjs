@@ -61,7 +61,8 @@ test('Quick voice memo uses the home bottom dock and auto-saves a valid STT tran
   assert.doesNotMatch(recorderSource, /runQuickVoiceFastPath/);
   assert.match(recorderSource, /quickDock/);
   assert.match(recorderSource, /quickMic/);
-  assert.match(recorderSource, /종료·저장/);
+  assert.match(recorderSource, /녹음 중/);
+  assert.match(recorderSource, /quickMicTimer/);
   assert.match(recorderSource, /브리핑 카드의 ✏️/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.match(recorderSource, /업무 직접 입력 열기/);
@@ -86,5 +87,15 @@ test('Meeting recorder is owned by an app-wide session instead of the meeting ca
 test('Home reserves measured space for the variable-height Quick Voice dock', () => {
   assert.match(homeSource, /quickDockHeight/);
   assert.match(homeSource, /onLayout=\{\(event\) => setQuickDockHeight/);
-  assert.match(homeSource, /quickDockHeight \+ 24/);
+  assert.match(homeSource, /quickDockHeight \+ 32/);
+});
+
+test('Quick Voice polish keeps a large web-like microphone, full red recording state, and elapsed timer', () => {
+  assert.match(recorderSource, /width: 148, height: 148/);
+  assert.match(recorderSource, /quickMicActive: \{ backgroundColor: '#b91c1c'/);
+  assert.match(recorderSource, /recordingElapsedMs/);
+  assert.match(recorderSource, /● 녹음 중 ·/);
+  assert.match(recorderSource, /quickMicTimer/);
+  assert.match(recorderSource, /끝나면 빨간 버튼을 누르세요/);
+  assert.match(homeSource, /Math\.max\(220, Math\.ceil\(event\.nativeEvent\.layout\.height\)\)/);
 });

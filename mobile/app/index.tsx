@@ -9,6 +9,7 @@ import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { MeetingRecordingBanner } from '@/src/features/voice/meeting-recording-banner';
 import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers/whisper-rn-quick-voice-runtime';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
+import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-actions';
 import { CalendarConnectionSummary } from '@/src/features/schedule/calendar-connection-summary';
@@ -17,6 +18,7 @@ import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/sche
 import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-calendar';
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
+import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
 import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, readWorklogDetails, saveWorklog, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
@@ -32,6 +34,19 @@ type DirectSaveFeedback = Readonly<{
   scheduleId: string;
   dueStart: string;
 }>;
+
+function emptyManualWorkInput(): ManualWorkInputValue {
+  return {
+    transcript: '',
+    institution: '기타',
+    status: '진행중',
+    type: '기타',
+    amount: '',
+    assignee: '',
+    dueDate: '',
+    followUp: '',
+  };
+}
 
 const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' }> = [
   { key: 'overdue', label: '지난 것', tone: 'danger' },
@@ -109,7 +124,7 @@ export default function HomeScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('signIn');
-  const [draft, setDraft] = useState('');
+  const [manualInput, setManualInput] = useState<ManualWorkInputValue>(() => emptyManualWorkInput());
   const [briefingNow, setBriefingNow] = useState(Date.now());
   useEffect(() => {
     const updateClock = () => setBriefingNow(Date.now());
@@ -134,6 +149,8 @@ export default function HomeScreen() {
   const [briefing, setBriefing] = useState<MobileBriefing | null>(null);
   const [briefingError, setBriefingError] = useState('');
   const [briefingBusy, setBriefingBusy] = useState(false);
+  const briefingRefreshQueue = useRef(createSerialTaskQueue());
+  const briefingRefreshEpoch = useRef(0);
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string } | null>(null);
@@ -145,13 +162,16 @@ export default function HomeScreen() {
   const [editLoading, setEditLoading] = useState(false);
   const [editReady, setEditReady] = useState(false);
   const [editStatus, setEditStatus] = useState('');
+  const [editStatusTone, setEditStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [expandedBuckets, setExpandedBuckets] = useState<Partial<Record<BriefingBucket, boolean>>>({});
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
   const [calendarConnectionVersion, setCalendarConnectionVersion] = useState(0);
-  const [quickDockHeight, setQuickDockHeight] = useState(190);
+  const [quickDockHeight, setQuickDockHeight] = useState(220);
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
+    briefingRefreshEpoch.current += 1;
+    briefingRefreshQueue.current.reset();
     if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setScreen('home'); return; }
     void refreshBriefing();
   }, [session?.access_token]);
@@ -216,9 +236,22 @@ export default function HomeScreen() {
   }
 
   async function refreshBriefing() {
-    if (!session || briefingBusy) return;
-    setBriefingBusy(true); setBriefingError('');
-    try { setBriefing(await loadBriefing(session.access_token)); } catch (nextError) { setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.')); } finally { setBriefingBusy(false); }
+    if (!session) return;
+    const accessToken = session.access_token;
+    const epoch = briefingRefreshEpoch.current;
+    await briefingRefreshQueue.current.run(async () => {
+      if (epoch !== briefingRefreshEpoch.current) return;
+      setBriefingBusy(true);
+      setBriefingError('');
+      try {
+        const next = await loadBriefing(accessToken);
+        if (epoch === briefingRefreshEpoch.current) setBriefing(next);
+      } catch (nextError) {
+        if (epoch === briefingRefreshEpoch.current) setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.'));
+      } finally {
+        if (epoch === briefingRefreshEpoch.current) setBriefingBusy(false);
+      }
+    });
   }
 
   async function runEmailSignIn() {
@@ -239,10 +272,25 @@ export default function HomeScreen() {
   }
 
   async function persistDraft() {
-    if (!session || !draft.trim() || busy) return;
-    const original = draft.trim();
+    if (!session || !manualInput.transcript.trim() || busy) return;
+    const original = manualInput.transcript.trim();
+    const amountText = manualInput.amount.trim().replaceAll(',', '');
+    const amount = amountText ? Number(amountText) : null;
+    if (amountText && (!Number.isFinite(amount) || Number(amount) < 0)) {
+      showMessage('금액은 0 이상의 숫자로 입력해주세요.', 'error');
+      return;
+    }
     await run(async () => {
-      const saved = await saveWorklog(session.access_token, original);
+      const saved = await saveWorklog(session.access_token, original, {
+        institution: manualInput.institution,
+        institutionSource: 'user_selected',
+        status: manualInput.status,
+        type: manualInput.type,
+        amount,
+        assignee: manualInput.assignee,
+        dueDate: manualInput.dueDate,
+        followUp: manualInput.followUp,
+      });
       const feedback = {
         transcript: saved.cleanTranscript?.trim() || original,
         scheduleDetected: Boolean(saved.scheduleDetected),
@@ -250,7 +298,7 @@ export default function HomeScreen() {
         scheduleId: saved.scheduleId?.trim() || '',
         dueStart: saved.dueStart?.trim() || '',
       };
-      setDraft('');
+      setManualInput(emptyManualWorkInput());
       setLastDirectSave(feedback);
       if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
       const dueLabel = formatSavedDue(feedback.dueStart);
@@ -309,6 +357,7 @@ export default function HomeScreen() {
     setEditLoading(true);
     setEditReady(false);
     setEditStatus('');
+    setEditStatusTone('neutral');
     try {
       const details = await readWorklogDetails(session.access_token, pageId);
       setEditTitle(details.title || fallbackTitle);
@@ -317,6 +366,7 @@ export default function HomeScreen() {
       setEditReady(true);
     } catch (nextError) {
       setEditStatus(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'));
+      setEditStatusTone('error');
     } finally {
       setEditLoading(false);
     }
@@ -330,6 +380,7 @@ export default function HomeScreen() {
     setEditTime('');
     setEditReady(false);
     setEditStatus('');
+    setEditStatusTone('neutral');
     await loadTaskEditorDetails(task.pageId, task.title || '', task.dueKey || '');
   }
 
@@ -338,41 +389,70 @@ export default function HomeScreen() {
     await loadTaskEditorDetails(editTaskId, editTitle, editDate);
   }
 
+  function updateVisibleTaskTitle(recordId: string, nextTitle: string) {
+    setBriefing((current) => {
+      if (!current?.structure) return current;
+      const structure = { ...current.structure };
+      for (const bucket of briefingBuckets) {
+        const tasks = structure[bucket.key];
+        if (Array.isArray(tasks)) {
+          structure[bucket.key] = tasks.map((task) => task.pageId === recordId ? { ...task, title: nextTitle } : task);
+        }
+      }
+      return { ...current, structure };
+    });
+    setSelectedTask((current) => current?.task.pageId === recordId
+      ? { ...current, task: { ...current.task, title: nextTitle } }
+      : current);
+  }
+
   async function saveTaskEditor() {
     if (!session || !editTaskId || editBusy || editLoading || !editReady) return;
+    const recordId = editTaskId;
     const nextTitle = editTitle.replace(/\s+/g, ' ').trim();
     if (!nextTitle) {
       setEditStatus('업무명을 입력해주세요.');
+      setEditStatusTone('error');
       return;
     }
     if (nextTitle.length > 160) {
       setEditStatus('업무명은 160자 이하로 입력해주세요.');
+      setEditStatusTone('error');
       return;
     }
     if (editTime.trim() && !editDate.trim()) {
       setEditStatus('시간을 설정하려면 날짜도 입력해주세요.');
+      setEditStatusTone('error');
       return;
     }
     setEditBusy(true);
     setEditStatus('');
+    setEditStatusTone('neutral');
     try {
       const result = await updateWorklogDetails(session.access_token, {
-        pageId: editTaskId,
+        pageId: recordId,
         title: nextTitle,
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
       });
-      showMessage(result.unchanged
+      const visibleTitle = result.title?.trim() || nextTitle;
+      updateVisibleTaskTitle(recordId, visibleTitle);
+      setEditBusy(false);
+      setEditReady(false);
+      setEditStatus(result.unchanged
         ? '변경된 내용이 없습니다.'
         : result.scheduleUpdated
-          ? '업무를 수정했습니다. 연결된 일정·캘린더·알림도 최신 상태로 맞춥니다.'
-          : '업무를 수정했습니다.', result.unchanged ? 'info' : 'success');
+          ? '✓ 업무와 연결된 일정도 수정했습니다.'
+          : '✓ 업무를 수정했습니다.');
+      setEditStatusTone(result.unchanged ? 'neutral' : 'success');
+      await new Promise((resolve) => setTimeout(resolve, 420));
       setEditTaskId(null);
-      setEditReady(false);
       setEditStatus('');
+      setEditStatusTone('neutral');
       await refreshBriefing();
     } catch (nextError) {
       setEditStatus(messageOf(nextError, '업무 수정에 실패했습니다.'));
+      setEditStatusTone('error');
     } finally {
       setEditBusy(false);
     }
@@ -390,13 +470,14 @@ export default function HomeScreen() {
   }
 
   function closeTaskEditor() {
-    if (editBusy || editLoading) return;
+    if (editBusy) return;
     setEditTaskId(null);
     setEditTitle('');
     setEditDate('');
     setEditTime('');
     setEditReady(false);
     setEditStatus('');
+    setEditStatusTone('neutral');
   }
 
   if (phase === 'loading') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><ActivityIndicator size="large" /><Text style={styles.statusText}>업무수첩을 연결하고 있습니다.</Text></View>;
@@ -412,7 +493,7 @@ export default function HomeScreen() {
   const structure = briefing?.structure || {};
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
-  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? quickDockHeight + 24 : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
+  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? quickDockHeight + 32 : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
@@ -461,7 +542,7 @@ export default function HomeScreen() {
 
     {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View>{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
-    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>입력한 원문을 기존 업무수첩에 저장합니다.</Text><TextInput accessibilityLabel="업무 내용" multiline placeholder="예: 내일 오후 3시 김과장에게 계약서 확인 전화" style={[styles.input, styles.multiline]} value={draft} onChangeText={setDraft} textAlignVertical="top" /><Button title={busy ? '저장 중...' : '저장'} disabled={busy || !draft.trim()} onPress={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
+    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>웹 업무수첩처럼 업무 내용과 필요한 세부값을 한 화면에서 저장합니다.</Text><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
     {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><CalendarConnectionSummary compact refreshKey={calendarConnectionVersion} onPressManage={() => setScreen('scheduleSettings')} /><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={confirmSignOut} /></View></View> : null}
     {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text><CalendarConnectionSummary refreshKey={calendarConnectionVersion} /><CalendarConnectionManager onChanged={() => setCalendarConnectionVersion((value) => value + 1)} />{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
@@ -476,6 +557,7 @@ export default function HomeScreen() {
     saving={editBusy}
     ready={editReady}
     statusText={editStatus}
+    statusTone={editStatusTone}
     onTitle={setEditTitle}
     onDate={setEditDate}
     onTime={setEditTime}
@@ -483,7 +565,7 @@ export default function HomeScreen() {
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
   />
-  {screen === 'home' ? <View onLayout={(event) => setQuickDockHeight(Math.max(150, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
+  {screen === 'home' ? <View onLayout={(event) => setQuickDockHeight(Math.max(220, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
@@ -570,9 +652,9 @@ const styles = StyleSheet.create({
   taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 },
   taskBadge: { alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', color: '#374151', backgroundColor: '#e5e7eb', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   followUp: { fontSize: 13, color: '#4b515c', lineHeight: 18 },
-  inlineEdit: { minHeight: 36, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db' },
-  inlineEditText: { fontSize: 15 },
-  inlineComplete: { minHeight: 38, minWidth: 54, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
+  inlineEdit: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db' },
+  inlineEditText: { fontSize: 18 },
+  inlineComplete: { minHeight: 48, minWidth: 60, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#111827' },
   inlineCompleteBusy: { opacity: 0.55 },
   inlineCompleteText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   undoBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, borderRadius: 14, backgroundColor: '#111827' },
