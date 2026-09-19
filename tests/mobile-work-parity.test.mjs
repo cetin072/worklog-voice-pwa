@@ -21,7 +21,9 @@ test('Mobile work parity exposes completion, undo, and one-tap editing from the 
   assert.match(homeSource, /updateWorklogStatus\(session\.access_token, task\.pageId, '완료'\)/);
   assert.match(homeSource, /openTaskEditor/);
   assert.match(homeSource, /WorkRecordEditSheet/);
-  assert.match(editSheetSource, /브리핑 내용을 바로 고칩니다/);
+  assert.match(editSheetSource, /dragHandle/);
+  assert.match(editSheetSource, /statusSuccess/);
+  assert.match(editSheetSource, /statusError/);
   assert.match(editSheetSource, /selectTextOnFocus/);
   assert.match(homeSource, /updateWorklogDetails/);
   assert.match(apiSource, /\/api\/worklog-edit/);
@@ -43,7 +45,8 @@ test('Inline work edit surfaces schedule reconciliation and refreshes Home for d
   assert.match(apiSource, /scheduleUpdated\?: boolean/);
   assert.match(homeSource, /const result = await updateWorklogDetails/);
   assert.match(homeSource, /result\.scheduleUpdated/);
-  assert.match(homeSource, /연결된 일정·캘린더·알림도 최신 상태로 맞춥니다/);
+  assert.match(homeSource, /업무와 연결된 일정도 수정했습니다/);
+  assert.match(homeSource, /updateVisibleTaskTitle/);
   assert.match(homeSource, /await refreshBriefing\(\)/);
 });
 
