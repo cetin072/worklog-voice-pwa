@@ -4,6 +4,7 @@ export const WORK_RECORD_TYPES = Object.freeze([
   "completed_work", "task", "meeting_call", "expense_tax", "delegation", "idea", "issue_review", "other",
 ]);
 export const WORK_RECORD_STATUSES = Object.freeze(["in_progress", "completed", "waiting", "needs_review", "cancelled"]);
+export const WORK_RECORD_ACTION_KINDS = Object.freeze(["task", "note"]);
 export const SCHEDULE_STATUSES = Object.freeze(["confirmed", "tentative", "completed", "cancelled"]);
 export const SOURCE_TYPES = Object.freeze(["direct", "voice", "call", "meeting", "mail", "capture", "scan", "notion", "import", "other"]);
 export const SOURCE_ENTITY_TYPES = Object.freeze(["work_record", "schedule", "candidate", "call_report", "meeting_report", "scan_document", "mail_analysis", "capture_analysis", "other"]);
@@ -38,6 +39,15 @@ function dateTime(value, label, { required = false } = {}) {
   const normalized = text(value, label, { required, max: 64 });
   if (!normalized) return null;
   if (!Number.isFinite(Date.parse(normalized))) throw repositoryError(`DATA_CORE_${label}_INVALID`, `${label}은 유효한 ISO 날짜/시각이어야 합니다.`);
+  return normalized;
+}
+
+function dateOnly(value, label) {
+  const normalized = text(value, label, { max: 10 });
+  if (!normalized) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized) || !Number.isFinite(Date.parse(`${normalized}T00:00:00Z`))) {
+    throw repositoryError(`DATA_CORE_${label}_INVALID`, `${label}은 YYYY-MM-DD 날짜여야 합니다.`);
+  }
   return normalized;
 }
 
@@ -81,6 +91,8 @@ export function toWorkRecordRow(input = {}, contextInput = input) {
     institution: optionalText(input.institution, "WORK_RECORD_INSTITUTION", 500),
     amount: optionalNumber(input.amount, "WORK_RECORD_AMOUNT"),
     follow_up: optionalText(input.followUp, "WORK_RECORD_FOLLOW_UP", 5000),
+    ...(input.actionKind ? { action_kind: enumValue(input.actionKind, WORK_RECORD_ACTION_KINDS, "WORK_RECORD_ACTION_KIND") } : {}),
+    ...(input.journalDate ? { journal_date: dateOnly(input.journalDate, "WORK_RECORD_JOURNAL_DATE") } : {}),
     recorded_at: dateTime(input.recordedAt, "WORK_RECORD_RECORDED_AT", { required: true }),
     due_at: dateTime(input.dueAt, "WORK_RECORD_DUE_AT"),
     metadata: object(input.metadata, "WORK_RECORD_METADATA"),
