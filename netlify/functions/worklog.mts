@@ -2,6 +2,7 @@ import type { Config, Context } from "@netlify/functions";
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { idempotencyHit, isValidClientRequestId, seoulDateFromRecordedAt } from "../shared/core-logic.mjs";
 import { classifyWorklogAction } from "../shared/action-engine-v1.mjs";
+import { multiActionChildRequestId, splitMultiActionText } from "../shared/multi-action-splitter.mjs";
 import { extractScheduleFromText } from "../shared/schedule-extract.mjs";
 import { createNotionWorklogAdapter } from "../shared/notion-worklog-adapter.mjs";
 import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
@@ -64,6 +65,13 @@ function bearerToken(req:Request){
 
 function fastSaveRpcUnavailable(error:any){
   return error?.code==="SUPABASE_DATA_CORE_RPC_FAILED";
+}
+
+function multiActionRpcUnavailable(error:any){
+  if(error?.code!=="SUPABASE_DATA_CORE_RPC_FAILED") return false;
+  const message=String(error?.message || "");
+  return /(?:could not find|schema cache)[\s\S]*save_my_multi_action_worklog/i.test(message)
+    || /save_my_multi_action_worklog[\s\S]*(?:could not find|schema cache)/i.test(message);
 }
 
 function fastSaveWorkspaceMissing(error:any){
@@ -176,34 +184,78 @@ export default async (req:Request, _context:Context) => {
   const recordedAtValue=body.recordedAt || new Date().toISOString();
   const explicitDueDate=String(body.dueDate || "").trim();
   const hasExplicitDueDate=/^\d{4}-\d{2}-\d{2}$/.test(explicitDueDate);
-  const schedule=hasExplicitDueDate
-    ? {text:transcript,dueStart:explicitDueDate,dateKey:explicitDueDate,matched:false,hasTime:false}
-    : extractScheduleFromText(transcript,recordedAtValue);
-  const action=classifyWorklogAction({
-    transcript,
-    recordedAt:recordedAtValue,
-    explicitType:requestedType,
-    schedule,
-  });
-  const status=requestedStatus || (action.needsReview ? "확인필요" : "진행중");
-  const type=requestedType || (action.kind==="schedule" ? "회의·통화" : action.kind==="task" ? "할 일" : "기타");
-  const cleanTranscript=String(schedule.text || transcript).trim() || transcript;
-  const actionEngine={
-    version:"action-engine-v1",
-    kind:action.kind,
-    actionKind:action.actionKind,
-    journalDate:action.journalDate,
-    reason:action.reason,
-    confidence:action.confidence,
-    needsReview:action.needsReview
-  };
-  const record={
-    clientRequestId:requestId, transcript, cleanTranscript, institution, institutionSource, status, type,
-    actionKind:action.actionKind, journalDate:action.journalDate, actionEngine,
-    recordedAt:recordedAtValue,
-    recordedDate:seoulDateFromRecordedAt(recordedAtValue),
-    amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
-  };
+  const requestedSourceType=String(body.sourceType || "direct").trim().toLowerCase();
+  const sourceType=["direct","voice","call","meeting","mail","capture","scan","notion","import","other"].includes(requestedSourceType)
+    ? requestedSourceType
+    : "direct";
+  const assignee=String(body.assignee||"").trim();
+  const followUp=String(body.followUp||"").trim();
+  const hasManualExtras=Boolean(body.amount !== undefined && body.amount !== null && body.amount !== "")
+    || Boolean(assignee)
+    || hasExplicitDueDate
+    || Boolean(followUp);
+  const split=splitMultiActionText(transcript);
+  const canAutoSplit=primaryRequested
+    && isValidClientRequestId(requestId)
+    && sourceType==="voice"
+    && split.matched
+    && !split.truncated
+    && !hasManualExtras
+    && !requestedStatus
+    && !requestedType;
+
+  function classifiedRecord(segment:string,clientRequestId:string,index:number|null=null,total:number|null=null){
+    const segmentSchedule=extractScheduleFromText(segment,recordedAtValue);
+    const segmentAction=classifyWorklogAction({
+      transcript:segment,
+      recordedAt:recordedAtValue,
+      explicitType:index===null ? requestedType : "",
+      schedule:segmentSchedule,
+    });
+    const segmentStatus=(index===null ? requestedStatus : "") || (segmentAction.needsReview ? "확인필요" : "진행중");
+    const segmentType=(index===null ? requestedType : "") || (segmentAction.kind==="schedule" ? "회의·통화" : segmentAction.kind==="task" ? "할 일" : "기타");
+    const segmentClean=String(segmentSchedule.text || segment).trim() || segment;
+    const actionEngine={
+      version:"action-engine-v1",
+      kind:segmentAction.kind,
+      actionKind:segmentAction.actionKind,
+      journalDate:segmentAction.journalDate,
+      reason:segmentAction.reason,
+      confidence:segmentAction.confidence,
+      needsReview:segmentAction.needsReview,
+      ...(index!==null && total!==null ? {multiAction:{parentRequestId:requestId,segmentIndex:index+1,segmentCount:total}} : {})
+    };
+    return {
+      schedule:segmentSchedule,
+      action:segmentAction,
+      cleanTranscript:segmentClean,
+      record:{
+        clientRequestId, transcript:segment, cleanTranscript:segmentClean, institution, institutionSource,
+        status:segmentStatus, type:segmentType,
+        actionKind:segmentAction.actionKind, journalDate:segmentAction.journalDate, actionEngine,
+        recordedAt:recordedAtValue,
+        recordedDate:seoulDateFromRecordedAt(recordedAtValue),
+        amount:index===null ? body.amount : null,
+        assignee:index===null ? assignee : "",
+        followUp:index===null ? followUp : "",
+        dueStart:segmentSchedule.dueStart
+      }
+    };
+  }
+
+  const single=classifiedRecord(transcript,requestId);
+  const schedule=single.schedule;
+  const action=single.action;
+  const cleanTranscript=single.cleanTranscript;
+  const record=single.record;
+  const multiRecords=canAutoSplit
+    ? split.segments.map((segment,index)=>classifiedRecord(
+        segment,
+        multiActionChildRequestId(requestId,index),
+        index,
+        split.segments.length
+      ).record)
+    : [];
 
   if(primaryRequested){
     const supabaseUrl=Netlify.env.get("SUPABASE_URL");
@@ -220,22 +272,63 @@ export default async (req:Request, _context:Context) => {
       let fastPath=false;
 
       try{
-        fastDataCore=await dataCore.persistFast(record);
+        fastDataCore=multiRecords.length>1
+          ? await dataCore.persistManyFast({
+              parentRequestId:requestId,
+              originalText:transcript,
+              source:sourceType,
+              recordedAt:recordedAtValue,
+              records:multiRecords
+            })
+          : await dataCore.persistFast(record);
         fastPath=true;
       }catch(fastError:any){
         if(fastSaveWorkspaceMissing(fastError)){
           workspaceContext=await resolver.resolve(accessToken);
           try{
-            fastDataCore=await dataCore.persistFast(record);
+            fastDataCore=multiRecords.length>1
+              ? await dataCore.persistManyFast({
+                  parentRequestId:requestId,
+                  originalText:transcript,
+                  source:sourceType,
+                  recordedAt:recordedAtValue,
+                  records:multiRecords
+                })
+              : await dataCore.persistFast(record);
             fastPath=true;
           }catch(retryError:any){
             console.warn("Worklog fast save repair retry failed",String(retryError?.code || "unknown"),String(retryError?.message || "unknown").slice(0,120));
           }
-        }else if(fastSaveRpcUnavailable(fastError)){
+        }else if(multiRecords.length>1 && multiActionRpcUnavailable(fastError)){
+          console.warn("Worklog multi-action RPC unavailable; preserving original as one WorkRecord",String(fastError?.message || "unknown").slice(0,120));
+          fastDataCore=await dataCore.persistFast(record);
+          fastPath=true;
+        }else if(multiRecords.length===0 && fastSaveRpcUnavailable(fastError)){
           console.warn("Worklog fast save unavailable; using legacy Data Core path",String(fastError?.message || "unknown").slice(0,120));
         }else{
           throw fastError;
         }
+      }
+
+      if(fastDataCore?.multiAction){
+        const normalizationResults=await Promise.all(
+          (fastDataCore.workRecordIds || []).map((workRecordId:string)=>queueRecordNormalization(req,accessToken,workRecordId))
+        );
+        const scheduleIds=Array.isArray(fastDataCore.scheduleIds) ? fastDataCore.scheduleIds : [];
+        return json(200,{
+          ok:true,
+          mode:"data_core",
+          multiAction:true,
+          splitCount:Number(fastDataCore.savedCount || multiRecords.length),
+          captureId:String(fastDataCore.captureId || ""),
+          dataCoreWorkRecordId:String(fastDataCore.workRecordId || ""),
+          dataCoreWorkRecordIds:fastDataCore.workRecordIds || [],
+          scheduleCreated:scheduleIds.length>0,
+          scheduleId:String(fastDataCore.scheduleId || ""),
+          scheduleIds,
+          normalizationQueued:normalizationResults.every(Boolean),
+          notionSync:notionConfigured ? "deferred_multi_action" : "disabled"
+        });
       }
 
       if(!fastDataCore){
