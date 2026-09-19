@@ -12,6 +12,7 @@ export type BriefingTask = {
   daysOverdue?: number;
   daysUntil?: number;
   followUp?: string;
+  reason?: 'attention' | 'overdue' | 'today' | string;
 };
 
 export type BriefingNote = {
@@ -43,6 +44,7 @@ export type MobileBriefing = {
   filteredTaskCount?: number;
   counts?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated' | 'total', number>>;
   structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>>;
+  resurface?: BriefingTask[];
   notes?: BriefingNote[];
   schedules?: { today?: BriefingSchedule[]; upcoming?: BriefingSchedule[]; total?: number };
   scheduleEnabled?: boolean;
@@ -221,11 +223,12 @@ export function parseMobileBriefing(body: Record<string, unknown>): MobileBriefi
   const buckets = ['overdue', 'today', 'upcoming', 'undated'] as const;
   if (typeof body.today !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.today)
     || !structure || !counts || (body.notes !== undefined && !Array.isArray(body.notes))
+    || (body.resurface !== undefined && !Array.isArray(body.resurface))
     || !buckets.every((key) => Array.isArray(structure[key])
       && typeof counts[key] === 'number' && Number.isFinite(counts[key]) && Number(counts[key]) >= 0)) {
     throw new Error('브리핑 응답을 확인하지 못했습니다. 기존 브리핑을 유지합니다. 다시 시도해주세요.');
   }
-  return body as MobileBriefing;
+  return { ...body, resurface: Array.isArray(body.resurface) ? body.resurface : [] } as MobileBriefing;
 }
 
 export async function loadBriefing(accessToken: string) {
