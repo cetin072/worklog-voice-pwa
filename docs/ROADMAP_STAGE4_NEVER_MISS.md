@@ -115,6 +115,13 @@ Push 없이 앱 내부에서 다시 보여줄 업무 판단.
 ### 4-6 최소 Push 연결
 기존 08:30 / 16:30을 재사용하고 새 자동 Push는 기본적으로 추가하지 않는다.
 
+Stage 4 V1 결정:
+
+- Task의 명시적 `다시 알림`은 `next_attention_at`과 앱 내부 재노출로 완결한다.
+- 현재 durable Local Notification mapping은 Schedule ID와 Calendar 일정 lifecycle에만 소유권·재시작 복구·취소 정합성이 있다.
+- WorkRecord까지 성급하게 일반화하면 완료/기한 변경/앱 재설치 경계가 넓어지므로, 이 단계에서는 native server Push나 별도 Task Local Notification을 추가하지 않는다.
+- Web/PWA의 opt-in 08:30 아침 브리핑과 16:30 미완료 알림만 서버 Push로 유지하며, 빈 대상은 발송하지 않는다.
+
 ### 4-7 Never Miss E2E
 완료/미루기/다시 알림/overdue/대기/재진입 통합검증.
 
