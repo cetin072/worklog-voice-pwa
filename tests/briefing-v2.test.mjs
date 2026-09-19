@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { briefingV2Counts, classifyBriefingTasks } from "../netlify/shared/briefing-v2.mjs";
+import { selectResurfaceTasks } from "../netlify/shared/resurface-engine.mjs";
 
 const TODAY="2026-09-12";
 
@@ -119,4 +120,23 @@ test("하나의 업무는 네 기본 구간 중 한 곳에만 들어간다",()=>
   const primary=[...result.overdue,...result.today,...result.upcoming,...result.undated];
   assert.equal(primary.length,4);
   assert.equal(new Set(primary.map(item=>item.pageId+item.title+item.dueKey+item.status)).size,4);
+});
+
+test("resurface prioritizes explicit attention, then overdue, then today with deterministic ties",()=>{
+  const result=selectResurfaceTasks([
+    task({pageId:"today",dueKey:TODAY}),
+    task({pageId:"old",dueKey:"2026-09-10"}),
+    task({pageId:"later-attention",nextAttentionAt:"2026-09-12T08:30:00.000Z"}),
+    task({pageId:"first-attention",nextAttentionAt:"2026-09-12T08:00:00.000Z"}),
+  ],{now:"2026-09-12T09:00:00.000Z",today:TODAY});
+  assert.deepEqual(result.map(item=>[item.pageId,item.reason]),[["first-attention","attention"],["later-attention","attention"],["old","overdue"],["today","today"]]);
+});
+
+test("resurface excludes future, undated, Notes, system, and inactive work",()=>{
+  const result=selectResurfaceTasks([
+    task({dueKey:"2026-09-13"}), task(), task({actionKind:"note",dueKey:TODAY}),
+    task({project:"SYSTEM_TEST",dueKey:TODAY}), task({status:"완료",dueKey:TODAY}),
+    task({status:"대기",nextAttentionAt:"2026-09-12T09:01:00.000Z"}),
+  ],{now:"2026-09-12T09:00:00.000Z",today:TODAY});
+  assert.equal(result.length,0);
 });

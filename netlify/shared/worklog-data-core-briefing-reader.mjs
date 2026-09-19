@@ -42,6 +42,8 @@ function toBriefingTask(row = {}) {
     status: STATUS_MAP[text(row.status, 80)] || "",
     project: text(row?.metadata?.project, 80),
     dueKey: dueDateKey(row.due_at),
+    nextAttentionAt: text(row.next_attention_at, 64),
+    actionKind: text(row.action_kind, 20),
     followUp: text(row.follow_up, 240),
     editedAt: text(row.updated_at || row.recorded_at, 64),
   });
@@ -52,7 +54,7 @@ export function createWorklogDataCoreBriefingReader({ client } = {}) {
   async function listOpenTasksWithMeta(contextInput) {
       const context = requireWorkspaceContext(contextInput);
       const rows = await client.select("work_records", {
-        select: "id,title,institution,status,follow_up,due_at,updated_at,recorded_at,metadata,action_kind",
+        select: "id,title,institution,status,follow_up,due_at,next_attention_at,updated_at,recorded_at,metadata,action_kind",
         workspace_id: `eq.${context.workspaceId}`,
         status: "in.(in_progress,waiting,needs_review)",
         or: "(action_kind.is.null,action_kind.eq.task)",
