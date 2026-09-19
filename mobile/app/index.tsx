@@ -17,6 +17,7 @@ import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/sche
 import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-calendar';
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
+import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
 import { type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, readWorklogDetails, saveWorklog, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
@@ -134,7 +135,7 @@ export default function HomeScreen() {
   const [briefing, setBriefing] = useState<MobileBriefing | null>(null);
   const [briefingError, setBriefingError] = useState('');
   const [briefingBusy, setBriefingBusy] = useState(false);
-  const briefingRefreshQueue = useRef<Promise<void>>(Promise.resolve());
+  const briefingRefreshQueue = useRef(createSerialTaskQueue());
   const briefingRefreshEpoch = useRef(0);
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
@@ -155,7 +156,7 @@ export default function HomeScreen() {
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
     briefingRefreshEpoch.current += 1;
-    briefingRefreshQueue.current = Promise.resolve();
+    briefingRefreshQueue.current.reset();
     if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setScreen('home'); return; }
     void refreshBriefing();
   }, [session?.access_token]);
@@ -223,7 +224,7 @@ export default function HomeScreen() {
     if (!session) return;
     const accessToken = session.access_token;
     const epoch = briefingRefreshEpoch.current;
-    const task = briefingRefreshQueue.current.then(async () => {
+    await briefingRefreshQueue.current.run(async () => {
       if (epoch !== briefingRefreshEpoch.current) return;
       setBriefingBusy(true);
       setBriefingError('');
@@ -236,8 +237,6 @@ export default function HomeScreen() {
         if (epoch === briefingRefreshEpoch.current) setBriefingBusy(false);
       }
     });
-    briefingRefreshQueue.current = task.then(() => undefined, () => undefined);
-    await task;
   }
 
   async function runEmailSignIn() {
