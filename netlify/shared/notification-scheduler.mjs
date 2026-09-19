@@ -71,45 +71,47 @@ function cleanClaim(row) {
 export function notificationSchedulerConfig(readEnv) {
   const read = typeof readEnv === "function" ? readEnv : () => undefined;
   const supabaseUrl = httpsOrigin(read("SUPABASE_URL"));
-  const publishableKey = text(read("SUPABASE_PUBLISHABLE_KEY"), 500);
   const schedulerSecret = text(read("NOTIFICATION_SCHEDULER_SECRET"), 500);
   return Object.freeze({
-    configured: Boolean(supabaseUrl && publishableKey && schedulerSecret.length >= 32),
+    configured: Boolean(supabaseUrl && schedulerSecret.length >= 32),
     supabaseUrl,
-    publishableKey,
     schedulerSecret,
   });
 }
 
-export function createNotificationSchedulerClient({ supabaseUrl, publishableKey, schedulerSecret, fetchImpl = fetch } = {}) {
+export function createNotificationSchedulerClient({ supabaseUrl, schedulerSecret, fetchImpl = fetch } = {}) {
   const origin = httpsOrigin(supabaseUrl);
-  const key = text(publishableKey, 500);
   const secret = text(schedulerSecret, 500);
-  if (!origin || !key || secret.length < 32) throw schedulerError("NOTIFICATION_SCHEDULER_CONFIG_INVALID", "알림 스케줄러 설정이 올바르지 않습니다.");
+  if (!origin || secret.length < 32) throw schedulerError("NOTIFICATION_SCHEDULER_CONFIG_INVALID", "알림 스케줄러 설정이 올바르지 않습니다.");
   if (typeof fetchImpl !== "function") throw schedulerError("NOTIFICATION_SCHEDULER_FETCH_REQUIRED", "알림 스케줄러 fetch 구현이 필요합니다.");
 
-  async function rpc(name, body) {
-    const response = await fetchImpl(`${origin}/rest/v1/rpc/${name}`, {
+  async function gateway(action, body) {
+    const response = await fetchImpl(`${origin}/functions/v1/notification-scheduler-gateway`, {
       method: "POST",
-      headers: { apikey: key, "content-type": "application/json" },
-      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json",
+        "x-worklog-scheduler-secret": secret,
+      },
+      body: JSON.stringify({ action, ...body }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const error = schedulerError("NOTIFICATION_SCHEDULER_RPC_FAILED", String(data?.message || data?.hint || `${name} 호출에 실패했습니다.`));
+      const error = schedulerError(
+        "NOTIFICATION_SCHEDULER_GATEWAY_FAILED",
+        String(data?.message || `${action} 요청에 실패했습니다.`),
+      );
       error.status = response.status;
       throw error;
     }
     return data;
   }
 
-  async function claim(functionName, appOrigin, localDate, label) {
+  async function claim(action, appOrigin, localDate, label) {
     const targetOrigin = httpsOrigin(appOrigin);
     if (!targetOrigin) throw schedulerError("NOTIFICATION_APP_ORIGIN_INVALID", "알림 대상 앱 origin이 올바르지 않습니다.");
-    const data = await rpc(functionName, {
-      p_scheduler_secret: secret,
-      p_app_origin: targetOrigin,
-      p_local_date: localDate || null,
+    const data = await gateway(action, {
+      appOrigin: targetOrigin,
+      localDate: localDate || null,
     });
     if (!Array.isArray(data)) throw schedulerError("NOTIFICATION_CLAIM_RESPONSE_INVALID", `${label} 알림 claim 결과가 올바르지 않습니다.`);
     return Object.freeze(data.map(cleanClaim));
@@ -117,22 +119,21 @@ export function createNotificationSchedulerClient({ supabaseUrl, publishableKey,
 
   return Object.freeze({
     async claimMorning({ appOrigin, localDate = null } = {}) {
-      return claim("claim_morning_notification_deliveries", appOrigin, localDate, "아침");
+      return claim("claim_morning", appOrigin, localDate, "아침");
     },
 
     async claimAfternoon({ appOrigin, localDate = null } = {}) {
-      return claim("claim_afternoon_notification_deliveries", appOrigin, localDate, "오후");
+      return claim("claim_afternoon", appOrigin, localDate, "오후");
     },
 
     async finish({ deliveryId, success, status = null, code = null } = {}) {
       const id = text(deliveryId, 80);
       if (!id || typeof success !== "boolean") throw schedulerError("NOTIFICATION_FINISH_INVALID", "알림 완료 기록 값이 올바르지 않습니다.");
-      const data = await rpc("finish_notification_delivery", {
-        p_scheduler_secret: secret,
-        p_delivery_id: id,
-        p_success: success,
-        p_status: optionalHttpStatus(status),
-        p_code: code ? text(code, 80) : null,
+      const data = await gateway("finish", {
+        deliveryId: id,
+        success,
+        status: optionalHttpStatus(status),
+        code: code ? text(code, 80) : null,
       });
       if (data !== true) throw schedulerError("NOTIFICATION_FINISH_REJECTED", "알림 완료 기록을 반영하지 못했습니다.");
       return true;
