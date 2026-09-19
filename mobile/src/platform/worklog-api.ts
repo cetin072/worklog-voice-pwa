@@ -360,10 +360,14 @@ export async function updateBriefingNoteState(
 }
 
 
+export type WorklogActionKind = 'task' | 'note';
+
 export type WorklogEditDetails = {
   title: string;
   dueDate: string;
   dueTime: string;
+  actionKind?: WorklogActionKind;
+  canConvertAction?: boolean;
   mode?: string;
 };
 
@@ -373,6 +377,9 @@ export type WorklogUpdateResult = Readonly<{
   dueDate?: string;
   dueTime?: string;
   scheduleUpdated?: boolean;
+  actionKind?: WorklogActionKind;
+  actionChanged?: boolean;
+  canConvertAction?: boolean;
   unchanged?: boolean;
   mode?: string;
 }>;
@@ -392,13 +399,15 @@ export async function readWorklogDetails(accessToken: string, pageId: string): P
     title: typeof body.title === 'string' ? body.title : '',
     dueDate: typeof body.dueDate === 'string' ? body.dueDate : '',
     dueTime: typeof body.dueTime === 'string' ? body.dueTime : '',
+    actionKind: body.actionKind === 'task' || body.actionKind === 'note' ? body.actionKind : undefined,
+    canConvertAction: body.canConvertAction === true,
     mode: typeof body.mode === 'string' ? body.mode : undefined,
   };
 }
 
 export async function updateWorklogDetails(
   accessToken: string,
-  input: { pageId: string; title: string; dueDate: string; dueTime: string },
+  input: { pageId: string; title: string; dueDate: string; dueTime: string; actionKind?: WorklogActionKind },
 ): Promise<WorklogUpdateResult> {
   const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
     method: 'POST',
@@ -413,6 +422,7 @@ export async function updateWorklogDetails(
       title: input.title,
       dueDate: input.dueDate,
       dueTime: input.dueTime,
+      ...(input.actionKind ? { actionKind: input.actionKind } : {}),
     }),
   });
   return readJson(response) as Promise<WorklogUpdateResult>;
