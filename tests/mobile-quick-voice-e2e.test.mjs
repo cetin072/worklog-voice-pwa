@@ -36,7 +36,7 @@ test('runtime model resolver preserves resumable partial downloads and promotes 
     downloader.indexOf('if (finalFile.exists)') < downloader.indexOf('Paths.availableDiskSpace'),
     'verified cached model is reused before checking download free space',
   );
-  assert.match(downloader, /await downloaded\.move\(finalFile\)/);
+  assert.match(downloader, /await verifiedDownload\.move\(finalFile\)/);
   assert.match(downloader, /Paths\.availableDiskSpace/);
   assert.match(runtime, /downloadBytes/);
   assert.match(runtime, /progressListeners/);

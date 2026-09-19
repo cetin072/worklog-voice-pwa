@@ -65,7 +65,7 @@ test('Quick Voice requires explicit transcript confirmation before the persisten
   assert.match(recorder, /title="저장"/);
   assert.match(recorder, /title="다시 녹음"/);
   assert.match(recorder, /title="버리기"/);
-  assert.match(recorder, /saveQuickVoiceTranscript\(\{/);
+  assert.match(recorder, /createQuickVoiceSaveAttempt\(\{/);
   assert.doesNotMatch(recorder, /runQuickVoiceFastPath/);
 });
 
