@@ -54,8 +54,8 @@ export function createQuickVoiceClientRequestId(now = Date.now(), random = Math.
 
 /**
  * Transcribes a captured Quick Voice input without crossing the persistence
- * boundary. UI must present this transcript for user confirmation before it
- * calls saveQuickVoiceTranscript.
+ * boundary. The Voice fast path may persist a valid transcript immediately;
+ * post-save correction belongs to the briefing edit flow.
  */
 export async function transcribeQuickVoiceCapture(input: {
   provider: MobileTranscriptionProvider;
