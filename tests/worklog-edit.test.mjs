@@ -39,7 +39,7 @@ test("Data Core editor reads and updates through scoped RPCs",async()=>{
   const client={
     async rpc(name,body){
       calls.push({name,body});
-      if(name==="get_my_work_record_edit") return [{record_id:id,title_value:"기존 업무",due_at_value:"2026-09-18T05:30:00+00:00",due_has_time:true}];
+      if(name==="get_my_work_record_edit_v2") return [{record_id:id,title_value:"기존 업무",due_at_value:"2026-09-18T05:30:00+00:00",due_has_time:true,action_kind_value:"task",action_conversion_allowed:true}];
       return [{record_id:id,title_value:"수정 업무",due_at_value:"2026-09-19T00:00:00+09:00",due_has_time:false,schedule_updated:true}];
     }
   };
@@ -47,11 +47,11 @@ test("Data Core editor reads and updates through scoped RPCs",async()=>{
   const current=await editor.readDetails({recordId:id});
   const updated=await editor.updateDetails({recordId:id,title:"  수정   업무 ",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false});
   assert.deepEqual(calls,[
-    {name:"get_my_work_record_edit",body:{p_record_id:id}},
+    {name:"get_my_work_record_edit_v2",body:{p_record_id:id}},
     {name:"update_my_work_record_details",body:{p_record_id:id,p_title:"수정 업무",p_due_at:"2026-09-19T00:00:00+09:00",p_due_has_time:false}}
   ]);
-  assert.deepEqual(current,{recordId:id,title:"기존 업무",dueAt:"2026-09-18T05:30:00+00:00",dueHasTime:true});
-  assert.deepEqual(updated,{recordId:id,title:"수정 업무",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false,scheduleUpdated:true});
+  assert.deepEqual(current,{recordId:id,title:"기존 업무",dueAt:"2026-09-18T05:30:00+00:00",dueHasTime:true,actionKind:"task",actionConversionAllowed:true});
+  assert.deepEqual(updated,{recordId:id,title:"수정 업무",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false,actionKind:null,actionKindChanged:false,scheduleUpdated:true});
 });
 
 test("Data Core editor fails closed for missing/forbidden records",async()=>{

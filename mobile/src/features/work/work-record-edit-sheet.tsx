@@ -13,11 +13,14 @@ type WorkRecordEditSheetProps = Readonly<{
   loading: boolean;
   saving: boolean;
   ready: boolean;
+  actionKind?: 'task' | 'note';
+  actionConversionAllowed?: boolean;
   statusText?: string;
   statusTone?: 'neutral' | 'success' | 'error';
   onTitle(value: string): void;
   onDate(value: string): void;
   onTime(value: string): void;
+  onActionKind?(value: 'task' | 'note'): void;
   onSave(): void;
   onCancel(): void;
   onRetry?(): void;
@@ -58,11 +61,14 @@ export function WorkRecordEditSheet({
   loading,
   saving,
   ready,
+  actionKind,
+  actionConversionAllowed = false,
   statusText = '',
   statusTone = 'neutral',
   onTitle,
   onDate,
   onTime,
+  onActionKind,
   onSave,
   onCancel,
   onRetry,
@@ -132,6 +138,31 @@ export function WorkRecordEditSheet({
           value={title}
           onChangeText={onTitle}
         />
+
+        {actionKind ? <View style={styles.kindSection}>
+          <Text style={styles.label}>종류</Text>
+          <View style={styles.kindRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="할 일로 변경"
+              disabled={!ready || inputBlocked || !actionConversionAllowed || !onActionKind}
+              style={[styles.kindChoice, actionKind === 'task' ? styles.kindChoiceActive : null, !actionConversionAllowed ? styles.disabled : null]}
+              onPress={() => onActionKind?.('task')}
+            >
+              <Text style={[styles.kindChoiceText, actionKind === 'task' ? styles.kindChoiceTextActive : null]}>할 일</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="메모 참고로 변경"
+              disabled={!ready || inputBlocked || !actionConversionAllowed || !onActionKind}
+              style={[styles.kindChoice, actionKind === 'note' ? styles.kindChoiceActive : null, !actionConversionAllowed ? styles.disabled : null]}
+              onPress={() => onActionKind?.('note')}
+            >
+              <Text style={[styles.kindChoiceText, actionKind === 'note' ? styles.kindChoiceTextActive : null]}>메모 · 참고</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.help}>{actionConversionAllowed ? '종류를 바꾸면 저장할 때 함께 반영됩니다.' : '일정과 연결된 기록은 종류를 바꿀 수 없습니다.'}</Text>
+        </View> : null}
 
         <View style={styles.dateRow}>
           <View style={styles.field}>
@@ -204,6 +235,12 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 28, lineHeight: 30, color: mobileTheme.colors.textSecondary },
   loading: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 9 },
   label: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.textSecondary },
+  kindSection: { gap: 7 },
+  kindRow: { flexDirection: 'row', gap: 8 },
+  kindChoice: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, backgroundColor: mobileTheme.colors.surface },
+  kindChoiceActive: { borderColor: mobileTheme.colors.primary, backgroundColor: mobileTheme.colors.neutralBackground },
+  kindChoiceText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.textSecondary },
+  kindChoiceTextActive: { color: mobileTheme.colors.primary },
   optional: { fontSize: 11, fontWeight: '700', color: mobileTheme.colors.textMuted },
   input: { minHeight: mobileTheme.size.input, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: mobileTheme.colors.text, backgroundColor: mobileTheme.colors.surface },
   dateRow: { flexDirection: 'row', gap: 8 },
