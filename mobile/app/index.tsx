@@ -11,6 +11,7 @@ import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
+import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
 import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-actions';
 import { CalendarConnectionSummary } from '@/src/features/schedule/calendar-connection-summary';
 import { CalendarConnectionManager } from '@/src/features/schedule/calendar-connection-manager';
@@ -19,7 +20,7 @@ import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-ca
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
-import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, readWorklogDetails, saveWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
+import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, postponeWorklog, readWorklogDetails, saveWorklog, setWorklogAttention, undoPostponeWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
@@ -267,6 +268,9 @@ export default function HomeScreen() {
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string } | null>(null);
+  const [reminderBusyId, setReminderBusyId] = useState<string | null>(null);
+  const [undoPostpone, setUndoPostpone] = useState<{ pageId: string; title: string } | null>(null);
+  const [undoAttention, setUndoAttention] = useState<{ pageId: string; title: string; previousAttentionAt: string | null } | null>(null);
   const [noteBusyId, setNoteBusyId] = useState<string | null>(null);
   const [undoNote, setUndoNote] = useState<{ pageId: string; title: string } | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
@@ -491,6 +495,79 @@ export default function HomeScreen() {
       showMessage(messageOf(nextError, '완료 처리를 되돌리지 못했습니다.'), 'error');
     } finally {
       setTaskBusyId(null);
+    }
+  }
+
+  async function postponeSelectedTask(date: string) {
+    const task = selectedTask?.task;
+    if (!session || !task?.pageId || reminderBusyId) return;
+    setReminderBusyId(task.pageId);
+    clearMessage();
+    try {
+      const current = await readWorklogDetails(session.access_token, task.pageId);
+      await postponeWorklog(session.access_token, { pageId: task.pageId, dueDate: date, dueTime: current.dueTime });
+      setUndoPostpone({ pageId: task.pageId, title: task.title || '업무' });
+      setSelectedTask(null);
+      setScreen('home');
+      showMessage(`${task.title || '업무'} 기한을 ${date}로 미뤘습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '업무를 미루지 못했습니다.'), 'error');
+    } finally {
+      setReminderBusyId(null);
+    }
+  }
+
+  async function remindSelectedTask(date: string | null) {
+    const task = selectedTask?.task;
+    if (!session || !task?.pageId || reminderBusyId) return;
+    setReminderBusyId(task.pageId);
+    clearMessage();
+    try {
+      const result = await setWorklogAttention(session.access_token, task.pageId, date ? `${date}T09:00:00+09:00` : null);
+      setUndoAttention({ pageId: task.pageId, title: task.title || '업무', previousAttentionAt: result.previousAttentionAt || null });
+      setSelectedTask(null);
+      setScreen('home');
+      showMessage(date ? `${task.title || '업무'}을(를) ${date}에 다시 확인합니다.` : `${task.title || '업무'}의 다시 알림을 취소했습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '다시 알림을 변경하지 못했습니다.'), 'error');
+    } finally {
+      setReminderBusyId(null);
+    }
+  }
+
+  async function undoPostponedTask() {
+    if (!session || !undoPostpone || reminderBusyId) return;
+    const target = undoPostpone;
+    setReminderBusyId(target.pageId);
+    clearMessage();
+    try {
+      await undoPostponeWorklog(session.access_token, target.pageId);
+      setUndoPostpone(null);
+      showMessage(`${target.title} 미루기를 되돌렸습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '미루기를 되돌리지 못했습니다.'), 'error');
+    } finally {
+      setReminderBusyId(null);
+    }
+  }
+
+  async function undoTaskAttention() {
+    if (!session || !undoAttention || reminderBusyId) return;
+    const target = undoAttention;
+    setReminderBusyId(target.pageId);
+    clearMessage();
+    try {
+      await setWorklogAttention(session.access_token, target.pageId, target.previousAttentionAt);
+      setUndoAttention(null);
+      showMessage(`${target.title} 다시 알림을 되돌렸습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '다시 알림을 되돌리지 못했습니다.'), 'error');
+    } finally {
+      setReminderBusyId(null);
     }
   }
 
@@ -762,6 +839,8 @@ export default function HomeScreen() {
       }) : null}
 
       {undoTask ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoTask.title} 완료 처리</Text><Pressable accessibilityRole="button" disabled={Boolean(taskBusyId)} onPress={() => void undoCompletedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
+      {undoPostpone ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoPostpone.title} 미루기</Text><Pressable accessibilityRole="button" disabled={Boolean(reminderBusyId)} onPress={() => void undoPostponedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
+      {undoAttention ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoAttention.title} 다시 알림</Text><Pressable accessibilityRole="button" disabled={Boolean(reminderBusyId)} onPress={() => void undoTaskAttention()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
 
       {notes.length ? <View style={[styles.briefingSection, styles.sectionNeutral]}>
         <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>📝 메모 · 참고</Text><Text style={styles.sectionCount}>{notes.length}</Text></View>
@@ -803,7 +882,7 @@ export default function HomeScreen() {
 
     {screen === 'recordSearch' ? <View style={styles.card}><PanelHead eyebrow="업무" title="과거 기록 전체 검색" onClose={() => setScreen('home')} />{client ? <WorkRecordSearch client={client} accessToken={session.access_token} /> : <Text style={styles.errorText}>검색 세션을 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
 
-    {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View>{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
+    {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
     {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>웹 업무수첩처럼 업무 내용과 필요한 세부값을 한 화면에서 저장합니다.</Text><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}

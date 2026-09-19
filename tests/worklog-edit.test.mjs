@@ -59,6 +59,25 @@ test("Data Core editor fails closed for missing/forbidden records",async()=>{
   await assert.rejects(()=>editor.readDetails({recordId:"12345678-1234-1234-1234-1234567890ab"}),error=>error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN");
 });
 
+test("Stage 4 reminder editor keeps postpone and attention as separate scoped RPCs",async()=>{
+  const calls=[];
+  const id="12345678-1234-1234-1234-1234567890ab";
+  const editor=createWorklogDataCoreEditor({client:{rpc:async(name,body)=>{
+    calls.push({name,body});
+    if(name==="postpone_my_work_record") return [{record_id:id,due_at_value:"2026-09-20T00:00:00+09:00",due_has_time:false,previous_due_at_value:"2026-09-18T00:00:00+09:00",previous_due_has_time:false}];
+    if(name==="set_my_work_record_attention") return [{record_id:id,next_attention_at_value:"2026-09-21T09:00:00+09:00",previous_attention_at_value:null}];
+    return [{record_id:id,due_at_value:"2026-09-18T00:00:00+09:00",due_has_time:false}];
+  }}});
+  assert.deepEqual(await editor.postpone({recordId:id,dueAt:"2026-09-20T00:00:00+09:00",dueHasTime:false}),{recordId:id,dueAt:"2026-09-20T00:00:00+09:00",dueHasTime:false,previousDueAt:"2026-09-18T00:00:00+09:00",previousDueHasTime:false});
+  assert.deepEqual(await editor.setAttention({recordId:id,nextAttentionAt:"2026-09-21T09:00:00+09:00"}),{recordId:id,nextAttentionAt:"2026-09-21T09:00:00+09:00",previousAttentionAt:null});
+  assert.deepEqual(await editor.undoPostpone({recordId:id}),{recordId:id,dueAt:"2026-09-18T00:00:00+09:00",dueHasTime:false});
+  assert.deepEqual(calls,[
+    {name:"postpone_my_work_record",body:{p_record_id:id,p_due_at:"2026-09-20T00:00:00+09:00",p_due_has_time:false}},
+    {name:"set_my_work_record_attention",body:{p_record_id:id,p_next_attention_at:"2026-09-21T09:00:00+09:00"}},
+    {name:"undo_my_work_record_postpone",body:{p_record_id:id}}
+  ]);
+});
+
 test("Platform briefing edit loads current details and saves title date and time without legacy prompt",()=>{
   assert.match(clientSource,/mode\(\)===\"data_core\"/);
   assert.match(clientSource,/WorklogPlatformAuth\?\.readSession\?\.\(\)/);
@@ -95,6 +114,30 @@ test("edit RPC migration is invoker-scoped and synchronizes only linked schedule
   assert.match(migrationSource,/when p_due_at is null then 'cancelled'/);
   assert.match(migrationSource,/revoke all on function public\.update_my_work_record_details[^;]+ from public/i);
   assert.match(migrationSource,/grant execute on function public\.update_my_work_record_details[^;]+ to authenticated/i);
+});
+
+test("Stage 4 postpone and attention SQL are invoker-scoped, owner-scoped, and never move linked schedules",()=>{
+  const migration=read("supabase/migrations/20260919163909_stage4_postpone_remind.sql");
+  assert.match(migration,/create or replace function public\.postpone_my_work_record/i);
+  assert.match(migration,/create or replace function public\.set_my_work_record_attention/i);
+  assert.match(migration,/create or replace function public\.undo_my_work_record_postpone/i);
+  assert.match(migration,/security invoker/gi);
+  assert.match(migration,/wr\.created_by_user_id = v_user_id/);
+  assert.match(migration,/WORK_RECORD_POSTPONE_SCHEDULE_LINKED/);
+  assert.match(migration,/s\.metadata ->> 'workRecordId' = p_record_id::text/);
+  assert.match(migration,/next_attention_at = p_next_attention_at/);
+  assert.match(migration,/due_at = p_due_at/);
+  assert.match(migration,/stage4Postpone/);
+  assert.match(migration,/revoke all on function public\.postpone_my_work_record[^;]+ from public, anon/i);
+  assert.match(migration,/grant execute on function public\.set_my_work_record_attention[^;]+ to authenticated, service_role/i);
+});
+
+test("worklog edit endpoint keeps Stage 4 actions on the Data Core path and fail-closes legacy mode",()=>{
+  assert.match(endpointSource,/\["read","postpone","undo_postpone","attention"\]/);
+  assert.match(endpointSource,/editor\.postpone/);
+  assert.match(endpointSource,/editor\.undoPostpone/);
+  assert.match(endpointSource,/editor\.setAttention/);
+  assert.match(endpointSource,/미루기와 다시 알림은 Data Core 업무에서만 지원합니다/);
 });
 
 test("main cache-busts the expanded briefing editor assets",()=>{
