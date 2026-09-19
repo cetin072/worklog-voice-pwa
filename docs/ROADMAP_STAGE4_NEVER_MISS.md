@@ -125,6 +125,12 @@ Stage 4 V1 결정:
 ### 4-7 Never Miss E2E
 완료/미루기/다시 알림/overdue/대기/재진입 통합검증.
 
+Stage 4 완료 상태:
+
+- 4-0 ~ 4-7은 각각 Issue, Draft PR, UAR, Production 검증을 거쳐 완료했다.
+- 핵심 상태 전이(오늘·기한 지남 완료 제거, 미래 다시 알림, 대기 재노출, 미루기/Undo, 다시 알림/Undo, 연결 Schedule fail-closed)는 runtime 중심 통합 계약으로 검증한다.
+- 서버 Push는 opt-in 08:30/16:30만 유지하며, 모바일은 앱 내 재노출과 Schedule Local Reminder를 구분한다.
+
 ## 8. 비목표
 
 - 새 유료 Push SaaS

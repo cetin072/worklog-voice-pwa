@@ -101,7 +101,9 @@ Stage 4는 **Never Miss / 최소 알림·능동형 브리핑**으로 사용자 �
 - 각 4-x를 별도 Issue/Branch/PR로 진행
 
 현재 개발 단계:
-- **4-0 Notification Scheduler Safety Gate** (#385)
+- **Stage 4 완료** — Never Miss / 최소 알림·능동형 브리핑
+- 4-0 ~ 4-7은 main 병합 및 Production 검증 완료
+- 다음 단계는 별도 사용자 요청 전 시작하지 않는다.
 
 ## 6. 장기 확장 축
 
