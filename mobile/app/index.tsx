@@ -274,6 +274,7 @@ export default function HomeScreen() {
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editActionKind, setEditActionKind] = useState<'task' | 'note' | undefined>(undefined);
+  const [editOriginalActionKind, setEditOriginalActionKind] = useState<'task' | 'note' | undefined>(undefined);
   const [editActionConversionAllowed, setEditActionConversionAllowed] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -505,6 +506,7 @@ export default function HomeScreen() {
       setEditDate(details.dueDate || fallbackDate);
       setEditTime(details.dueTime || '');
       setEditActionKind(details.actionKind);
+      setEditOriginalActionKind(details.actionKind);
       setEditActionConversionAllowed(details.actionConversionAllowed === true);
       setEditReady(true);
     } catch (nextError) {
@@ -560,6 +562,7 @@ export default function HomeScreen() {
     setEditDate(task.dueKey || '');
     setEditTime('');
     setEditActionKind(undefined);
+    setEditOriginalActionKind(undefined);
     setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
@@ -574,6 +577,7 @@ export default function HomeScreen() {
     setEditDate('');
     setEditTime('');
     setEditActionKind('note');
+    setEditOriginalActionKind(undefined);
     setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
@@ -650,7 +654,9 @@ export default function HomeScreen() {
         title: nextTitle,
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
-        ...(editActionConversionAllowed && editActionKind ? { actionKind: editActionKind } : {}),
+        ...(editActionConversionAllowed && editActionKind && editOriginalActionKind && editActionKind !== editOriginalActionKind
+          ? { actionKind: editActionKind }
+          : {}),
       });
       const visibleTitle = result.title?.trim() || nextTitle;
       if (result.actionKindChanged) removeVisibleRecordForConversion(recordId);
@@ -698,6 +704,7 @@ export default function HomeScreen() {
     setEditDate('');
     setEditTime('');
     setEditActionKind(undefined);
+    setEditOriginalActionKind(undefined);
     setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
