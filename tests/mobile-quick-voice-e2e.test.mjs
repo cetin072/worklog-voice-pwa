@@ -111,6 +111,6 @@ test('Quick Voice save success has immediate tactile feedback like the web fast-
 test('briefing refreshes serialize instead of dropping a voice-triggered refresh while another load is busy', () => {
   assert.match(home, /briefingRefreshQueue/);
   assert.match(home, /briefingRefreshEpoch/);
-  assert.match(home, /briefingRefreshQueue\.current\.then/);
+  assert.match(home, /briefingRefreshQueue\.current\.run/);
   assert.doesNotMatch(home, /if \(!session \|\| briefingBusy\) return/);
 });
