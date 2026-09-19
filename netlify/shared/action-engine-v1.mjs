@@ -78,7 +78,10 @@ export function classifyWorklogAction({
 
   const schedule=providedSchedule || extractScheduleFromText(source,recordedAt);
   const journal=extractJournalDateFromText(source,recordedAt);
-  const journalDate=journal.dateKey || fallbackDate;
+  const scheduleDate=String(schedule?.dateKey || "");
+  const journalDate=journal.matched
+    ? journal.dateKey
+    : (!journal.ambiguous && schedule?.matched && scheduleDate ? scheduleDate : (journal.dateKey || fallbackDate));
   const dateAmbiguous=Boolean(journal.ambiguous);
 
   if(isTimedScheduleIntent({source,dueStart:schedule?.dueStart,explicitType})){
