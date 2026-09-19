@@ -12,6 +12,15 @@ export type BriefingTask = {
   followUp?: string;
 };
 
+export type BriefingNote = {
+  pageId?: string;
+  title?: string;
+  institution?: string;
+  journalDate?: string;
+  recordedAt?: string;
+  editedAt?: string;
+};
+
 export type BriefingSchedule = {
   scheduleId?: string;
   title?: string;
@@ -32,6 +41,7 @@ export type MobileBriefing = {
   filteredTaskCount?: number;
   counts?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated' | 'total', number>>;
   structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>>;
+  notes?: BriefingNote[];
   schedules?: { today?: BriefingSchedule[]; upcoming?: BriefingSchedule[]; total?: number };
   scheduleEnabled?: boolean;
 };
@@ -177,7 +187,8 @@ export function parseMobileBriefing(body: Record<string, unknown>): MobileBriefi
   const structure = asRecord(body.structure); const counts = asRecord(body.counts);
   const buckets = ['overdue', 'today', 'upcoming', 'undated'] as const;
   if (typeof body.today !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.today)
-    || !structure || !counts || !buckets.every((key) => Array.isArray(structure[key])
+    || !structure || !counts || (body.notes !== undefined && !Array.isArray(body.notes))
+    || !buckets.every((key) => Array.isArray(structure[key])
       && typeof counts[key] === 'number' && Number.isFinite(counts[key]) && Number(counts[key]) >= 0)) {
     throw new Error('브리핑 응답을 확인하지 못했습니다. 기존 브리핑을 유지합니다. 다시 시도해주세요.');
   }
@@ -261,6 +272,23 @@ export async function updateWorklogStatus(accessToken: string, recordId: string,
       authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ recordId, status }),
+  });
+  return readJson(response);
+}
+
+export async function updateBriefingNoteState(
+  accessToken: string,
+  recordId: string,
+  state: 'active' | 'acknowledged',
+) {
+  const response = await fetch(`${getApiBaseUrl()}/api/briefing-note`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ recordId, state }),
   });
   return readJson(response);
 }
