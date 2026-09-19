@@ -470,7 +470,7 @@ export default function HomeScreen() {
   }
 
   function closeTaskEditor() {
-    if (editBusy || editLoading) return;
+    if (editBusy) return;
     setEditTaskId(null);
     setEditTitle('');
     setEditDate('');
