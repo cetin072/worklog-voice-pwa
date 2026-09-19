@@ -256,6 +256,7 @@ export default function HomeScreen() {
   const [briefing, setBriefing] = useState<MobileBriefing | null>(null);
   const [journalDate, setJournalDate] = useState(() => seoulTodayKey());
   const [journal, setJournal] = useState<WorkJournalDay | null>(null);
+  const [journalReloadKey, setJournalReloadKey] = useState(0);
   const [journalBusy, setJournalBusy] = useState(false);
   const [journalError, setJournalError] = useState('');
   const [briefingError, setBriefingError] = useState('');
@@ -293,6 +294,7 @@ export default function HomeScreen() {
     if (!session || screen !== 'journal') return;
     const token = session.access_token;
     let alive = true;
+    setJournal(null);
     setJournalBusy(true);
     setJournalError('');
     void loadWorkJournalDay(token, journalDate)
@@ -300,7 +302,7 @@ export default function HomeScreen() {
       .catch((nextError) => { if (alive) setJournalError(messageOf(nextError, '업무일지를 불러오지 못했습니다.')); })
       .finally(() => { if (alive) setJournalBusy(false); });
     return () => { alive = false; };
-  }, [screen, journalDate, session?.access_token]);
+  }, [screen, journalDate, journalReloadKey, session?.access_token]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -735,7 +737,7 @@ export default function HomeScreen() {
       </View>
       <Text style={styles.helpText}>{journalIsFuture ? '미래 날짜는 예정된 일정과 남은 업무를 미리 보여줍니다.' : '업무수첩에 기록된 내용을 날짜별로 자동 정리합니다.'}</Text>
       {journalBusy && !journal ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>업무일지를 정리하는 중입니다.</Text></View> : null}
-      {journalError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{journalError}</Text><Button title="다시 시도" onPress={() => { setJournal(null); setJournalDate((value) => value); }} /></View> : null}
+      {journalError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{journalError}</Text><Button title="다시 시도" onPress={() => setJournalReloadKey((value) => value + 1)} /></View> : null}
       {journal ? <>
         <View style={styles.journalSection}><Text style={styles.journalSectionTitle}>📅 일정 · 미팅</Text><JournalScheduleRows schedules={journal.schedules} empty="이 날짜의 일정이 없습니다." /></View>
         <View style={styles.journalSection}><Text style={styles.journalSectionTitle}>✓ 한 일</Text><JournalRecordRows records={journal.completed} completed empty="완료된 업무 기록이 없습니다." /></View>
