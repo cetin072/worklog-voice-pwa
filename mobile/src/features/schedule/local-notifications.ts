@@ -15,6 +15,7 @@ export const REMINDER_PRESETS = [
   { offsetMinutes: 60, label: '1시간 전' },
   { offsetMinutes: 1440, label: '1일 전' },
 ] as const;
+export const PRIMARY_REMINDER_PRESETS = REMINDER_PRESETS.filter((preset) => preset.offsetMinutes === 30 || preset.offsetMinutes === 1440);
 
 /** Installed explicitly by the application owner, never as an import side effect. */
 export function configureScheduleNotificationHandler() {

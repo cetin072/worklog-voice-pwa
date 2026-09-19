@@ -14,6 +14,7 @@ import {
   cancelAllScheduleReminders,
   cancelScheduleReminder,
   listScheduleReminders,
+  PRIMARY_REMINDER_PRESETS,
   REMINDER_PRESETS,
   reminderTriggerAt,
   scheduleReminder,
@@ -228,6 +229,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
   const reminderSummary = syncResult.reminders.status !== 'synced' ? (syncResult.reminders.status === 'checking' ? '알림 확인 중' : '⚠ 알림 예약 확인 필요') : reminders.length
     ? `🔔 이 일정 알림: ${reminders.map((reminder) => REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`).join(' · ')}`
     : '🔕 이 일정 알림 없음';
+  const legacyReminders = reminders.filter((reminder) => !PRIMARY_REMINDER_PRESETS.some((preset) => preset.offsetMinutes === reminder.offsetMinutes));
 
   return <View style={styles.root}>
     <View style={styles.compactSummary}>
@@ -259,8 +261,8 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
 
       <View style={styles.section}>
         <Text style={styles.heading}>이 일정 알림</Text>
-        <Text style={styles.help}>아래 선택은 이 일정에만 적용됩니다. 필요한 알림을 여러 개 동시에 선택할 수 있습니다.</Text>
-        <View style={styles.presetGrid}>{REMINDER_PRESETS.map((preset) => {
+        <Text style={styles.help}>새 알림은 30분 전 또는 1일 전으로 간단히 선택합니다. 필요한 알림을 동시에 선택할 수 있습니다.</Text>
+        <View style={styles.presetGrid}>{PRIMARY_REMINDER_PRESETS.map((preset) => {
           const active = reminders.some((reminder) => reminder.offsetMinutes === preset.offsetMinutes);
           const triggerAt = reminderTriggerAt(startsAt, preset.offsetMinutes);
           const available = triggerAt.getTime() > Date.now();
@@ -268,6 +270,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
             <Text style={[styles.presetText, active ? styles.presetTextActive : null]}>{active ? syncResult.reminders.status === 'synced' ? '✓ ' : '? ' : ''}{preset.label}</Text>
           </Pressable>;
         })}</View>
+        {legacyReminders.length ? <View style={styles.legacyReminders}><Text style={styles.summaryTitle}>기존 예약</Text><Text style={styles.help}>이전 버전에서 만든 알림은 유지됩니다. 여기서 개별 취소할 수 있습니다.</Text>{legacyReminders.map((reminder) => <Pressable key={reminder.identifier} accessibilityRole="button" disabled={busy} style={styles.legacyReminder} onPress={() => void toggleReminder(reminder.offsetMinutes as ReminderOffsetMinutes)}><Text style={styles.summaryLine}>{REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`}</Text><Text style={styles.legacyCancel}>취소</Text></Pressable>)}</View> : null}
         {reminders.length ? <View style={styles.reminderSummary}><Text style={styles.summaryTitle}>{syncResult.reminders.status === 'synced' ? '예약 확인된 알림' : '마지막 저장된 알림 정보'}</Text>{reminders.map((reminder) => <Text key={`${reminder.offsetMinutes}-${reminder.identifier}`} style={styles.summaryLine}>• {REMINDER_PRESETS.find((preset) => preset.offsetMinutes === reminder.offsetMinutes)?.label || `${reminder.offsetMinutes}분 전`} · {reminderTime(reminder.triggerAt)}</Text>)}<Button title="이 일정 알림 모두 취소" disabled={busy} onPress={() => void clearReminders()} /></View> : <Text style={styles.muted}>{syncResult.reminders.status === 'synced' ? '예약된 알림이 없습니다.' : '알림 확인이 끝나지 않았습니다.'}</Text>}
       </View>
 
@@ -308,6 +311,9 @@ const styles = StyleSheet.create({
   presetText: { fontSize: 13, fontWeight: '700', color: '#30343b' },
   presetTextActive: { color: '#fff' },
   reminderSummary: { gap: 5, backgroundColor: '#f4f7fb', borderRadius: 12, padding: 12 },
+  legacyReminders: { gap: 6, padding: 10, borderRadius: 12, backgroundColor: '#f7f7f8' },
+  legacyReminder: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 10, borderRadius: 9, backgroundColor: '#fff' },
+  legacyCancel: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.link },
   summaryTitle: { fontSize: 13, fontWeight: '800', color: '#30343b' },
   summaryLine: { fontSize: 12, color: '#4b515c', lineHeight: 18 },
   muted: { fontSize: 12, color: '#8a9099' },
