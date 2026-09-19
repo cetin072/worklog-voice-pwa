@@ -52,6 +52,7 @@ create table public.work_records (
   ),
   completed_at timestamptz,
   acknowledged_at timestamptz,
+  next_attention_at timestamptz,
   recorded_at timestamptz not null default now(),
   due_at timestamptz,
   metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
@@ -142,6 +143,11 @@ create index work_records_workspace_journal_date_idx on public.work_records(work
 create index work_records_workspace_active_notes_idx
   on public.work_records(workspace_id, journal_date desc, recorded_at desc)
   where action_kind = 'note' and briefing_state = 'active';
+create index work_records_workspace_next_attention_at_idx
+  on public.work_records(workspace_id, next_attention_at)
+  where next_attention_at is not null
+    and action_kind = 'task'
+    and status in ('in_progress', 'waiting', 'needs_review');
 create index schedules_workspace_starts_at_idx on public.schedules(workspace_id, starts_at);
 create index input_captures_workspace_recorded_at_idx
   on public.input_captures(workspace_id, recorded_at desc);
