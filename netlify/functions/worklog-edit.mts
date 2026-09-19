@@ -107,8 +107,10 @@ async function updateNotionWorklog(token:string,pageId:string,title:string,dueSt
 function dataCoreErrorResponse(error:any){
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_AUTH_REQUIRED") return json(401,{error:"로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요."});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_WORKSPACE_MISSING") return json(404,{error:"개인 업무공간을 찾지 못했습니다."});
-  if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_DUE_INVALID") return json(400,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_DUE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_INVALID") return json(400,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN") return json(404,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_FORBIDDEN") return json(409,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_UNAVAILABLE") return json(503,{error:error.message});
   console.error("Data Core worklog edit error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,200));
   return json(502,{error:"업무를 수정하지 못했습니다. 잠시 후 다시 시도해주세요."});
 }
@@ -135,7 +137,7 @@ export default async (req:Request,_context:Context)=>{
       if(action==="read"){
         const current=await editor.readDetails({recordId:pageId});
         const due=seoulDueFields(current.dueAt,current.dueHasTime);
-        return json(200,{ok:true,pageId:current.recordId,title:current.title,...due,mode:"data_core"});
+        return json(200,{ok:true,pageId:current.recordId,title:current.title,...due,actionKind:current.actionKind,canConvertAction:current.actionConversionAllowed,mode:"data_core"});
       }
 
       const nextTitle=normalizeWorklogTitle(body.title);
@@ -158,8 +160,22 @@ export default async (req:Request,_context:Context)=>{
         ({dueDate,dueTime}=seoulDueFields(dueAt,dueHasTime));
       }
 
-      const result=await editor.updateDetails({recordId:pageId,title:nextTitle,dueAt,dueHasTime});
-      return json(200,{ok:true,pageId:result.recordId,title:result.title,dueDate,dueTime,scheduleUpdated:result.scheduleUpdated,mode:"data_core"});
+      const requestedActionKind=body.actionKind===undefined || body.actionKind===null || body.actionKind===""
+        ? null
+        : String(body.actionKind).trim().toLowerCase();
+      const result=await editor.updateDetails({recordId:pageId,title:nextTitle,dueAt,dueHasTime,actionKind:requestedActionKind});
+      return json(200,{
+        ok:true,
+        pageId:result.recordId,
+        title:result.title,
+        dueDate,
+        dueTime,
+        scheduleUpdated:result.scheduleUpdated,
+        actionKind:result.actionKind,
+        actionChanged:result.actionChanged,
+        canConvertAction:result.actionConversionAllowed,
+        mode:"data_core"
+      });
     }catch(error:any){
       return dataCoreErrorResponse(error);
     }
