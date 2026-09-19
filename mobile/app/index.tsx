@@ -2,7 +2,6 @@ import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,6 +9,7 @@ import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { MeetingRecordingBanner } from '@/src/features/voice/meeting-recording-banner';
 import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers/whisper-rn-quick-voice-runtime';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
+import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-actions';
 import { CalendarConnectionSummary } from '@/src/features/schedule/calendar-connection-summary';
 import { CalendarConnectionManager } from '@/src/features/schedule/calendar-connection-manager';
@@ -69,27 +69,6 @@ function taskNote(bucket: BriefingBucket, task: BriefingTask) {
   return '기한 없음';
 }
 
-function pickerValue(date: string, time: string) {
-  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time);
-  if (!dateMatch) return new Date();
-  return new Date(
-    Number(dateMatch[1]),
-    Number(dateMatch[2]) - 1,
-    Number(dateMatch[3]),
-    timeMatch ? Number(timeMatch[1]) : 9,
-    timeMatch ? Number(timeMatch[2]) : 0,
-  );
-}
-
-function pickerDateValue(value: Date) {
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
-}
-
-function pickerTimeValue(value: Date) {
-  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
-}
-
 function TaskRow({ bucket, task, onOpen, onEdit, onComplete, completing = false }: { bucket: BriefingBucket; task: BriefingTask; onOpen: () => void; onEdit?: () => void; onComplete?: () => void; completing?: boolean }) {
   return <View style={styles.taskRow}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} style={styles.taskMain} onPress={onOpen}>
@@ -102,32 +81,6 @@ function TaskRow({ bucket, task, onOpen, onEdit, onComplete, completing = false 
       {onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 수정`} disabled={completing} style={styles.inlineEdit} onPress={onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
       {onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 완료 처리`} disabled={completing} style={[styles.inlineComplete, completing ? styles.inlineCompleteBusy : null]} onPress={onComplete}><Text style={styles.inlineCompleteText}>{completing ? '처리 중' : '완료'}</Text></Pressable> : null}
     </View> : null}
-  </View>;
-}
-
-function InlineTaskEditor({ title, date, time, busy, onTitle, onDate, onTime, onSave, onCancel }: { title: string; date: string; time: string; busy: boolean; onTitle: (value: string) => void; onDate: (value: string) => void; onTime: (value: string) => void; onSave: () => void; onCancel: () => void }) {
-  const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
-  const selectedValue = pickerValue(date, time);
-
-  function selectDateTime(value?: Date) {
-    if (!value) return;
-    if (pickerMode === 'date') {
-      onDate(pickerDateValue(value));
-      return;
-    }
-    if (pickerMode === 'time') onTime(pickerTimeValue(value));
-  }
-
-  return <View style={styles.inlineEditor}>
-    <Text style={styles.inlineEditorTitle}>업무 수정</Text>
-    <TextInput accessibilityLabel="수정할 업무명" placeholder="업무명" style={styles.input} value={title} onChangeText={onTitle} />
-    <View style={styles.inlineEditorDateRow}>
-      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>날짜</Text><Pressable accessibilityRole="button" accessibilityLabel="수정할 날짜 선택" disabled={busy} style={[styles.pickerTrigger, busy ? styles.pickerTriggerDisabled : null]} onPress={() => setPickerMode((current) => current === 'date' ? null : 'date')}><Text style={[styles.pickerTriggerText, date ? null : styles.pickerTriggerPlaceholder]}>{date || '날짜 선택'}</Text></Pressable></View>
-      <View style={styles.inlineEditorField}><Text style={styles.inlineEditorFieldLabel}>시간</Text><Pressable accessibilityRole="button" accessibilityLabel="수정할 시간 선택" disabled={busy || !date} style={[styles.pickerTrigger, busy || !date ? styles.pickerTriggerDisabled : null]} onPress={() => setPickerMode((current) => current === 'time' ? null : 'time')}><Text style={[styles.pickerTriggerText, time ? null : styles.pickerTriggerPlaceholder]}>{time || '시간 선택'}</Text></Pressable></View>
-    </View>
-    {pickerMode ? <View style={styles.dateTimePicker}><DateTimePicker value={selectedValue} mode={pickerMode} display={Platform.OS === 'ios' ? 'spinner' : 'default'} locale="ko-KR" is24Hour onChange={(_, value) => { if (Platform.OS === 'android') setPickerMode(null); selectDateTime(value); }} /></View> : null}
-    {!date && !time ? <Text style={styles.helpText}>현재 기한 없음 · 날짜 선택을 누르면 기한이 생깁니다.</Text> : <View style={styles.dueHelpRow}><Text style={styles.helpText}>날짜와 시간은 선택기로 바꿉니다.</Text><Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={busy} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDueText}>기한 없음</Text></Pressable></View>}
-    <View style={styles.inlineEditorActions}><Pressable accessibilityRole="button" style={styles.secondaryAction} disabled={busy} onPress={onCancel}><Text style={styles.secondaryActionText}>취소</Text></Pressable><Pressable accessibilityRole="button" style={styles.primaryAction} disabled={busy || !title.trim()} onPress={onSave}><Text style={styles.primaryActionText}>{busy ? '저장 중…' : '저장'}</Text></Pressable></View>
   </View>;
 }
 
@@ -189,6 +142,9 @@ export default function HomeScreen() {
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editBusy, setEditBusy] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editReady, setEditReady] = useState(false);
+  const [editStatus, setEditStatus] = useState('');
   const [expandedBuckets, setExpandedBuckets] = useState<Partial<Record<BriefingBucket, boolean>>>({});
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
   const [calendarConnectionVersion, setCalendarConnectionVersion] = useState(0);
@@ -348,39 +304,57 @@ export default function HomeScreen() {
     }
   }
 
+  async function loadTaskEditorDetails(pageId: string, fallbackTitle = '', fallbackDate = '') {
+    if (!session || editBusy || editLoading) return;
+    setEditLoading(true);
+    setEditReady(false);
+    setEditStatus('');
+    try {
+      const details = await readWorklogDetails(session.access_token, pageId);
+      setEditTitle(details.title || fallbackTitle);
+      setEditDate(details.dueDate || fallbackDate);
+      setEditTime(details.dueTime || '');
+      setEditReady(true);
+    } catch (nextError) {
+      setEditStatus(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'));
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
   async function openTaskEditor(task: BriefingTask) {
-    if (!session || !task.pageId || editBusy) return;
+    if (!session || !task.pageId || editBusy || editLoading) return;
     setEditTaskId(task.pageId);
     setEditTitle(task.title || '');
     setEditDate(task.dueKey || '');
     setEditTime('');
-    setEditBusy(true);
-    clearMessage();
-    try {
-      const details = await readWorklogDetails(session.access_token, task.pageId);
-      setEditTitle(details.title || task.title || '');
-      setEditDate(details.dueDate || '');
-      setEditTime(details.dueTime || '');
-    } catch (nextError) {
-      showMessage(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'), 'error');
-    } finally {
-      setEditBusy(false);
-    }
+    setEditReady(false);
+    setEditStatus('');
+    await loadTaskEditorDetails(task.pageId, task.title || '', task.dueKey || '');
+  }
+
+  async function retryTaskEditor() {
+    if (!editTaskId) return;
+    await loadTaskEditorDetails(editTaskId, editTitle, editDate);
   }
 
   async function saveTaskEditor() {
-    if (!session || !editTaskId || editBusy) return;
+    if (!session || !editTaskId || editBusy || editLoading || !editReady) return;
     const nextTitle = editTitle.replace(/\s+/g, ' ').trim();
     if (!nextTitle) {
-      showMessage('업무명을 입력해주세요.', 'error');
+      setEditStatus('업무명을 입력해주세요.');
+      return;
+    }
+    if (nextTitle.length > 160) {
+      setEditStatus('업무명은 160자 이하로 입력해주세요.');
       return;
     }
     if (editTime.trim() && !editDate.trim()) {
-      showMessage('시간을 설정하려면 날짜도 입력해주세요.', 'error');
+      setEditStatus('시간을 설정하려면 날짜도 입력해주세요.');
       return;
     }
     setEditBusy(true);
-    clearMessage();
+    setEditStatus('');
     try {
       const result = await updateWorklogDetails(session.access_token, {
         pageId: editTaskId,
@@ -394,9 +368,11 @@ export default function HomeScreen() {
           ? '업무를 수정했습니다. 연결된 일정·캘린더·알림도 최신 상태로 맞춥니다.'
           : '업무를 수정했습니다.', result.unchanged ? 'info' : 'success');
       setEditTaskId(null);
+      setEditReady(false);
+      setEditStatus('');
       await refreshBriefing();
     } catch (nextError) {
-      showMessage(messageOf(nextError, '업무 수정에 실패했습니다.'), 'error');
+      setEditStatus(messageOf(nextError, '업무 수정에 실패했습니다.'));
     } finally {
       setEditBusy(false);
     }
@@ -414,11 +390,13 @@ export default function HomeScreen() {
   }
 
   function closeTaskEditor() {
-    if (editBusy) return;
+    if (editBusy || editLoading) return;
     setEditTaskId(null);
     setEditTitle('');
     setEditDate('');
     setEditTime('');
+    setEditReady(false);
+    setEditStatus('');
   }
 
   if (phase === 'loading') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><ActivityIndicator size="large" /><Text style={styles.statusText}>업무수첩을 연결하고 있습니다.</Text></View>;
@@ -460,7 +438,6 @@ export default function HomeScreen() {
           <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>{bucket.key === 'overdue' ? '🔴' : bucket.key === 'today' ? '🟠' : bucket.key === 'upcoming' ? '🔵' : '⚪'} {bucket.label}</Text><Text style={styles.sectionCount}>{tasks.length}</Text></View>
           {tasks.length ? visibleTasks.map((task, index) => <View key={task.pageId || `${bucket.key}-${index}`}>
             <TaskRow bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onEdit={() => void openTaskEditor(task)} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />
-            {task.pageId && editTaskId === task.pageId ? <InlineTaskEditor title={editTitle} date={editDate} time={editTime} busy={editBusy} onTitle={setEditTitle} onDate={setEditDate} onTime={setEditTime} onSave={() => void saveTaskEditor()} onCancel={closeTaskEditor} /> : null}
           </View>) : <Text style={styles.emptyText}>해당 업무가 없습니다.</Text>}
           {extra ? <Pressable accessibilityRole="button" accessibilityLabel={expanded ? `${bucket.label} 접기` : `${bucket.label} ${extra}개 더 보기`} style={styles.moreButton} onPress={() => setExpandedBuckets((value) => ({ ...value, [bucket.key]: !expanded }))}><Text style={styles.moreButtonText}>{expanded ? '접기' : `${extra}개 더 보기`}</Text></Pressable> : null}
         </View>;
@@ -489,7 +466,24 @@ export default function HomeScreen() {
     {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><CalendarConnectionSummary compact refreshKey={calendarConnectionVersion} onPressManage={() => setScreen('scheduleSettings')} /><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={confirmSignOut} /></View></View> : null}
     {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text><CalendarConnectionSummary refreshKey={calendarConnectionVersion} /><CalendarConnectionManager onChanged={() => setCalendarConnectionVersion((value) => value + 1)} />{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
-  </ScrollView>{screen === 'home' ? <View onLayout={(event) => setQuickDockHeight(Math.max(150, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
+  </ScrollView>
+  <WorkRecordEditSheet
+    visible={Boolean(editTaskId)}
+    title={editTitle}
+    date={editDate}
+    time={editTime}
+    loading={editLoading}
+    saving={editBusy}
+    ready={editReady}
+    statusText={editStatus}
+    onTitle={setEditTitle}
+    onDate={setEditDate}
+    onTime={setEditTime}
+    onSave={() => void saveTaskEditor()}
+    onCancel={closeTaskEditor}
+    onRetry={() => void retryTaskEditor()}
+  />
+  {screen === 'home' ? <View onLayout={(event) => setQuickDockHeight(Math.max(150, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
@@ -550,6 +544,7 @@ const styles = StyleSheet.create({
   successText: { color: mobileTheme.colors.success, lineHeight: 20, backgroundColor: '#eaf4ea', padding: 10, borderRadius: mobileTheme.radius.compact },
   infoText: { color: mobileTheme.colors.textSecondary, lineHeight: 20, backgroundColor: mobileTheme.colors.neutralBackground, padding: 10, borderRadius: mobileTheme.radius.compact },
   emptyText: { color: mobileTheme.colors.textMuted, lineHeight: 20, paddingVertical: 4 },
+  helpText: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   emptyAction: { gap: 10, paddingTop: 8 },
   actionGrid: { flexDirection: 'row', gap: 12 },
   actionCard: { flex: 1, minHeight: 132, borderRadius: 18, padding: 16, gap: 6, backgroundColor: '#fff' },
@@ -580,25 +575,6 @@ const styles = StyleSheet.create({
   inlineComplete: { minHeight: 38, minWidth: 54, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
   inlineCompleteBusy: { opacity: 0.55 },
   inlineCompleteText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  inlineEditor: { gap: 9, padding: 12, marginBottom: 8, borderRadius: 14, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
-  inlineEditorTitle: { fontSize: 14, fontWeight: '800', color: '#1f2937' },
-  inlineEditorDateRow: { flexDirection: 'row', gap: 8 },
-  inlineEditorDateInput: { flex: 1 },
-  inlineEditorField: { flex: 1, gap: 6 },
-  inlineEditorFieldLabel: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.textSecondary },
-  pickerTrigger: { minHeight: mobileTheme.size.input, justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, backgroundColor: mobileTheme.colors.surface },
-  pickerTriggerDisabled: { opacity: 0.5 },
-  pickerTriggerText: { fontSize: 16, color: mobileTheme.colors.text },
-  pickerTriggerPlaceholder: { color: mobileTheme.colors.textMuted },
-  dateTimePicker: { borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, overflow: 'hidden', backgroundColor: mobileTheme.colors.surface },
-  dueHelpRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  clearDueText: { color: mobileTheme.colors.link, fontSize: 12, fontWeight: '800', padding: 4 },
-  inlineEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
-  primaryAction: { minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
-  primaryActionText: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  secondaryAction: { minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
-  secondaryActionText: { color: '#374151', fontSize: 13, fontWeight: '800' },
-  helpText: { fontSize: 12, color: '#737985', lineHeight: 18 },
   undoBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, borderRadius: 14, backgroundColor: '#111827' },
   undoText: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
   undoAction: { color: '#fff', fontSize: 13, fontWeight: '900', textDecorationLine: 'underline' },

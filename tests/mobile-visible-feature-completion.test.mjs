@@ -12,6 +12,7 @@ const calendarSummary = fs.readFileSync('mobile/src/features/schedule/calendar-c
 const deviceCalendar = fs.readFileSync('mobile/src/features/schedule/device-calendar.ts', 'utf8');
 const search = fs.readFileSync('mobile/src/features/search/work-record-search.tsx', 'utf8');
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
+const editSheet = fs.readFileSync('mobile/src/features/work/work-record-edit-sheet.tsx', 'utf8');
 
 test('Visible feature gate keeps Quick Voice fail-closed and result-visible', () => {
   assert.match(voice, /전사 재시도 필요/);
@@ -55,7 +56,8 @@ test('Visible feature gate keeps Calendar state visible without requiring a sche
 test('Visible feature gate keeps work completion, undo, editing and search editing reachable', () => {
   assert.match(home, /completeTaskInline/);
   assert.match(home, /undoCompletedTask/);
-  assert.match(home, /InlineTaskEditor/);
+  assert.match(home, /WorkRecordEditSheet/);
+  assert.match(editSheet, /KeyboardAvoidingView/);
   assert.match(home, /scheduleUpdated/);
   assert.match(search, /openEditor/);
   assert.match(search, /saveEditor/);
