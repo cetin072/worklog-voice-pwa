@@ -1,3 +1,11 @@
+import {
+  countKoreanDateSignals as coreDateSignalCount,
+  countKoreanTimeSignals as coreTimeSignalCount,
+  parseKoreanDateExpression as coreParseDate,
+  parseKoreanTimeExpression as coreParseTime,
+  seoulDateParts as coreSeoulParts,
+} from "./korean-date-core.mjs";
+
 const SEOUL_TZ="Asia/Seoul";
 
 function normalize(value){
@@ -164,12 +172,12 @@ function removeSchedulePhrase(source,parts){
 export function extractScheduleFromText(value,recordedAt=new Date()){
   const source=normalize(value);
   if(!source) return {text:"",dueStart:"",dateKey:"",hasTime:false,matched:false};
-  const base=seoulParts(recordedAt);
+  const base=coreSeoulParts(recordedAt);
   if(!base) return {text:source,dueStart:"",dateKey:"",hasTime:false,matched:false};
 
-  const datePart=parseDate(source,base);
-  const timePart=parseTime(source);
-  const signals=scheduleSignalCounts(source);
+  const datePart=coreParseDate(source,base,{policy:"schedule"});
+  const timePart=coreParseTime(source);
+  const signals={dates:coreDateSignalCount(source,{policy:"schedule"}),times:coreTimeSignalCount(source)};
   const ambiguous=signals.dates>1 || signals.times>1 || signals.dates>Number(Boolean(datePart)) || signals.times>Number(Boolean(timePart)) || !schedulePartsAreLinked(source,datePart,timePart);
   if(ambiguous){
     return {text:source,dueStart:"",dateKey:"",hasTime:false,matched:false};
