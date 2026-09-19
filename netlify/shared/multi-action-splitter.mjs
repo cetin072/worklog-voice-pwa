@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const SPLIT_MARKER="<<<WORK_SPLIT>>>";
 export const MULTI_ACTION_MAX_SEGMENTS=8;
 
@@ -43,11 +45,6 @@ export function multiActionChildRequestId(parentRequestId,index){
   if(!/^[A-Za-z0-9-]{16,100}$/.test(parent)) throw new Error("MULTI_ACTION_PARENT_REQUEST_ID_INVALID");
   if(!Number.isInteger(position) || position<0 || position>=MULTI_ACTION_MAX_SEGMENTS) throw new Error("MULTI_ACTION_INDEX_INVALID");
 
-  let hash=2166136261;
-  for(let i=0;i<parent.length;i++){
-    hash^=parent.charCodeAt(i);
-    hash=Math.imul(hash,16777619)>>>0;
-  }
-  const hashText=hash.toString(16).padStart(8,"0");
-  return `multi-${hashText}-${String(position+1).padStart(2,"0")}-${parent.slice(-12)}`;
+  const hashText=createHash("md5").update(parent).digest("hex").slice(0,24);
+  return `multi-${hashText}-${String(position+1).padStart(2,"0")}`;
 }
