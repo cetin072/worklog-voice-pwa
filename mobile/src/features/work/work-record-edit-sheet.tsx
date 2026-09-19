@@ -15,9 +15,12 @@ type WorkRecordEditSheetProps = Readonly<{
   ready: boolean;
   statusText?: string;
   statusTone?: 'neutral' | 'success' | 'error';
+  actionKind?: 'task' | 'note';
+  canConvertAction?: boolean;
   onTitle(value: string): void;
   onDate(value: string): void;
   onTime(value: string): void;
+  onActionKind?(value: 'task' | 'note'): void;
   onSave(): void;
   onCancel(): void;
   onRetry?(): void;
@@ -60,9 +63,12 @@ export function WorkRecordEditSheet({
   ready,
   statusText = '',
   statusTone = 'neutral',
+  actionKind,
+  canConvertAction = false,
   onTitle,
   onDate,
   onTime,
+  onActionKind,
   onSave,
   onCancel,
   onRetry,
@@ -132,6 +138,26 @@ export function WorkRecordEditSheet({
           value={title}
           onChangeText={onTitle}
         />
+
+        {actionKind ? <View style={styles.kindBlock}>
+          <Text style={styles.label}>종류</Text>
+          <View style={styles.kindRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={actionKind === 'note' ? '할 일로 전환' : '현재 할 일'}
+              disabled={!ready || inputBlocked || !canConvertAction || !onActionKind}
+              style={[styles.kindOption, actionKind === 'task' ? styles.kindOptionActive : null, !canConvertAction ? styles.disabled : null]}
+              onPress={() => onActionKind?.('task')}
+            ><Text style={[styles.kindText, actionKind === 'task' ? styles.kindTextActive : null]}>할 일</Text></Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={actionKind === 'task' ? '메모로 변경' : '현재 메모 참고'}
+              disabled={!ready || inputBlocked || !canConvertAction || !onActionKind}
+              style={[styles.kindOption, actionKind === 'note' ? styles.kindOptionActive : null, !canConvertAction ? styles.disabled : null]}
+              onPress={() => onActionKind?.('note')}
+            ><Text style={[styles.kindText, actionKind === 'note' ? styles.kindTextActive : null]}>메모 · 참고</Text></Pressable>
+          </View>
+        </View> : null}
 
         <View style={styles.dateRow}>
           <View style={styles.field}>
@@ -206,6 +232,12 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.textSecondary },
   optional: { fontSize: 11, fontWeight: '700', color: mobileTheme.colors.textMuted },
   input: { minHeight: mobileTheme.size.input, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: mobileTheme.colors.text, backgroundColor: mobileTheme.colors.surface },
+  kindBlock: { gap: 7 },
+  kindRow: { flexDirection: 'row', gap: 8 },
+  kindOption: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#cfd5dd', backgroundColor: '#fff' },
+  kindOptionActive: { borderColor: '#275daf', backgroundColor: '#edf4ff' },
+  kindText: { fontSize: 14, fontWeight: '800', color: '#4b515c' },
+  kindTextActive: { color: '#275daf' },
   dateRow: { flexDirection: 'row', gap: 8 },
   field: { flex: 1, gap: 6 },
   pickerTrigger: { minHeight: mobileTheme.size.input, justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, backgroundColor: mobileTheme.colors.surface },
