@@ -66,20 +66,20 @@ export function WorkRecordEditSheet({
 }: WorkRecordEditSheetProps) {
   const titleInput = useRef<TextInput>(null);
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
-  const busy = loading || saving;
+  const inputBlocked = loading || saving;
 
   useEffect(() => {
     if (!visible) {
       setPickerMode(null);
       return;
     }
-    if (!ready || busy) return;
+    if (!ready || inputBlocked) return;
     const timer = setTimeout(() => titleInput.current?.focus(), 80);
     return () => clearTimeout(timer);
-  }, [visible, ready, busy]);
+  }, [visible, ready, inputBlocked]);
 
   function close() {
-    if (busy) return;
+    if (saving) return;
     setPickerMode(null);
     onCancel();
   }
@@ -101,14 +101,14 @@ export function WorkRecordEditSheet({
     onRequestClose={close}
   >
     <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Pressable accessibilityLabel="업무 수정 닫기" style={StyleSheet.absoluteFill} disabled={busy} onPress={close} />
+      <Pressable accessibilityLabel="업무 수정 닫기" style={StyleSheet.absoluteFill} disabled={saving} onPress={close} />
       <View style={styles.sheet} accessibilityViewIsModal>
         <View style={styles.head}>
           <View style={styles.headCopy}>
             <Text style={styles.eyebrow}>업무 수정</Text>
             <Text style={styles.title}>브리핑 내용을 바로 고칩니다</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="업무 수정 닫기" hitSlop={8} disabled={busy} style={styles.close} onPress={close}>
+          <Pressable accessibilityRole="button" accessibilityLabel="업무 수정 닫기" hitSlop={8} disabled={saving} style={styles.close} onPress={close}>
             <Text style={styles.closeText}>×</Text>
           </Pressable>
         </View>
@@ -120,11 +120,11 @@ export function WorkRecordEditSheet({
           ref={titleInput}
           accessibilityLabel="수정할 업무명"
           autoCorrect
-          editable={ready && !busy}
+          editable={ready && !inputBlocked}
           maxLength={160}
           placeholder="업무명"
           selectTextOnFocus
-          style={[styles.input, !ready || busy ? styles.disabled : null]}
+          style={[styles.input, !ready || inputBlocked ? styles.disabled : null]}
           value={title}
           onChangeText={onTitle}
         />
@@ -135,8 +135,8 @@ export function WorkRecordEditSheet({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="수정할 날짜 선택"
-              disabled={!ready || busy}
-              style={[styles.pickerTrigger, !ready || busy ? styles.disabled : null]}
+              disabled={!ready || inputBlocked}
+              style={[styles.pickerTrigger, !ready || inputBlocked ? styles.disabled : null]}
               onPress={() => setPickerMode((current) => current === 'date' ? null : 'date')}
             >
               <Text style={[styles.pickerText, date ? null : styles.placeholder]}>{dateLabel(date)}</Text>
@@ -147,8 +147,8 @@ export function WorkRecordEditSheet({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="수정할 시간 선택"
-              disabled={!ready || busy || !date}
-              style={[styles.pickerTrigger, !ready || busy || !date ? styles.disabled : null]}
+              disabled={!ready || inputBlocked || !date}
+              style={[styles.pickerTrigger, !ready || inputBlocked || !date ? styles.disabled : null]}
               onPress={() => setPickerMode((current) => current === 'time' ? null : 'time')}
             >
               <Text style={[styles.pickerText, time ? null : styles.placeholder]}>{time || '시간 선택'}</Text>
@@ -173,7 +173,7 @@ export function WorkRecordEditSheet({
 
         <View style={styles.helpRow}>
           <Text style={styles.help}>{date ? '날짜와 시간은 터치해서 바꿉니다.' : '현재 기한 없음 · 날짜를 선택하면 기한이 생깁니다.'}</Text>
-          {date || time ? <Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={!ready || busy} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDue}>기한 없음</Text></Pressable> : null}
+          {date || time ? <Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={!ready || inputBlocked} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDue}>기한 없음</Text></Pressable> : null}
         </View>
         <Text style={styles.help}>업무명과 기한만 수정하며, 음성 원문은 그대로 보존됩니다.</Text>
 
@@ -181,8 +181,8 @@ export function WorkRecordEditSheet({
         {!ready && !loading && onRetry ? <Pressable accessibilityRole="button" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>다시 불러오기</Text></Pressable> : null}
 
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" disabled={busy} style={[styles.secondary, busy ? styles.disabled : null]} onPress={close}><Text style={styles.secondaryText}>취소</Text></Pressable>
-          <Pressable accessibilityRole="button" disabled={!ready || busy || !title.trim()} style={[styles.primary, !ready || busy || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : '저장'}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={saving} style={[styles.secondary, saving ? styles.disabled : null]} onPress={close}><Text style={styles.secondaryText}>취소</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={!ready || inputBlocked || !title.trim()} style={[styles.primary, !ready || inputBlocked || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : '저장'}</Text></Pressable>
         </View>
       </View>
     </KeyboardAvoidingView>
