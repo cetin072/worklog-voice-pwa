@@ -86,7 +86,7 @@ test('Meeting recorder is owned by an app-wide session instead of the meeting ca
 test('Home reserves measured space for the variable-height Quick Voice dock', () => {
   assert.match(homeSource, /quickDockHeight/);
   assert.match(homeSource, /onLayout=\{\(event\) => setQuickDockHeight/);
-  assert.match(homeSource, /quickDockHeight \+ 24/);
+  assert.match(homeSource, /quickDockHeight \\+ 32/);
 });
 
 test('Quick Voice polish keeps a large web-like microphone, full red recording state, and elapsed timer', () => {
