@@ -162,7 +162,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   }
 
   function cancelEditor() {
-    if (editBusy || editLoading) return;
+    if (editBusy) return;
     setEditId(null);
     setEditTitle('');
     setEditDate('');
