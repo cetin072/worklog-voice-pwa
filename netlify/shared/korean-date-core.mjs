@@ -57,6 +57,13 @@ function previousWeekday(base,target){
   return addDays(base,-delta);
 }
 
+function nextWeekday(base,target){
+  const current=currentWeekday(base);
+  if(current===undefined) return null;
+  const delta=(target-current+7)%7;
+  return addDays(base,delta);
+}
+
 function dateResult(match,date){
   if(!match || !date) return null;
   return {key:formatYmd(date),raw:match[0],index:match.index};
@@ -99,6 +106,16 @@ function weekExpression(source,base,{journal=false}={}){
   if(match){
     const isNext=/다음/.test(match[0]);
     return dateResult(match,weekDate(base,weekdayIndex(match[1]),isNext?1:0));
+  }
+
+  if(!journal){
+    match=source.match(/([월화수목금토일])요일/);
+    if(match){
+      const prefix=source.slice(Math.max(0,(match.index || 0)-8),match.index || 0);
+      if(!/(?:지난\s*주|지난주|지난\s*)$/.test(prefix)){
+        return dateResult(match,nextWeekday(base,weekdayIndex(match[1])));
+      }
+    }
   }
   return null;
 }
@@ -175,7 +192,7 @@ export function parseKoreanTimeExpression(value){
   return null;
 }
 
-const SCHEDULE_DATE_SIGNAL_RE=/(?:20\d{2}년\s*(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:이번\s*주|이번주|다음\s*주|다음주)\s*[월화수목금토일]요일|글피|모레|내일|오늘)/g;
+const SCHEDULE_DATE_SIGNAL_RE=/(?:20\d{2}년\s*(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:이번\s*주|이번주|다음\s*주|다음주)\s*[월화수목금토일]요일|[월화수목금토일]요일|글피|모레|내일|오늘)/g;
 const JOURNAL_DATE_SIGNAL_RE=/(?:20\d{2}년\s*(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:지난\s*주|지난주|이번\s*주|이번주|다음\s*주|다음주)\s*[월화수목금토일]요일|지난\s*[월화수목금토일]요일|그저께|그제|어제|오늘|내일|모레|글피)/g;
 const TIME_SIGNAL_RE=/(?:(?:오전|오후|아침|저녁|밤)\s*\d{1,2}시(?:\s*(?:반|\d{1,2}분))?|(?:1\d|2[0-3])시(?:\s*(?:반|\d{1,2}분))?|정오|자정)/g;
 

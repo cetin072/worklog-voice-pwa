@@ -1,6 +1,7 @@
 import type { Config, Context } from "@netlify/functions";
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { idempotencyHit, isValidClientRequestId, seoulDateFromRecordedAt } from "../shared/core-logic.mjs";
+import { classifyWorklogAction } from "../shared/action-engine-v1.mjs";
 import { extractScheduleFromText } from "../shared/schedule-extract.mjs";
 import { createNotionWorklogAdapter } from "../shared/notion-worklog-adapter.mjs";
 import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
@@ -169,19 +170,38 @@ export default async (req:Request, _context:Context) => {
   const institution=mode==="personal"
     ? (requestedInstitution || "기타")
     : (INSTITUTIONS.has(requestedInstitution) ? requestedInstitution : "기타");
-  const status=STATUSES.has(body.status) ? body.status : "진행중";
-  const type=TYPES.has(body.type) ? body.type : "기타";
+  const requestedStatus=STATUSES.has(body.status) ? body.status : "";
+  const requestedType=TYPES.has(body.type) ? body.type : "";
 
+  const recordedAtValue=body.recordedAt || new Date().toISOString();
   const explicitDueDate=String(body.dueDate || "").trim();
   const hasExplicitDueDate=/^\d{4}-\d{2}-\d{2}$/.test(explicitDueDate);
   const schedule=hasExplicitDueDate
-    ? {text:transcript,dueStart:explicitDueDate,matched:false,hasTime:false}
-    : extractScheduleFromText(transcript,body.recordedAt || new Date());
+    ? {text:transcript,dueStart:explicitDueDate,dateKey:explicitDueDate,matched:false,hasTime:false}
+    : extractScheduleFromText(transcript,recordedAtValue);
+  const action=classifyWorklogAction({
+    transcript,
+    recordedAt:recordedAtValue,
+    explicitType:requestedType,
+    schedule,
+  });
+  const status=requestedStatus || (action.needsReview ? "확인필요" : "진행중");
+  const type=requestedType || (action.kind==="schedule" ? "회의·통화" : action.kind==="task" ? "할 일" : "기타");
   const cleanTranscript=String(schedule.text || transcript).trim() || transcript;
+  const actionEngine={
+    version:"action-engine-v1",
+    kind:action.kind,
+    actionKind:action.actionKind,
+    journalDate:action.journalDate,
+    reason:action.reason,
+    confidence:action.confidence,
+    needsReview:action.needsReview
+  };
   const record={
     clientRequestId:requestId, transcript, cleanTranscript, institution, institutionSource, status, type,
-    recordedAt:body.recordedAt || new Date().toISOString(),
-    recordedDate:seoulDateFromRecordedAt(body.recordedAt),
+    actionKind:action.actionKind, journalDate:action.journalDate, actionEngine,
+    recordedAt:recordedAtValue,
+    recordedDate:seoulDateFromRecordedAt(recordedAtValue),
     amount:body.amount, assignee:String(body.assignee||"").trim(), followUp:String(body.followUp||"").trim(), dueStart:schedule.dueStart
   };
 
@@ -249,7 +269,7 @@ export default async (req:Request, _context:Context) => {
       });
       const result=await primary.execute(record,primaryExisting || {});
       const normalizationQueued=await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
-      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,dataCoreFastPath:fastPath,normalizationQueued,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
+      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),dueStart:String(schedule.dueStart || ""),cleanTranscript,actionClass:action.kind,actionKind:action.actionKind,actionNeedsReview:action.needsReview,journalDate:action.journalDate,dataCoreWorkRecordId:result.dataCore.workRecordId,dataCoreFastPath:fastPath,normalizationQueued,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
     }catch(err:any){
       if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog primary error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
@@ -292,7 +312,7 @@ export default async (req:Request, _context:Context) => {
         return json(503,{ok:false,error:"한 저장소에만 저장되었습니다. 원문은 유지되며 같은 내용을 다시 저장하면 완료되지 않은 저장소만 재시도합니다.",retryable:true,notionSaved:Boolean(result.notion),dataCoreSaved:Boolean(result.dataCore)});
       }
       const normalizationQueued=await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
-      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),dueStart:String(schedule.dueStart || ""),cleanTranscript,dataCoreWorkRecordId:result.dataCore.workRecordId,normalizationQueued});
+      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),dueStart:String(schedule.dueStart || ""),cleanTranscript,actionClass:action.kind,actionKind:action.actionKind,actionNeedsReview:action.needsReview,journalDate:action.journalDate,dataCoreWorkRecordId:result.dataCore.workRecordId,normalizationQueued});
     }catch(err:any){
       if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog dual-write error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
@@ -326,7 +346,11 @@ export default async (req:Request, _context:Context) => {
       scheduleCreated:false,
       scheduleId:"",
       dueStart:String(schedule.dueStart || ""),
-      cleanTranscript
+      cleanTranscript,
+      actionClass:action.kind,
+      actionKind:action.actionKind,
+      actionNeedsReview:action.needsReview,
+      journalDate:action.journalDate
     });
   }catch(err:any){
     const notionStatus=Number(err?.notionStatus || 0);

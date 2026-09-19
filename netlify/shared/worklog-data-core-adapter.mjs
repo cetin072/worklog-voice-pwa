@@ -1,11 +1,9 @@
+import { isTimedScheduleIntent } from "./action-engine-v1.mjs";
 import { createDataCoreRepositories } from "./data-core/repositories.mjs";
 
 const TYPE_MAP = Object.freeze({ "완료업무": "completed_work", "할 일": "task", "회의·통화": "meeting_call", "지출·세무": "expense_tax", "지시·위임": "delegation", "아이디어": "idea", "문제·확인": "issue_review", "기타": "other" });
 const STATUS_MAP = Object.freeze({ "완료": "completed", "진행중": "in_progress", "대기": "waiting", "확인필요": "needs_review" });
 const TRUSTED_FIELD_SOURCES = new Set(["user_selected", "user_confirmed"]);
-const EVENT_SIGNAL_RE = /(미팅|약속|면담|상담|방문|만나|통화|전화(?!번호)|인터뷰|행사|교육|세미나|촬영|식사|점심|저녁|출발|도착|회의(?!\s*(?:자료|록|안건|준비|내용)))/;
-const STRONG_EVENT_VERB_RE = /(약속|면담|상담|방문|만나|통화|전화(?!번호)|출발|도착)/;
-const DEADLINE_RE = /까지[\s\S]{0,40}(?:제출|보내|전달|완료|처리|보고|정리|준비|확인)|(?:마감|제출기한|완료기한)/;
 
 function adapterError(code, message, details = {}) { const error = new Error(message); error.code = code; Object.assign(error, details); return error; }
 function validRecordedAt(value) { const date = new Date(value || ""); return Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString(); }
@@ -25,20 +23,23 @@ function fieldSource(value) {
   const source = String(value || "").trim().toLowerCase();
   return TRUSTED_FIELD_SOURCES.has(source) ? source : "unverified";
 }
-function hasExplicitTime(value) {
-  return /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(String(value || ""));
+function journalDate(value) {
+  const text = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function actionKind(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "task" || normalized === "note" ? normalized : null;
 }
 
 export function quickWorklogSchedule(record = {}, normalized = {}) {
-  if (!hasExplicitTime(record.dueStart)) return null;
-  const source = String(record.transcript || "").replace(/\s+/g, " ").trim();
-  if (!source) return null;
-  const deadline = DEADLINE_RE.test(source);
-  const strongEvent = STRONG_EVENT_VERB_RE.test(source);
-  const eventSignal = EVENT_SIGNAL_RE.test(source);
-  const meetingType = normalized.recordType === "meeting_call";
-  if (deadline && !strongEvent) return null;
-  if (!eventSignal && !meetingType) return null;
+  if (!isTimedScheduleIntent({
+    source: record.transcript,
+    dueStart: record.dueStart,
+    recordType: normalized.recordType,
+    explicitType: record.type,
+  })) return null;
   return Object.freeze({ title: normalized.title, startsAt: normalized.dueAt, timezone: "Asia/Seoul", status: "confirmed" });
 }
 
@@ -48,6 +49,11 @@ function normalizedRecord(record = {}) {
   const institutionSource = fieldSource(record.institutionSource ?? record.institution_source);
   const requestedInstitution = String(record.institution || "").trim();
   const institution = TRUSTED_FIELD_SOURCES.has(institutionSource) && requestedInstitution ? requestedInstitution : null;
+  const normalizedActionKind = actionKind(record.actionKind);
+  const normalizedJournalDate = journalDate(record.journalDate);
+  const actionEngine = record.actionEngine && typeof record.actionEngine === "object" && !Array.isArray(record.actionEngine)
+    ? { ...record.actionEngine, actionKind: normalizedActionKind, journalDate: normalizedJournalDate }
+    : null;
   return Object.freeze({
     clientRequestId,
     title: title(record.cleanTranscript),
@@ -59,9 +65,16 @@ function normalizedRecord(record = {}) {
     institutionSource,
     amount: amount(record.amount),
     followUp: String(record.followUp || "").trim() || null,
+    actionKind: normalizedActionKind,
+    journalDate: normalizedJournalDate,
     recordedAt: validRecordedAt(record.recordedAt),
     dueAt: dueAt(record.dueStart),
-    metadata: { source: "quick_worklog", clientRequestId, fieldProvenance: { institution: institutionSource } },
+    metadata: {
+      source: "quick_worklog",
+      clientRequestId,
+      fieldProvenance: { institution: institutionSource },
+      ...(actionEngine ? { actionEngine } : {}),
+    },
     sourceExcerpt: String(record.transcript || ""),
   });
 }
@@ -113,6 +126,8 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
         institution: normalized.institution,
         amount: normalized.amount,
         followUp: normalized.followUp,
+        actionKind: normalized.actionKind,
+        journalDate: normalized.journalDate,
         recordedAt: normalized.recordedAt,
         dueAt: normalized.dueAt,
         metadata: normalized.metadata,

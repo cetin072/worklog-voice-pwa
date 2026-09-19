@@ -63,3 +63,15 @@ test("invalid explicit journal date is not silently converted to today",()=>{
   assert.equal(result.dateKey,"");
   assert.equal(result.ambiguous,true);
 });
+
+test("schedule policy supports the nearest upcoming bare weekday",()=>{
+  const base=seoulDateParts(RECORDED_AT);
+  const result=parseKoreanDateExpression("금요일까지 견적서 보내기",base,{policy:"schedule"});
+  assert.equal(result?.key,"2026-09-25");
+});
+
+test("schedule policy does not turn 지난 금요일 into an upcoming weekday",()=>{
+  const base=seoulDateParts(RECORDED_AT);
+  const result=parseKoreanDateExpression("지난 금요일 삼현 미팅",base,{policy:"schedule"});
+  assert.equal(result,null);
+});
