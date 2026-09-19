@@ -8,5 +8,6 @@ test("worklog API only forwards trusted institution provenance to Data Core reco
   assert.match(source, /TRUSTED_INSTITUTION_SOURCES = new Set\(\["user_selected","user_confirmed"\]\)/);
   assert.match(source, /requestedInstitutionSource=String\(body\.institutionSource \|\| body\.institution_source \|\| ""\)/);
   assert.match(source, /TRUSTED_INSTITUTION_SOURCES\.has\(requestedInstitutionSource\) \? requestedInstitutionSource : "unverified"/);
-  assert.match(source, /cleanTranscript, institution, institutionSource, status, type/);
+  assert.match(source, /record:\{[\s\S]*institution, institutionSource,[\s\S]*status:segmentStatus, type:segmentType/);
+  assert.match(source, /classifiedRecord\(transcript,requestId\)/);
 });
