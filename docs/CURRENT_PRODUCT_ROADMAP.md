@@ -86,14 +86,22 @@ Stage 3 자동검증이 끝나도 Stage 4 코드를 바로 시작하지 않는�
 
 ## 5. Stage 4의 현재 위치
 
-현재 후보 주제는 **Never Miss / 능동형 브리핑·후속조치**이지만 아직 최종 설계가 아니다.
+Stage 4는 **Never Miss / 최소 알림·능동형 브리핑**으로 사용자 승인 완료.
 
-Stage 3가 확정되기 전에는:
-- Stage 4 기능 목록을 확정하지 않는다.
-- Snooze, 반복 리마인드, 우선순위 재설계, 자동 에스컬레이션 등을 미리 구현하지 않는다.
-- 기존 알림/브리핑 코드를 대규모로 재작성하지 않는다.
+공식 상세 로드맵:
+- `docs/ROADMAP_STAGE4_NEVER_MISS.md`
+- 추적 Issue #384
 
-Stage 3 수락 후 새 브리핑에서 필요성을 다시 판단한다.
+핵심 방향:
+- Push 확대보다 앱 내부 재노출 우선
+- 기존 08:30 / 16:30 Push 재사용
+- 알림·리마인더 설정 별도 페이지
+- 일정 신규 reminder UI는 30분 전 / 1일 전 중심
+- 미루기(due_at)와 다시 알림(next_attention_at) 분리
+- 각 4-x를 별도 Issue/Branch/PR로 진행
+
+현재 개발 단계:
+- **4-0 Notification Scheduler Safety Gate** (#385)
 
 ## 6. 장기 확장 축
 
