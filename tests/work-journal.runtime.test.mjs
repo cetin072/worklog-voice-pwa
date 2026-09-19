@@ -111,5 +111,5 @@ test("journal endpoint validates bearer and date before querying Data Core",()=>
   assert.match(endpoint,/if\(!accessToken\) return json\(401/);
   assert.match(endpoint,/if\(!\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(date\)\) return json\(400/);
   assert.match(endpoint,/createWorklogJournalReader\(\{client\}\)\.load\(date\)/);
-  assert.match(endpoint,/path:"\\/api\\/work-journal"/);
+  assert.match(endpoint,/path:"\/api\/work-journal"/);
 });
