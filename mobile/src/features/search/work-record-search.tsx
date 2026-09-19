@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Button, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { readWorklogDetails, searchMyWorkRecords, updateWorklogDetails, type WorkRecordSearchResult } from '@/src/platform/worklog-api';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 
@@ -38,6 +39,9 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editBusy, setEditBusy] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editReady, setEditReady] = useState(false);
+  const [editStatus, setEditStatus] = useState('');
 
   async function search(reset: boolean) {
     const normalizedQuery = query.trim();
@@ -69,42 +73,59 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setMessage('상태 조건을 바꿨습니다. 검색을 다시 눌러 적용하세요.');
   }
 
+  async function loadEditorDetails(recordId: string, fallbackTitle = '') {
+    if (editBusy || editLoading) return;
+    setEditLoading(true);
+    setEditReady(false);
+    setEditStatus('');
+    try {
+      const details = await readWorklogDetails(accessToken, recordId);
+      setEditTitle(details.title || fallbackTitle);
+      setEditDate(details.dueDate || '');
+      setEditTime(details.dueTime || '');
+      setEditReady(true);
+    } catch (error) {
+      setEditStatus(error instanceof Error ? error.message : '업무 상세를 불러오지 못했습니다.');
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
   async function openEditor(item: WorkRecordSearchResult) {
-    if (editBusy) return;
+    if (editBusy || editLoading) return;
     setSelectedId(item.workRecordId);
     setEditId(item.workRecordId);
     setEditTitle(item.title);
     setEditDate('');
     setEditTime('');
-    setEditBusy(true);
-    setMessage('');
-    try {
-      const details = await readWorklogDetails(accessToken, item.workRecordId);
-      setEditTitle(details.title || item.title);
-      setEditDate(details.dueDate || '');
-      setEditTime(details.dueTime || '');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '업무 상세를 불러오지 못했습니다.');
-      setEditId(null);
-    } finally {
-      setEditBusy(false);
-    }
+    setEditReady(false);
+    setEditStatus('');
+    await loadEditorDetails(item.workRecordId, item.title);
+  }
+
+  async function retryEditor() {
+    if (!editId) return;
+    await loadEditorDetails(editId, editTitle);
   }
 
   async function saveEditor() {
-    if (!editId || editBusy) return;
+    if (!editId || editBusy || editLoading || !editReady) return;
     const title = editTitle.replace(/\s+/g, ' ').trim();
     if (!title) {
-      setMessage('업무명을 입력해주세요.');
+      setEditStatus('업무명을 입력해주세요.');
+      return;
+    }
+    if (title.length > 160) {
+      setEditStatus('업무명은 160자 이하로 입력해주세요.');
       return;
     }
     if (editTime.trim() && !editDate.trim()) {
-      setMessage('시간을 설정하려면 날짜도 입력해주세요.');
+      setEditStatus('시간을 설정하려면 날짜도 입력해주세요.');
       return;
     }
 
     setEditBusy(true);
-    setMessage('');
+    setEditStatus('');
     try {
       await updateWorklogDetails(accessToken, {
         pageId: editId,
@@ -113,21 +134,24 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
         dueTime: editTime.trim(),
       });
       setEditId(null);
+      setEditReady(false);
       await search(true);
       setMessage('업무를 수정했습니다.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '업무 수정에 실패했습니다.');
+      setEditStatus(error instanceof Error ? error.message : '업무 수정에 실패했습니다.');
     } finally {
       setEditBusy(false);
     }
   }
 
   function cancelEditor() {
-    if (editBusy) return;
+    if (editBusy || editLoading) return;
     setEditId(null);
     setEditTitle('');
     setEditDate('');
     setEditTime('');
+    setEditReady(false);
+    setEditStatus('');
   }
 
   return <View style={styles.root}>
@@ -138,7 +162,6 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     {busy ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.meta}>검색 중입니다.</Text></View> : null}
     {items.map((item) => {
       const selected = item.workRecordId === selectedId;
-      const editing = item.workRecordId === editId;
       return <View key={item.workRecordId} style={styles.result}>
         <Pressable accessibilityRole="button" accessibilityLabel={`${item.title} ${selected ? '접기' : '상세 보기'}`} style={styles.resultMain} onPress={() => setSelectedId((current) => current === item.workRecordId ? null : item.workRecordId)}>
           <View style={styles.resultCopy}><Text style={styles.title}>{item.title}</Text><Text style={styles.meta}>{statusLabel(item.status)}{item.institution ? ` · ${item.institution}` : ''}{recordedAtLabel(item.recordedAt) ? ` · ${recordedAtLabel(item.recordedAt)}` : ''}</Text>{item.snippet ? <Text style={styles.snippet}>{item.snippet}</Text> : null}</View>
@@ -146,18 +169,28 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
         </Pressable>
         {selected ? <View style={styles.detail}>
           {item.dueAt ? <Text style={styles.detailMeta}>기한: {recordedAtLabel(item.dueAt)}</Text> : <Text style={styles.detailMeta}>기한 없음</Text>}
-          {!editing ? <Pressable accessibilityRole="button" style={styles.editAction} disabled={editBusy} onPress={() => void openEditor(item)}><Text style={styles.editActionText}>{editBusy && selectedId === item.workRecordId ? '불러오는 중…' : '✏️ 이 업무 수정'}</Text></Pressable> : null}
-          {editing ? <View style={styles.editor}>
-            <TextInput accessibilityLabel="검색 결과 업무명 수정" placeholder="업무명" style={styles.input} value={editTitle} onChangeText={setEditTitle} />
-            <View style={styles.dateRow}><View style={styles.field}><Text style={styles.fieldLabel}>날짜</Text><TextInput accessibilityLabel="검색 결과 날짜 수정" placeholder="YYYY-MM-DD" style={styles.input} value={editDate} onChangeText={setEditDate} /></View><View style={styles.field}><Text style={styles.fieldLabel}>시간</Text><TextInput accessibilityLabel="검색 결과 시간 수정" placeholder="HH:MM" style={styles.input} value={editTime} onChangeText={setEditTime} /></View></View>
-            {!editDate && !editTime ? <Text style={styles.detailMeta}>현재 기한 없음</Text> : null}
-            <View style={styles.editorActions}><Pressable accessibilityRole="button" style={styles.secondaryAction} disabled={editBusy} onPress={cancelEditor}><Text style={styles.secondaryText}>취소</Text></Pressable><Pressable accessibilityRole="button" style={styles.primaryAction} disabled={editBusy || !editTitle.trim()} onPress={() => void saveEditor()}><Text style={styles.primaryText}>{editBusy ? '저장 중…' : '저장'}</Text></Pressable></View>
-          </View> : null}
+          <Pressable accessibilityRole="button" style={styles.editAction} disabled={editBusy || editLoading} onPress={() => void openEditor(item)}><Text style={styles.editActionText}>{editLoading && selectedId === item.workRecordId ? '불러오는 중…' : '✏️ 이 업무 수정'}</Text></Pressable>
         </View> : null}
       </View>;
     })}
     {hasMore ? <Button title={busy ? '더 불러오는 중...' : '더 보기'} disabled={busy} onPress={() => void search(false)} /> : null}
     {message ? <Text style={styles.message}>{message}</Text> : null}
+    <WorkRecordEditSheet
+      visible={Boolean(editId)}
+      title={editTitle}
+      date={editDate}
+      time={editTime}
+      loading={editLoading}
+      saving={editBusy}
+      ready={editReady}
+      statusText={editStatus}
+      onTitle={setEditTitle}
+      onDate={setEditDate}
+      onTime={setEditTime}
+      onSave={() => void saveEditor()}
+      onCancel={cancelEditor}
+      onRetry={() => void retryEditor()}
+    />
   </View>;
 }
 
@@ -179,16 +212,6 @@ const styles = StyleSheet.create({
   detailMeta: { fontSize: 12, color: '#737985', lineHeight: 18 },
   editAction: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#cfd5dd', backgroundColor: '#fff' },
   editActionText: { fontSize: 13, fontWeight: '800', color: '#275daf' },
-  editor: { gap: 8 },
-  dateRow: { flexDirection: 'row', gap: 8 },
-  dateInput: { flex: 1 },
-  field: { flex: 1, gap: 6 },
-  fieldLabel: { fontSize: 12, fontWeight: '800', color: '#4b515c' },
-  editorActions: { flexDirection: 'row', gap: 8 },
-  secondaryAction: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#cfd5dd', backgroundColor: '#fff' },
-  secondaryText: { fontSize: 13, fontWeight: '800', color: '#4b515c' },
-  primaryAction: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#111827' },
-  primaryText: { fontSize: 13, fontWeight: '800', color: '#fff' },
   title: { fontSize: 15, fontWeight: '800', color: '#30343b', lineHeight: 21 },
   meta: { fontSize: 12, color: '#737985', lineHeight: 18 },
   snippet: { fontSize: 13, color: '#4b515c', lineHeight: 19 },
