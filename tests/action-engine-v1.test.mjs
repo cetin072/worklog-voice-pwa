@@ -17,12 +17,12 @@ test("clear timed meeting is Schedule",()=>{
 });
 
 test("deadline action is Task rather than Schedule",()=>{
-  const transcript="다음주 화요일까지 견적서 보내기";
+  const transcript="금요일까지 견적서 보내기";
   const schedule=extractScheduleFromText(transcript,RECORDED_AT);
   const result=classifyWorklogAction({transcript,recordedAt:RECORDED_AT,schedule});
   assert.equal(result.kind,"task");
   assert.equal(result.actionKind,"task");
-  assert.equal(result.journalDate,"2026-09-22");
+  assert.equal(result.journalDate,"2026-09-25");
   assert.equal(result.reason,"deadline_action");
   assert.equal(result.needsReview,false);
 });
@@ -105,4 +105,10 @@ test("ambiguous journal date keeps recording date and marks review",()=>{
   assert.equal(result.kind,"task");
   assert.equal(result.journalDate,"2026-09-19");
   assert.equal(result.needsReview,true);
+});
+
+test("지난 금요일 is never reinterpreted as a future schedule weekday",()=>{
+  const transcript="지난 금요일 삼현 미팅 내용 정리";
+  const schedule=extractScheduleFromText(transcript,RECORDED_AT);
+  assert.equal(schedule.matched,false);
 });
