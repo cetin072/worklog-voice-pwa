@@ -36,6 +36,10 @@ function translateRpcError(error){
   if(/WORK_RECORD_ACTION_KIND_INVALID/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_ACTION_KIND_INVALID","업무 종류를 확인해주세요.");
   if(/WORK_RECORD_ACTION_CONVERSION_UNCLASSIFIED/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_ACTION_UNCLASSIFIED","분류되지 않은 기존 기록은 할 일/메모 전환 대상이 아닙니다.");
   if(/WORK_RECORD_ACTION_CONVERSION_SCHEDULE_LINKED/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_ACTION_SCHEDULE_LINKED","일정과 연결된 기록은 할 일/메모 종류를 바꿀 수 없습니다.");
+  if(/WORK_RECORD_POSTPONE_DUE_REQUIRED/i.test(message)) return editError("WORKLOG_DATA_CORE_POSTPONE_DUE_REQUIRED","미룰 날짜를 선택해주세요.");
+  if(/WORK_RECORD_POSTPONE_SCHEDULE_LINKED/i.test(message)) return editError("WORKLOG_DATA_CORE_POSTPONE_SCHEDULE_LINKED","일정과 연결된 업무는 일정 화면에서 시간을 변경해주세요.");
+  if(/WORK_RECORD_POSTPONE_UNDO_UNAVAILABLE/i.test(message)) return editError("WORKLOG_DATA_CORE_POSTPONE_UNDO_UNAVAILABLE","되돌릴 미루기 기록이 없습니다.");
+  if(/WORK_RECORD_ATTENTION_MUST_BE_FUTURE/i.test(message)) return editError("WORKLOG_DATA_CORE_ATTENTION_MUST_BE_FUTURE","다시 확인할 시간은 지금 이후로 선택해주세요.");
   return error;
 }
 
@@ -136,6 +140,48 @@ export function createWorklogDataCoreEditor({client}={}){
       }catch(error){
         throw translateRpcError(error);
       }
+    },
+
+    async postpone({recordId:rawRecordId,dueAt,dueHasTime=false}={}){
+      const id=recordId(rawRecordId);
+      if(!dueAt || !Number.isFinite(new Date(String(dueAt)).getTime())) throw editError("WORKLOG_DATA_CORE_POSTPONE_DUE_REQUIRED","미룰 날짜를 선택해주세요.");
+      try{
+        const row=singleRow(await client.rpc("postpone_my_work_record",{
+          p_record_id:id,p_due_at:String(dueAt),p_due_has_time:Boolean(dueHasTime)
+        }));
+        return Object.freeze({
+          recordId:id,
+          dueAt:row.due_at_value ? String(row.due_at_value) : null,
+          dueHasTime:row.due_has_time===true,
+          previousDueAt:row.previous_due_at_value ? String(row.previous_due_at_value) : null,
+          previousDueHasTime:row.previous_due_has_time===true
+        });
+      }catch(error){ throw translateRpcError(error); }
+    },
+
+    async undoPostpone({recordId:rawRecordId}={}){
+      const id=recordId(rawRecordId);
+      try{
+        const row=singleRow(await client.rpc("undo_my_work_record_postpone",{p_record_id:id}));
+        return Object.freeze({recordId:id,dueAt:row.due_at_value ? String(row.due_at_value) : null,dueHasTime:row.due_has_time===true});
+      }catch(error){ throw translateRpcError(error); }
+    },
+
+    async setAttention({recordId:rawRecordId,nextAttentionAt=null}={}){
+      const id=recordId(rawRecordId);
+      if(nextAttentionAt!==null && nextAttentionAt!==undefined && !Number.isFinite(new Date(String(nextAttentionAt)).getTime())){
+        throw editError("WORKLOG_DATA_CORE_ATTENTION_MUST_BE_FUTURE","다시 확인할 시간을 확인해주세요.");
+      }
+      try{
+        const row=singleRow(await client.rpc("set_my_work_record_attention",{
+          p_record_id:id,p_next_attention_at:nextAttentionAt ? String(nextAttentionAt) : null
+        }));
+        return Object.freeze({
+          recordId:id,
+          nextAttentionAt:row.next_attention_at_value ? String(row.next_attention_at_value) : null,
+          previousAttentionAt:row.previous_attention_at_value ? String(row.previous_attention_at_value) : null
+        });
+      }catch(error){ throw translateRpcError(error); }
     }
   });
 }

@@ -7,6 +7,8 @@ export type BriefingTask = {
   institution?: string;
   status?: string;
   dueKey?: string;
+  nextAttentionAt?: string;
+  actionKind?: string;
   daysOverdue?: number;
   daysUntil?: number;
   followUp?: string;
@@ -383,6 +385,17 @@ export type WorklogUpdateResult = Readonly<{
   mode?: string;
 }>;
 
+export type WorklogReminderResult = Readonly<{
+  pageId?: string;
+  dueDate?: string;
+  dueTime?: string;
+  nextAttentionAt?: string | null;
+  previousAttentionAt?: string | null;
+  previousDueAt?: string | null;
+  previousDueHasTime?: boolean;
+  mode?: string;
+}>;
+
 export async function readWorklogDetails(accessToken: string, pageId: string): Promise<WorklogEditDetails> {
   const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
     method: 'POST',
@@ -425,4 +438,34 @@ export async function updateWorklogDetails(
     }),
   });
   return readJson(response) as Promise<WorklogUpdateResult>;
+}
+
+export async function postponeWorklog(
+  accessToken: string,
+  input: { pageId: string; dueDate: string; dueTime: string },
+): Promise<WorklogReminderResult> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ action: 'postpone', ...input }),
+  });
+  return readJson(response) as Promise<WorklogReminderResult>;
+}
+
+export async function undoPostponeWorklog(accessToken: string, pageId: string): Promise<WorklogReminderResult> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ action: 'undo_postpone', pageId }),
+  });
+  return readJson(response) as Promise<WorklogReminderResult>;
+}
+
+export async function setWorklogAttention(accessToken: string, pageId: string, nextAttentionAt: string | null): Promise<WorklogReminderResult> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ action: 'attention', pageId, nextAttentionAt }),
+  });
+  return readJson(response) as Promise<WorklogReminderResult>;
 }

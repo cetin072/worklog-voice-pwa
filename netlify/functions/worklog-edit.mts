@@ -109,6 +109,8 @@ function dataCoreErrorResponse(error:any){
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_WORKSPACE_MISSING") return json(404,{error:"개인 업무공간을 찾지 못했습니다."});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_DUE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_KIND_INVALID") return json(400,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_UNCLASSIFIED" || error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_SCHEDULE_LINKED") return json(409,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_POSTPONE_SCHEDULE_LINKED" || error?.code==="WORKLOG_DATA_CORE_POSTPONE_UNDO_UNAVAILABLE") return json(409,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_POSTPONE_DUE_REQUIRED" || error?.code==="WORKLOG_DATA_CORE_ATTENTION_MUST_BE_FUTURE") return json(400,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_CONVERSION_UNAVAILABLE") return json(503,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN") return json(404,{error:error.message});
   console.error("Data Core worklog edit error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,200));
@@ -122,7 +124,8 @@ export default async (req:Request,_context:Context)=>{
   try{ body=await req.json(); }
   catch{ return json(400,{error:"요청 형식이 올바르지 않습니다."}); }
 
-  const action=String(body.action || "update")==="read" ? "read" : "update";
+  const requestedAction=String(body.action || "update").trim();
+  const action=["read","postpone","undo_postpone","attention"].includes(requestedAction) ? requestedAction : "update";
   const pageId=String(body.pageId || "").trim();
   const hasDueFields=Object.prototype.hasOwnProperty.call(body,"dueDate") || Object.prototype.hasOwnProperty.call(body,"dueTime");
   const accessToken=bearerToken(req);
@@ -138,6 +141,27 @@ export default async (req:Request,_context:Context)=>{
         const current=await editor.readDetails({recordId:pageId});
         const due=seoulDueFields(current.dueAt,current.dueHasTime);
         return json(200,{ok:true,pageId:current.recordId,title:current.title,...due,actionKind:current.actionKind || "",actionConversionAllowed:current.actionConversionAllowed===true,mode:"data_core"});
+      }
+
+      if(action==="postpone"){
+        let normalized:any;
+        try{ normalized=normalizeWorklogDueInput(body.dueDate,body.dueTime); }
+        catch(error:any){ return json(400,{error:error.message}); }
+        if(!normalized.dueAt) return json(400,{error:"미룰 날짜를 선택해주세요."});
+        const result=await editor.postpone({recordId:pageId,dueAt:normalized.dueAt,dueHasTime:normalized.dueHasTime});
+        return json(200,{ok:true,pageId:result.recordId,dueDate:normalized.dueDate,dueTime:normalized.dueTime,previousDueAt:result.previousDueAt,previousDueHasTime:result.previousDueHasTime,mode:"data_core"});
+      }
+
+      if(action==="undo_postpone"){
+        const result=await editor.undoPostpone({recordId:pageId});
+        const due=seoulDueFields(result.dueAt,result.dueHasTime);
+        return json(200,{ok:true,pageId:result.recordId,...due,mode:"data_core"});
+      }
+
+      if(action==="attention"){
+        const nextAttentionAt=Object.prototype.hasOwnProperty.call(body,"nextAttentionAt") ? body.nextAttentionAt : null;
+        const result=await editor.setAttention({recordId:pageId,nextAttentionAt});
+        return json(200,{ok:true,pageId:result.recordId,nextAttentionAt:result.nextAttentionAt,previousAttentionAt:result.previousAttentionAt,mode:"data_core"});
       }
 
       const nextTitle=normalizeWorklogTitle(body.title);
@@ -184,6 +208,10 @@ export default async (req:Request,_context:Context)=>{
   if(connection.error) return json(connection.status || 400,{error:connection.error});
   const {token,dataSourceId,mode}=connection;
   if(!validWorklogPageId(pageId)) return json(400,{error:"수정할 업무 식별자가 올바르지 않습니다."});
+
+  if(action==="postpone" || action==="undo_postpone" || action==="attention"){
+    return json(409,{error:"미루기와 다시 알림은 Data Core 업무에서만 지원합니다."});
+  }
 
   try{
     const page=await getVerifiedPage(token,pageId,dataSourceId);
