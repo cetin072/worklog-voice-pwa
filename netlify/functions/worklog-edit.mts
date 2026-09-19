@@ -108,7 +108,7 @@ function dataCoreErrorResponse(error:any){
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_AUTH_REQUIRED") return json(401,{error:"로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요."});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_WORKSPACE_MISSING") return json(404,{error:"개인 업무공간을 찾지 못했습니다."});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_DUE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_KIND_INVALID") return json(400,{error:error.message});
-  if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_SCHEDULE_LINKED") return json(409,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_UNCLASSIFIED" || error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_SCHEDULE_LINKED") return json(409,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_CONVERSION_UNAVAILABLE") return json(503,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN") return json(404,{error:error.message});
   console.error("Data Core worklog edit error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,200));
