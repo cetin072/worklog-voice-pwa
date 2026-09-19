@@ -11,6 +11,7 @@ const preferencesApi = readFileSync(new URL("../netlify/functions/notification-p
 const subscriptionApi = readFileSync(new URL("../netlify/functions/push-subscription.mts", import.meta.url), "utf8");
 const settingsHtml = readFileSync(new URL("../public/settings.html", import.meta.url), "utf8");
 const settingsJs = readFileSync(new URL("../public/morning-push-settings.js", import.meta.url), "utf8");
+const safetyMigration = readFileSync(new URL("../supabase/migrations/20260920001000_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
 
 test("morning digest keeps count summary and can show two useful titles", () => {
   assert.equal(
@@ -82,12 +83,13 @@ test("detail preference and focus titles are transient scheduler fields, not del
   assert.doesNotMatch(contentMigration, /'primaryScheduleTitle'/);
 });
 
-test("scheduled RPC is protected by a hashed server secret and fail-closed grants", () => {
+test("scheduled RPC keeps hashed secret validation but Stage 4-0 removes public execution", () => {
   assert.match(migration, /extensions\.digest\(coalesce\(p_secret, ''\), 'sha256'\)/);
   assert.match(migration, /security definer/);
   assert.match(migration, /revoke all on function public\._notification_scheduler_secret_ok\(text\) from public, anon, authenticated/);
-  assert.match(migration, /grant execute on function public\.claim_morning_notification_deliveries[\s\S]*to anon/);
-  assert.doesNotMatch(migration, /NOTIFICATION_SCHEDULER_SECRET/);
+  assert.match(safetyMigration, /revoke all on function public\.claim_morning_notification_deliveries[\s\S]*from public, anon, authenticated/);
+  assert.match(safetyMigration, /grant execute on function public\.claim_morning_notification_deliveries[\s\S]*to service_role/);
+  assert.doesNotMatch(safetyMigration, /grant execute[\s\S]*to anon/);
 });
 
 test("preference API requires current-origin Push connection before enabling morning alerts", () => {
@@ -116,14 +118,12 @@ test("settings separates everyday notification options from collapsed diagnostic
 test("scheduler config fails closed without a long server secret", () => {
   const missing = notificationSchedulerConfig((name) => ({
     SUPABASE_URL: "https://example.supabase.co",
-    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
     NOTIFICATION_SCHEDULER_SECRET: "short",
   })[name]);
   assert.equal(missing.configured, false);
 
   const configured = notificationSchedulerConfig((name) => ({
     SUPABASE_URL: "https://example.supabase.co",
-    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
     NOTIFICATION_SCHEDULER_SECRET: "x".repeat(40),
   })[name]);
   assert.equal(configured.configured, true);
@@ -134,7 +134,7 @@ test("scheduler client normalizes detail fields and preserves null failure statu
   const fetchImpl = async (url, options) => {
     const body = JSON.parse(options.body);
     calls.push({ url, body });
-    if (String(url).endsWith("/claim_morning_notification_deliveries")) {
+    if (body.action === "claim_morning") {
       return new Response(JSON.stringify([{
         delivery_id: "delivery-1",
         subscription_id: "subscription-1",
@@ -156,7 +156,6 @@ test("scheduler client normalizes detail fields and preserves null failure statu
 
   const client = createNotificationSchedulerClient({
     supabaseUrl: "https://example.supabase.co",
-    publishableKey: "sb_publishable_test",
     schedulerSecret: "s".repeat(40),
     fetchImpl,
   });
@@ -166,10 +165,12 @@ test("scheduler client normalizes detail fields and preserves null failure statu
   assert.equal(rows[0].detailEnabled, true);
   assert.equal(rows[0].primaryScheduleTime, "10:00");
   assert.equal(rows[0].primaryWorkTitle, "계약서 확인");
-  assert.equal(calls[0].body.p_app_origin, "https://worklog.example.test");
-  assert.equal(calls[0].body.p_local_date, "2026-09-16");
+  assert.equal(calls[0].body.action, "claim_morning");
+  assert.equal(calls[0].body.appOrigin, "https://worklog.example.test");
+  assert.equal(calls[0].body.localDate, "2026-09-16");
 
   await client.finish({ deliveryId: "delivery-1", success: false, status: null, code: "NETWORK_ERROR" });
-  assert.equal(calls[1].body.p_status, null);
-  assert.equal(calls[1].body.p_code, "NETWORK_ERROR");
+  assert.equal(calls[1].body.action, "finish");
+  assert.equal(calls[1].body.status, null);
+  assert.equal(calls[1].body.code, "NETWORK_ERROR");
 });

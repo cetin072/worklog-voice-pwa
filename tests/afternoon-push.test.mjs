@@ -11,6 +11,7 @@ const preferencesApi = readFileSync(new URL("../netlify/functions/notification-p
 const settingsHtml = readFileSync(new URL("../public/settings.html", import.meta.url), "utf8");
 const settingsJs = readFileSync(new URL("../public/morning-push-settings.js", import.meta.url), "utf8");
 const notificationsJs = readFileSync(new URL("../public/notifications.js", import.meta.url), "utf8");
+const safetyMigration = readFileSync(new URL("../supabase/migrations/20260920001000_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
 
 test("afternoon reminder shows one priority task and remaining counts", () => {
   assert.equal(
@@ -70,11 +71,11 @@ test("afternoon preferences default off and claim sends only when due incomplete
   assert.doesNotMatch(migration, /schedule_counts/);
 });
 
-test("afternoon claim remains protected by the existing scheduler secret and anon-only RPC boundary", () => {
+test("afternoon claim keeps the scheduler secret and Stage 4-0 moves execution to service_role only", () => {
   assert.match(migration, /_notification_scheduler_secret_ok\(p_scheduler_secret\)/);
   assert.match(migration, /security definer/);
-  assert.match(migration, /revoke all on function public\.claim_afternoon_notification_deliveries\(text, text, date\) from public, authenticated/);
-  assert.match(migration, /grant execute on function public\.claim_afternoon_notification_deliveries\(text, text, date\) to anon/);
+  assert.match(safetyMigration, /revoke all on function public\.claim_afternoon_notification_deliveries[\s\S]*from public, anon, authenticated/);
+  assert.match(safetyMigration, /grant execute on function public\.claim_afternoon_notification_deliveries[\s\S]*to service_role/);
 });
 
 test("scheduler client normalizes afternoon claims through the shared claim contract", async () => {
@@ -82,7 +83,7 @@ test("scheduler client normalizes afternoon claims through the shared claim cont
   const fetchImpl = async (url, options) => {
     const body = JSON.parse(options.body);
     calls.push({ url: String(url), body });
-    if (String(url).endsWith("/claim_afternoon_notification_deliveries")) {
+    if (body.action === "claim_afternoon") {
       return new Response(JSON.stringify([{
         delivery_id: "delivery-a",
         subscription_id: "subscription-a",
@@ -104,7 +105,6 @@ test("scheduler client normalizes afternoon claims through the shared claim cont
 
   const client = createNotificationSchedulerClient({
     supabaseUrl: "https://example.supabase.co",
-    publishableKey: "sb_publishable_test",
     schedulerSecret: "s".repeat(40),
     fetchImpl,
   });
@@ -115,8 +115,9 @@ test("scheduler client normalizes afternoon claims through the shared claim cont
   assert.equal(rows[0].scheduleCount, 0);
   assert.equal(rows[0].detailEnabled, true);
   assert.equal(rows[0].primaryWorkTitle, "계약서 확인");
-  assert.equal(calls[0].body.p_local_date, "2026-09-16");
-  assert.equal(calls[0].body.p_app_origin, "https://worklog.example.test");
+  assert.equal(calls[0].body.action, "claim_afternoon");
+  assert.equal(calls[0].body.localDate, "2026-09-16");
+  assert.equal(calls[0].body.appOrigin, "https://worklog.example.test");
 });
 
 test("notification settings exposes and persists the afternoon option without weakening Push connection checks", () => {
