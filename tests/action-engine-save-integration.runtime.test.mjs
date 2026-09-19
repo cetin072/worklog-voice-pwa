@@ -129,12 +129,15 @@ test("projection migration keeps the existing authenticated RPC signature and pr
   assert.match(migration,/grant execute on function public\.save_my_worklog_with_schedule[\s\S]*to authenticated, service_role/i);
 });
 
-test("canonical worklog handler classifies before building the saved record",()=>{
-  const classifyIndex=worklogFunction.indexOf("const action=classifyWorklogAction");
-  const recordIndex=worklogFunction.indexOf("const record={",classifyIndex);
-  assert.ok(classifyIndex>=0);
+test("canonical worklog handler classifies every segment before building its saved record",()=>{
+  const helperIndex=worklogFunction.indexOf("function classifiedRecord");
+  const classifyIndex=worklogFunction.indexOf("const segmentAction=classifyWorklogAction",helperIndex);
+  const recordIndex=worklogFunction.indexOf("record:{",classifyIndex);
+  assert.ok(helperIndex>=0);
+  assert.ok(classifyIndex>helperIndex);
   assert.ok(recordIndex>classifyIndex);
-  assert.match(worklogFunction,/actionKind:action\.actionKind, journalDate:action\.journalDate, actionEngine/);
+  assert.match(worklogFunction,/actionKind:segmentAction\.actionKind, journalDate:segmentAction\.journalDate, actionEngine/);
+  assert.match(worklogFunction,/split\.segments\.map\(\(segment,index\)=>classifiedRecord/);
   assert.match(worklogFunction,/actionClass:action\.kind/);
   assert.match(worklogFunction,/actionNeedsReview:action\.needsReview/);
 });
