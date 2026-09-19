@@ -67,6 +67,13 @@ function fastSaveRpcUnavailable(error:any){
   return error?.code==="SUPABASE_DATA_CORE_RPC_FAILED";
 }
 
+function multiActionRpcUnavailable(error:any){
+  if(error?.code!=="SUPABASE_DATA_CORE_RPC_FAILED") return false;
+  const message=String(error?.message || "");
+  return /(?:could not find|schema cache)[\s\S]*save_my_multi_action_worklog/i.test(message)
+    || /save_my_multi_action_worklog[\s\S]*(?:could not find|schema cache)/i.test(message);
+}
+
 function fastSaveWorkspaceMissing(error:any){
   return error?.code==="WORKLOG_DATA_CORE_FAST_WORKSPACE_MISSING"
     || /PERSONAL_WORKSPACE_MISSING/i.test(String(error?.message || ""));
@@ -292,14 +299,12 @@ export default async (req:Request, _context:Context) => {
           }catch(retryError:any){
             console.warn("Worklog fast save repair retry failed",String(retryError?.code || "unknown"),String(retryError?.message || "unknown").slice(0,120));
           }
-        }else if(fastSaveRpcUnavailable(fastError)){
-          if(multiRecords.length>1){
-            console.warn("Worklog multi-action RPC unavailable; preserving original as one WorkRecord",String(fastError?.message || "unknown").slice(0,120));
-            fastDataCore=await dataCore.persistFast(record);
-            fastPath=true;
-          }else{
-            console.warn("Worklog fast save unavailable; using legacy Data Core path",String(fastError?.message || "unknown").slice(0,120));
-          }
+        }else if(multiRecords.length>1 && multiActionRpcUnavailable(fastError)){
+          console.warn("Worklog multi-action RPC unavailable; preserving original as one WorkRecord",String(fastError?.message || "unknown").slice(0,120));
+          fastDataCore=await dataCore.persistFast(record);
+          fastPath=true;
+        }else if(multiRecords.length===0 && fastSaveRpcUnavailable(fastError)){
+          console.warn("Worklog fast save unavailable; using legacy Data Core path",String(fastError?.message || "unknown").slice(0,120));
         }else{
           throw fastError;
         }
@@ -322,7 +327,7 @@ export default async (req:Request, _context:Context) => {
           scheduleId:String(fastDataCore.scheduleId || ""),
           scheduleIds,
           normalizationQueued:normalizationResults.every(Boolean),
-          notionSync:notionConfigured ? "pending" : "disabled"
+          notionSync:notionConfigured ? "deferred_multi_action" : "disabled"
         });
       }
 
