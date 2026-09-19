@@ -544,6 +544,7 @@ const styles = StyleSheet.create({
   successText: { color: mobileTheme.colors.success, lineHeight: 20, backgroundColor: '#eaf4ea', padding: 10, borderRadius: mobileTheme.radius.compact },
   infoText: { color: mobileTheme.colors.textSecondary, lineHeight: 20, backgroundColor: mobileTheme.colors.neutralBackground, padding: 10, borderRadius: mobileTheme.radius.compact },
   emptyText: { color: mobileTheme.colors.textMuted, lineHeight: 20, paddingVertical: 4 },
+  helpText: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   emptyAction: { gap: 10, paddingTop: 8 },
   actionGrid: { flexDirection: 'row', gap: 12 },
   actionCard: { flex: 1, minHeight: 132, borderRadius: 18, padding: 16, gap: 6, backgroundColor: '#fff' },
