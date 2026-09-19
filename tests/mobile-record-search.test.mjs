@@ -48,11 +48,13 @@ test('Mobile search result can be expanded and edited through the existing workl
   assert.match(mobileSearchUi, /openEditor/);
   assert.match(mobileSearchUi, /readWorklogDetails/);
   assert.match(mobileSearchUi, /updateWorklogDetails/);
-  assert.match(mobileSearchUi, /이 업무 수정/);
+  assert.match(mobileSearchUi, /editIconAction/);
+  assert.match(mobileSearchUi, /accessibilityLabel=\{`\$\{item\.title\} 수정`\}/);
   assert.match(mobileSearchUi, /WorkRecordEditSheet/);
   assert.match(mobileSearchUi, /retryEditor/);
   assert.match(mobileSearchUi, /saveEditor/);
-  assert.match(mobileSearchUi, /업무를 수정했습니다/);
+  assert.match(mobileSearchUi, /✓ 업무를 수정했습니다/);
+  assert.match(mobileSearchUi, /setItems\(\(current\) => current\.map/);
   assert.match(mobileHome, /accessToken=\{session\.access_token\}/);
 });
 
