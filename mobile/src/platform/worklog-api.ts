@@ -139,6 +139,7 @@ function requestId() {
 export type SaveWorklogOptions = Readonly<{
   clientRequestId?: string;
   recordedAt?: string;
+  sourceType?: 'direct' | 'voice';
   institution?: string;
   institutionSource?: 'user_selected' | 'user_confirmed';
   status?: string;
@@ -157,6 +158,10 @@ export type SavedWorklog = Readonly<{
   scheduleCreated?: boolean;
   scheduleId?: string;
   dueStart?: string;
+  multiAction?: boolean;
+  splitCount?: number;
+  dataCoreWorkRecordIds?: string[];
+  scheduleIds?: string[];
 }>;
 
 function normalizedRecordedAt(value?: string) {
@@ -214,6 +219,7 @@ export async function saveWorklog(
       transcript: normalizedTranscript,
       clientRequestId,
       recordedAt: normalizedRecordedAt(options.recordedAt),
+      ...(options.sourceType ? { sourceType: options.sourceType } : {}),
       ...(options.institution ? { institution: options.institution.trim() } : {}),
       ...(options.institutionSource ? { institutionSource: options.institutionSource } : {}),
       ...(options.status ? { status: options.status.trim() } : {}),
