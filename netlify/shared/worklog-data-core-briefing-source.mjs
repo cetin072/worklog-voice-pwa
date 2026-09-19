@@ -1,3 +1,4 @@
+import { briefingCompleteness, BRIEFING_TASK_LIMIT } from "./briefing-completeness.mjs";
 const TASK_STATUS_MAP = Object.freeze({ in_progress: "진행중", waiting: "대기", needs_review: "확인필요" });
 const SCHEDULE_STATUS_MAP = Object.freeze({ confirmed: "확정", tentative: "임시" });
 
@@ -70,14 +71,19 @@ export function createWorklogDataCoreBriefingSource({ client } = {}) {
         throw sourceError("WORKLOG_DATA_CORE_BRIEFING_TODAY_INVALID", "브리핑 기준일이 올바르지 않습니다.");
       }
 
-      const tasks = (Array.isArray(row?.tasks) ? row.tasks : [])
+      if (!Array.isArray(row?.tasks) || !Array.isArray(row?.schedules)) {
+        throw sourceError("WORKLOG_DATA_CORE_BRIEFING_SOURCE_INVALID", "브리핑 데이터 형식을 확인하지 못했습니다.");
+      }
+      const tasks = row.tasks.slice(0, BRIEFING_TASK_LIMIT)
         .map(toBriefingTask)
         .filter((task) => task.title);
       const scheduleRows = (Array.isArray(row?.schedules) ? row.schedules : [])
         .map(toBriefingSchedule)
         .filter((schedule) => schedule.title && schedule.dateKey);
 
+      const page = await briefingCompleteness({ client, workspaceId, sourceCount: row.tasks.length, displayedCount: tasks.length, rpcBounded: true });
       return Object.freeze({
+        ...page,
         workspaceId,
         today,
         tasks: Object.freeze(tasks),

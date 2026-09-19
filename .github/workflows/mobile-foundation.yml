@@ -4,8 +4,25 @@ on:
   pull_request:
     paths:
       - 'mobile/**'
+      - 'mobile/app/**'
+      - 'mobile/src/**'
+      - 'mobile/android/**'
+      - 'mobile/ios/**'
+      - 'mobile/app.json'
+      - 'mobile/app.config.js'
+      - 'mobile/app.config.ts'
+      - 'mobile/package-lock.json'
       - 'tests/mobile-*.test.mjs'
+      - 'tests/helpers/**'
+      - 'scripts/verify-mobile-device-mutations.mjs'
       - '.github/workflows/mobile-foundation.yml'
+  workflow_dispatch:
+    inputs:
+      build_android:
+        description: 'Build and upload standalone ARM64 APK'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: mobile-app-${{ github.ref }}
@@ -15,11 +32,69 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.scope.outputs.android }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scope
+        name: Detect native Android build scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FORCE_ANDROID: ${{ inputs.build_android }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "${FORCE_ANDROID:-true}" == "true" ]]; then
+              echo "android=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "android=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee /tmp/mobile-changed-files.txt
+
+          if grep -Eq '^(mobile/(app/|src/|app\.json|app\.config\.(js|ts)|package-lock\.json|android/|ios/)|\.github/workflows/mobile-foundation\.yml)' /tmp/mobile-changed-files.txt; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "android=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preserve exact PR source for reproducible verification
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/worklog-source"
+          git rev-parse --verify "${SOURCE_SHA}^{commit}" > "$RUNNER_TEMP/worklog-source/SOURCE_SHA.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/worklog-source/CI_CHECKOUT_SHA.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/worklog-source/source.tar.gz" "$SOURCE_SHA"
+          git ls-tree -r "$SOURCE_SHA" > "$RUNNER_TEMP/worklog-source/SOURCE_TREE.txt"
+          (cd "$RUNNER_TEMP/worklog-source" && sha256sum source.tar.gz > SHA256SUMS)
+      - name: Upload exact source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-mobile-source-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/worklog-source/
+          if-no-files-found: error
+          retention-days: 7
+
   typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -30,19 +105,39 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Check Expo dependency compatibility
         working-directory: mobile
-        run: npx expo install --check
+        run: EXPO_OFFLINE=1 npx expo install --check
       - name: Typecheck mobile app
         working-directory: mobile
         run: npm run typecheck
-      - name: Run mobile contract tests
+      - name: Bundle Android app with Metro
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo export --platform android --output-dir /tmp/worklog-mobile-android-export --clear
+      - name: Run mobile contract and production-source runtime tests
         run: node --test tests/mobile-*.test.mjs
+      - name: Verify device-state tests reject broken implementations
+        run: node scripts/verify-mobile-device-mutations.mjs "$RUNNER_TEMP/device-state-mutations"
+      - name: Upload device-state mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-device-state-mutations
+          path: ${{ runner.temp }}/device-state-mutations/
+          if-no-files-found: ignore
+          retention-days: 7
 
   android-standalone:
-    needs: typecheck
+    needs:
+      - changes
+      - typecheck
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -72,3 +167,46 @@ jobs:
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
+
+
+  android-runtime-smoke:
+    needs:
+      - changes
+      - typecheck
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install locked mobile dependencies
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+      - name: Generate Android project
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch x86_64 APK and assert first screen renders
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: bash mobile/scripts/android-runtime-smoke.sh

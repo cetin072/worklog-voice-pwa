@@ -25,6 +25,11 @@ export type BriefingSchedule = {
 export type MobileBriefing = {
   today?: string;
   generatedAt?: string;
+  mode?: string;
+  truncated?: boolean | null;
+  completeness?: 'complete' | 'partial' | 'unknown';
+  queryLimit?: number;
+  filteredTaskCount?: number;
   counts?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated' | 'total', number>>;
   structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>>;
   schedules?: { today?: BriefingSchedule[]; upcoming?: BriefingSchedule[]; total?: number };
@@ -131,6 +136,41 @@ function requestId() {
   return `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+export type SaveWorklogOptions = Readonly<{
+  clientRequestId?: string;
+  recordedAt?: string;
+}>;
+
+export type SavedWorklog = Readonly<{
+  pageId?: string;
+  dataCoreWorkRecordId?: string;
+  cleanTranscript?: string;
+  scheduleDetected?: boolean;
+  scheduleCreated?: boolean;
+  scheduleId?: string;
+  dueStart?: string;
+}>;
+
+function normalizedRecordedAt(value?: string) {
+  if (!value) return new Date().toISOString();
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error('업무 기록 시각이 올바르지 않습니다.');
+  }
+  return date.toISOString();
+}
+
+export function parseMobileBriefing(body: Record<string, unknown>): MobileBriefing {
+  const structure = asRecord(body.structure); const counts = asRecord(body.counts);
+  const buckets = ['overdue', 'today', 'upcoming', 'undated'] as const;
+  if (typeof body.today !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.today)
+    || !structure || !counts || !buckets.every((key) => Array.isArray(structure[key])
+      && typeof counts[key] === 'number' && Number.isFinite(counts[key]) && Number(counts[key]) >= 0)) {
+    throw new Error('브리핑 응답을 확인하지 못했습니다. 기존 브리핑을 유지합니다. 다시 시도해주세요.');
+  }
+  return body as MobileBriefing;
+}
+
 export async function loadBriefing(accessToken: string) {
   const response = await fetch(`${getApiBaseUrl()}/api/briefing-fast`, {
     method: 'GET',
@@ -139,10 +179,22 @@ export async function loadBriefing(accessToken: string) {
       authorization: `Bearer ${accessToken}`,
     },
   });
-  return readJson(response) as Promise<MobileBriefing>;
+  return parseMobileBriefing(await readJson(response));
 }
 
-export async function saveWorklog(accessToken: string, transcript: string) {
+export async function saveWorklog(
+  accessToken: string,
+  transcript: string,
+  options: SaveWorklogOptions = {},
+): Promise<SavedWorklog> {
+  const normalizedTranscript = transcript.trim();
+  if (!normalizedTranscript) throw new Error('저장할 업무 원문이 없습니다.');
+
+  const clientRequestId = options.clientRequestId?.trim() || requestId();
+  if (clientRequestId.length > 200) {
+    throw new Error('업무 저장 요청 ID가 너무 깁니다.');
+  }
+
   const response = await fetch(`${getApiBaseUrl()}/api/worklog`, {
     method: 'POST',
     headers: {
@@ -151,10 +203,29 @@ export async function saveWorklog(accessToken: string, transcript: string) {
       authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
-      transcript,
-      clientRequestId: requestId(),
-      recordedAt: new Date().toISOString(),
+      transcript: normalizedTranscript,
+      clientRequestId,
+      recordedAt: normalizedRecordedAt(options.recordedAt),
     }),
+  });
+  return readJson(response) as Promise<SavedWorklog>;
+}
+
+/** Reuses the canonical worklog edit endpoint for post-transcription correction. */
+export async function updateWorklogTitle(accessToken: string, recordId: string, title: string) {
+  const normalizedRecordId = recordId.trim();
+  const normalizedTitle = title.trim();
+  if (!normalizedRecordId) throw new Error('수정할 업무 식별자가 없습니다.');
+  if (!normalizedTitle) throw new Error('수정할 업무 원문이 없습니다.');
+
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ pageId: normalizedRecordId, title: normalizedTitle }),
   });
   return readJson(response);
 }
@@ -170,4 +241,63 @@ export async function updateWorklogStatus(accessToken: string, recordId: string,
     body: JSON.stringify({ recordId, status }),
   });
   return readJson(response);
+}
+
+
+export type WorklogEditDetails = {
+  title: string;
+  dueDate: string;
+  dueTime: string;
+  mode?: string;
+};
+
+export type WorklogUpdateResult = Readonly<{
+  pageId?: string;
+  title?: string;
+  dueDate?: string;
+  dueTime?: string;
+  scheduleUpdated?: boolean;
+  unchanged?: boolean;
+  mode?: string;
+}>;
+
+export async function readWorklogDetails(accessToken: string, pageId: string): Promise<WorklogEditDetails> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ action: 'read', pageId }),
+  });
+  const body = await readJson(response);
+  return {
+    title: typeof body.title === 'string' ? body.title : '',
+    dueDate: typeof body.dueDate === 'string' ? body.dueDate : '',
+    dueTime: typeof body.dueTime === 'string' ? body.dueTime : '',
+    mode: typeof body.mode === 'string' ? body.mode : undefined,
+  };
+}
+
+export async function updateWorklogDetails(
+  accessToken: string,
+  input: { pageId: string; title: string; dueDate: string; dueTime: string },
+): Promise<WorklogUpdateResult> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      action: 'update',
+      pageId: input.pageId,
+      title: input.title,
+      dueDate: input.dueDate,
+      dueTime: input.dueTime,
+    }),
+  });
+  return readJson(response) as Promise<WorklogUpdateResult>;
 }

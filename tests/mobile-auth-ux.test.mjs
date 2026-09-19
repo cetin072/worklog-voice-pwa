@@ -56,7 +56,7 @@ test('Login UI exposes Google first plus password visibility and autofill hints'
   assert.match(homeSource, /보기/);
   assert.match(homeSource, /숨기기/);
   assert.match(homeSource, /autoComplete="email"/);
-  assert.match(homeSource, /autoComplete="current-password"/);
+  assert.match(homeSource, /autoComplete=\{authMode === 'signUp' \? 'new-password' : 'current-password'\}/);
   assert.match(homeSource, /importantForAutofill="yes"/);
 });
 
@@ -67,15 +67,35 @@ test('Android resizes the app above the software keyboard during login', () => {
   assert.match(appShellSource, /keyboardDismissMode="on-drag"/);
 });
 
-test('App shell applies the installed safe-area provider to login and bottom navigation', () => {
+test('App shell applies safe-area insets without depending on a bottom navigation bar', () => {
   assert.match(rootLayoutSource, /SafeAreaProvider/);
   assert.match(appShellSource, /useSafeAreaInsets/);
-  assert.match(appShellSource, /bottomInset/);
-  assert.match(appShellSource, /Math\.max\(10, bottomInset\)/);
+  assert.match(appShellSource, /paddingTop: insets\.top/);
+  assert.match(appShellSource, /quickDockShell/);
+  assert.match(appShellSource, /paddingBottom: Math\.max\(insets\.bottom, 8\)/);
+  assert.doesNotMatch(appShellSource, /PrimaryNavigation/);
 });
 
 test('Only the non-sensitive email identifier is remembered by the app', () => {
   assert.match(authPreferencesSource, /LAST_LOGIN_EMAIL_KEY/);
   assert.match(authPreferencesSource, /SecureStore\.setItemAsync/);
   assert.doesNotMatch(authPreferencesSource, /password/i);
+});
+
+
+test('Login and settings keep truthful success and error feedback', () => {
+  assert.match(homeSource, /messageTone/);
+  assert.match(homeSource, /showMessage\(messageOf\(nextError, '처리 중 오류가 발생했습니다\.'\), 'error'\)/);
+  assert.match(homeSource, /authError \|\| messageTone === 'error'/);
+  assert.match(homeSource, /messageTone === 'success' \? styles\.successText : styles\.infoText/);
+  assert.match(homeSource, /function clearMessage\(\) \{[\s\S]*setMessage\(''\);[\s\S]*setMessageTone\('info'\)/);
+  assert.doesNotMatch(homeSource, /function clearMessage\(\) \{\s*clearMessage\(\)/);
+});
+
+test('Settings surfaces Calendar connection state and confirms destructive logout', () => {
+  assert.match(homeSource, /CalendarConnectionSummary compact[^>]*onPressManage/);
+  assert.match(homeSource, /function confirmSignOut\(\)/);
+  assert.match(homeSource, /Alert\.alert\(/);
+  assert.match(homeSource, /이 기기에서 현재 업무수첩 계정 세션을 종료할까요/);
+  assert.match(homeSource, /destructive onPress=\{confirmSignOut\}/);
 });

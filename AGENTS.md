@@ -21,6 +21,28 @@
 - 규칙·코드·DB·OS 기능으로 해결 가능한 문제에 생성형 AI를 기본 엔진으로 사용하지 않는다.
 - 오픈소스/로컬 처리는 절대 규칙이 아니다. 보안, 정확도, 성능, 배터리, 유지보수, API 비용을 포함한 총비용으로 선택한다.
 
+## 교체 가능성 Gate — 외부 엔진/오픈소스
+
+- STT/OCR/AI/Calendar/Notification처럼 교체 가능성이 있는 외부 엔진은 반드시 `Core → 공통 Contract → Adapter/Registry → Provider` 경계를 유지한다.
+- provider-specific import/type/model 경로는 UI, Data Core, 업무 규칙에 직접 노출하지 않는다.
+- **엔진을 바꿀 때 UI·DB·업무 규칙을 수정해야 한다면 구조가 잘못된 것으로 보고 먼저 경계를 고친다.**
+- 오픈소스 채택 전 라이선스, 최근 유지보수, Android/RN 호환성, binary/model 크기, 정확도, latency, 배터리/메모리, 장애 복구, 총운영비를 기록한다.
+- 특정 provider 실패 시 Core를 재작성하지 말고 Adapter 구현만 교체하여 다음 후보를 검증한다.
+- Quick Voice STT #353/#358 작업은 `docs/planning/CODEX_QUICK_VOICE_STT_EXECUTION_V1.md`를 실행 기준으로 추가 참조한다.
+
+
+## Mobile 개발·검수 Fast Loop
+
+- 모바일 UI/JS/TS 변경의 기본 검수 경로는 **Development Build 1회 설치 + Metro/Fast Refresh**다.
+- 작은 화면/버튼/문구/StyleSheet/일반 TypeScript 변경마다 standalone Release APK를 다시 만들거나 사용자에게 재설치를 요구하지 않는다.
+- 로컬 개발 기기 최초 설치는 `cd mobile && npm ci && npm run android:device`를 사용한다.
+- 이후 native runtime이 그대로라면 `cd mobile && npm run start:device`로 Metro를 실행해 반복 검수한다.
+- development build 재생성은 native dependency, Expo config plugin, Android permission/manifest, scheme/deep-link native config, Expo/RN native version, STT native runtime이 바뀔 때만 기본으로 한다.
+- standalone ARM64 Release APK는 native-change checkpoint, milestone Human QA, release candidate에서만 생성한다.
+- CI도 JS/TS-only 변경에서는 typecheck/contract regression을 우선하고 standalone APK 반복 생성을 피한다. 필요 시 manual workflow dispatch로 Release APK를 강제 생성한다.
+- 이미 PASS했고 영향 파일/native contract가 바뀌지 않은 영역은 Human QA를 반복하지 않는다.
+- 세부 기준은 `docs/planning/MOBILE_QA_FAST_LOOP_V1.md`를 따른다.
+
 ## 공통 웹 아키텍처 기준
 
 - 웹 제작 공통 source of truth는 `cetin072/ai-development-system`의 `docs/WEB_ARCHITECTURE_STANDARD_V1.md`다.

@@ -6,21 +6,51 @@ import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 const PENDING_SCHEDULE_CLEANUP_KEY = 'worklog.mobile.pending-schedule-cleanup.v1';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function pendingScheduleIds() {
-  const raw = await secureSessionStorage.getItem(PENDING_SCHEDULE_CLEANUP_KEY);
-  if (!raw) return [];
-  try {
-    const values = JSON.parse(raw) as unknown;
-    return Array.isArray(values) ? values.filter((value): value is string => typeof value === 'string' && UUID_PATTERN.test(value)) : [];
-  } catch {
-    return [];
+function parsePendingScheduleIds(raw: string | null): string[] {
+  if (raw === null) return [];
+  let values: unknown;
+  try { values = JSON.parse(raw); } catch { throw new Error('일정 정리 대기 기록이 손상됐습니다. 기존 기록은 보존했습니다.'); }
+  if (!Array.isArray(values) || !values.every((value) => typeof value === 'string' && UUID_PATTERN.test(value))) {
+    throw new Error('일정 정리 대기 기록 형식을 확인하지 못했습니다.');
   }
+  return [...new Set(values as string[])];
+}
+async function pendingScheduleIds() {
+  return parsePendingScheduleIds(await secureSessionStorage.getItem(PENDING_SCHEDULE_CLEANUP_KEY));
+}
+async function updatePendingScheduleIds(update: (ids: string[]) => string[]) {
+  return secureSessionStorage.updateItem(PENDING_SCHEDULE_CLEANUP_KEY, (raw) => {
+    const next = [...new Set(update(parsePendingScheduleIds(raw)))];
+    if (!next.every((sid) => UUID_PATTERN.test(sid))) throw new Error('일정 정리 식별자가 올바르지 않습니다.');
+    return JSON.stringify(next);
+  });
 }
 
-async function savePendingScheduleIds(scheduleIds: readonly string[]) {
-  const unique = [...new Set(scheduleIds.filter((scheduleId) => UUID_PATTERN.test(scheduleId)))];
-  if (!unique.length) return secureSessionStorage.removeItem(PENDING_SCHEDULE_CLEANUP_KEY);
-  return secureSessionStorage.setItem(PENDING_SCHEDULE_CLEANUP_KEY, JSON.stringify(unique));
+function isMissingCancelRpc(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message || '';
+  return error?.code === 'PGRST202'
+    || /Could not find the function public\.cancel_my_schedule/i.test(message)
+    || /cancel_my_schedule.*schema cache/i.test(message);
+}
+
+async function cancelScheduleDirectly(client: PlatformSupabaseClient, scheduleId: string) {
+  const { data: userData, error: userError } = await client.auth.getUser();
+  const userId = userData.user?.id;
+  if (userError || !userId) throw new Error('일정 취소를 위한 로그인 정보를 확인하지 못했습니다.');
+
+  const { data, error } = await client
+    .from('schedules')
+    .update({ status: 'cancelled' })
+    .eq('id', scheduleId)
+    .eq('created_by_user_id', userId)
+    .in('status', ['confirmed', 'tentative'])
+    .select('id, status')
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || '일정을 취소하지 못했습니다.');
+  if (!data?.id || data.status !== 'cancelled') {
+    throw new Error('취소할 일정을 찾지 못했거나 이미 변경된 일정입니다.');
+  }
 }
 
 async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
@@ -41,14 +71,15 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
   if (!UUID_PATTERN.test(scheduleId)) throw new Error('취소할 일정 정보를 확인하지 못했습니다.');
 
   const { error } = await client.rpc('cancel_my_schedule', { p_schedule_id: scheduleId });
-  if (error) throw new Error(error.message || '일정을 취소하지 못했습니다.');
-
-  const pending = await pendingScheduleIds();
-  await savePendingScheduleIds([...pending, scheduleId]);
+  if (error) {
+    if (!isMissingCancelRpc(error)) throw new Error(error.message || '일정을 취소하지 못했습니다.');
+    await cancelScheduleDirectly(client, scheduleId);
+  }
 
   try {
+    await updatePendingScheduleIds((ids) => [...ids, scheduleId]);
     await cleanupDeviceScheduleArtifacts(scheduleId);
-    await savePendingScheduleIds((await pendingScheduleIds()).filter((value) => value !== scheduleId));
+    await updatePendingScheduleIds((ids) => ids.filter((value) => value !== scheduleId));
   } catch {
     throw new Error('일정은 취소됐지만 휴대폰 Calendar 또는 알림 정리가 남았습니다. 앱을 다시 열면 자동으로 다시 시도합니다.');
   }
@@ -86,15 +117,16 @@ export async function reconcileCanceledScheduleArtifacts(client: PlatformSupabas
   );
   const remaining = pending.filter((scheduleId) => !cancelledIds.has(scheduleId));
   let cleaned = 0;
+  const cleanedIds = new Set<string>();
   for (const scheduleId of candidateIds) {
     if (!cancelledIds.has(scheduleId)) continue;
     try {
       await cleanupDeviceScheduleArtifacts(scheduleId);
-      cleaned += 1;
+      cleaned += 1; cleanedIds.add(scheduleId);
     } catch {
       remaining.push(scheduleId);
     }
   }
-  await savePendingScheduleIds(remaining);
-  return { cleaned, remaining: remaining.length };
+  await updatePendingScheduleIds((ids) => [...ids.filter((sid) => !cleanedIds.has(sid)), ...remaining]);
+  return { cleaned, remaining: (await pendingScheduleIds()).length };
 }

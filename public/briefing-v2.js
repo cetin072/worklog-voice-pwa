@@ -235,17 +235,18 @@
     renderedMode=String(data?.mode || "");
 
     root.dataset.followUpCount=String(Number(counts.followUp || 0));
-    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 것 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 할 일 <b>${Number(counts.today || 0)}</b></span><span class="is-upcoming">다가오는 업무 <b>${Number(counts.upcoming || 0)}</b></span><span class="is-undated">기한 없는 업무 <b>${Number(counts.undated || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘 할 일",structure.today,canUpdate)}${sectionHtml("upcoming","🔵 다가오는 업무",structure.upcoming,canUpdate)}${sectionHtml("undated","⚪ 기한 없는 업무",structure.undated,canUpdate)}${scheduleSectionHtml(data?.schedules,data?.scheduleEnabled===true)}${total===0 ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
+    root.innerHTML=`<div class="briefing-v2-summary" aria-label="업무 상황 요약"><span class="is-overdue">지난 것 <b>${Number(counts.overdue || 0)}</b></span><span class="is-today">오늘 할 일 <b>${Number(counts.today || 0)}</b></span><span class="is-upcoming">다가오는 업무 <b>${Number(counts.upcoming || 0)}</b></span><span class="is-undated">기한 없는 업무 <b>${Number(counts.undated || 0)}</b></span></div>${sectionHtml("overdue","🔴 지난 것",structure.overdue,canUpdate)}${sectionHtml("today","🟠 오늘 할 일",structure.today,canUpdate)}${sectionHtml("upcoming","🔵 다가오는 업무",structure.upcoming,canUpdate)}${sectionHtml("undated","⚪ 기한 없는 업무",structure.undated,canUpdate)}${scheduleSectionHtml(data?.schedules,data?.scheduleEnabled===true)}${total===0 && data.completeness!=="unknown" && data.completeness!=="partial" && data.truncated!==true ? `<p class="briefing-v2-clear">현재 미완료 업무가 없습니다.</p>` : ""}`;
 
     root.hidden=false;
     hideLegacy();
     title.textContent=IS_PREVIEW_DEMO ? "오늘 업무 상황 · 화면 미리보기" : "오늘 업무 상황";
     const generated=formatGeneratedAt(data.generatedAt);
-    const countLabel=data.truncated ? `미완료 ${total}건 이상` : `미완료 ${total}건`;
+    const incomplete=data.truncated===true || data.completeness==="partial" || data.completeness==="unknown";
+    const countLabel=incomplete ? `표시 중 ${total}건` : `미완료 ${total}건`;
     meta.textContent=IS_PREVIEW_DEMO ? "예시 업무로 보는 브리핑 2.0 화면" : [generated,countLabel,data?.mode==="data_core" ? "Data Core 기준" : "Notion 최신 기준"].filter(Boolean).join(" · ");
     if(quick) quick.hidden=!canUpdate || renderedMode==="data_core";
-    if(data.truncated){
-      error.textContent="업무가 많아 최근 500건 기준으로 정리했습니다.";
+    if(incomplete){
+      error.textContent=data.completeness==="unknown" ? "전체 조회 여부를 확인하지 못했습니다. 누락된 업무가 있을 수 있습니다." : "일부 업무만 표시 중입니다. 표시 건수가 전체 건수와 다를 수 있습니다.";
       card.classList.add("has-error");
     }else{
       error.textContent="";

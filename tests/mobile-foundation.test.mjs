@@ -37,6 +37,8 @@ test('mobile foundation reuses the existing platform endpoints', async () => {
 test('mobile auth session storage uses Expo SecureStore', async () => {
   const storage = await text('mobile/src/platform/secure-storage.ts');
   assert.match(storage, /expo-secure-store/);
-  assert.match(storage, /CHUNK_SIZE/);
+  assert.match(storage, /createDurableStorage/);
+  const durable = await text('mobile/src/platform/durable-storage.ts');
+  assert.match(durable, /STORAGE_LIMITS/);
   assert.match(storage, /AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY/);
 });

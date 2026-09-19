@@ -210,8 +210,10 @@ revoke all on table public.candidates from anon;
 
 grant select, insert, update, delete on table public.workspaces to authenticated, service_role;
 grant select, insert, update, delete on table public.workspace_members to authenticated, service_role;
-grant select, insert, update, delete on table public.work_records to authenticated, service_role;
-grant select, insert, update, delete on table public.schedules to authenticated, service_role;
+grant select, insert, update on table public.work_records to authenticated;
+grant select, insert, update on table public.schedules to authenticated;
+grant select, insert, update, delete on table public.work_records to service_role;
+grant select, insert, update, delete on table public.schedules to service_role;
 grant select, insert, update, delete on table public.source_refs to authenticated, service_role;
 grant select, insert, update, delete on table public.candidates to authenticated, service_role;
 
@@ -291,11 +293,6 @@ with check (
   and created_by_user_id = (select auth.uid())
 );
 
-create policy work_records_delete_member
-on public.work_records for delete
-to authenticated
-using ((select private.can_access_workspace(workspace_id)));
-
 create policy schedules_select_member
 on public.schedules for select
 to authenticated
@@ -309,16 +306,17 @@ with check (
   and created_by_user_id = (select auth.uid())
 );
 
-create policy schedules_update_member
+create policy schedules_update_creator
 on public.schedules for update
 to authenticated
-using ((select private.can_access_workspace(workspace_id)))
-with check ((select private.can_access_workspace(workspace_id)));
-
-create policy schedules_delete_member
-on public.schedules for delete
-to authenticated
-using ((select private.can_access_workspace(workspace_id)));
+using (
+  (select private.can_access_workspace(workspace_id))
+  and created_by_user_id = (select auth.uid())
+)
+with check (
+  (select private.can_access_workspace(workspace_id))
+  and created_by_user_id = (select auth.uid())
+);
 
 create policy source_refs_select_member
 on public.source_refs for select

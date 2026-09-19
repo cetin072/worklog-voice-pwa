@@ -5,7 +5,7 @@ import test from 'node:test';
 const packageJson = JSON.parse(fs.readFileSync('mobile/package.json', 'utf8'));
 const appJson = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
 const calendarSource = fs.readFileSync('mobile/src/features/schedule/device-calendar.ts', 'utf8');
-const notificationSource = fs.readFileSync('mobile/src/features/schedule/local-notifications.ts', 'utf8');
+const notificationSource = fs.readFileSync('mobile/src/features/schedule/local-notifications.ts', 'utf8') + fs.readFileSync('mobile/src/features/schedule/schedule-reminder-service.ts', 'utf8');
 const scheduleActionsSource = fs.readFileSync('mobile/src/features/schedule/schedule-device-actions.tsx', 'utf8');
 const cancellationSource = fs.readFileSync('mobile/src/features/schedule/schedule-cancellation.ts', 'utf8');
 const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
@@ -25,15 +25,15 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(calendarSource, /ownerAccount/);
   assert.match(calendarSource, /isPrimary/);
   assert.match(calendarSource, /setPreferredCalendarId/);
-  assert.match(calendarSource, /current\.calendarId === calendarId/);
-  assert.match(calendarSource, /current\.calendarId !== calendarId/);
-  assert.match(calendarSource, /deleteCalendarEvent\(current\.eventId\)/);
-  assert.match(calendarSource, /deleteCalendarEvent\(event\.id\)/);
+  assert.match(calendarSource, /current\?\.calendarId === calendarId/);
+  assert.match(calendarSource, /current\.eventId !== event\.id/);
+  assert.match(calendarSource, /deleteCalendarEvent\(cleanup\.eventId, cleanup\.calendarId/);
+  assert.match(calendarSource, /deleteCalendarEvent\(event\.id, intent\.calendarId, intent\.marker\)/);
   assert.match(calendarSource, /pendingCleanup/);
   assert.match(calendarSource, /reconcileCalendarEventCleanup/);
   assert.match(calendarSource, /Retain the mapping so a user-initiated removal or cancellation can retry/);
-  assert.match(calendarSource, /이동을 취소했습니다/);
-  assert.match(scheduleActionsSource, /mapping\?\.calendarId \|\| preferred/);
+  assert.match(calendarSource, /이전 이벤트 정리가 남았습니다/);
+  assert.match(scheduleActionsSource, /mapping\.value\?\.calendarId/);
   assert.match(notificationSource, /requestScheduleNotificationPermission/);
   assert.match(notificationSource, /scheduleNotificationAsync/);
   assert.match(notificationSource, /cancelScheduledNotificationAsync/);
@@ -43,7 +43,20 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(notificationSource, /triggerAt/);
   assert.match(notificationSource, /이미 지났습니다/);
   assert.doesNotMatch(notificationSource, /08:30|09:00|16:30/);
-  assert.match(scheduleActionsSource, /Google Calendar \/ 휴대폰 캘린더/);
+  assert.match(scheduleActionsSource, /connectedCalendarLabel/);
+  assert.match(scheduleActionsSource, /compactOnly/);
+  assert.match(homeSource, /showDeviceStatus/);
+  assert.match(scheduleActionsSource, /synchronizeScheduleToPreferredCalendar/);
+  assert.match(calendarSource, /getCalendarPermissions/);
+  assert.match(calendarSource, /reason: 'not-connected'/);
+  assert.match(scheduleActionsSource, /선택한 캘린더로 이동/);
+  assert.match(scheduleActionsSource, /selectionMatchesMapping/);
+  assert.match(scheduleActionsSource, /✓ Google Calendar/);
+  assert.match(scheduleActionsSource, /이 일정 알림:/);
+  assert.match(scheduleActionsSource, /이 일정 알림 없음/);
+  assert.match(scheduleActionsSource, /설정 ▾/);
+  assert.match(calendarSource, /calendarTitle/);
+  assert.match(calendarSource, /calendarOwnerAccount/);
   assert.match(scheduleActionsSource, /REMINDER_PRESETS/);
   assert.match(scheduleActionsSource, /이 일정 알림 모두 취소/);
   assert.match(scheduleActionsSource, /이 일정 취소/);
@@ -51,7 +64,7 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(cancellationSource, /reconcileCanceledScheduleArtifacts/);
 });
 
-test('Notifications reconcile after app restart, open the linked schedule, and consume the cold-start response', () => {
+test('Notifications reconcile after app restart and route the linked schedule into the home schedule section', () => {
   assert.match(notificationSource, /reconcileScheduleReminders/);
   assert.match(notificationSource, /getAllScheduledNotificationsAsync/);
   assert.match(notificationSource, /target: 'schedule'/);
@@ -70,6 +83,44 @@ test('Notifications reconcile after app restart, open the linked schedule, and c
   assert.ok(reminderCleanup > calendarCleanup, 'reminder reconcile runs after all calendar cleanup');
   assert.match(homeSource, /\+ 새 일정/);
   assert.match(homeSource, /setScreen\('input'\)/);
-  assert.match(homeSource, /알림.*일정/);
-  assert.match(homeSource, /setScreen\('calendar'\)/);
+  assert.match(homeSource, /setNotificationScheduleId\(payload\.scheduleId\)/);
+  assert.match(homeSource, /setScreen\('home'\)/);
+  assert.doesNotMatch(homeSource, /setScreen\('calendar'\)/);
+});
+
+
+test('Home keeps global Calendar connection truth visible even when there are no schedule rows', () => {
+  const summarySource = fs.readFileSync('mobile/src/features/schedule/calendar-connection-summary.tsx', 'utf8');
+  assert.match(calendarSource, /readCalendarConnectionStatus/);
+  assert.match(calendarSource, /permission-required/);
+  assert.match(calendarSource, /not-selected/);
+  assert.match(calendarSource, /Google Calendar 연결됨/);
+  assert.match(summarySource, /캘린더 연결 상태 및 설정 열기/);
+  assert.match(summarySource, /관리 ›/);
+  assert.match(homeSource, /CalendarConnectionSummary/);
+  assert.match(homeSource, /<CalendarConnectionSummary compact[^>]*onPressManage/);
+  assert.match(homeSource, /screen === 'scheduleSettings'/);
+});
+
+
+test('Settings has a standalone Calendar manager even when no schedule exists', () => {
+  const managerSource = fs.readFileSync('mobile/src/features/schedule/calendar-connection-manager.tsx', 'utf8');
+  assert.match(managerSource, /CalendarConnectionManager/);
+  assert.match(managerSource, /listWritableCalendarOptions/);
+  assert.match(managerSource, /setPreferredCalendarId/);
+  assert.match(managerSource, /연결·선택/);
+  assert.match(managerSource, /일정 저장 캘린더/);
+  assert.match(managerSource, /Google Calendar 기본 저장 대상으로 선택했습니다/);
+  assert.match(homeSource, /CalendarConnectionManager onChanged/);
+  assert.match(homeSource, /calendarConnectionVersion/);
+  assert.match(homeSource, /refreshKey=\{calendarConnectionVersion\}/);
+});
+
+
+test('new schedules auto-sync into the selected preferred Calendar', () => {
+  assert.match(calendarSource, /synchronizeScheduleToPreferredCalendar/);
+  assert.match(calendarSource, /mapping\?\.calendarId \|\| preferredId/);
+  assert.match(calendarSource, /calendarOperation/);
+  assert.match(calendarSource, /syncCalendarUnlocked\(calendarId, schedule\)/);
+  assert.match(scheduleActionsSource, /synchronizeScheduleToPreferredCalendar\(deviceSchedule\)/);
 });

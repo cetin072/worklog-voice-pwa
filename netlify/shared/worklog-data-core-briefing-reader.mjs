@@ -1,3 +1,4 @@
+import { briefingCompleteness, BRIEFING_TASK_LIMIT } from "./briefing-completeness.mjs";
 import { requireWorkspaceContext } from "./platform/workspace-context.mjs";
 
 const STATUS_MAP = Object.freeze({ in_progress: "진행중", waiting: "대기", needs_review: "확인필요" });
@@ -37,8 +38,7 @@ function toBriefingTask(row = {}) {
 
 export function createWorklogDataCoreBriefingReader({ client } = {}) {
   if (!client || typeof client.select !== "function") throw readerError("WORKLOG_DATA_CORE_BRIEFING_CLIENT_REQUIRED", "Data Core select client가 필요합니다.");
-  return Object.freeze({
-    async listOpenTasks(contextInput) {
+  async function listOpenTasksWithMeta(contextInput) {
       const context = requireWorkspaceContext(contextInput);
       const rows = await client.select("work_records", {
         select: "id,title,institution,status,follow_up,due_at,updated_at,recorded_at,metadata",
@@ -47,7 +47,13 @@ export function createWorklogDataCoreBriefingReader({ client } = {}) {
         order: "updated_at.desc",
         limit: "500",
       });
-      return Object.freeze(rows.map(toBriefingTask).filter((task) => task.title));
-    },
+      if (!Array.isArray(rows)) throw readerError("WORKLOG_DATA_CORE_BRIEFING_SOURCE_INVALID", "브리핑 조회 결과가 올바르지 않습니다.");
+      const tasks = Object.freeze(rows.slice(0, BRIEFING_TASK_LIMIT).map(toBriefingTask).filter((task) => task.title));
+      const page = await briefingCompleteness({ client, workspaceId: context.workspaceId, sourceCount: rows.length, displayedCount: tasks.length });
+      return Object.freeze({ tasks, ...page });
+  }
+  return Object.freeze({
+    listOpenTasksWithMeta,
+    async listOpenTasks(contextInput) { return (await listOpenTasksWithMeta(contextInput)).tasks; },
   });
 }

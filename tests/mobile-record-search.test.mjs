@@ -29,7 +29,7 @@ test('Mobile full-record search exposes historical results, status filters, and 
   assert.match(mobileSearchUi, /이 조건의 결과가 다음 페이지에 있을 수 있습니다/);
   assert.match(mobileHome, /과거 기록 전체 검색/);
   assert.match(mobileHome, /setScreen\('recordSearch'\)/);
-  assert.match(mobileHome, /<WorkRecordSearch client=\{client\}/);
+  assert.match(mobileHome, /<WorkRecordSearch client=\{client\} accessToken=\{session\.access_token\}/);
 });
 
 test('Mobile full-record search keeps server pagination and search query limits intact', () => {
@@ -39,4 +39,28 @@ test('Mobile full-record search keeps server pagination and search query limits 
   assert.match(mobileSearchSource, /hasMore: rows\.length === RECORD_SEARCH_PAGE_SIZE/);
   assert.match(searchMigration, /greatest\(1, least\(coalesce\(p_limit, 20\), 50\)\)/);
   assert.match(searchMigration, /greatest\(0, least\(coalesce\(p_offset, 0\), 5000\)\)/);
+});
+
+
+test('Mobile search result can be expanded and edited through the existing worklog edit boundary', () => {
+  assert.match(mobileSearchUi, /selectedId/);
+  assert.match(mobileSearchUi, /openEditor/);
+  assert.match(mobileSearchUi, /readWorklogDetails/);
+  assert.match(mobileSearchUi, /updateWorklogDetails/);
+  assert.match(mobileSearchUi, /이 업무 수정/);
+  assert.match(mobileSearchUi, /검색 결과 업무명 수정/);
+  assert.match(mobileSearchUi, /saveEditor/);
+  assert.match(mobileSearchUi, /업무를 수정했습니다/);
+  assert.match(mobileHome, /accessToken=\{session\.access_token\}/);
+});
+
+test('Mobile task editing selects due dates and times with the native picker instead of typing formats', () => {
+  assert.match(mobileHome, /@react-native-community\/datetimepicker/);
+  assert.match(mobileHome, /accessibilityLabel="수정할 날짜 선택"/);
+  assert.match(mobileHome, /accessibilityLabel="수정할 시간 선택"/);
+  assert.match(mobileHome, /<DateTimePicker value=\{selectedValue\} mode=\{pickerMode\}/);
+  assert.match(mobileHome, /mode=\{pickerMode\}/);
+  assert.match(mobileHome, /기한 없음으로 변경/);
+  assert.doesNotMatch(mobileHome, /placeholder="YYYY-MM-DD"/);
+  assert.doesNotMatch(mobileHome, /placeholder="HH:MM"/);
 });
