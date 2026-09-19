@@ -4,6 +4,7 @@ import { createDataCoreRepositories } from "./data-core/repositories.mjs";
 const TYPE_MAP = Object.freeze({ "완료업무": "completed_work", "할 일": "task", "회의·통화": "meeting_call", "지출·세무": "expense_tax", "지시·위임": "delegation", "아이디어": "idea", "문제·확인": "issue_review", "기타": "other" });
 const STATUS_MAP = Object.freeze({ "완료": "completed", "진행중": "in_progress", "대기": "waiting", "확인필요": "needs_review" });
 const TRUSTED_FIELD_SOURCES = new Set(["user_selected", "user_confirmed"]);
+const SOURCE_TYPES = new Set(["direct", "voice", "call", "meeting", "mail", "capture", "scan", "notion", "import", "other"]);
 
 function adapterError(code, message, details = {}) { const error = new Error(message); error.code = code; Object.assign(error, details); return error; }
 function validRecordedAt(value) { const date = new Date(value || ""); return Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString(); }
@@ -22,6 +23,12 @@ function amount(value) {
 function fieldSource(value) {
   const source = String(value || "").trim().toLowerCase();
   return TRUSTED_FIELD_SOURCES.has(source) ? source : "unverified";
+}
+
+function sourceType(value) {
+  const source = String(value || "direct").trim().toLowerCase();
+  if (!SOURCE_TYPES.has(source)) throw adapterError("WORKLOG_DATA_CORE_SOURCE_TYPE_INVALID", "입력 원본 유형이 올바르지 않습니다.");
+  return source;
 }
 function journalDate(value) {
   const text = String(value || "").trim();
@@ -82,6 +89,67 @@ function normalizedRecord(record = {}) {
 export function createWorklogDataCoreAdapter({ client } = {}) {
   const repositories = createDataCoreRepositories(client);
   return Object.freeze({
+    async persistManyFast({ parentRequestId, originalText, source = "direct", recordedAt, records = [] } = {}) {
+      if (typeof client?.rpc !== "function") throw adapterError("WORKLOG_DATA_CORE_FAST_RPC_REQUIRED", "Data Core fast save에는 RPC client가 필요합니다.");
+      const parentId = String(parentRequestId || "").trim();
+      if (!/^[A-Za-z0-9-]{16,100}$/.test(parentId)) throw adapterError("WORKLOG_DATA_CORE_MULTI_PARENT_REQUEST_ID_INVALID", "다중 업무 저장에는 유효한 parent request ID가 필요합니다.");
+      const raw = String(originalText || "");
+      if (!raw || raw.length > 10000) throw adapterError("WORKLOG_DATA_CORE_MULTI_ORIGINAL_INVALID", "다중 업무 원문이 비어 있거나 너무 깁니다.");
+      if (!Array.isArray(records) || records.length < 2 || records.length > 8) throw adapterError("WORKLOG_DATA_CORE_MULTI_RECORDS_INVALID", "다중 업무는 2~8개까지 저장할 수 있습니다.");
+
+      const normalizedRecords = records.map((record) => {
+        const normalized = normalizedRecord(record);
+        const schedule = quickWorklogSchedule(record, normalized);
+        return { normalized, schedule };
+      });
+
+      const result = await client.rpc("save_my_multi_action_worklog", {
+        p_parent_request_id: parentId,
+        p_original_text: raw,
+        p_source_type: sourceType(source),
+        p_recorded_at: validRecordedAt(recordedAt),
+        p_capture_metadata: { source: "worklog_multi_action", segmentCount: records.length },
+        p_items: normalizedRecords.map(({ normalized, schedule }) => ({
+          title: normalized.title,
+          content: normalized.content,
+          originalText: normalized.originalText,
+          recordType: normalized.recordType,
+          status: normalized.status,
+          institution: normalized.institution,
+          amount: normalized.amount,
+          followUp: normalized.followUp,
+          recordedAt: normalized.recordedAt,
+          dueAt: normalized.dueAt,
+          metadata: normalized.metadata,
+          sourceExcerpt: normalized.sourceExcerpt,
+          scheduleTitle: schedule?.title || null,
+          scheduleStartsAt: schedule?.startsAt || null,
+        })),
+      });
+
+      const row = Array.isArray(result) ? result[0] : result;
+      const captureId = String(row?.capture_id || "").trim();
+      const savedCount = Number(row?.saved_count || 0);
+      const workRecordIds = Array.isArray(row?.work_record_ids) ? row.work_record_ids.map(String).filter(Boolean) : [];
+      const sourceRefIds = Array.isArray(row?.source_ref_ids) ? row.source_ref_ids.map(String).filter(Boolean) : [];
+      const scheduleIds = Array.isArray(row?.schedule_ids) ? row.schedule_ids.map(String).filter(Boolean) : [];
+      if (!captureId || savedCount !== records.length || workRecordIds.length !== records.length || sourceRefIds.length !== records.length) {
+        throw adapterError("WORKLOG_DATA_CORE_MULTI_RESPONSE_INVALID", "다중 업무 저장 결과가 올바르지 않습니다.");
+      }
+
+      return Object.freeze({
+        captureId,
+        savedCount,
+        workRecordIds: Object.freeze(workRecordIds),
+        sourceRefIds: Object.freeze(sourceRefIds),
+        scheduleIds: Object.freeze(scheduleIds),
+        workRecordId: workRecordIds[0] || "",
+        sourceRefId: sourceRefIds[0] || "",
+        scheduleId: scheduleIds[0] || "",
+        fastPath: true,
+        multiAction: true,
+      });
+    },
     async persistFast(record = {}) {
       if (typeof client?.rpc !== "function") throw adapterError("WORKLOG_DATA_CORE_FAST_RPC_REQUIRED", "Data Core fast save에는 RPC client가 필요합니다.");
       const normalized = normalizedRecord(record);
