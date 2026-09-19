@@ -47,7 +47,8 @@ begin
       else ((wr.due_at at time zone 'Asia/Seoul')::time <> time '00:00')
     end,
     wr.action_kind,
-    not exists (
+    wr.action_kind in ('task', 'note')
+    and not exists (
       select 1
       from public.schedules s
       where s.workspace_id = v_workspace_id
@@ -147,6 +148,12 @@ begin
 
   if v_action_kind is not null
      and v_action_kind is distinct from v_previous_action_kind
+     and v_previous_action_kind not in ('task', 'note') then
+    raise exception 'WORK_RECORD_ACTION_CONVERSION_UNCLASSIFIED';
+  end if;
+
+  if v_action_kind is not null
+     and v_action_kind is distinct from v_previous_action_kind
      and v_has_linked_schedule then
     raise exception 'WORK_RECORD_ACTION_CONVERSION_SCHEDULE_LINKED';
   end if;
@@ -162,7 +169,7 @@ begin
       metadata = coalesce(wr.metadata, '{}'::jsonb)
         || jsonb_build_object('dueTimeExplicit', v_due_has_time)
         || case
-          when v_action_kind in ('task', 'note') then jsonb_build_object(
+          when v_action_kind in ('task', 'note') and v_action_kind is distinct from wr.action_kind then jsonb_build_object(
             'actionOverride',
             jsonb_build_object(
               'kind', v_action_kind,
