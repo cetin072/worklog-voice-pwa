@@ -174,3 +174,17 @@ test("Search edit sheet uses the same action kind conversion contract",()=>{
   assert.match(search,/메모 · 참고로 변경했습니다/);
   assert.match(search,/할 일로 변경했습니다/);
 });
+
+test("mobile only requests kind conversion after the user changes the loaded kind",()=>{
+  assert.match(home,/editOriginalActionKind/);
+  assert.match(home,/editActionKind !== editOriginalActionKind/);
+  assert.match(search,/editOriginalActionKind/);
+  assert.match(search,/editActionKind !== editOriginalActionKind/);
+});
+
+test("conversion SQL is limited to classified task-note records and records overrides only for real changes",()=>{
+  assert.match(migration,/wr\.action_kind in \('task', 'note'\)[\s\S]*and not exists/i);
+  assert.match(migration,/WORK_RECORD_ACTION_CONVERSION_UNCLASSIFIED/i);
+  assert.match(migration,/when v_action_kind in \('task', 'note'\) and v_action_kind is distinct from wr\.action_kind then jsonb_build_object/i);
+});
+
