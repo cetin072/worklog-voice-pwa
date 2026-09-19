@@ -23,6 +23,17 @@ function dueDateKey(value) {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+function toBriefingNote(row = {}) {
+  return Object.freeze({
+    pageId: text(row.id, 200),
+    title: text(row.title, 200),
+    institution: text(row.institution, 60),
+    journalDate: text(row.journal_date, 10),
+    recordedAt: text(row.recorded_at, 64),
+    editedAt: text(row.updated_at || row.recorded_at, 64),
+  });
+}
+
 function toBriefingTask(row = {}) {
   return Object.freeze({
     pageId: text(row.id, 200),
@@ -41,9 +52,10 @@ export function createWorklogDataCoreBriefingReader({ client } = {}) {
   async function listOpenTasksWithMeta(contextInput) {
       const context = requireWorkspaceContext(contextInput);
       const rows = await client.select("work_records", {
-        select: "id,title,institution,status,follow_up,due_at,updated_at,recorded_at,metadata",
+        select: "id,title,institution,status,follow_up,due_at,updated_at,recorded_at,metadata,action_kind",
         workspace_id: `eq.${context.workspaceId}`,
         status: "in.(in_progress,waiting,needs_review)",
+        or: "(action_kind.is.null,action_kind.eq.task)",
         order: "updated_at.desc",
         limit: "500",
       });
@@ -52,8 +64,24 @@ export function createWorklogDataCoreBriefingReader({ client } = {}) {
       const page = await briefingCompleteness({ client, workspaceId: context.workspaceId, sourceCount: rows.length, displayedCount: tasks.length });
       return Object.freeze({ tasks, ...page });
   }
+  async function listActiveNotes(contextInput) {
+    const context = requireWorkspaceContext(contextInput);
+    const rows = await client.select("work_records", {
+      select: "id,title,institution,journal_date,recorded_at,updated_at",
+      workspace_id: `eq.${context.workspaceId}`,
+      action_kind: "eq.note",
+      briefing_state: "eq.active",
+      status: "in.(in_progress,waiting,needs_review)",
+      order: "updated_at.desc",
+      limit: "100",
+    });
+    if (!Array.isArray(rows)) throw readerError("WORKLOG_DATA_CORE_BRIEFING_NOTES_INVALID", "메모·참고 조회 결과가 올바르지 않습니다.");
+    return Object.freeze(rows.map(toBriefingNote).filter((note) => note.title));
+  }
+
   return Object.freeze({
     listOpenTasksWithMeta,
+    listActiveNotes,
     async listOpenTasks(contextInput) { return (await listOpenTasksWithMeta(contextInput)).tasks; },
   });
 }
