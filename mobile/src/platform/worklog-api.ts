@@ -25,6 +25,11 @@ export type BriefingSchedule = {
 export type MobileBriefing = {
   today?: string;
   generatedAt?: string;
+  mode?: string;
+  truncated?: boolean | null;
+  completeness?: 'complete' | 'partial' | 'unknown';
+  queryLimit?: number;
+  filteredTaskCount?: number;
   counts?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated' | 'total', number>>;
   structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>>;
   schedules?: { today?: BriefingSchedule[]; upcoming?: BriefingSchedule[]; total?: number };
@@ -155,6 +160,17 @@ function normalizedRecordedAt(value?: string) {
   return date.toISOString();
 }
 
+export function parseMobileBriefing(body: Record<string, unknown>): MobileBriefing {
+  const structure = asRecord(body.structure); const counts = asRecord(body.counts);
+  const buckets = ['overdue', 'today', 'upcoming', 'undated'] as const;
+  if (typeof body.today !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.today)
+    || !structure || !counts || !buckets.every((key) => Array.isArray(structure[key])
+      && typeof counts[key] === 'number' && Number.isFinite(counts[key]) && Number(counts[key]) >= 0)) {
+    throw new Error('브리핑 응답을 확인하지 못했습니다. 기존 브리핑을 유지합니다. 다시 시도해주세요.');
+  }
+  return body as MobileBriefing;
+}
+
 export async function loadBriefing(accessToken: string) {
   const response = await fetch(`${getApiBaseUrl()}/api/briefing-fast`, {
     method: 'GET',
@@ -163,7 +179,7 @@ export async function loadBriefing(accessToken: string) {
       authorization: `Bearer ${accessToken}`,
     },
   });
-  return readJson(response) as Promise<MobileBriefing>;
+  return parseMobileBriefing(await readJson(response));
 }
 
 export async function saveWorklog(

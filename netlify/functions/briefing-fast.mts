@@ -56,19 +56,19 @@ function rpcUnavailable(error:any){
 async function loadLegacyDataCore({supabaseUrl,publishableKey,accessToken,client}:{supabaseUrl:string,publishableKey:string,accessToken:string,client:any}){
   const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
   const workspaceContext=await resolver.resolve(accessToken);
-  const tasks=await createWorklogDataCoreBriefingReader({client}).listOpenTasks(workspaceContext);
+  const taskPage=await createWorklogDataCoreBriefingReader({client}).listOpenTasksWithMeta(workspaceContext);
   const today=seoulDate();
   const schedules=dataCoreScheduleBriefingEnabled()
     ? await createWorklogDataCoreScheduleReader({client}).listForBriefing(workspaceContext,today)
     : {today:[],upcoming:[],total:0};
-  return {today,tasks,schedules,fastPath:false};
+  return {today,...taskPage,schedules,fastPath:false};
 }
 
 async function loadFastDataCore({supabaseUrl,publishableKey,accessToken,client}:{supabaseUrl:string,publishableKey:string,accessToken:string,client:any}){
   const reader=createWorklogDataCoreBriefingSource({client});
   try{
     const source=await reader.load();
-    return {today:source.today,tasks:source.tasks,schedules:source.schedules,fastPath:true};
+    return {...source,fastPath:true};
   }catch(error:any){
     if(rpcUnavailable(error)){
       return loadLegacyDataCore({supabaseUrl,publishableKey,accessToken,client});
@@ -77,7 +77,7 @@ async function loadFastDataCore({supabaseUrl,publishableKey,accessToken,client}:
       const resolver=createSupabaseWorkspaceContextResolver({supabaseUrl,publishableKey});
       await resolver.resolve(accessToken);
       const source=await reader.load();
-      return {today:source.today,tasks:source.tasks,schedules:source.schedules,fastPath:true};
+      return {...source,fastPath:true};
     }
     throw error;
   }
@@ -107,7 +107,10 @@ export default async (req:Request,_context:Context)=>{
       generatedAt:seoulIsoNow(),
       today:source.today,
       mode:"data_core",
-      truncated:false,
+      truncated:source.truncated,
+      completeness:source.completeness,
+      queryLimit:source.queryLimit,
+      filteredTaskCount:source.filteredTaskCount,
       canUpdate:dataCoreBriefingMutationEnabled(),
       scheduleEnabled:dataCoreScheduleBriefingEnabled(),
       schedules,

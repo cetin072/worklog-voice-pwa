@@ -10,14 +10,14 @@ export async function resolve(specifier, context, nextResolve) {
   if (mobileParent && (specifier.startsWith('@/') || specifier.startsWith('.'))) {
     const url = specifier.startsWith('@/') ? new URL(specifier.slice(2), root) : new URL(specifier, context.parentURL);
     for (const suffix of ['', '.ts', '/index.ts']) {
-      try { await access(new URL(`${url.href}${suffix}`)); return { url: `${url.href}${suffix}`, shortCircuit: true }; } catch { /* try extension */ }
+      try { await access(new URL(`${url.href}${suffix}`)); const resolved = new URL(`${url.href}${suffix}`); resolved.search = new URL(context.parentURL).search; return { url: resolved.href, shortCircuit: true }; } catch { /* try extension */ }
     }
   }
   return nextResolve(specifier, context);
 }
 // Strip types from CURRENT production sources. Only native/network/storage boundaries may be mocked.
 export async function load(url, context, nextLoad) {
-  if (url.startsWith('file:') && url.endsWith('.ts') && url.includes('/mobile/src/')) {
+  if (url.startsWith('file:') && ((new URL(url).pathname.endsWith('.ts') && url.includes('/mobile/src/')) || (new URL(url).pathname.endsWith('.mts') && url.includes('/netlify/functions/')))) {
     return { format: 'module', source: stripTypeScriptTypes(await readFile(new URL(url), 'utf8'), { mode: 'transform' }), shortCircuit: true };
   }
   return nextLoad(url, context);

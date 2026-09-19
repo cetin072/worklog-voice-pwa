@@ -1,6 +1,7 @@
+import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -156,6 +157,13 @@ export default function HomeScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('signIn');
   const [draft, setDraft] = useState('');
+  const [briefingNow, setBriefingNow] = useState(Date.now());
+  useEffect(() => {
+    const updateClock = () => setBriefingNow(Date.now());
+    const timer = setInterval(updateClock, 60_000);
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') updateClock(); });
+    return () => { clearInterval(timer); subscription.remove(); };
+  }, []);
   const [screen, applyScreen] = useState<AppScreen>('home');
   const quickVoiceNavigation = useRef(false);
   function warnPendingVoice() {
@@ -421,6 +429,7 @@ export default function HomeScreen() {
     <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>업무를 놓치지 않는{`\n`}개인 업무수첩</Text><Text style={styles.body}>복잡한 설정 없이 계정만 만들면 바로 시작할 수 있습니다.</Text><View style={styles.welcomeBenefits}><Text style={styles.welcomeBenefit}>🎙 말하거나 직접 입력</Text><Text style={styles.welcomeBenefit}>📅 오늘·다가오는 일정 확인</Text><Text style={styles.welcomeBenefit}>✓ 저장 후 브리핑에서 바로 확인</Text></View></View>
     <View style={styles.card}><Text style={styles.sectionTitle}>{authMode === 'signIn' ? '내 업무공간' : '무료로 시작하기'}</Text><Text style={styles.body}>Google 계정으로 가장 빠르게 시작할 수 있습니다.</Text><AuthAction title="Google로 시작" variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} /><View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View><TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} /><View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View><View style={styles.authActions}><AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '무료로 시작'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} /><AuthAction title={authMode === 'signIn' ? '무료로 시작' : '로그인'} variant="secondary" disabled={busy} onPress={() => { setAuthMode((value) => value === 'signIn' ? 'signUp' : 'signIn'); clearMessage(); clearAuthError(); }} /></View><Text style={styles.authHint}>{authMode === 'signIn' ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.' : '가입하면 개인 업무공간이 자동으로 만들어집니다. 이메일 확인이 필요할 수 있습니다.'}</Text>{message || authError ? <Text style={authError || messageTone === 'error' ? styles.errorText : messageTone === 'success' ? styles.successText : styles.infoText}>{authError || message}</Text> : null}</View></ScrollView></KeyboardAvoidingView></View>;
 
+  const briefingInfo = briefing ? briefingMetadata(briefing, briefingNow) : null;
   const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
@@ -435,7 +444,8 @@ export default function HomeScreen() {
       </View> : null}
 
       <View style={styles.card}>
-        <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>오늘의 브리핑</Text><Text style={styles.sectionTitle}>지금 확인할 것</Text></View><Pressable accessibilityRole="button" onPress={() => void refreshBriefing()}><Text style={styles.linkText}>{briefingBusy ? '정리 중…' : '새로고침'}</Text></Pressable></View>
+        <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>{briefingInfo?.heading || '오늘의 브리핑'}</Text><Text style={styles.sectionTitle}>지금 확인할 것</Text></View><Pressable accessibilityRole="button" onPress={() => void refreshBriefing()}><Text style={styles.linkText}>{briefingBusy ? '정리 중…' : '새로고침'}</Text></Pressable></View>
+        {briefingInfo ? <View accessibilityLiveRegion="polite"><Text style={styles.helpText}>{briefingInfo.meta}</Text>{briefingInfo.warnings.map((warning) => <Text key={warning} style={styles.errorText}>{warning}</Text>)}</View> : null}
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
         {briefing ? <View style={styles.countGrid}>{briefingBuckets.map((bucket) => <View key={bucket.key} style={[styles.countTile, countToneStyles[bucket.tone]]}><Text style={styles.countLabel}>{bucket.label}</Text><Text style={styles.countValue}>{Number(counts[bucket.key] || 0)}</Text></View>)}</View> : null}
