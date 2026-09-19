@@ -59,13 +59,13 @@ test('Quick Voice rejects Whisper special-token-only text before canonical save'
   assert.match(whisperProvider, /normalizeWhisperText/);
 });
 
-test('Quick Voice requires explicit transcript confirmation before the persistence path', () => {
+test('Quick Voice automatically persists a valid STT transcript without a review gate', () => {
   assert.match(flow, /transcribeQuickVoiceCapture/);
-  assert.match(recorder, /setQuickPhase\('review'\)/);
-  assert.match(recorder, /title="저장"/);
-  assert.match(recorder, /title="다시 녹음"/);
-  assert.match(recorder, /title="버리기"/);
   assert.match(recorder, /createQuickVoiceSaveAttempt\(\{/);
+  assert.match(recorder, /const saved = await saveAttempt\.current\.save\(\)/);
+  assert.match(recorder, /브리핑 카드의 ✏️/);
+  assert.doesNotMatch(recorder, /setQuickPhase\('review'\)/);
+  assert.doesNotMatch(recorder, /전사문을 확인한 뒤 저장하세요/);
   assert.doesNotMatch(recorder, /runQuickVoiceFastPath/);
 });
 
