@@ -96,13 +96,14 @@ test("Data Core Briefing reader는 현재 Workspace의 열린 WorkRecord만 V2 t
   const reader = createWorklogDataCoreBriefingReader({
     client: { select: async (table, query) => {
       calls.push({ table, query });
-      return [{ id: "record-1", title: "계약서 확인", institution: "태장", status: "needs_review", follow_up: "오후 회신", due_at: "2026-09-15T00:00:00+09:00", updated_at: "2026-09-14T01:00:00Z", metadata: {} }];
+      return [{ id: "record-1", title: "계약서 확인", institution: "태장", status: "needs_review", follow_up: "오후 회신", due_at: "2026-09-15T00:00:00+09:00", next_attention_at: "2026-09-14T09:00:00+09:00", action_kind: "task", updated_at: "2026-09-14T01:00:00Z", metadata: {} }];
     } },
   });
-  assert.deepEqual(await reader.listOpenTasks(workspaceContext), [{ pageId: "record-1", title: "계약서 확인", institution: "태장", status: "확인필요", project: "", dueKey: "2026-09-15", followUp: "오후 회신", editedAt: "2026-09-14T01:00:00Z" }]);
+  assert.deepEqual(await reader.listOpenTasks(workspaceContext), [{ pageId: "record-1", title: "계약서 확인", institution: "태장", status: "확인필요", project: "", dueKey: "2026-09-15", nextAttentionAt: "2026-09-14T09:00:00+09:00", actionKind: "task", followUp: "오후 회신", editedAt: "2026-09-14T01:00:00Z" }]);
   assert.equal(calls[0].table, "work_records");
   assert.equal(calls[0].query.workspace_id, "eq.workspace-1");
   assert.equal(calls[0].query.status, "in.(in_progress,waiting,needs_review)");
+  assert.match(calls[0].query.select, /next_attention_at/);
 });
 
 test("Data Core Briefing 상태 변경은 Workspace와 creator 조건으로 본인 WorkRecord 한 건만 갱신한다", async () => {

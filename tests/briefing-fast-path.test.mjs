@@ -23,6 +23,8 @@ test("briefing source reader uses exactly one RPC and preserves task/schedule co
           status: "waiting",
           follow_up: "회신 확인",
           due_at: "2026-09-17T00:00:00+09:00",
+          next_attention_at: "2026-09-16T08:00:00+09:00",
+          action_kind: "task",
           updated_at: "2026-09-16T08:00:00+09:00",
           metadata: { project: "운영" },
         }],
@@ -44,6 +46,8 @@ test("briefing source reader uses exactly one RPC and preserves task/schedule co
   assert.equal(source.tasks.length, 1);
   assert.equal(source.tasks[0].status, "대기");
   assert.equal(source.tasks[0].project, "운영");
+  assert.equal(source.tasks[0].nextAttentionAt, "2026-09-16T08:00:00+09:00");
+  assert.equal(source.tasks[0].actionKind, "task");
   assert.equal(source.schedules.total, 1);
   assert.equal(source.schedules.today[0].status, "확정");
   assert.equal(source.schedules.today[0].startsAt, "2026-09-16T10:00:00+09:00");
@@ -75,6 +79,7 @@ test("briefing open-work query has a partial workspace/update index", () => {
 test("fast endpoint prefers one-RPC source and keeps rollout fallback", () => {
   assert.match(fastFunction, /createWorklogDataCoreBriefingSource/);
   assert.match(fastFunction, /source\.fastPath/);
+  assert.match(fastFunction, /selectResurfaceTasks\(source\.tasks/);
   assert.match(fastFunction, /rpcUnavailable\(error\)/);
   assert.match(fastFunction, /loadLegacyDataCore/);
   assert.match(fastFunction, /path:"\/api\/briefing-fast"/);

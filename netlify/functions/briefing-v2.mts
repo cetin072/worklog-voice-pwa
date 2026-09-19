@@ -1,5 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { briefingV2Counts, classifyBriefingTasks } from "../shared/briefing-v2.mjs";
+import { selectResurfaceTasks } from "../shared/resurface-engine.mjs";
 import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
 import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
 import { createWorklogDataCoreBriefingReader } from "../shared/worklog-data-core-briefing-reader.mjs";
@@ -236,7 +237,8 @@ export default async (req:Request,_context:Context)=>{
       const schedules=dataCoreScheduleBriefingEnabled()
         ? await createWorklogDataCoreScheduleReader({client}).listForBriefing(workspaceContext,today)
         : {today:[],upcoming:[],total:0};
-      return json(200,{ok:true,ready:true,generatedAt:seoulIsoNow(),today,mode:"data_core",truncated:taskPage.truncated,completeness:taskPage.completeness,queryLimit:taskPage.queryLimit,filteredTaskCount:taskPage.filteredTaskCount,canUpdate:dataCoreBriefingMutationEnabled(),scheduleEnabled:dataCoreScheduleBriefingEnabled(),schedules,notes,counts:briefingV2Counts(structure),structure});
+      const generatedAt=seoulIsoNow();
+      return json(200,{ok:true,ready:true,generatedAt,today,mode:"data_core",truncated:taskPage.truncated,completeness:taskPage.completeness,queryLimit:taskPage.queryLimit,filteredTaskCount:taskPage.filteredTaskCount,canUpdate:dataCoreBriefingMutationEnabled(),scheduleEnabled:dataCoreScheduleBriefingEnabled(),schedules,notes,resurface:selectResurfaceTasks(tasks,{now:generatedAt,today}),counts:briefingV2Counts(structure),structure});
     }catch(error:any){
       if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 브리핑을 열어주세요."});
       console.error("Data Core briefing v2 error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,160));

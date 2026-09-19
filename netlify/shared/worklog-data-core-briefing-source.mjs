@@ -35,6 +35,8 @@ function toBriefingTask(row = {}) {
     status: TASK_STATUS_MAP[text(row.status, 80)] || "",
     project: text(row?.metadata?.project, 80),
     dueKey: seoulDateKey(row.due_at),
+    nextAttentionAt: text(row.next_attention_at, 64),
+    actionKind: text(row.action_kind, 20),
     followUp: text(row.follow_up, 240),
     editedAt: text(row.updated_at || row.recorded_at, 64),
   });

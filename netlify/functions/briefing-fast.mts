@@ -1,5 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { briefingV2Counts, classifyBriefingTasks } from "../shared/briefing-v2.mjs";
+import { selectResurfaceTasks } from "../shared/resurface-engine.mjs";
 import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
 import { createSupabaseWorkspaceContextResolver } from "../shared/platform/supabase-workspace-context.mjs";
 import { createWorklogDataCoreBriefingReader } from "../shared/worklog-data-core-briefing-reader.mjs";
@@ -105,10 +106,11 @@ export default async (req:Request,_context:Context)=>{
     const schedules=dataCoreScheduleBriefingEnabled()
       ? source.schedules
       : {today:[],upcoming:[],total:0};
+    const generatedAt=seoulIsoNow();
     return json(200,{
       ok:true,
       ready:true,
-      generatedAt:seoulIsoNow(),
+      generatedAt,
       today:source.today,
       mode:"data_core",
       truncated:source.truncated,
@@ -119,6 +121,7 @@ export default async (req:Request,_context:Context)=>{
       scheduleEnabled:dataCoreScheduleBriefingEnabled(),
       schedules,
       notes:Array.isArray(source.notes) ? source.notes : [],
+      resurface:selectResurfaceTasks(source.tasks,{now:generatedAt,today:source.today}),
       counts:briefingV2Counts(structure),
       structure,
       fastPath:source.fastPath
