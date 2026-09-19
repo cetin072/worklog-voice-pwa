@@ -139,6 +139,14 @@ function requestId() {
 export type SaveWorklogOptions = Readonly<{
   clientRequestId?: string;
   recordedAt?: string;
+  institution?: string;
+  institutionSource?: 'user_selected' | 'user_confirmed';
+  status?: string;
+  type?: string;
+  amount?: number | null;
+  assignee?: string;
+  dueDate?: string;
+  followUp?: string;
 }>;
 
 export type SavedWorklog = Readonly<{
@@ -206,6 +214,14 @@ export async function saveWorklog(
       transcript: normalizedTranscript,
       clientRequestId,
       recordedAt: normalizedRecordedAt(options.recordedAt),
+      ...(options.institution ? { institution: options.institution.trim() } : {}),
+      ...(options.institutionSource ? { institutionSource: options.institutionSource } : {}),
+      ...(options.status ? { status: options.status.trim() } : {}),
+      ...(options.type ? { type: options.type.trim() } : {}),
+      ...(options.amount !== undefined ? { amount: options.amount } : {}),
+      ...(options.assignee ? { assignee: options.assignee.trim() } : {}),
+      ...(options.dueDate ? { dueDate: options.dueDate.trim() } : {}),
+      ...(options.followUp ? { followUp: options.followUp.trim() } : {}),
     }),
   });
   return readJson(response) as Promise<SavedWorklog>;
