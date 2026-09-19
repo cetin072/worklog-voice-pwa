@@ -135,3 +135,17 @@ Push 없이 앱 내부에서 다시 보여줄 업무 판단.
 - 기존 정상 경계와 UX를 우선 재사용한다.
 - Production DB/권한 변경은 해당 단계 코드/자동검증 완료 후 적용·검증한다.
 - 한 단계 완료 후 다음 단계로 진행한다.
+
+
+## 10. 벤치마킹 참고 링크
+
+- Microsoft To Do — Due dates and reminders:
+  - https://support.microsoft.com/en-us/todo/add-due-dates-and-reminders-in-microsoft-to-do
+- Todoist — Reminders / automatic reminders / mobile snooze:
+  - https://www.todoist.com/help/todoist/features/introduction-to-reminders-9PezfU
+- Vikunja — Dates & Reminders:
+  - https://vikunja.io/help/dates-and-reminders/
+- Super Productivity — Custom Reminders discussion:
+  - https://github.com/super-productivity/super-productivity/issues/6531
+
+외부 코드는 직접 복사하지 않고 제품 개념과 UX 패턴만 참고한다.
