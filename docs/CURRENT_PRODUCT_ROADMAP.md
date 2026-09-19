@@ -48,10 +48,11 @@
 7. 3-7 Note ↔ Task 수정/전환
 
 현재 상태:
-- 3-1 ~ 3-6: main 병합 완료
-- 3-7: Issue #382 / Draft PR #383 검증 중
-- Stage 3 종료 전 PR #383 자동검사와 회귀감사를 완료한다.
-- Stage 3 완료 후보가 되면 사용자에게 보고하고 명시적 확인을 받는다.
+- 3-1 ~ 3-7: main 병합 완료
+- Stage 3 Production DB migrations 적용 완료
+- main 기준 Production Netlify 배포 완료
+- Stage 3 자동검사와 회귀감사 완료
+- Stage 3 완료. 다음 단계는 사용자 확인 후 Stage 4 브리핑/재설계다.
 
 ## 3. Stage 3 완료 기준
 
@@ -108,7 +109,7 @@ Stage 4 이후에도 다음 모듈은 standalone-first 원칙으로 확장한다
 
 ## 7. 승인 규칙
 
-- Stage 3-7 PR #383은 사용자 승인 전 main 병합하지 않는다.
-- Production DB migration은 코드 merge와 별도 승인·적용·검증 단계로 취급한다.
-- Stage 4는 Stage 3 사용자 수락 전 개발하지 않는다.
+- Stage 3-7 PR #383은 main 병합 완료.
+- Stage 3 Production DB migration 적용·검증 완료.
+- Stage 4는 Stage 3 사용자 확인 전 개발하지 않는다.
 - Stage 4는 브리핑과 재설계가 사용자에게 수락된 뒤에만 구현한다.
