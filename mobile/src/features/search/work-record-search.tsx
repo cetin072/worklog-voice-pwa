@@ -38,6 +38,8 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
+  const [editActionKind, setEditActionKind] = useState<'task' | 'note' | undefined>(undefined);
+  const [editActionConversionAllowed, setEditActionConversionAllowed] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editReady, setEditReady] = useState(false);
@@ -85,6 +87,8 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       setEditTitle(details.title || fallbackTitle);
       setEditDate(details.dueDate || '');
       setEditTime(details.dueTime || '');
+      setEditActionKind(details.actionKind);
+      setEditActionConversionAllowed(details.actionConversionAllowed === true);
       setEditReady(true);
     } catch (error) {
       setEditStatus(error instanceof Error ? error.message : '업무 상세를 불러오지 못했습니다.');
@@ -101,6 +105,8 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditTitle(item.title);
     setEditDate('');
     setEditTime('');
+    setEditActionKind(undefined);
+    setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
@@ -141,13 +147,20 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
         title,
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
+        ...(editActionConversionAllowed && editActionKind ? { actionKind: editActionKind } : {}),
       });
       const visibleTitle = result.title?.trim() || title;
       setItems((current) => current.map((item) => item.workRecordId === recordId ? { ...item, title: visibleTitle } : item));
       setEditBusy(false);
       setEditReady(false);
-      setEditStatus(result.unchanged ? '변경된 내용이 없습니다.' : '✓ 업무를 수정했습니다.');
-      setEditStatusTone(result.unchanged ? 'neutral' : 'success');
+      setEditStatus(result.actionKindChanged
+        ? result.actionKind === 'note'
+          ? '✓ 메모 · 참고로 변경했습니다.'
+          : '✓ 할 일로 변경했습니다.'
+        : result.unchanged
+          ? '변경된 내용이 없습니다.'
+          : '✓ 업무를 수정했습니다.');
+      setEditStatusTone(result.unchanged && !result.actionKindChanged ? 'neutral' : 'success');
       await new Promise((resolve) => setTimeout(resolve, 420));
       setEditId(null);
       setEditStatus('');
@@ -167,6 +180,8 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditTitle('');
     setEditDate('');
     setEditTime('');
+    setEditActionKind(undefined);
+    setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
@@ -203,11 +218,14 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       loading={editLoading}
       saving={editBusy}
       ready={editReady}
+      actionKind={editActionKind}
+      actionConversionAllowed={editActionConversionAllowed}
       statusText={editStatus}
       statusTone={editStatusTone}
       onTitle={setEditTitle}
       onDate={setEditDate}
       onTime={setEditTime}
+      onActionKind={setEditActionKind}
       onSave={() => void saveEditor()}
       onCancel={cancelEditor}
       onRetry={() => void retryEditor()}
