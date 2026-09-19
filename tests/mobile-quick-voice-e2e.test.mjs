@@ -7,13 +7,15 @@ const flow = fs.readFileSync('mobile/src/features/voice/quick-voice-flow.ts', 'u
 const downloader = fs.readFileSync('mobile/src/features/voice/stt-model-download.ts', 'utf8');
 const runtime = fs.readFileSync('mobile/src/features/voice/providers/whisper-rn-quick-voice-runtime.ts', 'utf8');
 
-test('Quick Voice source contract stays provider-neutral while separating capture, STT confirmation, save, and briefing refresh', () => {
+test('Quick Voice source contract stays provider-neutral while separating capture, automatic save, and briefing refresh', () => {
   assert.match(card, /ensureProvider\(onProgress\?: .*Promise<MobileTranscriptionProvider>/);
   assert.match(card, /useQuickVoicePcmCapture/);
   assert.match(card, /transcribeQuickVoiceCapture/);
-  assert.match(card, /saveQuickVoiceTranscript/);
-  assert.match(card, /전사문을 확인한 뒤 저장하세요/);
+  assert.match(card, /createQuickVoiceSaveAttempt/);
+  assert.match(card, /const saved = await saveAttempt\.current\.save\(\)/);
+  assert.match(card, /브리핑 카드의 ✏️/);
   assert.match(card, /clientRequestId/);
+  assert.doesNotMatch(card, /전사문을 확인한 뒤 저장하세요/);
   assert.doesNotMatch(card, /whisper\.rn|initWhisper|transcribeData/);
 });
 

@@ -99,9 +99,7 @@ export async function runQuickVoiceFastPath<TSave>(input: {
   refreshBriefing(): Promise<unknown>;
   onProgress?: (stage: QuickVoiceFlowProgress) => void;
   language?: string;
-  confirmTranscript(transcript: MobileTranscriptV1): Promise<MobileTranscriptV1 | null>;
 }): Promise<QuickVoiceFastPathResult<TSave>> {
-  if (typeof input.confirmTranscript !== 'function') throw new Error('저장 전 전사문 확인이 필요합니다.');
   const clientRequestId = input.clientRequestId.trim();
   if (!clientRequestId) {
     throw new Error('Quick Voice clientRequestId가 필요합니다.');
@@ -109,11 +107,9 @@ export async function runQuickVoiceFastPath<TSave>(input: {
 
   input.onProgress?.('transcribing');
   const { transcript, transcribeMs } = await transcribeQuickVoiceCapture(input);
-  const confirmed = await input.confirmTranscript(transcript);
-  if (!confirmed) throw new Error('음성 기록 저장을 취소했습니다.');
 
   return saveQuickVoiceTranscript({
-    transcript: confirmed,
+    transcript,
     clientRequestId,
     recordedAt: input.audio.createdAt,
     saveWorklog: input.saveWorklog,
@@ -123,7 +119,7 @@ export async function runQuickVoiceFastPath<TSave>(input: {
   });
 }
 
-/** Reuses a confirmed transcript for a retry without invoking STT or changing its idempotency key. */
+/** Reuses the accepted STT transcript for a retry without invoking STT or changing its idempotency key. */
 export async function saveQuickVoiceTranscript<TSave>(input: {
   transcript: MobileTranscriptV1;
   clientRequestId: string;
@@ -173,7 +169,7 @@ export async function saveQuickVoiceTranscript<TSave>(input: {
   });
 }
 
-/** One immutable payload/key per confirmed attempt, including uncertain responses and concurrent taps. */
+/** One immutable payload/key per automatic save attempt, including uncertain responses and concurrent retries. */
 export function createQuickVoiceSaveAttempt<TSave>(input: Parameters<typeof saveQuickVoiceTranscript<TSave>>[0]) {
   const snapshot = { ...input, transcript: { ...input.transcript, text: input.transcript.text.trim() } };
   let pending: Promise<QuickVoiceFastPathResult<TSave>> | null = null;
@@ -190,7 +186,7 @@ export function createQuickVoiceSaveAttempt<TSave>(input: Parameters<typeof save
   });
 }
 
-/** Screen changes must not discard an in-flight capture or an unconfirmed/uncertain save. */
+/** Screen changes must not discard an in-flight capture or an uncertain save. */
 export function quickVoiceNeedsAttention(phase: string) {
   return !['idle', 'saved', 'refresh_error'].includes(phase);
 }
