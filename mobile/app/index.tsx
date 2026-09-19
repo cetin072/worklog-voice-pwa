@@ -129,6 +129,34 @@ function taskNote(bucket: BriefingBucket, task: BriefingTask) {
   return '기한 없음';
 }
 
+function focusBucket(task: BriefingTask, today: string): BriefingBucket {
+  if (task.dueKey && task.dueKey < today) return 'overdue';
+  if (task.dueKey === today) return 'today';
+  if (task.dueKey && task.dueKey > today) return 'upcoming';
+  return 'undated';
+}
+
+function focusReason(task: BriefingTask, today: string) {
+  if (task.reason === 'attention') return '다시 확인할 시간';
+  if (task.reason === 'today' || task.dueKey === today) return '오늘까지';
+  if (task.reason === 'overdue' || (task.dueKey && task.dueKey < today)) {
+    const days = task.daysOverdue || Math.max(1, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${task.dueKey}T00:00:00Z`)) / 86_400_000));
+    return `${days}일 지남`;
+  }
+  return '확인이 필요한 업무';
+}
+
+function FocusTaskRow({ task, today, onOpen, onComplete, completing = false }: { task: BriefingTask; today: string; onOpen: () => void; onComplete: () => void; completing?: boolean }) {
+  return <View style={styles.focusTaskRow}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} style={styles.taskMain} onPress={onOpen}>
+      <Text style={styles.taskTitle}>{task.title || '제목 없는 업무'}</Text>
+      <View style={styles.focusMetaLine}><Text style={styles.focusReason}>{focusReason(task, today)}</Text>{task.status ? <Text style={styles.focusStatus}>{task.status}</Text> : null}</View>
+      {task.institution ? <Text style={styles.taskBadge}>{task.institution}</Text> : null}
+    </Pressable>
+    {task.pageId ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 완료 처리`} disabled={completing} style={[styles.inlineComplete, completing ? styles.inlineCompleteBusy : null]} onPress={onComplete}><Text style={styles.inlineCompleteText}>{completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+  </View>;
+}
+
 function TaskRow({ bucket, task, onOpen, onEdit, onComplete, completing = false }: { bucket: BriefingBucket; task: BriefingTask; onOpen: () => void; onEdit?: () => void; onComplete?: () => void; completing?: boolean }) {
   return <View style={styles.taskRow}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} style={styles.taskMain} onPress={onOpen}>
@@ -286,6 +314,7 @@ export default function HomeScreen() {
   const [editStatus, setEditStatus] = useState('');
   const [editStatusTone, setEditStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [expandedBuckets, setExpandedBuckets] = useState<Partial<Record<BriefingBucket, boolean>>>({});
+  const [focusExpanded, setFocusExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
   const [calendarConnectionVersion, setCalendarConnectionVersion] = useState(0);
@@ -800,8 +829,10 @@ export default function HomeScreen() {
   const journalTarget = journal?.targetDate || journalDate;
   const journalToday = journal?.today || seoulTodayKey();
   const journalIsFuture = journalTarget > journalToday;
-  const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
+  const focusTasks = briefing?.resurface || [];
+  const visibleFocusTasks = focusExpanded ? focusTasks : focusTasks.slice(0, 3);
+  const extraFocusTasks = Math.max(0, focusTasks.length - 3);
   const notes = briefing?.notes || [];
   const visibleNotes = notesExpanded ? notes : notes.slice(0, 3);
   const extraNotes = Math.max(0, notes.length - 3);
@@ -821,7 +852,8 @@ export default function HomeScreen() {
         {briefingInfo ? <View accessibilityLiveRegion="polite"><Text style={styles.helpText}>{briefingInfo.meta}</Text>{briefingInfo.warnings.map((warning) => <Text key={warning} style={styles.errorText}>{warning}</Text>)}</View> : null}
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
-        {briefing ? <View style={styles.countGrid}>{briefingBuckets.map((bucket) => <View key={bucket.key} style={[styles.countTile, countToneStyles[bucket.tone]]}><Text style={styles.countLabel}>{bucket.label}</Text><Text style={styles.countValue}>{Number(counts[bucket.key] || 0)}</Text></View>)}</View> : null}
+        {briefing ? focusTasks.length ? visibleFocusTasks.map((task, index) => <FocusTaskRow key={task.pageId || `focus-${index}`} task={task} today={briefing.today || seoulTodayKey()} onOpen={() => { setSelectedTask({ bucket: focusBucket(task, briefing.today || seoulTodayKey()), task }); setScreen('task'); }} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />) : <Text style={styles.emptyText}>지금 확인할 업무가 없습니다.</Text> : null}
+        {briefing && extraFocusTasks ? <Pressable accessibilityRole="button" accessibilityLabel={focusExpanded ? '지금 확인할 것 접기' : `지금 확인할 것 ${extraFocusTasks}개 더 보기`} style={styles.moreButton} onPress={() => setFocusExpanded((value) => !value)}><Text style={styles.moreButtonText}>{focusExpanded ? '접기' : `${extraFocusTasks}개 더 보기`}</Text></Pressable> : null}
       </View>
 
       {briefing ? briefingBuckets.map((bucket) => {
@@ -949,14 +981,6 @@ const styles = StyleSheet.create({
   sectionHeadText: { flex: 1, minWidth: 0 },
   closeButton: { flexShrink: 0, minWidth: 48, alignItems: 'center' },
   linkText: { color: '#275daf', fontWeight: '800', padding: 8 },
-  countGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  countTile: { width: '47%', minHeight: 92, padding: 14, borderRadius: 14, justifyContent: 'space-between' },
-  countDanger: { backgroundColor: '#fff0f0' },
-  countWarning: { backgroundColor: '#fff5e7' },
-  countInfo: { backgroundColor: '#edf4ff' },
-  countNeutral: { backgroundColor: '#f1f3f5' },
-  countLabel: { fontSize: 13, fontWeight: '700', color: '#4b515c' },
-  countValue: { fontSize: 30, fontWeight: '800', color: '#17191d' },
   loadingInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16 },
   errorPanel: { gap: 10 },
   saveFeedback: { gap: 8, padding: 14, borderRadius: mobileTheme.radius.control, backgroundColor: '#eef8f0', borderWidth: 1, borderColor: '#bbdfc2' },
@@ -1004,6 +1028,10 @@ const styles = StyleSheet.create({
   moreButtonText: { fontSize: 12, fontWeight: '800', color: '#374151' },
   sectionCount: { minWidth: 26, height: 26, textAlign: 'center', textAlignVertical: 'center', borderRadius: 13, overflow: 'hidden', backgroundColor: '#e5e7eb', color: '#374151', fontSize: 12, fontWeight: '800' },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.15)' },
+  focusTaskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.15)' },
+  focusMetaLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  focusReason: { fontSize: 13, fontWeight: '800', color: '#9a3412', lineHeight: 18 },
+  focusStatus: { fontSize: 11, fontWeight: '800', color: '#374151', backgroundColor: '#e5e7eb', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   taskMain: { flex: 1, minWidth: 0, gap: 3 },
   taskActions: { flexShrink: 0, gap: 6, alignItems: 'stretch' },
   taskTitle: { fontSize: 15, fontWeight: '700', color: '#30343b', lineHeight: 21 },
@@ -1063,13 +1091,6 @@ const styles = StyleSheet.create({
   messageError: { backgroundColor: '#fff0f0', color: mobileTheme.colors.danger },
   messageInfo: { backgroundColor: mobileTheme.colors.neutralBackground, color: mobileTheme.colors.textSecondary },
 });
-
-const countToneStyles = {
-  danger: styles.countDanger,
-  warning: styles.countWarning,
-  info: styles.countInfo,
-  neutral: styles.countNeutral,
-};
 
 const sectionToneStyles = {
   danger: styles.sectionDanger,
