@@ -45,6 +45,13 @@ create table public.work_records (
   institution text,
   amount numeric(18,2),
   follow_up text,
+  action_kind text check (action_kind is null or action_kind in ('task', 'note')),
+  journal_date date not null,
+  briefing_state text not null default 'active' check (
+    briefing_state in ('active', 'acknowledged')
+  ),
+  completed_at timestamptz,
+  acknowledged_at timestamptz,
   recorded_at timestamptz not null default now(),
   due_at timestamptz,
   metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
@@ -115,6 +122,10 @@ create table public.candidates (
 create index workspace_members_user_id_idx on public.workspace_members(user_id);
 create index work_records_workspace_recorded_at_idx on public.work_records(workspace_id, recorded_at desc);
 create index work_records_workspace_due_at_idx on public.work_records(workspace_id, due_at) where due_at is not null;
+create index work_records_workspace_journal_date_idx on public.work_records(workspace_id, journal_date desc, recorded_at desc);
+create index work_records_workspace_active_notes_idx
+  on public.work_records(workspace_id, journal_date desc, recorded_at desc)
+  where action_kind = 'note' and briefing_state = 'active';
 create index schedules_workspace_starts_at_idx on public.schedules(workspace_id, starts_at);
 create index schedules_workspace_status_starts_at_idx on public.schedules(workspace_id, status, starts_at);
 create index source_refs_entity_idx on public.source_refs(workspace_id, entity_type, entity_id);
@@ -125,12 +136,50 @@ create or replace function private.set_updated_at()
 returns trigger
 language plpgsql
 set search_path = ''
-as $$
+as $
 begin
   new.updated_at = now();
   return new;
 end;
-$$;
+$;
+
+create or replace function private.apply_work_record_action_journal_state()
+returns trigger
+language plpgsql
+set search_path = ''
+as $
+begin
+  if new.journal_date is null then
+    new.journal_date := (coalesce(new.recorded_at, now()) at time zone 'Asia/Seoul')::date;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.status = 'completed' and new.completed_at is null then
+      new.completed_at := now();
+    end if;
+    if new.briefing_state = 'acknowledged' and new.acknowledged_at is null then
+      new.acknowledged_at := now();
+    end if;
+    return new;
+  end if;
+
+  if new.status = 'completed' and old.status is distinct from 'completed' then
+    new.completed_at := coalesce(new.completed_at, now());
+  elsif new.status is distinct from 'completed' and old.status = 'completed' then
+    new.completed_at := null;
+  end if;
+
+  if new.briefing_state = 'acknowledged'
+     and old.briefing_state is distinct from 'acknowledged' then
+    new.acknowledged_at := coalesce(new.acknowledged_at, now());
+  elsif new.briefing_state = 'active'
+        and old.briefing_state = 'acknowledged' then
+    new.acknowledged_at := null;
+  end if;
+
+  return new;
+end;
+$;
 
 create trigger workspaces_set_updated_at
 before update on public.workspaces
@@ -139,6 +188,11 @@ for each row execute function private.set_updated_at();
 create trigger work_records_set_updated_at
 before update on public.work_records
 for each row execute function private.set_updated_at();
+
+create trigger work_records_apply_action_journal_state
+before insert or update of recorded_at, journal_date, status, briefing_state, completed_at, acknowledged_at
+on public.work_records
+for each row execute function private.apply_work_record_action_journal_state();
 
 create trigger schedules_set_updated_at
 before update on public.schedules
@@ -189,6 +243,7 @@ as $$
 $$;
 
 revoke all on function private.set_updated_at() from public, anon, authenticated;
+revoke all on function private.apply_work_record_action_journal_state() from public, anon, authenticated;
 revoke all on function private.is_workspace_owner(uuid) from public, anon;
 revoke all on function private.can_access_workspace(uuid) from public, anon;
 grant execute on function private.is_workspace_owner(uuid) to authenticated, service_role;
