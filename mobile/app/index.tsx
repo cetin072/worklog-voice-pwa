@@ -19,7 +19,7 @@ import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-ca
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
-import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, readWorklogDetails, saveWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
+import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, type WorklogActionKind, loadBriefing, loadWorkJournalDay, readWorklogDetails, saveWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
@@ -150,7 +150,7 @@ function formatNoteJournalDate(value?: string) {
   return `${new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(date)} 기록`;
 }
 
-function NoteRow({ note, onAcknowledge, acknowledging = false }: { note: BriefingNote; onAcknowledge: () => void; acknowledging?: boolean }) {
+function NoteRow({ note, onEdit, onAcknowledge, acknowledging = false }: { note: BriefingNote; onEdit?: () => void; onAcknowledge: () => void; acknowledging?: boolean }) {
   return <View style={styles.taskRow}>
     <View style={styles.taskMain}>
       <Text style={styles.taskTitle}>{note.title || '제목 없는 메모'}</Text>
@@ -158,6 +158,7 @@ function NoteRow({ note, onAcknowledge, acknowledging = false }: { note: Briefin
       {note.institution ? <Text style={styles.taskBadge}>{note.institution}</Text> : null}
     </View>
     {note.pageId ? <View style={styles.taskActions}>
+      {onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 수정`} disabled={acknowledging} style={styles.inlineEdit} onPress={onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
       <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 확인했어요 처리`} disabled={acknowledging} style={[styles.inlineComplete, acknowledging ? styles.inlineCompleteBusy : null]} onPress={onAcknowledge}>
         <Text style={styles.inlineCompleteText}>{acknowledging ? '처리 중' : '확인했어요'}</Text>
       </Pressable>
@@ -272,6 +273,9 @@ export default function HomeScreen() {
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
+  const [editActionKind, setEditActionKind] = useState<WorklogActionKind | null>(null);
+  const [editInitialActionKind, setEditInitialActionKind] = useState<WorklogActionKind | null>(null);
+  const [editCanConvertAction, setEditCanConvertAction] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editReady, setEditReady] = useState(false);
@@ -501,6 +505,9 @@ export default function HomeScreen() {
       setEditTitle(details.title || fallbackTitle);
       setEditDate(details.dueDate || fallbackDate);
       setEditTime(details.dueTime || '');
+      setEditActionKind(details.actionKind || null);
+      setEditInitialActionKind(details.actionKind || null);
+      setEditCanConvertAction(details.canConvertAction === true);
       setEditReady(true);
     } catch (nextError) {
       setEditStatus(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'));
@@ -554,10 +561,28 @@ export default function HomeScreen() {
     setEditTitle(task.title || '');
     setEditDate(task.dueKey || '');
     setEditTime('');
+    setEditActionKind(null);
+    setEditInitialActionKind(null);
+    setEditCanConvertAction(false);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
     await loadTaskEditorDetails(task.pageId, task.title || '', task.dueKey || '');
+  }
+
+  async function openNoteEditor(note: BriefingNote) {
+    if (!session || !note.pageId || editBusy || editLoading) return;
+    setEditTaskId(note.pageId);
+    setEditTitle(note.title || '');
+    setEditDate('');
+    setEditTime('');
+    setEditActionKind(null);
+    setEditInitialActionKind(null);
+    setEditCanConvertAction(false);
+    setEditReady(false);
+    setEditStatus('');
+    setEditStatusTone('neutral');
+    await loadTaskEditorDetails(note.pageId, note.title || '', '');
   }
 
   async function retryTaskEditor() {
@@ -565,17 +590,18 @@ export default function HomeScreen() {
     await loadTaskEditorDetails(editTaskId, editTitle, editDate);
   }
 
-  function updateVisibleTaskTitle(recordId: string, nextTitle: string) {
+  function updateVisibleRecordTitle(recordId: string, nextTitle: string) {
     setBriefing((current) => {
-      if (!current?.structure) return current;
-      const structure = { ...current.structure };
+      if (!current) return current;
+      const structure = { ...(current.structure || {}) };
       for (const bucket of briefingBuckets) {
         const tasks = structure[bucket.key];
         if (Array.isArray(tasks)) {
           structure[bucket.key] = tasks.map((task) => task.pageId === recordId ? { ...task, title: nextTitle } : task);
         }
       }
-      return { ...current, structure };
+      const notes = (current.notes || []).map((note) => note.pageId === recordId ? { ...note, title: nextTitle } : note);
+      return { ...current, structure, notes };
     });
     setSelectedTask((current) => current?.task.pageId === recordId
       ? { ...current, task: { ...current.task, title: nextTitle } }
@@ -601,6 +627,7 @@ export default function HomeScreen() {
       setEditStatusTone('error');
       return;
     }
+    const actionKindChanged = Boolean(editActionKind && editActionKind !== editInitialActionKind);
     setEditBusy(true);
     setEditStatus('');
     setEditStatusTone('neutral');
@@ -610,16 +637,21 @@ export default function HomeScreen() {
         title: nextTitle,
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
+        ...(actionKindChanged && editActionKind ? { actionKind: editActionKind } : {}),
       });
       const visibleTitle = result.title?.trim() || nextTitle;
-      updateVisibleTaskTitle(recordId, visibleTitle);
+      updateVisibleRecordTitle(recordId, visibleTitle);
       setEditBusy(false);
       setEditReady(false);
-      setEditStatus(result.unchanged
-        ? '변경된 내용이 없습니다.'
-        : result.scheduleUpdated
-          ? '✓ 업무와 연결된 일정도 수정했습니다.'
-          : '✓ 업무를 수정했습니다.');
+      setEditStatus(result.actionChanged
+        ? result.actionKind === 'note'
+          ? '✓ 메모 · 참고로 변경했습니다.'
+          : '✓ 할 일로 전환했습니다.'
+        : result.unchanged
+          ? '변경된 내용이 없습니다.'
+          : result.scheduleUpdated
+            ? '✓ 업무와 연결된 일정도 수정했습니다.'
+            : '✓ 업무를 수정했습니다.');
       setEditStatusTone(result.unchanged ? 'neutral' : 'success');
       await new Promise((resolve) => setTimeout(resolve, 420));
       setEditTaskId(null);
@@ -651,6 +683,9 @@ export default function HomeScreen() {
     setEditTitle('');
     setEditDate('');
     setEditTime('');
+    setEditActionKind(null);
+    setEditInitialActionKind(null);
+    setEditCanConvertAction(false);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
@@ -710,7 +745,7 @@ export default function HomeScreen() {
 
       {notes.length ? <View style={[styles.briefingSection, styles.sectionNeutral]}>
         <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>📝 메모 · 참고</Text><Text style={styles.sectionCount}>{notes.length}</Text></View>
-        {visibleNotes.map((note, index) => <NoteRow key={note.pageId || `note-${index}`} note={note} onAcknowledge={() => void acknowledgeNote(note)} acknowledging={noteBusyId === note.pageId} />)}
+        {visibleNotes.map((note, index) => <NoteRow key={note.pageId || `note-${index}`} note={note} onEdit={() => void openNoteEditor(note)} onAcknowledge={() => void acknowledgeNote(note)} acknowledging={noteBusyId === note.pageId} />)}
         {extraNotes ? <Pressable accessibilityRole="button" accessibilityLabel={notesExpanded ? '메모 · 참고 접기' : `메모 · 참고 ${extraNotes}개 더 보기`} style={styles.moreButton} onPress={() => setNotesExpanded((value) => !value)}><Text style={styles.moreButtonText}>{notesExpanded ? '접기' : `${extraNotes}개 더 보기`}</Text></Pressable> : null}
       </View> : null}
 
@@ -766,9 +801,12 @@ export default function HomeScreen() {
     ready={editReady}
     statusText={editStatus}
     statusTone={editStatusTone}
+    actionKind={editActionKind || undefined}
+    canConvertAction={editCanConvertAction}
     onTitle={setEditTitle}
     onDate={setEditDate}
     onTime={setEditTime}
+    onActionKind={setEditActionKind}
     onSave={() => void saveTaskEditor()}
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
