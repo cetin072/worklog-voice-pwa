@@ -42,6 +42,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [editLoading, setEditLoading] = useState(false);
   const [editReady, setEditReady] = useState(false);
   const [editStatus, setEditStatus] = useState('');
+  const [editStatusTone, setEditStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
 
   async function search(reset: boolean) {
     const normalizedQuery = query.trim();
@@ -78,6 +79,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditLoading(true);
     setEditReady(false);
     setEditStatus('');
+    setEditStatusTone('neutral');
     try {
       const details = await readWorklogDetails(accessToken, recordId);
       setEditTitle(details.title || fallbackTitle);
@@ -86,6 +88,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       setEditReady(true);
     } catch (error) {
       setEditStatus(error instanceof Error ? error.message : '업무 상세를 불러오지 못했습니다.');
+      setEditStatusTone('error');
     } finally {
       setEditLoading(false);
     }
@@ -100,6 +103,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditTime('');
     setEditReady(false);
     setEditStatus('');
+    setEditStatusTone('neutral');
     await loadEditorDetails(item.workRecordId, item.title);
   }
 
@@ -110,35 +114,48 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
 
   async function saveEditor() {
     if (!editId || editBusy || editLoading || !editReady) return;
+    const recordId = editId;
     const title = editTitle.replace(/\s+/g, ' ').trim();
     if (!title) {
       setEditStatus('업무명을 입력해주세요.');
+      setEditStatusTone('error');
       return;
     }
     if (title.length > 160) {
       setEditStatus('업무명은 160자 이하로 입력해주세요.');
+      setEditStatusTone('error');
       return;
     }
     if (editTime.trim() && !editDate.trim()) {
       setEditStatus('시간을 설정하려면 날짜도 입력해주세요.');
+      setEditStatusTone('error');
       return;
     }
 
     setEditBusy(true);
     setEditStatus('');
+    setEditStatusTone('neutral');
     try {
-      await updateWorklogDetails(accessToken, {
-        pageId: editId,
+      const result = await updateWorklogDetails(accessToken, {
+        pageId: recordId,
         title,
         dueDate: editDate.trim(),
         dueTime: editTime.trim(),
       });
-      setEditId(null);
+      const visibleTitle = result.title?.trim() || title;
+      setItems((current) => current.map((item) => item.workRecordId === recordId ? { ...item, title: visibleTitle } : item));
+      setEditBusy(false);
       setEditReady(false);
+      setEditStatus(result.unchanged ? '변경된 내용이 없습니다.' : '✓ 업무를 수정했습니다.');
+      setEditStatusTone(result.unchanged ? 'neutral' : 'success');
+      await new Promise((resolve) => setTimeout(resolve, 420));
+      setEditId(null);
+      setEditStatus('');
+      setEditStatusTone('neutral');
       await search(true);
-      setMessage('업무를 수정했습니다.');
     } catch (error) {
       setEditStatus(error instanceof Error ? error.message : '업무 수정에 실패했습니다.');
+      setEditStatusTone('error');
     } finally {
       setEditBusy(false);
     }
@@ -152,6 +169,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditTime('');
     setEditReady(false);
     setEditStatus('');
+    setEditStatusTone('neutral');
   }
 
   return <View style={styles.root}>
@@ -163,13 +181,15 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     {items.map((item) => {
       const selected = item.workRecordId === selectedId;
       return <View key={item.workRecordId} style={styles.result}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`${item.title} ${selected ? '접기' : '상세 보기'}`} style={styles.resultMain} onPress={() => setSelectedId((current) => current === item.workRecordId ? null : item.workRecordId)}>
-          <View style={styles.resultCopy}><Text style={styles.title}>{item.title}</Text><Text style={styles.meta}>{statusLabel(item.status)}{item.institution ? ` · ${item.institution}` : ''}{recordedAtLabel(item.recordedAt) ? ` · ${recordedAtLabel(item.recordedAt)}` : ''}</Text>{item.snippet ? <Text style={styles.snippet}>{item.snippet}</Text> : null}</View>
-          <Text style={styles.expand}>{selected ? '접기' : '상세'}</Text>
-        </Pressable>
+        <View style={styles.resultHeader}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${item.title} ${selected ? '접기' : '상세 보기'}`} style={styles.resultMain} onPress={() => setSelectedId((current) => current === item.workRecordId ? null : item.workRecordId)}>
+            <View style={styles.resultCopy}><Text style={styles.title}>{item.title}</Text><Text style={styles.meta}>{statusLabel(item.status)}{item.institution ? ` · ${item.institution}` : ''}{recordedAtLabel(item.recordedAt) ? ` · ${recordedAtLabel(item.recordedAt)}` : ''}</Text>{item.snippet ? <Text style={styles.snippet}>{item.snippet}</Text> : null}</View>
+            <Text style={styles.expand}>{selected ? '접기' : '상세'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${item.title} 수정`} disabled={editBusy || editLoading} style={styles.editIconAction} onPress={() => void openEditor(item)}><Text style={styles.editIconText}>✏️</Text></Pressable>
+        </View>
         {selected ? <View style={styles.detail}>
           {item.dueAt ? <Text style={styles.detailMeta}>기한: {recordedAtLabel(item.dueAt)}</Text> : <Text style={styles.detailMeta}>기한 없음</Text>}
-          <Pressable accessibilityRole="button" style={styles.editAction} disabled={editBusy || editLoading} onPress={() => void openEditor(item)}><Text style={styles.editActionText}>{editLoading && selectedId === item.workRecordId ? '불러오는 중…' : '✏️ 이 업무 수정'}</Text></Pressable>
         </View> : null}
       </View>;
     })}
@@ -184,6 +204,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       saving={editBusy}
       ready={editReady}
       statusText={editStatus}
+      statusTone={editStatusTone}
       onTitle={setEditTitle}
       onDate={setEditDate}
       onTime={setEditTime}
@@ -205,13 +226,14 @@ const styles = StyleSheet.create({
   filterTextActive: { color: '#275daf' },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   result: { gap: 8, borderTopWidth: 1, borderTopColor: '#eceef1', paddingTop: 13 },
-  resultMain: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  resultHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  resultMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   resultCopy: { flex: 1, minWidth: 0, gap: 4 },
   expand: { fontSize: 12, fontWeight: '800', color: '#275daf', paddingVertical: 4 },
   detail: { gap: 8, padding: 10, borderRadius: 10, backgroundColor: '#f8fafc' },
   detailMeta: { fontSize: 12, color: '#737985', lineHeight: 18 },
-  editAction: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#cfd5dd', backgroundColor: '#fff' },
-  editActionText: { fontSize: 13, fontWeight: '800', color: '#275daf' },
+  editIconAction: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#cfd5dd', backgroundColor: '#fff' },
+  editIconText: { fontSize: 18 },
   title: { fontSize: 15, fontWeight: '800', color: '#30343b', lineHeight: 21 },
   meta: { fontSize: 12, color: '#737985', lineHeight: 18 },
   snippet: { fontSize: 13, color: '#4b515c', lineHeight: 19 },
