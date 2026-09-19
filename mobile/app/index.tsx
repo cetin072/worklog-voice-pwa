@@ -134,6 +134,8 @@ export default function HomeScreen() {
   const [briefing, setBriefing] = useState<MobileBriefing | null>(null);
   const [briefingError, setBriefingError] = useState('');
   const [briefingBusy, setBriefingBusy] = useState(false);
+  const briefingRefreshQueue = useRef<Promise<void>>(Promise.resolve());
+  const briefingRefreshEpoch = useRef(0);
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string } | null>(null);
@@ -152,6 +154,8 @@ export default function HomeScreen() {
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
+    briefingRefreshEpoch.current += 1;
+    briefingRefreshQueue.current = Promise.resolve();
     if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setScreen('home'); return; }
     void refreshBriefing();
   }, [session?.access_token]);
@@ -216,9 +220,24 @@ export default function HomeScreen() {
   }
 
   async function refreshBriefing() {
-    if (!session || briefingBusy) return;
-    setBriefingBusy(true); setBriefingError('');
-    try { setBriefing(await loadBriefing(session.access_token)); } catch (nextError) { setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.')); } finally { setBriefingBusy(false); }
+    if (!session) return;
+    const accessToken = session.access_token;
+    const epoch = briefingRefreshEpoch.current;
+    const task = briefingRefreshQueue.current.then(async () => {
+      if (epoch !== briefingRefreshEpoch.current) return;
+      setBriefingBusy(true);
+      setBriefingError('');
+      try {
+        const next = await loadBriefing(accessToken);
+        if (epoch === briefingRefreshEpoch.current) setBriefing(next);
+      } catch (nextError) {
+        if (epoch === briefingRefreshEpoch.current) setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.'));
+      } finally {
+        if (epoch === briefingRefreshEpoch.current) setBriefingBusy(false);
+      }
+    });
+    briefingRefreshQueue.current = task.then(() => undefined, () => undefined);
+    await task;
   }
 
   async function runEmailSignIn() {
@@ -483,7 +502,7 @@ export default function HomeScreen() {
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
   />
-  {screen === 'home' ? <View onLayout={(event) => setQuickDockHeight(Math.max(150, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
+  {screen === 'home' ? <View onLayout={(event) => setQuickDockHeight(Math.max(150, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, options); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
