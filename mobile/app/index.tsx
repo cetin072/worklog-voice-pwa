@@ -19,11 +19,11 @@ import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-ca
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
-import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, loadBriefing, readWorklogDetails, saveWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
+import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, readWorklogDetails, saveWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
-type AppScreen = 'home' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'scheduleSettings' | 'patchNotes';
+type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'scheduleSettings' | 'patchNotes';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
 type AuthMode = 'signIn' | 'signUp';
@@ -54,6 +54,50 @@ const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger
   { key: 'upcoming', label: '다가오는 업무', tone: 'info' },
   { key: 'undated', label: '기한 없는 업무', tone: 'neutral' },
 ];
+
+function seoulTodayKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function shiftDateKey(value: string, days: number) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return seoulTodayKey();
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  date.setUTCDate(date.getUTCDate() + days);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function formatJournalDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  }).format(date);
+}
+
+function formatJournalTime(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
 
 function messageOf(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -121,6 +165,47 @@ function NoteRow({ note, onAcknowledge, acknowledging = false }: { note: Briefin
   </View>;
 }
 
+function JournalRecordRows({ records, empty, completed = false }: { records?: WorkJournalRecord[]; empty: string; completed?: boolean }) {
+  if (!records?.length) return <Text style={styles.emptyText}>{empty}</Text>;
+  return records.map((record, index) => <View key={record.pageId || `journal-record-${index}`} style={styles.journalRow}>
+    <Text style={styles.journalBullet}>{completed ? '✓' : '○'}</Text>
+    <View style={styles.taskMain}>
+      <Text style={styles.taskTitle}>{record.title || '제목 없는 업무'}</Text>
+      <Text style={styles.taskMeta}>{[
+        completed ? formatJournalTime(record.completedAt || record.recordedAt) : '',
+        record.status && !completed ? record.status : '',
+        record.institution || '',
+      ].filter(Boolean).join(' · ')}</Text>
+      {record.followUp ? <Text style={styles.followUp}>↳ {record.followUp}</Text> : null}
+    </View>
+  </View>);
+}
+
+function JournalNoteRows({ notes, empty }: { notes?: WorkJournalNote[]; empty: string }) {
+  if (!notes?.length) return <Text style={styles.emptyText}>{empty}</Text>;
+  return notes.map((note, index) => <View key={note.pageId || `journal-note-${index}`} style={styles.journalRow}>
+    <Text style={styles.journalBullet}>•</Text>
+    <View style={styles.taskMain}>
+      <Text style={styles.taskTitle}>{note.title || '제목 없는 메모'}</Text>
+      <Text style={styles.taskMeta}>{[
+        formatJournalTime(note.recordedAt),
+        note.institution || '',
+      ].filter(Boolean).join(' · ')}</Text>
+    </View>
+  </View>);
+}
+
+function JournalScheduleRows({ schedules, empty }: { schedules?: BriefingSchedule[]; empty: string }) {
+  if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
+  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `journal-schedule-${index}`} style={styles.journalRow}>
+    <Text style={styles.journalTime}>{schedule.allDay ? '종일' : formatJournalTime(schedule.startsAt) || '시간 미정'}</Text>
+    <View style={styles.taskMain}>
+      <Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>
+      {schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}
+    </View>
+  </View>);
+}
+
 function ScheduleRows({ schedules, empty, showDeviceActions = false, showDeviceStatus = false }: { schedules?: BriefingSchedule[]; empty: string; showDeviceActions?: boolean; showDeviceStatus?: boolean }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
   return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{showDeviceActions ? <ScheduleDeviceActions schedule={schedule} /> : showDeviceStatus ? <ScheduleDeviceActions schedule={schedule} compactOnly /> : null}</View>);
@@ -169,6 +254,11 @@ export default function HomeScreen() {
   const [message, setMessage] = useState('');
   const [messageTone, setMessageTone] = useState<'success' | 'error' | 'info'>('info');
   const [briefing, setBriefing] = useState<MobileBriefing | null>(null);
+  const [journalDate, setJournalDate] = useState(() => seoulTodayKey());
+  const [journal, setJournal] = useState<WorkJournalDay | null>(null);
+  const [journalReloadKey, setJournalReloadKey] = useState(0);
+  const [journalBusy, setJournalBusy] = useState(false);
+  const [journalError, setJournalError] = useState('');
   const [briefingError, setBriefingError] = useState('');
   const [briefingBusy, setBriefingBusy] = useState(false);
   const briefingRefreshQueue = useRef(createSerialTaskQueue());
@@ -197,9 +287,23 @@ export default function HomeScreen() {
   useEffect(() => {
     briefingRefreshEpoch.current += 1;
     briefingRefreshQueue.current.reset();
-    if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setScreen('home'); return; }
+    if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); return; }
     void refreshBriefing();
   }, [session?.access_token]);
+  useEffect(() => {
+    if (!session || screen !== 'journal') return;
+    const token = session.access_token;
+    let alive = true;
+    setJournal(null);
+    setJournalBusy(true);
+    setJournalError('');
+    void loadWorkJournalDay(token, journalDate)
+      .then((next) => { if (alive) setJournal(next); })
+      .catch((nextError) => { if (alive) setJournalError(messageOf(nextError, '업무일지를 불러오지 못했습니다.')); })
+      .finally(() => { if (alive) setJournalBusy(false); });
+    return () => { alive = false; };
+  }, [screen, journalDate, journalReloadKey, session?.access_token]);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (quickVoiceNavigation.current) { warnPendingVoice(); return true; }
@@ -258,6 +362,15 @@ export default function HomeScreen() {
   async function run(action: () => Promise<void>) {
     setBusy(true); clearMessage();
     try { await action(); } catch (nextError) { showMessage(messageOf(nextError, '처리 중 오류가 발생했습니다.'), 'error'); } finally { setBusy(false); }
+  }
+
+  function openJournal() {
+    setJournalDate(seoulTodayKey());
+    setScreen('journal');
+  }
+
+  function moveJournalDay(days: number) {
+    setJournalDate((current) => shiftDateKey(current, days));
   }
 
   async function refreshBriefing() {
@@ -552,6 +665,9 @@ export default function HomeScreen() {
     <View style={styles.card}><Text style={styles.sectionTitle}>{authMode === 'signIn' ? '내 업무공간' : '무료로 시작하기'}</Text><Text style={styles.body}>Google 계정으로 가장 빠르게 시작할 수 있습니다.</Text><AuthAction title="Google로 시작" variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} /><View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View><TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} /><View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View><View style={styles.authActions}><AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '무료로 시작'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} /><AuthAction title={authMode === 'signIn' ? '무료로 시작' : '로그인'} variant="secondary" disabled={busy} onPress={() => { setAuthMode((value) => value === 'signIn' ? 'signUp' : 'signIn'); clearMessage(); clearAuthError(); }} /></View><Text style={styles.authHint}>{authMode === 'signIn' ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.' : '가입하면 개인 업무공간이 자동으로 만들어집니다. 이메일 확인이 필요할 수 있습니다.'}</Text>{message || authError ? <Text style={authError || messageTone === 'error' ? styles.errorText : messageTone === 'success' ? styles.successText : styles.infoText}>{authError || message}</Text> : null}</View></ScrollView></KeyboardAvoidingView></View>;
 
   const briefingInfo = briefing ? briefingMetadata(briefing, briefingNow) : null;
+  const journalTarget = journal?.targetDate || journalDate;
+  const journalToday = journal?.today || seoulTodayKey();
+  const journalIsFuture = journalTarget > journalToday;
   const counts = briefing?.counts || {};
   const structure = briefing?.structure || {};
   const notes = briefing?.notes || [];
@@ -559,7 +675,7 @@ export default function HomeScreen() {
   const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
-  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? quickDockHeight + 32 : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
+  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? quickDockHeight + 32 : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="업무일지 열기" style={styles.headerButton} onPress={openJournal}><Text style={styles.headerButtonIcon}>📒</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
@@ -611,6 +727,24 @@ export default function HomeScreen() {
       <View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무를 바로 저장</Text></Pressable></View>
       {message ? <Text style={[styles.message, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}
     </> : null}
+
+    {screen === 'journal' ? <View style={styles.journalScreen}>
+      <PanelHead eyebrow="자동 기록" title="업무일지" onClose={() => setScreen('home')} />
+      <View style={styles.journalDateNav}>
+        <Pressable accessibilityRole="button" accessibilityLabel="이전 날짜 업무일지" style={styles.journalNavButton} onPress={() => moveJournalDay(-1)}><Text style={styles.journalNavText}>‹ 이전</Text></Pressable>
+        <View style={styles.journalDateTitleWrap}><Text style={styles.journalDateTitle}>{formatJournalDate(journalTarget)}</Text><Pressable accessibilityRole="button" disabled={journalTarget === journalToday} onPress={() => setJournalDate(seoulTodayKey())}><Text style={[styles.journalTodayLink, journalTarget === journalToday ? styles.journalTodayLinkDisabled : null]}>{journalTarget === journalToday ? '오늘' : '오늘로'}</Text></Pressable></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="다음 날짜 업무일지" style={styles.journalNavButton} onPress={() => moveJournalDay(1)}><Text style={styles.journalNavText}>다음 ›</Text></Pressable>
+      </View>
+      <Text style={styles.helpText}>{journalIsFuture ? '미래 날짜는 예정된 일정과 남은 업무를 미리 보여줍니다.' : '업무수첩에 기록된 내용을 날짜별로 자동 정리합니다.'}</Text>
+      {journalBusy && !journal ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>업무일지를 정리하는 중입니다.</Text></View> : null}
+      {journalError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{journalError}</Text><Button title="다시 시도" onPress={() => setJournalReloadKey((value) => value + 1)} /></View> : null}
+      {journal ? <>
+        <View style={styles.journalSection}><Text style={styles.journalSectionTitle}>📅 일정 · 미팅</Text><JournalScheduleRows schedules={journal.schedules} empty="이 날짜의 일정이 없습니다." /></View>
+        <View style={styles.journalSection}><Text style={styles.journalSectionTitle}>✓ 한 일</Text><JournalRecordRows records={journal.completed} completed empty="완료된 업무 기록이 없습니다." /></View>
+        <View style={styles.journalSection}><Text style={styles.journalSectionTitle}>📝 업무 중 확인사항</Text><JournalNoteRows notes={journal.notes} empty="기록된 메모·참고가 없습니다." /></View>
+        <View style={styles.journalSection}><Text style={styles.journalSectionTitle}>{journalIsFuture ? '○ 예정' : '○ 남은 업무'}</Text><JournalRecordRows records={journal.openTasks} empty={journalIsFuture ? '이 날짜에 예정된 업무가 없습니다.' : '남아 있는 업무가 없습니다.'} /></View>
+      </> : null}
+    </View> : null}
 
     {screen === 'recordSearch' ? <View style={styles.card}><PanelHead eyebrow="업무" title="과거 기록 전체 검색" onClose={() => setScreen('home')} />{client ? <WorkRecordSearch client={client} accessToken={session.access_token} /> : <Text style={styles.errorText}>검색 세션을 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
 
@@ -707,6 +841,19 @@ const styles = StyleSheet.create({
   actionIcon: { fontSize: 24 },
   actionTitle: { fontSize: 17, fontWeight: '800', color: '#17191d' },
   actionBody: { fontSize: 13, color: '#737985', lineHeight: 18 },
+  journalScreen: { gap: 14 },
+  journalDateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: 12, borderRadius: 16, backgroundColor: mobileTheme.colors.surface },
+  journalNavButton: { minWidth: 68, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: '#fff' },
+  journalNavText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.link },
+  journalDateTitleWrap: { flex: 1, alignItems: 'center', gap: 3 },
+  journalDateTitle: { fontSize: 17, fontWeight: '800', color: mobileTheme.colors.text, textAlign: 'center' },
+  journalTodayLink: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.link, paddingHorizontal: 8, paddingVertical: 3 },
+  journalTodayLinkDisabled: { color: mobileTheme.colors.textMuted },
+  journalSection: { gap: 8, padding: 14, borderRadius: 18, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border },
+  journalSectionTitle: { fontSize: 17, fontWeight: '800', color: mobileTheme.colors.text },
+  journalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.12)' },
+  journalBullet: { width: 22, fontSize: 16, fontWeight: '900', color: mobileTheme.colors.textSecondary, textAlign: 'center', paddingTop: 1 },
+  journalTime: { width: 48, fontSize: 13, fontWeight: '800', color: mobileTheme.colors.link, paddingTop: 2 },
   detailSection: { gap: 8, borderTopWidth: 1, borderTopColor: '#eceef1', paddingTop: 16 },
   detailTitle: { fontSize: 16, fontWeight: '800', color: '#17191d' },
   briefingSection: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 8 },
