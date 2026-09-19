@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { mobileTheme } from '@/src/ui/theme';
 
@@ -13,6 +14,7 @@ type WorkRecordEditSheetProps = Readonly<{
   saving: boolean;
   ready: boolean;
   statusText?: string;
+  statusTone?: 'neutral' | 'success' | 'error';
   onTitle(value: string): void;
   onDate(value: string): void;
   onTime(value: string): void;
@@ -57,6 +59,7 @@ export function WorkRecordEditSheet({
   saving,
   ready,
   statusText = '',
+  statusTone = 'neutral',
   onTitle,
   onDate,
   onTime,
@@ -64,6 +67,7 @@ export function WorkRecordEditSheet({
   onCancel,
   onRetry,
 }: WorkRecordEditSheetProps) {
+  const insets = useSafeAreaInsets();
   const titleInput = useRef<TextInput>(null);
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const inputBlocked = loading || saving;
@@ -102,11 +106,11 @@ export function WorkRecordEditSheet({
   >
     <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Pressable accessibilityLabel="업무 수정 닫기" style={StyleSheet.absoluteFill} disabled={saving} onPress={close} />
-      <View style={styles.sheet} accessibilityViewIsModal>
+      <View style={[styles.sheet, { paddingBottom: 18 + insets.bottom }]} accessibilityViewIsModal>
+        <View style={styles.dragHandle} />
         <View style={styles.head}>
           <View style={styles.headCopy}>
-            <Text style={styles.eyebrow}>업무 수정</Text>
-            <Text style={styles.title}>브리핑 내용을 바로 고칩니다</Text>
+            <Text style={styles.title}>업무 수정</Text>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="업무 수정 닫기" hitSlop={8} disabled={saving} style={styles.close} onPress={close}>
             <Text style={styles.closeText}>×</Text>
@@ -172,17 +176,17 @@ export function WorkRecordEditSheet({
         </View> : null}
 
         <View style={styles.helpRow}>
-          <Text style={styles.help}>{date ? '날짜와 시간은 터치해서 바꿉니다.' : '현재 기한 없음 · 날짜를 선택하면 기한이 생깁니다.'}</Text>
+          <Text style={styles.help}>{date ? '기한을 변경하거나 없앨 수 있습니다.' : '현재 기한 없음'}</Text>
           {date || time ? <Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={!ready || inputBlocked} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDue}>기한 없음</Text></Pressable> : null}
         </View>
-        <Text style={styles.help}>업무명과 기한만 수정하며, 음성 원문은 그대로 보존됩니다.</Text>
+        <Text style={styles.help}>음성 원문은 그대로 보존됩니다.</Text>
 
-        {statusText ? <Text accessibilityLiveRegion="polite" style={styles.status}>{statusText}</Text> : null}
+        {statusText ? <Text accessibilityLiveRegion="polite" style={[styles.status, statusTone === 'success' ? styles.statusSuccess : statusTone === 'error' ? styles.statusError : null]}>{statusText}</Text> : null}
         {!ready && !loading && onRetry ? <Pressable accessibilityRole="button" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>다시 불러오기</Text></Pressable> : null}
 
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" disabled={saving} style={[styles.secondary, saving ? styles.disabled : null]} onPress={close}><Text style={styles.secondaryText}>취소</Text></Pressable>
-          <Pressable accessibilityRole="button" disabled={!ready || inputBlocked || !title.trim()} style={[styles.primary, !ready || inputBlocked || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : '저장'}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={!ready || inputBlocked || !title.trim()} style={[styles.primary, !ready || inputBlocked || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : statusTone === 'success' ? '✓ 저장 완료' : '저장'}</Text></Pressable>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -191,11 +195,11 @@ export function WorkRecordEditSheet({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,24,39,0.42)' },
-  sheet: { gap: 10, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border },
+  sheet: { gap: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border },
+  dragHandle: { width: 44, height: 5, alignSelf: 'center', borderRadius: 999, backgroundColor: '#d1d5db', marginBottom: 2 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   headCopy: { flex: 1, minWidth: 0, gap: 2 },
-  eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 0.9, color: mobileTheme.colors.textMuted },
-  title: { fontSize: 17, fontWeight: '800', color: mobileTheme.colors.text },
+  title: { fontSize: 19, fontWeight: '900', color: mobileTheme.colors.text },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   closeText: { fontSize: 28, lineHeight: 30, color: mobileTheme.colors.textSecondary },
   loading: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 9 },
@@ -213,13 +217,15 @@ const styles = StyleSheet.create({
   helpRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   help: { flexShrink: 1, fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   clearDue: { color: mobileTheme.colors.link, fontSize: 12, fontWeight: '800', paddingVertical: 6, paddingHorizontal: 4 },
-  status: { fontSize: 13, color: mobileTheme.colors.textSecondary, lineHeight: 19 },
+  status: { minHeight: 22, fontSize: 13, fontWeight: '800', color: mobileTheme.colors.textSecondary, lineHeight: 19 },
+  statusSuccess: { color: mobileTheme.colors.success },
+  statusError: { color: mobileTheme.colors.danger },
   retry: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
   retryText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.link },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingTop: 2 },
-  secondary: { minHeight: 44, minWidth: 86, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  actions: { flexDirection: 'row', gap: 10, paddingTop: 4 },
+  secondary: { flex: 1, minHeight: 50, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
   secondaryText: { color: mobileTheme.colors.textSecondary, fontSize: 13, fontWeight: '800' },
-  primary: { minHeight: 44, minWidth: 96, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: mobileTheme.colors.primary },
+  primary: { flex: 1.2, minHeight: 50, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: mobileTheme.colors.primary },
   primaryText: { color: mobileTheme.colors.primaryText, fontSize: 13, fontWeight: '800' },
   disabled: { opacity: 0.5 },
 });
