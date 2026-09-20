@@ -1,5 +1,6 @@
 name: Mobile App
 
+# Main pushes run the exact-SHA post-merge Pre-Human mobile revalidation.
 on:
   pull_request:
     paths:
