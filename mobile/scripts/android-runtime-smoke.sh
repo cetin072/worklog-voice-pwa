@@ -80,7 +80,7 @@ rendered=0
 for attempt in 1 2 3 4 5 6; do
   dump_window /sdcard/worklog-window.xml "$WINDOW_XML"
 
-  if grep -q 'QA authenticated Home' "$WINDOW_XML"; then
+  if grep -q '업무일지 열기' "$WINDOW_XML" && grep -q '음성 기록 시작' "$WINDOW_XML"; then
     rendered=1
     break
   fi
@@ -101,28 +101,40 @@ for attempt in 1 2 3 4 5 6; do
 done
 
 if [[ "$rendered" != "1" ]]; then
-  echo "Authenticated-home touch harness did not render."
+  echo "Production HomeScreenApp did not render its authenticated controls."
   cat "$WINDOW_XML"
   adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime" || true
   exit 1
 fi
 
-# Tap a top authenticated-home button and require a React state change.
+# Tap the production header and require HomeScreenApp's real setScreen('journal')
+# navigation, then return through the production panel close action.
 HEADER_COORDS="$(find_node_center "$WINDOW_XML" "업무일지 열기")"
 read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
 adb shell input tap "$HEADER_X" "$HEADER_Y"
 sleep 1
 dump_window /sdcard/worklog-header-after.xml /tmp/worklog-header-after.xml
-if ! grep -q 'QA 홈 상단 PASS 1' /tmp/worklog-header-after.xml; then
-  echo "Authenticated-home header Pressable did not react to Android tap."
+if ! grep -q '업무일지' /tmp/worklog-header-after.xml || ! grep -q '닫기' /tmp/worklog-header-after.xml; then
+  echo "HomeScreenApp did not navigate to the production journal screen."
   cat /tmp/worklog-header-after.xml
+  exit 1
+fi
+
+CLOSE_COORDS="$(find_node_center /tmp/worklog-header-after.xml "닫기")"
+read -r CLOSE_X CLOSE_Y <<<"$CLOSE_COORDS"
+adb shell input tap "$CLOSE_X" "$CLOSE_Y"
+sleep 1
+dump_window /sdcard/worklog-home-return.xml /tmp/worklog-home-return.xml
+if ! grep -q '음성 기록 시작' /tmp/worklog-home-return.xml; then
+  echo "Production journal close did not return to HomeScreenApp."
+  cat /tmp/worklog-home-return.xml
   exit 1
 fi
 
 # Tap the actual Quick Voice Pressable. Audio streaming keeps React Native busy
 # enough that uiautomator may not produce a post-tap XML dump, so verify the
 # VoiceRecorderCard's state transition through the release runtime log instead.
-MIC_COORDS="$(find_node_center /tmp/worklog-header-after.xml "음성 기록 시작")"
+MIC_COORDS="$(find_node_center /tmp/worklog-home-return.xml "음성 기록 시작")"
 read -r MIC_X MIC_Y <<<"$MIC_COORDS"
 adb shell input tap "$MIC_X" "$MIC_Y"
 recording=0
@@ -134,7 +146,7 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
   sleep 1
 done
 if [[ "$recording" != "1" ]]; then
-  echo "Authenticated-home Quick Voice Pressable did not enter recording state."
+  echo "HomeScreenApp Quick Voice Pressable did not enter recording state."
   echo "Tapped at: $MIC_X $MIC_Y"
   adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime|quick-voice" || true
   exit 1
@@ -144,7 +156,7 @@ fi
 # mic accessibility node to change; a click/console event alone is insufficient.
 dump_window /sdcard/worklog-mic-after.xml /tmp/worklog-mic-after.xml
 if ! grep -Eq '음성 기록 종료 후 바로 저장|녹음 중' /tmp/worklog-mic-after.xml; then
-  echo "Authenticated-home Quick Voice recording UI did not render after Android tap."
+  echo "HomeScreenApp Quick Voice recording UI did not render after Android tap."
   cat /tmp/worklog-mic-after.xml
   exit 1
 fi
@@ -155,20 +167,21 @@ adb shell input tap "$CANCEL_X" "$CANCEL_Y"
 sleep 1
 dump_window /sdcard/worklog-cancel-after.xml /tmp/worklog-cancel-after.xml
 if ! grep -q '음성 기록 시작' /tmp/worklog-cancel-after.xml; then
-  echo "Quick Voice cancel did not return the authenticated Home recorder to idle."
+  echo "Quick Voice cancel did not return HomeScreenApp recorder to idle."
   cat /tmp/worklog-cancel-after.xml
   exit 1
 fi
 
+# After cancellation, exercise the same production navigation path again.
 HEADER_COORDS="$(find_node_center /tmp/worklog-cancel-after.xml "업무일지 열기")"
 read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
 adb shell input tap "$HEADER_X" "$HEADER_Y"
 sleep 1
 dump_window /sdcard/worklog-header-retry.xml /tmp/worklog-header-retry.xml
-if ! grep -q 'QA 홈 상단 PASS 2' /tmp/worklog-header-retry.xml; then
-  echo "Authenticated-home header Pressable did not remain touchable after Quick Voice cancellation."
+if ! grep -q '업무일지' /tmp/worklog-header-retry.xml || ! grep -q '닫기' /tmp/worklog-header-retry.xml; then
+  echo "HomeScreenApp did not navigate after Quick Voice cancellation."
   cat /tmp/worklog-header-retry.xml
   exit 1
 fi
 
-echo "Android authenticated-home touch smoke PASS: header and Quick Voice taps reached React Native."
+echo "Android production HomeScreenApp E2E PASS: navigation, Quick Voice recording, cancel, and post-cancel navigation."

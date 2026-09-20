@@ -70,7 +70,7 @@ test('Quick voice memo uses normal authenticated-home flow and auto-saves a vali
   assert.match(homeSource, /MeetingRecordingBanner[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{styles\.quickDock\}>/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
-  assert.match(homeSource, /saveWorklog: async \(transcript, options\)/);
+  assert.match(homeSource, /saveWorklog: androidTouchSmoke \? async \(\) => \(\{\}\) : async \(transcript, options\)/);
   assert.match(homeSource, /refreshBriefing/);
 });
 

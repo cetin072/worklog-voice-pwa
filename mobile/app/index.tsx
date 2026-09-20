@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Session } from '@supabase/supabase-js';
 
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { createConfiguredMobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
@@ -25,6 +26,7 @@ import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
 import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, postponeWorklog, readWorklogDetails, saveWorklog, setWorklogAttention, undoPostponeWorklog, undoWorklogAttention, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { usePlatform } from '@/src/providers/platform-provider';
+import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import { mobileTheme } from '@/src/ui/theme';
 
 type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'scheduleSettings' | 'reminderSettings' | 'patchNotes';
@@ -262,6 +264,17 @@ const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider
   provider: 'android-touch-smoke',
   async transcribe() { return { text: 'android touch smoke' }; },
 });
+const ANDROID_TOUCH_SMOKE_SESSION = {
+  access_token: 'android-touch-smoke-token',
+  user: { id: 'android-touch-smoke-user', email: 'android-touch-smoke@example.invalid' },
+} as Session;
+// This client is never allowed to reach Supabase: HomeScreenApp substitutes its
+// startup reads/recovery calls with the no-op adapter below in smoke mode.
+const ANDROID_TOUCH_SMOKE_CLIENT = {} as PlatformSupabaseClient;
+const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
+  today: '2026-09-20', counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
+  structure: { overdue: [], today: [], upcoming: [], undated: [] }, resurface: [], notes: [], schedules: { today: [], upcoming: [], total: 0 },
+};
 
 function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onOpenJournal: () => void; onOpenRecordSearch: () => void; onOpenSettings: () => void }) {
   return <View style={styles.header}>
@@ -274,44 +287,23 @@ function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onO
   </View>;
 }
 
-function AuthenticatedHomeTouchSmoke() {
-  const insets = useSafeAreaInsets();
-  const [headerTapCount, setHeaderTapCount] = useState(0);
-  const [quickVoicePhase, setQuickVoicePhase] = useState('idle');
-  const markHeaderTap = () => setHeaderTapCount((count) => count + 1);
-  return <View style={[styles.page, { paddingTop: insets.top }]} accessibilityLabel="QA authenticated Home">
-    <StatusBar style="dark" />
-    <View style={styles.authenticatedShell}>
-    <ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled">
-      <HomeHeader onOpenJournal={markHeaderTap} onOpenRecordSearch={markHeaderTap} onOpenSettings={markHeaderTap} />
-      <Text accessibilityLabel="QA 홈 상단 결과" style={styles.statusText}>{headerTapCount ? `QA 홈 상단 PASS ${headerTapCount}` : 'QA 홈 상단 대기'}</Text>
-      <VoiceRecorderCard
-        mode="quick"
-        onOpenWorklogInput={markHeaderTap}
-        freezeQuickVoiceTimer
-        onQuickVoicePhaseChange={(phase) => {
-          setQuickVoicePhase(phase);
-          console.info(`[android-touch-smoke] quick-voice-phase=${phase}`);
-        }}
-        quickVoice={{
-          ensureProvider: async () => ANDROID_TOUCH_SMOKE_PROVIDER,
-          draftScope: 'android-touch-smoke-v2',
-          saveWorklog: async () => ({}),
-          refreshBriefing: async () => undefined,
-        }}
-      />
-      <Text accessibilityLabel="QA Quick Voice phase" style={styles.statusText}>{`QA Quick Voice ${quickVoicePhase}`}</Text>
-    </ScrollView>
-    </View>
-  </View>;
-}
-
 export default function HomeScreen() {
-  return ANDROID_TOUCH_SMOKE_MODE ? <AuthenticatedHomeTouchSmoke /> : <HomeScreenApp />;
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} />;
 }
 
-function HomeScreenApp() {
-  const { phase, session, error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut, config, client } = usePlatform();
+function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
+  const platform = usePlatform();
+  const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
+  const phase = androidTouchSmoke ? 'ready' : platform.phase;
+  const session = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION : platform.session;
+  const client = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
+  const config = androidTouchSmoke ? null : platform.config;
+  const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
+  const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
+  const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => ANDROID_TOUCH_SMOKE_SESSION.access_token : getFreshAccessToken;
+  const reconcileHomeCancelledSchedules = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCanceledScheduleArtifacts;
+  const reconcileHomeCalendar = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCalendarEventCleanup;
+  const reconcileHomeReminders = androidTouchSmoke ? async () => ({ restored: 0, removed: 0, cleanedPending: 0, failed: 0, untracked: 0, pending: 0 }) : reconcileScheduleReminders;
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -389,7 +381,7 @@ function HomeScreenApp() {
     setJournal(null);
     setJournalBusy(true);
     setJournalError('');
-    void loadWorkJournalDay(token, journalDate)
+    void loadHomeJournal(token, journalDate)
       .then((next) => { if (alive) setJournal(next); })
       .catch((nextError) => { if (alive) setJournalError(messageOf(nextError, '업무일지를 불러오지 못했습니다.')); })
       .finally(() => { if (alive) setJournalBusy(false); });
@@ -428,9 +420,9 @@ function HomeScreenApp() {
     // Calendar rollback artifacts, then reminder restoration/cleanup.
     if (client && session) {
       void (async () => {
-        await reconcileCanceledScheduleArtifacts(client);
-        const calendarRecovery = await reconcileCalendarEventCleanup();
-        const reminderRecovery = await reconcileScheduleReminders();
+        await reconcileHomeCancelledSchedules(client);
+        const calendarRecovery = await reconcileHomeCalendar();
+        const reminderRecovery = await reconcileHomeReminders();
         if (calendarRecovery.remaining || reminderRecovery.failed || reminderRecovery.pending || reminderRecovery.untracked) {
           showMessage('일부 캘린더·알림은 복구 또는 확인이 필요합니다. 일정별 상태와 다시 확인 버튼을 확인해주세요.', 'error');
         }
@@ -473,8 +465,8 @@ function HomeScreenApp() {
       setBriefingBusy(true);
       setBriefingError('');
       try {
-        const accessToken = await getFreshAccessToken(client);
-        const next = await loadBriefing(accessToken);
+        const accessToken = await freshHomeAccessToken(client);
+        const next = await loadHomeBriefing(accessToken);
         if (epoch === briefingRefreshEpoch.current) setBriefing(next);
       } catch (nextError) {
         if (epoch === briefingRefreshEpoch.current) setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.'));
@@ -930,7 +922,7 @@ function HomeScreenApp() {
   return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
-      <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+      <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, draftScope: androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION.user.id : session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
         <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>✅ 업무 저장 완료</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
         <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
