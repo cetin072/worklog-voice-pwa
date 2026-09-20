@@ -16,6 +16,22 @@ on:
       - 'tests/helpers/**'
       - 'scripts/verify-mobile-device-mutations.mjs'
       - '.github/workflows/mobile-foundation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'mobile/app/**'
+      - 'mobile/src/**'
+      - 'mobile/android/**'
+      - 'mobile/ios/**'
+      - 'mobile/app.json'
+      - 'mobile/app.config.js'
+      - 'mobile/app.config.ts'
+      - 'mobile/package-lock.json'
+      - 'tests/mobile-*.test.mjs'
+      - 'tests/helpers/**'
+      - 'scripts/verify-mobile-device-mutations.mjs'
+      - '.github/workflows/mobile-foundation.yml'
   workflow_dispatch:
     inputs:
       build_android:
@@ -51,8 +67,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ "${FORCE_ANDROID:-true}" == "true" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$GITHUB_EVENT_NAME" == "push" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == "push" || "${FORCE_ANDROID:-true}" == "true" ]]; then
               echo "android=true" >> "$GITHUB_OUTPUT"
             else
               echo "android=false" >> "$GITHUB_OUTPUT"
@@ -167,7 +183,6 @@ jobs:
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
-
 
   android-runtime-smoke:
     needs:
