@@ -83,11 +83,3 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: bash mobile/scripts/pre-human-native-stt.sh
-              fi
-              sleep 6
-            done
-
-            echo 'Timed out waiting for native Korean STT result.'
-            cat /tmp/prehuman.xml 2>/dev/null || true
-            adb logcat -d -t 1000 | grep -E 'PREHUMAN_STT_FAIL|PREHUMAN_STT_PASS|ReactNativeJS|AndroidRuntime|rnwhisper' | tail -400 || true
-            exit 1
