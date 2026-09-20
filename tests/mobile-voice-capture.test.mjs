@@ -52,7 +52,7 @@ test('Briefing App Shell shows progress plus typed result or error next to the a
   assert.match(homeSource, /briefingError/);
 });
 
-test('Quick voice memo uses the home bottom dock and auto-saves a valid STT transcript', () => {
+test('Quick voice memo uses normal authenticated-home flow and auto-saves a valid STT transcript', () => {
   assert.match(recorderSource, /useQuickVoicePcmCapture/);
   assert.match(recorderSource, /transcribeQuickVoiceCapture/);
   assert.match(recorderSource, /createQuickVoiceSaveAttempt/);
@@ -66,8 +66,8 @@ test('Quick voice memo uses the home bottom dock and auto-saves a valid STT tran
   assert.match(recorderSource, /브리핑 카드의 ✏️/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.match(recorderSource, /업무 직접 입력 열기/);
-  assert.match(homeSource, /<View pointerEvents="box-none" onLayout=\{/);
-  assert.match(homeSource, /styles\.quickDockShell/);
+  assert.doesNotMatch(homeSource, /quickDockShell|quickDockHeight|setQuickDockHeight|position: 'absolute'/);
+  assert.match(homeSource, /MeetingRecordingBanner[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{styles\.quickDock\}>/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
   assert.match(homeSource, /saveWorklog: async \(transcript, options\)/);
@@ -86,10 +86,10 @@ test('Meeting recorder is owned by an app-wide session instead of the meeting ca
 });
 
 
-test('Home reserves measured space for the variable-height Quick Voice dock', () => {
-  assert.match(homeSource, /quickDockHeight/);
-  assert.match(homeSource, /onLayout=\{\(event\) => setQuickDockHeight/);
-  assert.match(homeSource, /quickDockHeight \+ 32/);
+test('Home keeps Quick Voice in normal scroll flow so it cannot overlay authenticated controls', () => {
+  assert.doesNotMatch(homeSource, /quickDockHeight|setQuickDockHeight|quickDockShell/);
+  assert.match(homeSource, /paddingBottom: 28 \+ insets\.bottom/);
+  assert.match(homeSource, /ANDROID_TOUCH_SMOKE_MODE/);
 });
 
 test('Quick Voice keeps a separate top control and left-center-right orbital controls with explicit cancellation', () => {
@@ -109,5 +109,5 @@ test('Quick Voice keeps a separate top control and left-center-right orbital con
   assert.match(recorderSource, /● 녹음 중 ·/);
   assert.match(recorderSource, /quickMicTimer/);
   assert.match(recorderSource, /끝나면 빨간 버튼을 누르세요/);
-  assert.match(homeSource, /Math\.max\(220, Math\.ceil\(event\.nativeEvent\.layout\.height\)\)/);
+  assert.doesNotMatch(homeSource, /Math\.max\(220, Math\.ceil\(event\.nativeEvent\.layout\.height\)\)/);
 });
