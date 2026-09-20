@@ -36,13 +36,14 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d/);
   assert.match(workflow, /bash mobile\/scripts\/android-runtime-smoke\.sh/);
   assert.match(smokeScript, /adb shell am start -W -n "\$ACTIVITY"/);
-  assert.match(smokeScript, /assembleRelease/);
+  assert.match(workflow, /Build x86_64 authenticated-home touch APK/);
+  assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '1'/);
+  assert.match(workflow, /assembleRelease -PreactNativeArchitectures=x86_64/);
   assert.match(smokeScript, /app-release\.apk/);
   assert.match(smokeScript, /uiautomator dump/);
   assert.match(smokeScript, /for attempt in 1 2 3/);
   assert.match(smokeScript, /Quickstep isn't responding/);
   assert.match(smokeScript, /ANDROID TOUCH SMOKE/);
-  assert.match(smokeScript, /EXPO_PUBLIC_ANDROID_TOUCH_SMOKE=1/);
   assert.match(smokeScript, /QA 홈 상단 버튼/);
   assert.match(smokeScript, /음성 기록 시작/);
   assert.match(smokeScript, /adb shell input tap/);
