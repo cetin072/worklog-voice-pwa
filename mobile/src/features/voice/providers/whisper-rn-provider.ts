@@ -4,6 +4,7 @@ import {
   type MobileTranscriptionProvider,
 } from '../transcription-provider';
 import type { ResolvedSttModel } from '../stt-model';
+import { reportQuickVoiceDebug } from '../quick-voice-debug';
 
 export type WhisperRnTranscribeResult = Readonly<{
   result?: string;
@@ -37,24 +38,7 @@ export type WhisperRnContextLike = Readonly<{
 
 
 
-/**
- * Expo AudioStream int16 is little-endian signed PCM. whisper.rn Whisper
- * transcribeData consumes float32 PCM samples, so normalize at the provider
- * boundary instead of leaking a provider-specific audio format into Core.
- */
-export function pcm16LittleEndianToFloat32Buffer(data: ArrayBuffer) {
-  if (data.byteLength === 0 || data.byteLength % 2 !== 0) {
-    throw new Error('whisper.rn 변환용 PCM16 데이터 길이가 올바르지 않습니다.');
-  }
-
-  const input = new DataView(data);
-  const output = new Float32Array(data.byteLength / 2);
-  for (let index = 0; index < output.length; index += 1) {
-    output[index] = input.getInt16(index * 2, true) / 32_768;
-  }
-  return output.buffer;
-}
-
+/** Normalizes the native provider result without exposing it outside this adapter. */
 function normalizedWhisperResult(
   result: WhisperRnTranscribeResult,
   language: string,
@@ -132,12 +116,35 @@ export function createWhisperRnTranscriptionProvider(input: {
         throw new Error('whisper.rn Quick Voice PoC는 16kHz mono int16 PCM 입력만 허용합니다.');
       }
 
-      const whisperPcm = pcm16LittleEndianToFloat32Buffer(audio.data);
-      const task = input.context.transcribeData(whisperPcm, {
-        language,
-        ...(maxThreads ? { maxThreads } : {}),
-      });
-      return normalizedWhisperResult(await task.promise, language, input.model.descriptor.id);
+      // whisper.rn 0.7.2's Android JSI implementation decodes the ArrayBuffer
+      // with decodePcm16() before calling whisper_full_parallel. Its public TS
+      // comment says float32, but the installed native implementation is the
+      // runtime contract for this Android path. Keep Expo AudioStream's exact
+      // signed PCM16 bytes intact; converting here makes native decodePcm16()
+      // reinterpret Float32 bytes as unrelated PCM samples.
+      reportQuickVoiceDebug('transcribe_data', 'started');
+      let normalizing = false;
+      try {
+        const task = input.context.transcribeData(audio.data, {
+          language,
+          ...(maxThreads ? { maxThreads } : {}),
+        });
+        const result = await task.promise;
+        reportQuickVoiceDebug('transcribe_data', 'succeeded');
+        reportQuickVoiceDebug('result_normalization', 'started');
+        normalizing = true;
+        try {
+          const normalized = normalizedWhisperResult(result, language, input.model.descriptor.id);
+          reportQuickVoiceDebug('result_normalization', 'succeeded');
+          return normalized;
+        } catch (error) {
+          reportQuickVoiceDebug('result_normalization', 'failed', error);
+          throw error;
+        }
+      } catch (error) {
+        if (!normalizing) reportQuickVoiceDebug('transcribe_data', 'failed', error);
+        throw error;
+      }
     },
   });
 }

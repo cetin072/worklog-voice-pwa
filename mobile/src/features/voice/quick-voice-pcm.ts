@@ -10,6 +10,8 @@ import {
   createQuickVoicePcmAudioInput,
   type QuickVoicePcmAudioInput,
 } from './audio-input';
+import { cancelQuickVoiceCapture } from './quick-voice-capture-lifecycle';
+import { reportQuickVoiceDebug } from './quick-voice-debug';
 
 export const QUICK_VOICE_PCM_SAMPLE_RATE = 16_000;
 export const QUICK_VOICE_PCM_CHANNELS = 1;
@@ -112,6 +114,7 @@ export function useQuickVoicePcmCapture() {
   }
 
   async function start() {
+    reportQuickVoiceDebug('capture', 'started');
     reset();
     const createdAt = new Date().toISOString();
     captureIdentity.current = {
@@ -128,6 +131,7 @@ export function useQuickVoicePcmCapture() {
       allowsBackgroundRecording: false,
     });
     await stream.stream.start();
+    reportQuickVoiceDebug('capture', 'succeeded');
   }
 
   async function stop(): Promise<QuickVoicePcmCapture> {
@@ -165,11 +169,25 @@ export function useQuickVoicePcmCapture() {
     });
   }
 
+  async function cancel() {
+    try {
+      await cancelQuickVoiceCapture({
+        stopCapture: async () => { await stream.stream.stop(); },
+        disableRecordingMode: () => setAudioModeAsync({ allowsRecording: false }),
+        discardCapturedAudio: reset,
+      });
+    } catch (error) {
+      reportQuickVoiceDebug('capture', 'failed', error);
+      throw error;
+    }
+  }
+
   return Object.freeze({
     isStreaming: stream.isStreaming,
     stream: stream.stream,
     start,
     stop,
+    cancel,
     reset,
   });
 }

@@ -10,6 +10,8 @@ import { useQuickVoicePcmCapture } from '@/src/features/voice/quick-voice-pcm';
 import type { MobileTranscriptV1, MobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { secureSessionStorage } from '@/src/platform/secure-storage';
 import { mobileTheme } from '@/src/ui/theme';
+import { reportQuickVoiceDebug } from '@/src/features/voice/quick-voice-debug';
+import { QUICK_VOICE_LAYOUT } from '@/src/features/voice/quick-voice-layout';
 
 type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transcribing' | 'saving' | 'refreshing' | 'saved' | 'transcript_error' | 'save_error' | 'refresh_error';
 type QuickVoiceSaveResult = Readonly<{ recordId?: string; scheduleDetected?: boolean; scheduleCreated?: boolean; scheduleId?: string; dueStart?: string }>;
@@ -132,15 +134,24 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     saveAttempt.current = null;
     inFlight.current = true; setError(null); setModelDownload(null); setProviderPrepareMs(null); setFlowTimings(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setQuickPhase('preparing');
     try {
+      reportQuickVoiceDebug('provider_prepare', 'started');
       const providerStartedAt = Date.now();
       quickProvider.current = await quickVoice.ensureProvider((progress) => setModelDownload(progress));
+      reportQuickVoiceDebug('provider_prepare', 'succeeded');
       setProviderPrepareMs(Math.max(0, Date.now() - providerStartedAt));
-      await quickCapture.start();
+      reportQuickVoiceDebug('capture', 'started');
+      try {
+        await quickCapture.start();
+        reportQuickVoiceDebug('capture', 'succeeded');
+      } catch (error) {
+        reportQuickVoiceDebug('capture', 'failed', error);
+        throw error;
+      }
       clientRequestId.current = createQuickVoiceClientRequestId();
       recordingStartedAt.current = Date.now();
       setRecordingElapsedMs(0);
       setQuickPhase('recording');
-    } catch (nextError) { setQuickPhase('idle'); setError(messageOf(nextError, 'Quick Voice를 시작하지 못했습니다.')); }
+    } catch (nextError) { reportQuickVoiceDebug('provider_prepare', 'failed', nextError); setQuickPhase('idle'); setError(messageOf(nextError, 'Quick Voice를 시작하지 못했습니다.')); }
     finally { inFlight.current = false; }
   }
 
@@ -170,6 +181,30 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     inFlight.current = true; setError(null); setQuickPhase('captured');
     try { const audio = await quickCapture.stop(); setQuickAudio(audio); inFlight.current = false; await transcribeCapturedAudio(audio); }
     catch (nextError) { setQuickPhase('transcript_error'); setError(messageOf(nextError, '녹음된 음성을 확인하지 못했습니다.')); inFlight.current = false; }
+  }
+
+  async function cancelQuickVoice() {
+    if (quickPhase !== 'recording' || inFlight.current) return;
+    inFlight.current = true;
+    try {
+      await quickCapture.cancel();
+    } catch {
+      // The capture hook has already discarded chunks and attempted to restore
+      // the audio mode. Cancellation never creates a transcript or save.
+    } finally {
+      clientRequestId.current = null;
+      saveAttempt.current = null;
+      recordingStartedAt.current = null;
+      setRecordingElapsedMs(0);
+      setError(null);
+      setQuickAudio(null);
+      setQuickTranscript(null);
+      setQuickSave(null);
+      setEditableTranscript('');
+      setFlowTimings(null);
+      setQuickPhase('idle');
+      inFlight.current = false;
+    }
   }
 
   async function transcribeCapturedAudio(audio: QuickVoicePcmAudioInput) {
@@ -293,34 +328,39 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
             : null;
 
     return <View style={styles.quickDock}>
-      <View style={[styles.quickStatusBubble, isRecording ? styles.quickStatusBubbleRecording : statusDone ? styles.quickStatusBubbleDone : null]}>
-        <Text style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
+      <View style={styles.quickTopControl}>
+        <View style={[styles.quickStatusBubble, isRecording ? styles.quickStatusBubbleRecording : statusDone ? styles.quickStatusBubbleDone : null]}>
+          <Text style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
+        </View>
       </View>
       {quickPhase === 'preparing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
-      <View style={styles.quickControls}>
-        <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickSideAction, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
+      <View style={styles.quickOrbitalRow}>
+        <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
           <Text style={styles.quickSideIcon}>✏️</Text>
           <Text style={styles.quickSideLabel}>메모</Text>
         </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isRecording ? '음성 기록 종료 후 바로 저장' : '음성 기록 시작'}
-          disabled={quickActive && !isRecording}
-          style={[styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
-          onPress={() => void (isRecording ? stopQuickVoice() : canStart ? startQuickVoice() : undefined)}
-        >
-          <Text style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
-          <Text style={styles.quickMicLabel}>{isRecording ? '녹음 중' : quickActive ? '처리 중' : '음성 기록'}</Text>
-          {isRecording ? <Text style={styles.quickMicTimer}>{formatDuration(recordingElapsedMs)}</Text> : null}
-        </Pressable>
+        <View style={styles.quickPrimaryControl}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isRecording ? '음성 기록 종료 후 바로 저장' : '음성 기록 시작'}
+            disabled={quickActive && !isRecording}
+            style={[styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
+            onPress={() => void (isRecording ? stopQuickVoice() : canStart ? startQuickVoice() : undefined)}
+          >
+            <Text style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
+            <Text style={styles.quickMicLabel}>{isRecording ? '녹음 중' : quickActive ? '처리 중' : '음성 기록'}</Text>
+            {isRecording ? <Text style={styles.quickMicTimer}>{formatDuration(recordingElapsedMs)}</Text> : null}
+          </Pressable>
+        </View>
 
-        <View style={styles.quickSideStatus}>
+        <View style={styles.quickAuxiliaryStatus}>
           <Text style={styles.quickStatusIcon}>{statusDone ? '✓' : quickPhase === 'transcript_error' || quickPhase === 'save_error' ? '!' : '●'}</Text>
           <Text style={styles.quickSideLabel}>{statusDone ? '저장됨' : isRecording ? '녹음 중' : quickPhase === 'idle' ? '대기' : '처리 중'}</Text>
         </View>
       </View>
+      {isRecording ? <Pressable accessibilityRole="button" accessibilityLabel="녹음 취소" style={styles.quickCancel} onPress={() => void cancelQuickVoice()}><Text style={styles.quickCancelText}>취소</Text></Pressable> : null}
 
       {guidance ? <Text style={styles.quickGuidance}>{guidance}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -355,24 +395,28 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 }
 
 const styles = StyleSheet.create({
-  quickDock: { backgroundColor: 'transparent', borderTopWidth: 0, paddingHorizontal: 18, paddingTop: mobileTheme.spacing.compact, paddingBottom: mobileTheme.spacing.compact, gap: 7 },
-  quickStatusBubble: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.94)' },
+  quickDock: { backgroundColor: 'transparent', borderTopWidth: 0, paddingHorizontal: QUICK_VOICE_LAYOUT.horizontalPadding, paddingTop: mobileTheme.spacing.compact, paddingBottom: mobileTheme.spacing.compact, gap: QUICK_VOICE_LAYOUT.verticalGap },
+  quickTopControl: { minHeight: QUICK_VOICE_LAYOUT.topHitHeight, alignItems: 'center', justifyContent: 'center' },
+  quickStatusBubble: { minHeight: QUICK_VOICE_LAYOUT.topHitHeight, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.94)' },
   quickStatusBubbleRecording: { backgroundColor: '#b91c1c' },
   quickStatusBubbleDone: { backgroundColor: '#eaf4ea' },
   quickStatusBubbleText: { fontSize: 12, fontWeight: '900', color: '#475569' },
   quickStatusBubbleTextRecording: { color: '#fff' },
   quickStatusBubbleTextDone: { color: mobileTheme.colors.success },
   quickProgress: { textAlign: 'center', fontSize: 11, color: '#475569' },
-  quickControls: { minHeight: 132, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 },
-  quickMic: { width: 148, height: 148, marginTop: -28, borderRadius: 74, alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: mobileTheme.colors.primary, borderWidth: 5, borderColor: mobileTheme.colors.surface, shadowColor: mobileTheme.colors.primary, shadowOpacity: 0.28, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
+  quickOrbitalRow: { height: QUICK_VOICE_LAYOUT.micSize, flexDirection: 'row', alignItems: 'center', gap: QUICK_VOICE_LAYOUT.horizontalGap },
+  quickPrimaryControl: { width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
+  quickMic: { width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize, borderRadius: QUICK_VOICE_LAYOUT.micSize / 2, alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: mobileTheme.colors.primary, borderWidth: 5, borderColor: mobileTheme.colors.surface, shadowColor: mobileTheme.colors.primary, shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
   quickMicActive: { backgroundColor: '#b91c1c', shadowColor: '#b91c1c', shadowOpacity: 0.34 },
   quickMicBusy: { opacity: 0.65 },
   quickMicIcon: { fontSize: 38, color: '#fff' },
   quickMicLabel: { fontSize: 15, fontWeight: '900', color: '#fff' },
   quickMicTimer: { fontSize: 13, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] },
-  quickSideAction: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.92)' },
+  quickAuxiliaryAction: { flex: 1, minWidth: QUICK_VOICE_LAYOUT.auxiliaryMinWidth, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.92)' },
   quickSideActionDisabled: { opacity: 0.4 },
-  quickSideStatus: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(248,250,252,0.92)' },
+  quickAuxiliaryStatus: { flex: 1, minWidth: QUICK_VOICE_LAYOUT.auxiliaryMinWidth, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(248,250,252,0.92)' },
+  quickCancel: { minHeight: QUICK_VOICE_LAYOUT.cancelHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#b91c1c', backgroundColor: '#fff1f2' },
+  quickCancelText: { color: '#b91c1c', fontSize: 14, fontWeight: '900' },
   quickSideIcon: { fontSize: 18 },
   quickStatusIcon: { fontSize: 16, fontWeight: '900', color: '#245c2a' },
   quickSideLabel: { fontSize: 10, fontWeight: '800', color: '#374151' },

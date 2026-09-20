@@ -39,9 +39,11 @@ test('Whisper Android file transcription fails closed for original M4A and accep
   assert.match(whisper, /input\.context\.transcribe\(audio\.uri/);
 });
 
-test('Quick Voice PCM path remains unchanged beside prepared file transcription', () => {
-  assert.match(whisper, /pcm16LittleEndianToFloat32Buffer/);
+test('Quick Voice preserves PCM16 bytes for native decode beside prepared file transcription', () => {
+  assert.match(whisper, /decodePcm16\(\)/);
+  assert.doesNotMatch(whisper, /pcm16LittleEndianToFloat32Buffer/);
   assert.match(whisper, /input\.context\.transcribeData/);
+  assert.match(whisper, /transcribeData\(audio\.data/);
   assert.match(whisper, /16kHz mono int16 PCM/);
 });
 

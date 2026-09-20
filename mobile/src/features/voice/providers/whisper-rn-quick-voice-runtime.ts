@@ -1,5 +1,7 @@
 import { defineDownloadableSttModel, createExpoSttModelResolver, type SttModelDownloadProgress } from '../stt-model-download';
 import { defineSttModel } from '../stt-model';
+import type { ResolvedSttModel } from '../stt-model';
+import { reportQuickVoiceDebug } from '../quick-voice-debug';
 import type { MobileTranscriptionProvider } from '../transcription-provider';
 import {
   initializeWhisperRnRuntime,
@@ -49,10 +51,25 @@ export async function prepareQuickVoiceWhisperProvider(
   if (onProgress) progressListeners.add(onProgress);
   if (!runtimePromise) {
     runtimePromise = (async () => {
-      const model = await modelResolver.ensureAvailable(QUICK_VOICE_WHISPER_MODEL.descriptor);
-      const runtime = await initializeWhisperRnRuntime({ model, maxThreads: 4 });
-      activeRuntime = runtime;
-      return runtime;
+      reportQuickVoiceDebug('model_resolve', 'started');
+      let model: ResolvedSttModel;
+      try {
+        model = await modelResolver.ensureAvailable(QUICK_VOICE_WHISPER_MODEL.descriptor);
+        reportQuickVoiceDebug('model_resolve', 'succeeded');
+      } catch (error) {
+        reportQuickVoiceDebug('model_resolve', 'failed', error);
+        throw error;
+      }
+      reportQuickVoiceDebug('init_whisper', 'started');
+      try {
+        const runtime = await initializeWhisperRnRuntime({ model, maxThreads: 4 });
+        activeRuntime = runtime;
+        reportQuickVoiceDebug('init_whisper', 'succeeded');
+        return runtime;
+      } catch (error) {
+        reportQuickVoiceDebug('init_whisper', 'failed', error);
+        throw error;
+      }
     })().catch((error) => {
       runtimePromise = null;
       throw error;
