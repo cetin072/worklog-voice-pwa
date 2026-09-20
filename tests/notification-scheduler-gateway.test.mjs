@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createNotificationSchedulerClient, notificationSchedulerConfig } from "../netlify/shared/notification-scheduler.mjs";
 
 const gateway = readFileSync(new URL("../supabase/functions/notification-scheduler-gateway/index.ts", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../supabase/migrations/20260920001000_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../supabase/migrations/20260919154119_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
 
 test("scheduler config is server-secret only and no longer depends on a public Supabase key", () => {
   const configured = notificationSchedulerConfig((name) => ({
