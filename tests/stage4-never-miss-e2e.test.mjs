@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { selectResurfaceTasks } from '../netlify/shared/resurface-engine.mjs';
 
-const migration = readFileSync(new URL('../supabase/migrations/20260919163909_stage4_postpone_remind.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../supabase/migrations/20260919170640_stage4_postpone_remind.sql', import.meta.url), 'utf8');
 const task = (values = {}) => ({ pageId: 'task-1', title: '계약서 확인', status: '진행중', actionKind: 'task', dueKey: '2026-09-20', ...values });
 const focus = (tasks, now = '2026-09-20T09:00:00.000Z', today = '2026-09-20') => selectResurfaceTasks(tasks, { now, today });
 
