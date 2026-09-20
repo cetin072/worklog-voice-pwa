@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 const voice = fs.readFileSync('mobile/src/features/voice/voice-recorder-card.tsx', 'utf8');
+const quickVoiceLayout = fs.readFileSync('mobile/src/features/voice/quick-voice-layout.ts', 'utf8');
 const home = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 const manual = fs.readFileSync('mobile/src/features/work/manual-work-input.tsx', 'utf8');
 const sheet = fs.readFileSync('mobile/src/features/work/work-record-edit-sheet.tsx', 'utf8');
@@ -10,9 +11,10 @@ const search = fs.readFileSync('mobile/src/features/search/work-record-search.ts
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 
 test('Voice UX mirrors the strongest web recording affordances', () => {
-  assert.match(voice, /width: 124, height: 124/);
+  assert.match(voice, /QUICK_VOICE_LAYOUT\.micSize/);
+  assert.match(quickVoiceLayout, /micSize: 128/);
   assert.doesNotMatch(voice, /marginTop: -28/);
-  assert.match(voice, /title="취소"/);
+  assert.match(voice, /accessibilityLabel="녹음 취소"/);
   assert.match(voice, /backgroundColor: '#b91c1c'/);
   assert.match(voice, /● 녹음 중 ·/);
   assert.match(voice, /recordingElapsedMs/);
