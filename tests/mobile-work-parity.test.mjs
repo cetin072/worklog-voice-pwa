@@ -18,7 +18,9 @@ test('Mobile work parity exposes completion, undo, and one-tap editing from the 
   assert.match(homeSource, /onComplete=\{\(\) => void completeTaskInline\(task\)\}/);
   assert.match(homeSource, /undoCompletedTask/);
   assert.match(homeSource, /실행 취소/);
-  assert.match(homeSource, /updateWorklogStatus\(session\.access_token, task\.pageId, '완료'\)/);
+  assert.match(homeSource, /const accessToken = await getFreshAccessToken\(client\)/);
+  assert.match(homeSource, /updateWorklogStatus\(accessToken, task\.pageId, '완료'\)/);
+  assert.doesNotMatch(homeSource, /updateWorklogStatus\(session\.access_token, task\.pageId, '완료'\)/);
   assert.match(homeSource, /openTaskEditor/);
   assert.match(homeSource, /WorkRecordEditSheet/);
   assert.match(editSheetSource, /dragHandle/);
