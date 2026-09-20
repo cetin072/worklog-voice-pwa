@@ -43,6 +43,10 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /for attempt in 1 2 3/);
   assert.match(smokeScript, /Quickstep isn't responding/);
   assert.match(smokeScript, /업무수첩\|연결을 확인해주세요/);
+  assert.match(smokeScript, /find_password_toggle_center/);
+  assert.match(smokeScript, /adb shell input tap/);
+  assert.match(smokeScript, /비밀번호 숨기기/);
+  assert.match(smokeScript, /real Pressable tap reached React Native/);
   assert.match(smokeScript, /Android runtime smoke PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);
 });
