@@ -41,12 +41,12 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /uiautomator dump/);
   assert.match(smokeScript, /for attempt in 1 2 3/);
   assert.match(smokeScript, /Quickstep isn't responding/);
-  assert.match(smokeScript, /업무수첩\|연결을 확인해주세요/);
+  assert.match(smokeScript, /ANDROID TOUCH SMOKE/);
   assert.match(smokeScript, /EXPO_PUBLIC_ANDROID_TOUCH_SMOKE=1/);
   assert.match(smokeScript, /QA 홈 상단 버튼/);
   assert.match(smokeScript, /음성 기록 시작/);
   assert.match(smokeScript, /adb shell input tap/);
   assert.match(smokeScript, /authenticated-home Quick Voice/);
-  assert.match(smokeScript, /Android runtime smoke PASS/);
+  assert.match(smokeScript, /Android authenticated-home touch smoke PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);
 });
