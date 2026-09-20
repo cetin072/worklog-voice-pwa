@@ -6,6 +6,7 @@ import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
+import { createConfiguredMobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { MeetingRecordingBanner } from '@/src/features/voice/meeting-recording-banner';
 import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers/whisper-rn-quick-voice-runtime';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
@@ -256,7 +257,44 @@ function SettingsMenuItem({ eyebrow, title, description, onPress, destructive = 
   </Pressable>;
 }
 
+const ANDROID_TOUCH_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_SMOKE === '1';
+const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider({
+  provider: 'android-touch-smoke',
+  async transcribe() { return { text: 'android touch smoke' }; },
+});
+
+function AuthenticatedHomeTouchSmoke() {
+  const insets = useSafeAreaInsets();
+  const [headerTapped, setHeaderTapped] = useState(false);
+  return <View style={[styles.page, { paddingTop: insets.top }]}>
+    <StatusBar style="dark" />
+    <ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]}>
+      <View style={styles.header}>
+        <View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>ANDROID TOUCH SMOKE</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="QA 홈 상단 버튼" style={styles.headerButton} onPress={() => setHeaderTapped(true)}>
+          <Text style={styles.headerButtonIcon}>✓</Text>
+        </Pressable>
+      </View>
+      <Text accessibilityLabel="QA 홈 상단 결과" style={styles.statusText}>{headerTapped ? 'QA 홈 상단 PASS' : 'QA 홈 상단 대기'}</Text>
+      <VoiceRecorderCard
+        mode="quick"
+        onOpenWorklogInput={() => setHeaderTapped(true)}
+        quickVoice={{
+          ensureProvider: async () => ANDROID_TOUCH_SMOKE_PROVIDER,
+          draftScope: 'android-touch-smoke-v2',
+          saveWorklog: async () => ({}),
+          refreshBriefing: async () => undefined,
+        }}
+      />
+    </ScrollView>
+  </View>;
+}
+
 export default function HomeScreen() {
+  return ANDROID_TOUCH_SMOKE_MODE ? <AuthenticatedHomeTouchSmoke /> : <HomeScreenApp />;
+}
+
+function HomeScreenApp() {
   const { phase, session, error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut, config, client } = usePlatform();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -320,7 +358,6 @@ export default function HomeScreen() {
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
   const [calendarConnectionVersion, setCalendarConnectionVersion] = useState(0);
-  const [quickDockHeight, setQuickDockHeight] = useState(220);
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
@@ -874,9 +911,10 @@ export default function HomeScreen() {
   const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
-  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? quickDockHeight + 32 : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="업무일지 열기" style={styles.headerButton} onPress={openJournal}><Text style={styles.headerButtonIcon}>📒</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
+  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="업무일지 열기" style={styles.headerButton} onPress={openJournal}><Text style={styles.headerButtonIcon}>📒</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
+      <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
         <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>✅ 업무 저장 완료</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
         <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
@@ -979,7 +1017,7 @@ export default function HomeScreen() {
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
   />
-  {screen === 'home' ? <View pointerEvents="box-none" onLayout={(event) => setQuickDockHeight(Math.max(220, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
+</View></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
@@ -991,7 +1029,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   authenticatedShell: { flex: 1 },
   contentScroll: { flex: 1 },
-  quickDockShell: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: mobileTheme.spacing.section, padding: 24, backgroundColor: mobileTheme.colors.background },
   scroll: { padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section, paddingBottom: 28 },
   loginScroll: { flexGrow: 1, justifyContent: 'center', padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section },
