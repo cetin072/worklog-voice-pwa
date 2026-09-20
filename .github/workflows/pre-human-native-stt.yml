@@ -82,29 +82,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            set -eu
-            cd mobile/android
-            ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
-            APK=app/build/outputs/apk/release/app-release.apk
-            adb install -r "$APK"
-            adb shell am force-stop com.cetin072.worklog || true
-            adb shell am start -W -a android.intent.action.VIEW -d 'worklog://prehuman-stt' -p com.cetin072.worklog
-
-            for attempt in $(seq 1 150); do
-              adb shell uiautomator dump /sdcard/prehuman.xml >/dev/null 2>&1 || true
-              adb pull /sdcard/prehuman.xml /tmp/prehuman.xml >/dev/null 2>&1 || true
-              if grep -q 'PREHUMAN STT PASS' /tmp/prehuman.xml 2>/dev/null; then
-                echo 'Pre-Human native Korean STT PASS'
-                grep -o 'text="[^"]*"' /tmp/prehuman.xml | tail -20 || true
-                adb logcat -d -t 500 | grep -E 'PREHUMAN_STT_PASS|ReactNativeJS' | tail -100 || true
-                exit 0
-              fi
-              if grep -q 'PREHUMAN STT FAIL' /tmp/prehuman.xml 2>/dev/null; then
-                echo 'Pre-Human native Korean STT FAIL'
-                cat /tmp/prehuman.xml || true
-                adb logcat -d -t 800 | grep -E 'PREHUMAN_STT_FAIL|PREHUMAN_STT_PASS|ReactNativeJS|AndroidRuntime|rnwhisper' | tail -300 || true
-                exit 1
+          script: bash mobile/scripts/pre-human-native-stt.sh
               fi
               sleep 6
             done
