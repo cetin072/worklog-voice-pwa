@@ -15,8 +15,8 @@ mkdirSync(output, { recursive: true });
 const cases = [
   ['reminder-fake-success', 'schedule-reminder-service.ts', 'const actualId = await deps.driver.schedule(next, scheduleId);', 'const actualId = next.identifier;', 'REMINDER_TEST_SOURCE_URL', 'mobile-reminders.runtime.test.mjs', 15],
   ['reminder-no-operation-queue', 'schedule-reminder-service.ts', 'const task = tail.then(run);', 'const task = Promise.resolve().then(run);', 'REMINDER_TEST_SOURCE_URL', 'mobile-reminders.runtime.test.mjs', 15],
-  ['calendar-no-operation-queue', 'device-calendar.ts', 'const task = calendarTail.then(run);', 'const task = Promise.resolve().then(run);', 'CALENDAR_TEST_SOURCE_URL', 'mobile-calendar.runtime.test.mjs', 18],
-  ['calendar-fake-update', 'device-calendar.ts', "await event.update({ title: schedule.title, startDate, endDate, allDay: Boolean(schedule.allDay), location: schedule.location || '' });", 'await Promise.resolve();', 'CALENDAR_TEST_SOURCE_URL', 'mobile-calendar.runtime.test.mjs', 18],
+  ['calendar-no-operation-queue', 'device-calendar.ts', 'const task = calendarTail.then(run);', 'const task = Promise.resolve().then(run);', 'CALENDAR_TEST_SOURCE_URL', 'mobile-calendar.runtime.test.mjs', 19],
+  ['calendar-fake-update', 'device-calendar.ts', "await event.update({ title: schedule.title, startDate, endDate, allDay: Boolean(schedule.allDay), location: schedule.location || '' });", 'await Promise.resolve();', 'CALENDAR_TEST_SOURCE_URL', 'mobile-calendar.runtime.test.mjs', 19],
 ];
 const results = [];
 for (const [name, file, before, after, variable, testFile, expectedTests] of cases) {
