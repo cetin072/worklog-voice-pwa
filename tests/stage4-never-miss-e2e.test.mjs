@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { selectResurfaceTasks } from '../netlify/shared/resurface-engine.mjs';
 
-const migration = readFileSync(new URL('../supabase/migrations/20260919163909_stage4_postpone_remind.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../supabase/migrations/20260919170640_stage4_postpone_remind.sql', import.meta.url), 'utf8');
 const task = (values = {}) => ({ pageId: 'task-1', title: '계약서 확인', status: '진행중', actionKind: 'task', dueKey: '2026-09-20', ...values });
 const focus = (tasks, now = '2026-09-20T09:00:00.000Z', today = '2026-09-20') => selectResurfaceTasks(tasks, { now, today });
 
@@ -21,6 +21,13 @@ test('future attention preserves due date, stays quiet until due, then resurface
   const waiting = task({ status: '대기', dueKey: '', nextAttentionAt: '2026-09-21T09:00:00.000Z' });
   assert.deepEqual(focus([waiting]), []);
   assert.equal(focus([waiting], '2026-09-21T09:00:00.000Z', '2026-09-21')[0].reason, 'attention');
+});
+
+test('future explicit attention suppresses today and overdue focus until the chosen attention time', () => {
+  const futureAttention = '2026-09-21T09:00:00.000Z';
+  assert.deepEqual(focus([task({ dueKey: '2026-09-20', nextAttentionAt: futureAttention })]), []);
+  assert.deepEqual(focus([task({ dueKey: '2026-09-18', nextAttentionAt: futureAttention })]), []);
+  assert.equal(focus([task({ dueKey: '2026-09-18', nextAttentionAt: futureAttention })], futureAttention, '2026-09-21')[0].reason, 'attention');
 });
 
 test('postpone, undo, attention undo, ownership, and linked schedules stay fail-closed at the trusted SQL boundary', () => {

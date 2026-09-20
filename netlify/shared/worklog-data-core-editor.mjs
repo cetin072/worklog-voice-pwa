@@ -39,6 +39,8 @@ function translateRpcError(error){
   if(/WORK_RECORD_POSTPONE_DUE_REQUIRED/i.test(message)) return editError("WORKLOG_DATA_CORE_POSTPONE_DUE_REQUIRED","미룰 날짜를 선택해주세요.");
   if(/WORK_RECORD_POSTPONE_SCHEDULE_LINKED/i.test(message)) return editError("WORKLOG_DATA_CORE_POSTPONE_SCHEDULE_LINKED","일정과 연결된 업무는 일정 화면에서 시간을 변경해주세요.");
   if(/WORK_RECORD_POSTPONE_UNDO_UNAVAILABLE/i.test(message)) return editError("WORKLOG_DATA_CORE_POSTPONE_UNDO_UNAVAILABLE","되돌릴 미루기 기록이 없습니다.");
+  if(/WORK_RECORD_POSTPONE_UNDO_STALE/i.test(message)) return editError("WORKLOG_DATA_CORE_POSTPONE_UNDO_STALE","업무 기한이 이미 다시 변경되어 이전 미루기를 되돌리지 않았습니다.");
+  if(/WORK_RECORD_ATTENTION_UNDO_STALE/i.test(message)) return editError("WORKLOG_DATA_CORE_ATTENTION_UNDO_STALE","다시 알림이 이미 다시 변경되어 이전 상태를 덮어쓰지 않았습니다.");
   if(/WORK_RECORD_ATTENTION_MUST_BE_FUTURE/i.test(message)) return editError("WORKLOG_DATA_CORE_ATTENTION_MUST_BE_FUTURE","다시 확인할 시간은 지금 이후로 선택해주세요.");
   return error;
 }
@@ -180,6 +182,26 @@ export function createWorklogDataCoreEditor({client}={}){
           recordId:id,
           nextAttentionAt:row.next_attention_at_value ? String(row.next_attention_at_value) : null,
           previousAttentionAt:row.previous_attention_at_value ? String(row.previous_attention_at_value) : null
+        });
+      }catch(error){ throw translateRpcError(error); }
+    },
+
+    async undoAttention({recordId:rawRecordId,expectedAttentionAt=null,previousAttentionAt=null}={}){
+      const id=recordId(rawRecordId);
+      for(const value of [expectedAttentionAt,previousAttentionAt]){
+        if(value!==null && value!==undefined && !Number.isFinite(new Date(String(value)).getTime())){
+          throw editError("WORKLOG_DATA_CORE_ATTENTION_UNDO_STALE","다시 알림 실행 취소 정보를 확인해주세요.");
+        }
+      }
+      try{
+        const row=singleRow(await client.rpc("undo_my_work_record_attention",{
+          p_record_id:id,
+          p_expected_attention_at:expectedAttentionAt ? String(expectedAttentionAt) : null,
+          p_previous_attention_at:previousAttentionAt ? String(previousAttentionAt) : null
+        }));
+        return Object.freeze({
+          recordId:id,
+          nextAttentionAt:row.next_attention_at_value ? String(row.next_attention_at_value) : null
         });
       }catch(error){ throw translateRpcError(error); }
     }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const migration = readFileSync(new URL("../supabase/migrations/20260919162133_stage4_attention_contract.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../supabase/migrations/20260919162457_stage4_attention_contract.sql", import.meta.url), "utf8");
 const schema = readFileSync(new URL("../supabase/schemas/01_data_core_v1.sql", import.meta.url), "utf8");
 
 test("Stage 4 attention contract is nullable, independent from due_at, and has no legacy backfill", () => {

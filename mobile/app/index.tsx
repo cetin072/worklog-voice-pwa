@@ -21,7 +21,7 @@ import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifi
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
-import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, postponeWorklog, readWorklogDetails, saveWorklog, setWorklogAttention, undoPostponeWorklog, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
+import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, postponeWorklog, readWorklogDetails, saveWorklog, setWorklogAttention, undoPostponeWorklog, undoWorklogAttention, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
@@ -296,10 +296,10 @@ export default function HomeScreen() {
   const briefingRefreshEpoch = useRef(0);
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
-  const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string } | null>(null);
+  const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string; previousAttentionAt: string | null } | null>(null);
   const [reminderBusyId, setReminderBusyId] = useState<string | null>(null);
   const [undoPostpone, setUndoPostpone] = useState<{ pageId: string; title: string } | null>(null);
-  const [undoAttention, setUndoAttention] = useState<{ pageId: string; title: string; previousAttentionAt: string | null } | null>(null);
+  const [undoAttention, setUndoAttention] = useState<{ pageId: string; title: string; appliedAttentionAt: string | null; previousAttentionAt: string | null } | null>(null);
   const [noteBusyId, setNoteBusyId] = useState<string | null>(null);
   const [undoNote, setUndoNote] = useState<{ pageId: string; title: string } | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
@@ -503,7 +503,7 @@ export default function HomeScreen() {
     clearMessage();
     try {
       await updateWorklogStatus(session.access_token, task.pageId, '완료');
-      setUndoTask({ pageId: task.pageId, status: previousStatus, title: task.title || '업무' });
+      setUndoTask({ pageId: task.pageId, status: previousStatus, title: task.title || '업무', previousAttentionAt: task.nextAttentionAt || null });
       await refreshBriefing();
     } catch (nextError) {
       showMessage(messageOf(nextError, '업무 완료 처리에 실패했습니다.'), 'error');
@@ -514,12 +514,24 @@ export default function HomeScreen() {
 
   async function undoCompletedTask() {
     if (!session || !undoTask || taskBusyId) return;
-    setTaskBusyId(undoTask.pageId);
+    const target = undoTask;
+    setTaskBusyId(target.pageId);
     clearMessage();
     try {
-      await updateWorklogStatus(session.access_token, undoTask.pageId, undoTask.status);
-      showMessage(`${undoTask.title} 완료 처리를 되돌렸습니다.`, 'success');
+      await updateWorklogStatus(session.access_token, target.pageId, target.status);
+      let attentionError = '';
+      if (target.previousAttentionAt) {
+        try {
+          await undoWorklogAttention(session.access_token, target.pageId, null, target.previousAttentionAt);
+        } catch (nextError) {
+          attentionError = messageOf(nextError, '기존 다시 알림을 복원하지 못했습니다.');
+        }
+      }
       setUndoTask(null);
+      showMessage(
+        attentionError ? `${target.title} 완료는 되돌렸지만 다시 알림은 확인이 필요합니다. ${attentionError}` : `${target.title} 완료 처리를 되돌렸습니다.`,
+        attentionError ? 'error' : 'success',
+      );
       await refreshBriefing();
     } catch (nextError) {
       showMessage(messageOf(nextError, '완료 처리를 되돌리지 못했습니다.'), 'error');
@@ -555,7 +567,12 @@ export default function HomeScreen() {
     clearMessage();
     try {
       const result = await setWorklogAttention(session.access_token, task.pageId, date ? `${date}T09:00:00+09:00` : null);
-      setUndoAttention({ pageId: task.pageId, title: task.title || '업무', previousAttentionAt: result.previousAttentionAt || null });
+      setUndoAttention({
+        pageId: task.pageId,
+        title: task.title || '업무',
+        appliedAttentionAt: result.nextAttentionAt || null,
+        previousAttentionAt: result.previousAttentionAt || null,
+      });
       setSelectedTask(null);
       setScreen('home');
       showMessage(date ? `${task.title || '업무'}을(를) ${date}에 다시 확인합니다.` : `${task.title || '업무'}의 다시 알림을 취소했습니다.`, 'success');
@@ -590,7 +607,7 @@ export default function HomeScreen() {
     setReminderBusyId(target.pageId);
     clearMessage();
     try {
-      await setWorklogAttention(session.access_token, target.pageId, target.previousAttentionAt);
+      await undoWorklogAttention(session.access_token, target.pageId, target.appliedAttentionAt, target.previousAttentionAt);
       setUndoAttention(null);
       showMessage(`${target.title} 다시 알림을 되돌렸습니다.`, 'success');
       await refreshBriefing();

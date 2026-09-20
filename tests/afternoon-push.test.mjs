@@ -11,7 +11,7 @@ const preferencesApi = readFileSync(new URL("../netlify/functions/notification-p
 const settingsHtml = readFileSync(new URL("../public/settings.html", import.meta.url), "utf8");
 const settingsJs = readFileSync(new URL("../public/morning-push-settings.js", import.meta.url), "utf8");
 const notificationsJs = readFileSync(new URL("../public/notifications.js", import.meta.url), "utf8");
-const safetyMigration = readFileSync(new URL("../supabase/migrations/20260920001000_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
+const safetyMigration = readFileSync(new URL("../supabase/migrations/20260919154119_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
 
 test("afternoon reminder shows one priority task and remaining counts", () => {
   assert.equal(

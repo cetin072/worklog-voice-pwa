@@ -511,3 +511,17 @@ export async function setWorklogAttention(accessToken: string, pageId: string, n
   });
   return readJson(response) as Promise<WorklogReminderResult>;
 }
+ 
+export async function undoWorklogAttention(
+  accessToken: string,
+  pageId: string,
+  expectedAttentionAt: string | null,
+  previousAttentionAt: string | null,
+): Promise<WorklogReminderResult> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ action: 'undo_attention', pageId, expectedAttentionAt, previousAttentionAt }),
+  });
+  return readJson(response) as Promise<WorklogReminderResult>;
+}

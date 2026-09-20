@@ -20,7 +20,8 @@ export function selectResurfaceTasks(rawTasks, { now = new Date().toISOString(),
     let reason = "";
     let rank = 9;
     let moment = "";
-    if (nextAttentionAt && nextAttentionAt <= nowIso) { reason = "attention"; rank = 0; moment = nextAttentionAt; }
+    if (nextAttentionAt && nextAttentionAt > nowIso) continue;
+    if (nextAttentionAt) { reason = "attention"; rank = 0; moment = nextAttentionAt; }
     else if (dueKey && dueKey < today) { reason = "overdue"; rank = 1; moment = `${dueKey}T00:00:00.000Z`; }
     else if (dueKey === today) { reason = "today"; rank = 2; moment = `${dueKey}T00:00:00.000Z`; }
     if (!reason) continue;
