@@ -41,12 +41,13 @@ export type CalendarConnectionStatus = Readonly<{
   isGoogle: boolean;
 }>;
 
-type CalendarEventCleanup = { calendarId: string; eventId: string; marker?: string };
+type CalendarEventCleanup = { calendarId: string; eventId: string; marker?: string; startsAt?: string };
 type CalendarEventMapping = Record<string, {
   calendarId: string;
   eventId: string;
   fingerprint: string;
   eventMarker?: string;
+  startsAt?: string;
   calendarTitle?: string;
   calendarOwnerAccount?: string;
   calendarSourceName?: string;
@@ -92,7 +93,9 @@ function parseMappings(raw: string | null): CalendarEventMapping {
     if (!sid || ['__proto__', 'constructor', 'prototype'].includes(sid) || !object(item)
       || typeof item.calendarId !== 'string' || !item.calendarId || typeof item.eventId !== 'string' || !item.eventId
       || typeof item.fingerprint !== 'string' || (item.eventMarker !== undefined && typeof item.eventMarker !== 'string')
-      || (item.pendingCleanup !== undefined && (!Array.isArray(item.pendingCleanup) || item.pendingCleanup.some((v) => !object(v) || typeof v.calendarId !== 'string' || typeof v.eventId !== 'string')))) {
+      || (item.startsAt !== undefined && (typeof item.startsAt !== 'string' || !Number.isFinite(Date.parse(item.startsAt))))
+      || (item.pendingCleanup !== undefined && (!Array.isArray(item.pendingCleanup) || item.pendingCleanup.some((v) => !object(v) || typeof v.calendarId !== 'string' || typeof v.eventId !== 'string'
+        || (v.startsAt !== undefined && (typeof v.startsAt !== 'string' || !Number.isFinite(Date.parse(v.startsAt)))))))) {
       throw new Error('캘린더 연결 기록을 검증하지 못했습니다. 기존 이벤트는 변경하지 않았습니다.');
     }
   }
@@ -123,7 +126,8 @@ async function readIntents(): Promise<Record<string, CalendarIntent>> {
       || typeof item.schedule.startsAt !== 'string' || !Number.isFinite(Date.parse(item.schedule.startsAt))
       || typeof item.attempted !== 'boolean'
       || (item.eventId !== undefined && typeof item.eventId !== 'string')
-      || (item.obsolete !== undefined && (!Array.isArray(item.obsolete) || item.obsolete.some((e) => !object(e) || typeof e.eventId !== 'string' || typeof e.calendarId !== 'string')))) {
+      || (item.obsolete !== undefined && (!Array.isArray(item.obsolete) || item.obsolete.some((e) => !object(e) || typeof e.eventId !== 'string' || typeof e.calendarId !== 'string'
+        || (e.startsAt !== undefined && (typeof e.startsAt !== 'string' || !Number.isFinite(Date.parse(e.startsAt)))))))) {
       throw new Error('미완료 캘린더 작업을 확인하지 못했습니다. 자동 재생성하지 않습니다.');
     }
   }
@@ -150,22 +154,48 @@ async function setOptOut(sid: string, disabled: boolean) {
   });
 }
 
-async function findEvent(eventId: string) {
+function nativeCalendarError(stage: string, error: unknown, message: string) {
+  console.warn('[device-calendar]', {
+    stage,
+    detail: error instanceof Error ? error.message : 'unknown_error',
+  });
+  return Object.assign(new Error(message), { code: `WORKLOG_CALENDAR_NATIVE_${stage.toUpperCase()}`, causeValue: error });
+}
+
+async function findEvent(eventId: string, calendarId?: string, startsAt?: string) {
+  // When schedule time is known, prefer a bounded calendar query. This avoids
+  // depending on a static SharedObject lookup for the normal sync/cancel path
+  // and also verifies that the event still belongs to the expected calendar.
+  if (calendarId && startsAt && Number.isFinite(Date.parse(startsAt))) {
+    try {
+      const calendar = await calendarById(calendarId);
+      const anchor = new Date(startsAt);
+      const events = await calendar.listEvents(
+        new Date(anchor.getTime() - 2 * 86_400_000),
+        new Date(anchor.getTime() + 2 * 86_400_000),
+      );
+      return events.find((event) => event.id === eventId) || null;
+    } catch (error) {
+      throw nativeCalendarError('event_list', error, '캘린더 이벤트 상태를 확인하지 못했습니다. 다시 확인해주세요.');
+    }
+  }
+
   try { return await Calendar.ExpoCalendarEvent.get(eventId); }
   catch (error) {
     // Exact native absence only. Permission/DB/read errors must NOT authorize a create/delete.
     if (object(error) && error.code === 'E_EVENT_NOT_FOUND') return null;
-    throw error;
+    throw nativeCalendarError('event_get', error, '캘린더 이벤트 상태를 확인하지 못했습니다. 다시 확인해주세요.');
   }
 }
-async function deleteCalendarEvent(eventId: string, calendarId: string, marker?: string) {
-  const event = await findEvent(eventId);
+async function deleteCalendarEvent(eventId: string, calendarId: string, marker?: string, startsAt?: string) {
+  const event = await findEvent(eventId, calendarId, startsAt);
   if (!event) return;
   if (event.calendarId !== calendarId || (marker && !event.notes?.split('\n').includes(marker))) {
     throw new Error('캘린더 이벤트의 연결 대상을 확인하지 못해 삭제하지 않았습니다.');
   }
-  await event.delete();
-  if (await findEvent(eventId)) throw new Error('캘린더 이벤트 삭제 결과를 확인하지 못했습니다. 정리 내역을 보존합니다.');
+  try { await event.delete(); }
+  catch (error) { throw nativeCalendarError('event_delete', error, '캘린더 이벤트를 제거하지 못했습니다. 다시 확인해주세요.'); }
+  if (await findEvent(eventId, calendarId, startsAt)) throw new Error('캘린더 이벤트 삭제 결과를 확인하지 못했습니다. 정리 내역을 보존합니다.');
 }
 
 export async function getPreferredCalendarId() {
@@ -321,7 +351,7 @@ async function calendarById(id: string) {
 }
 async function locateIntentEvent(intent: CalendarIntent) {
   if (intent.eventId) {
-    const found = await findEvent(intent.eventId);
+    const found = await findEvent(intent.eventId, intent.calendarId, intent.schedule.startsAt);
     if (!found) return null;
     if (found.calendarId !== intent.calendarId || !found.notes?.split('\n').includes(intent.marker)) throw new Error('캘린더 작업 식별자가 일치하지 않습니다.');
     return found;
@@ -339,7 +369,7 @@ async function cleanupMapping(sid: string) {
   if (!mapping?.pendingCleanup?.length) return;
   const unresolved: CalendarEventCleanup[] = [];
   for (const cleanup of mapping.pendingCleanup) {
-    try { await deleteCalendarEvent(cleanup.eventId, cleanup.calendarId, cleanup.marker); } catch { unresolved.push(cleanup); }
+    try { await deleteCalendarEvent(cleanup.eventId, cleanup.calendarId, cleanup.marker, cleanup.startsAt); } catch { unresolved.push(cleanup); }
   }
   await setMapping(sid, { ...mapping, pendingCleanup: unresolved });
   if (unresolved.length) throw new Error('새 캘린더에 반영했지만 이전 이벤트 정리가 남았습니다. 다시 시도해주세요.');
@@ -349,8 +379,8 @@ async function finishIntent(sid: string) {
   if (!intent) return;
   const event = intent.kind === 'remove' && !intent.attempted && !intent.eventId ? null : await locateIntentEvent(intent);
   if (intent.kind === 'remove' || intent.kind === 'rollback') {
-    if (event) await deleteCalendarEvent(event.id, intent.calendarId, intent.marker);
-    for (const old of intent.obsolete || []) await deleteCalendarEvent(old.eventId, old.calendarId, old.marker);
+    if (event) await deleteCalendarEvent(event.id, intent.calendarId, intent.marker, intent.schedule.startsAt);
+    for (const old of intent.obsolete || []) await deleteCalendarEvent(old.eventId, old.calendarId, old.marker, old.startsAt);
     if (intent.kind === 'remove') await setMapping(sid, null);
     await setIntent(sid, null); return;
   }
@@ -363,10 +393,11 @@ async function finishIntent(sid: string) {
   }
   const current = (await readMappings())[sid];
   const option = optionOf(await calendarById(intent.calendarId));
-  const old = current?.eventId && current.eventId !== event.id ? [{ calendarId: current.calendarId, eventId: current.eventId, marker: current.eventMarker }] : [];
+  const old = current?.eventId && current.eventId !== event.id ? [{ calendarId: current.calendarId, eventId: current.eventId, marker: current.eventMarker, startsAt: current.startsAt || intent.schedule.startsAt }] : [];
   const pendingCleanup = [...(current?.pendingCleanup || []), ...old];
   await setMapping(sid, {
     calendarId: intent.calendarId, eventId: event.id, eventMarker: intent.marker, fingerprint: fingerprint(intent.schedule),
+    startsAt: intent.schedule.startsAt,
     calendarTitle: option.title, calendarOwnerAccount: option.ownerAccount,
     calendarSourceName: option.sourceName, calendarIsGoogle: option.isGoogle,
     pendingCleanup: [...new Map(pendingCleanup.map((v) => [cleanupKey(v), v])).values()],
@@ -384,7 +415,7 @@ async function syncCalendarUnlocked(calendarId: string, schedule: DeviceSchedule
     const calendar = await calendarById(calendarId);
     const current = (await readMappings())[schedule.scheduleId];
     if (current?.calendarId === calendarId) {
-      const event = await findEvent(current.eventId);
+      const event = await findEvent(current.eventId, current.calendarId, current.startsAt || schedule.startsAt);
       if (event) {
         if (current.eventMarker && !event.notes?.split('\n').includes(current.eventMarker)) throw new Error('이벤트 식별 메모가 변경됐습니다. 자동으로 덮어쓰지 않습니다.');
         if (event.calendarId !== calendarId) throw new Error('연결된 이벤트의 캘린더가 변경됐습니다. 다시 선택해주세요.');
@@ -394,13 +425,13 @@ async function syncCalendarUnlocked(calendarId: string, schedule: DeviceSchedule
           || (event.location || '') !== (schedule.location || '')) {
           await event.update({ title: schedule.title, startDate, endDate, allDay: Boolean(schedule.allDay), location: schedule.location || '' });
         }
-        const verified = await findEvent(current.eventId);
+        const verified = await findEvent(current.eventId, current.calendarId, current.startsAt || schedule.startsAt);
         if (!verified || verified.calendarId !== calendarId || verified.title !== schedule.title
           || new Date(verified.startDate).getTime() !== startDate.getTime() || new Date(verified.endDate).getTime() !== endDate.getTime()
           || Boolean(verified.allDay) !== Boolean(schedule.allDay) || (verified.location || '') !== (schedule.location || '')) {
           throw new Error('캘린더의 실제 변경 결과를 확인하지 못했습니다. 다시 시도해주세요.');
         }
-        await setMapping(schedule.scheduleId, { ...current, fingerprint: fingerprint(schedule) });
+        await setMapping(schedule.scheduleId, { ...current, fingerprint: fingerprint(schedule), startsAt: schedule.startsAt });
         return { eventId: current.eventId, created: false };
       }
     }
@@ -431,7 +462,7 @@ export function syncScheduleToCalendar(calendarId: string, schedule: DeviceSched
   });
 }
 
-export function removeScheduleFromCalendar(scheduleId: string) {
+export function removeScheduleFromCalendar(scheduleId: string, startsAt?: string) {
   return calendarOperation(async () => {
     const mapping = (await readMappings())[scheduleId];
     const pending = (await readIntents())[scheduleId];
@@ -439,15 +470,15 @@ export function removeScheduleFromCalendar(scheduleId: string) {
     await setOptOut(scheduleId, true);
     if (!mapping && !pending) return false;
     if (pending) {
-      const obsolete = [...(pending.obsolete || []), ...(mapping ? [{ eventId: mapping.eventId, calendarId: mapping.calendarId, marker: mapping.eventMarker }, ...(mapping.pendingCleanup || [])] : [])];
+      const obsolete = [...(pending.obsolete || []), ...(mapping ? [{ eventId: mapping.eventId, calendarId: mapping.calendarId, marker: mapping.eventMarker, startsAt: mapping.startsAt || startsAt || pending.schedule.startsAt }, ...(mapping.pendingCleanup || [])] : [])];
       await setIntent(scheduleId, { ...pending, kind: 'remove', obsolete });
       await finishIntent(scheduleId);
     } else if (mapping) {
       // Retain the mapping so a user-initiated removal or cancellation can retry.
       const intent: CalendarIntent = {
         kind: 'remove', calendarId: mapping.calendarId, marker: `worklog-sync:${Crypto.randomUUID()}`,
-        schedule: { scheduleId, title: 'Calendar cleanup', startsAt: new Date().toISOString() }, attempted: false,
-        obsolete: [{ eventId: mapping.eventId, calendarId: mapping.calendarId, marker: mapping.eventMarker }, ...(mapping.pendingCleanup || [])],
+        schedule: { scheduleId, title: 'Calendar cleanup', startsAt: startsAt || mapping.startsAt || new Date().toISOString() }, attempted: false,
+        obsolete: [{ eventId: mapping.eventId, calendarId: mapping.calendarId, marker: mapping.eventMarker, startsAt: mapping.startsAt || startsAt }, ...(mapping.pendingCleanup || [])],
       };
       await setIntent(scheduleId, intent);
       await finishIntent(scheduleId);
