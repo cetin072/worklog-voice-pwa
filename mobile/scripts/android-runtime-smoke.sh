@@ -69,8 +69,28 @@ raise SystemExit(1)
 PY
 }
 
+find_quickstep_wait_center() {
+  python3 - "$1" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+root = ET.parse(sys.argv[1]).getroot()
+for node in root.iter("node"):
+    if node.attrib.get("resource-id") != "android:id/aerr_wait" and node.attrib.get("text") != "Wait":
+        continue
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
+    if not match:
+        continue
+    x1, y1, x2, y2 = map(int, match.groups())
+    print((x1 + x2) // 2, (y1 + y2) // 2)
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
 rendered=0
-for attempt in 1 2 3; do
+for attempt in 1 2 3 4 5 6; do
   dump_window /sdcard/worklog-window.xml "$WINDOW_XML"
 
   if grep -Eq '업무수첩|연결을 확인해주세요' "$WINDOW_XML"; then
@@ -79,10 +99,19 @@ for attempt in 1 2 3; do
   fi
 
   # API 35's launcher can show a transient Quickstep ANR dialog while the
-  # newly installed app takes foreground. Dismiss only that system dialog,
-  # then re-read the app UI; any app error still fails below.
+  # newly installed app takes foreground. Explicitly choose "Wait" on that
+  # system dialog, then foreground the app again before re-reading its UI.
   if grep -q "Quickstep isn't responding" "$WINDOW_XML"; then
-    adb shell input keyevent 4
+    if WAIT_COORDS="$(find_quickstep_wait_center "$WINDOW_XML")"; then
+      read -r WAIT_X WAIT_Y <<<"$WAIT_COORDS"
+      adb shell input tap "$WAIT_X" "$WAIT_Y"
+      sleep 2
+      adb shell am start -W -n "$ACTIVITY" >/dev/null || true
+    else
+      echo "Quickstep ANR was visible but its Wait action could not be located."
+      cat "$WINDOW_XML"
+      exit 1
+    fi
   fi
   sleep 3
 done
