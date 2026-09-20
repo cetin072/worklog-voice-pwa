@@ -414,13 +414,13 @@ export default function HomeScreen() {
 
   async function refreshBriefing() {
     if (!session || !client) return;
-    const accessToken = await getFreshAccessToken(client);
     const epoch = briefingRefreshEpoch.current;
     await briefingRefreshQueue.current.run(async () => {
       if (epoch !== briefingRefreshEpoch.current) return;
       setBriefingBusy(true);
       setBriefingError('');
       try {
+        const accessToken = await getFreshAccessToken(client);
         const next = await loadBriefing(accessToken);
         if (epoch === briefingRefreshEpoch.current) setBriefing(next);
       } catch (nextError) {
