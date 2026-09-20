@@ -66,7 +66,9 @@ test('Quick voice memo uses the home bottom dock and auto-saves a valid STT tran
   assert.match(recorderSource, /브리핑 카드의 ✏️/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.match(recorderSource, /업무 직접 입력 열기/);
-  assert.match(homeSource, /quickDockShell/);
+  assert.match(homeSource, /<View pointerEvents="box-none" onLayout=\{/);
+  assert.match(homeSource, /styles\.quickDockShell/);
+  assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{styles\.quickDock\}>/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
   assert.match(homeSource, /saveWorklog: async \(transcript, options\)/);
   assert.match(homeSource, /refreshBriefing/);
