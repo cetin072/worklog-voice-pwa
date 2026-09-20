@@ -7,6 +7,7 @@ const readme = fs.readFileSync('mobile/README.md', 'utf8');
 const plan = fs.readFileSync('docs/planning/MOBILE_QA_FAST_LOOP_V1.md', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/mobile-foundation.yml', 'utf8');
 const smokeScript = fs.readFileSync('mobile/scripts/android-runtime-smoke.sh', 'utf8');
+const appShell = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 
 test('Mobile QA fast loop exposes local device scripts without adding a new native dependency', () => {
   assert.equal(packageJson.scripts['android:device'], 'expo run:android --device');
@@ -43,10 +44,14 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /uiautomator dump/);
   assert.match(smokeScript, /for attempt in 1 2 3/);
   assert.match(smokeScript, /Quickstep isn't responding/);
-  assert.match(smokeScript, /ANDROID TOUCH SMOKE/);
-  assert.match(smokeScript, /QA 홈 상단 버튼/);
+  assert.match(appShell, /QA authenticated Home/);
+  assert.match(appShell, /HomeHeader/);
+  assert.match(appShell, /onQuickVoicePhaseChange/);
+  assert.match(smokeScript, /QA authenticated Home/);
+  assert.match(smokeScript, /업무일지 열기/);
   assert.match(smokeScript, /음성 기록 시작/);
   assert.match(smokeScript, /adb shell input tap/);
+  assert.match(smokeScript, /quick-voice-phase=recording/);
   assert.match(smokeScript, /Authenticated-home Quick Voice Pressable/);
   assert.match(smokeScript, /Android authenticated-home touch smoke PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);

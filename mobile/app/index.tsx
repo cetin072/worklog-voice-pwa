@@ -263,22 +263,35 @@ const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider
   async transcribe() { return { text: 'android touch smoke' }; },
 });
 
+function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onOpenJournal: () => void; onOpenRecordSearch: () => void; onOpenSettings: () => void }) {
+  return <View style={styles.header}>
+    <View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View>
+    <View style={styles.headerActions}>
+      <Pressable accessibilityRole="button" accessibilityLabel="업무일지 열기" style={styles.headerButton} onPress={onOpenJournal}><Text style={styles.headerButtonIcon}>📒</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={onOpenRecordSearch}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={onOpenSettings}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable>
+    </View>
+  </View>;
+}
+
 function AuthenticatedHomeTouchSmoke() {
   const insets = useSafeAreaInsets();
   const [headerTapped, setHeaderTapped] = useState(false);
-  return <View style={[styles.page, { paddingTop: insets.top }]}>
+  const [quickVoicePhase, setQuickVoicePhase] = useState('idle');
+  const markHeaderTap = () => setHeaderTapped(true);
+  return <View style={[styles.page, { paddingTop: insets.top }]} accessibilityLabel="QA authenticated Home">
     <StatusBar style="dark" />
-    <ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]}>
-      <View style={styles.header}>
-        <View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>ANDROID TOUCH SMOKE</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View>
-        <Pressable accessibilityRole="button" accessibilityLabel="QA 홈 상단 버튼" style={styles.headerButton} onPress={() => setHeaderTapped(true)}>
-          <Text style={styles.headerButtonIcon}>✓</Text>
-        </Pressable>
-      </View>
+    <View style={styles.authenticatedShell}>
+    <ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled">
+      <HomeHeader onOpenJournal={markHeaderTap} onOpenRecordSearch={markHeaderTap} onOpenSettings={markHeaderTap} />
       <Text accessibilityLabel="QA 홈 상단 결과" style={styles.statusText}>{headerTapped ? 'QA 홈 상단 PASS' : 'QA 홈 상단 대기'}</Text>
       <VoiceRecorderCard
         mode="quick"
-        onOpenWorklogInput={() => setHeaderTapped(true)}
+        onOpenWorklogInput={markHeaderTap}
+        onQuickVoicePhaseChange={(phase) => {
+          setQuickVoicePhase(phase);
+          console.info(`[android-touch-smoke] quick-voice-phase=${phase}`);
+        }}
         quickVoice={{
           ensureProvider: async () => ANDROID_TOUCH_SMOKE_PROVIDER,
           draftScope: 'android-touch-smoke-v2',
@@ -286,7 +299,9 @@ function AuthenticatedHomeTouchSmoke() {
           refreshBriefing: async () => undefined,
         }}
       />
+      <Text accessibilityLabel="QA Quick Voice phase" style={styles.statusText}>{`QA Quick Voice ${quickVoicePhase}`}</Text>
     </ScrollView>
+    </View>
   </View>;
 }
 
@@ -911,7 +926,7 @@ function HomeScreenApp() {
   const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
-  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="업무일지 열기" style={styles.headerButton} onPress={openJournal}><Text style={styles.headerButtonIcon}>📒</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
+  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />

@@ -21,7 +21,20 @@ type QuickVoiceProps = Readonly<{
   refreshBriefing(): Promise<unknown>;
   draftScope: string;
 }>;
-type VoiceRecorderCardProps = { mode?: 'quick' | 'meeting'; onOpenWorklogInput?: () => void; quickVoice?: QuickVoiceProps; navigationGuard?: { current: boolean } };
+type VoiceRecorderCardProps = {
+  mode?: 'quick';
+  onOpenWorklogInput?: () => void;
+  quickVoice?: QuickVoiceProps;
+  navigationGuard?: { current: boolean };
+  /** Test-only observer used by the Android release smoke to prove the real capture state transition. */
+  onQuickVoicePhaseChange?: (phase: QuickVoicePhase) => void;
+} | {
+  mode: 'meeting';
+  onOpenWorklogInput?: () => void;
+  quickVoice?: QuickVoiceProps;
+  navigationGuard?: { current: boolean };
+  onQuickVoicePhaseChange?: never;
+};
 
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -46,7 +59,7 @@ function quickStatus(phase: QuickVoicePhase) {
   return ({ idle: '대기', preparing: '음성 모델 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
 }
 
-export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoice, navigationGuard }: VoiceRecorderCardProps) {
+export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoice, navigationGuard, onQuickVoicePhaseChange }: VoiceRecorderCardProps) {
   const meeting = useMeetingRecordingSession();
   const quickCapture = useQuickVoicePcmCapture();
   const [quickPhase, applyQuickPhase] = useState<QuickVoicePhase>('idle');
@@ -68,6 +81,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   function setQuickPhase(phase: QuickVoicePhase) {
     // Update the parent guard synchronously, before awaiting capture or network.
     if (navigationGuard) navigationGuard.current = quickVoiceNeedsAttention(phase);
+    onQuickVoicePhaseChange?.(phase);
     applyQuickPhase(phase);
   }
 

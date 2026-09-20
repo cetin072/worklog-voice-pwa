@@ -21,6 +21,7 @@ adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 
 adb install -r "$APK"
 adb shell pm grant "$PACKAGE" android.permission.RECORD_AUDIO || true
 adb shell am force-stop "$PACKAGE" || true
+adb logcat -c || true
 adb shell am start -W -n "$ACTIVITY"
 sleep 8
 
@@ -79,7 +80,7 @@ rendered=0
 for attempt in 1 2 3 4 5 6; do
   dump_window /sdcard/worklog-window.xml "$WINDOW_XML"
 
-  if grep -q 'ANDROID TOUCH SMOKE' "$WINDOW_XML"; then
+  if grep -q 'QA authenticated Home' "$WINDOW_XML"; then
     rendered=1
     break
   fi
@@ -107,7 +108,7 @@ if [[ "$rendered" != "1" ]]; then
 fi
 
 # Tap a top authenticated-home button and require a React state change.
-HEADER_COORDS="$(find_node_center "$WINDOW_XML" "QA 홈 상단 버튼")"
+HEADER_COORDS="$(find_node_center "$WINDOW_XML" "업무일지 열기")"
 read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
 adb shell input tap "$HEADER_X" "$HEADER_Y"
 sleep 1
@@ -118,16 +119,23 @@ if ! grep -q 'QA 홈 상단 PASS' /tmp/worklog-header-after.xml; then
   exit 1
 fi
 
-# Tap the actual Quick Voice Pressable and require it to enter recording state.
+# Tap the actual Quick Voice Pressable. Audio streaming keeps React Native busy
+# enough that uiautomator may not produce a post-tap XML dump, so verify the
+# VoiceRecorderCard's state transition through the release runtime log instead.
 MIC_COORDS="$(find_node_center /tmp/worklog-header-after.xml "음성 기록 시작")"
 read -r MIC_X MIC_Y <<<"$MIC_COORDS"
 adb shell input tap "$MIC_X" "$MIC_Y"
-sleep 2
-dump_window /sdcard/worklog-mic-after.xml /tmp/worklog-mic-after.xml
-if ! grep -Eq '음성 기록 종료 후 바로 저장|녹음 중' /tmp/worklog-mic-after.xml; then
+recording=0
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if adb logcat -d -v brief | grep -q 'quick-voice-phase=recording'; then
+    recording=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$recording" != "1" ]]; then
   echo "Authenticated-home Quick Voice Pressable did not enter recording state."
   echo "Tapped at: $MIC_X $MIC_Y"
-  cat /tmp/worklog-mic-after.xml
   adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime|quick-voice" || true
   exit 1
 fi
