@@ -25,7 +25,7 @@ export async function getCalendars() {
       world.events.set(id, { ...details, id, calendarId: row.id }); step('event-created', id); return eventObject(id);
     },
     async listEvents(start, end) {
-      step('list-events', row.id);
+      step('list-events', row.id); world.calls.push(['list-events', row.id]);
       return [...world.events.values()].filter((e) => e.calendarId === row.id && new Date(e.startDate) < end && new Date(e.endDate) > start).map((e) => eventObject(e.id));
     },
   }));
