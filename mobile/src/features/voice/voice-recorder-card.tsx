@@ -327,21 +327,21 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
             ? '저장된 업무를 브리핑에 바로 반영하고 있습니다.'
             : null;
 
-    return <View style={styles.quickDock}>
-      <View style={styles.quickTopControl}>
+    return <View pointerEvents="box-none" style={styles.quickDock}>
+      <View pointerEvents="none" style={styles.quickTopControl}>
         <View style={[styles.quickStatusBubble, isRecording ? styles.quickStatusBubbleRecording : statusDone ? styles.quickStatusBubbleDone : null]}>
           <Text style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
         </View>
       </View>
       {quickPhase === 'preparing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
-      <View style={styles.quickOrbitalRow}>
+      <View pointerEvents="box-none" style={styles.quickOrbitalRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
           <Text style={styles.quickSideIcon}>✏️</Text>
           <Text style={styles.quickSideLabel}>메모</Text>
         </Pressable>
 
-        <View style={styles.quickPrimaryControl}>
+        <View pointerEvents="box-none" style={styles.quickPrimaryControl}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isRecording ? '음성 기록 종료 후 바로 저장' : '음성 기록 시작'}
@@ -355,7 +355,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
           </Pressable>
         </View>
 
-        <View style={styles.quickAuxiliaryStatus}>
+        <View pointerEvents="none" style={styles.quickAuxiliaryStatus}>
           <Text style={styles.quickStatusIcon}>{statusDone ? '✓' : quickPhase === 'transcript_error' || quickPhase === 'save_error' ? '!' : '●'}</Text>
           <Text style={styles.quickSideLabel}>{statusDone ? '저장됨' : isRecording ? '녹음 중' : quickPhase === 'idle' ? '대기' : '처리 중'}</Text>
         </View>
