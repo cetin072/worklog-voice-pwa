@@ -90,12 +90,16 @@ test('Home reserves measured space for the variable-height Quick Voice dock', ()
   assert.match(homeSource, /quickDockHeight \+ 32/);
 });
 
-test('Quick Voice keeps web-like separate top, primary, and auxiliary control regions with explicit cancellation', () => {
+test('Quick Voice keeps a separate top control and left-center-right orbital controls with explicit cancellation', () => {
   assert.match(recorderSource, /quickTopControl/);
+  assert.match(recorderSource, /quickOrbitalRow/);
   assert.match(recorderSource, /quickPrimaryControl/);
-  assert.match(recorderSource, /quickAuxiliaryControls/);
+  assert.match(recorderSource, /quickAuxiliaryAction/);
+  assert.match(recorderSource, /quickAuxiliaryStatus/);
   assert.match(recorderSource, /QUICK_VOICE_LAYOUT/);
+  assert.match(recorderSource, /horizontalGap/);
   assert.doesNotMatch(recorderSource, /marginTop: -28/);
+  assert.doesNotMatch(recorderSource, /quickAuxiliaryControls/);
   assert.match(recorderSource, /accessibilityLabel="녹음 취소"/);
   assert.match(recorderSource, /cancelQuickVoice/);
   assert.match(recorderSource, /quickMicActive: \{ backgroundColor: '#b91c1c'/);
