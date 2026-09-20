@@ -174,7 +174,10 @@ async function findEvent(eventId: string, calendarId?: string, startsAt?: string
         new Date(anchor.getTime() - 2 * 86_400_000),
         new Date(anchor.getTime() + 2 * 86_400_000),
       );
-      return events.find((event) => event.id === eventId) || null;
+      const found = events.find((event) => event.id === eventId);
+      if (found) return found;
+      // The event may have been moved outside the expected window by the user.
+      // Fall through to the ID lookup before declaring it absent.
     } catch (error) {
       throw nativeCalendarError('event_list', error, '캘린더 이벤트 상태를 확인하지 못했습니다. 다시 확인해주세요.');
     }
