@@ -10,7 +10,9 @@ const search = fs.readFileSync('mobile/src/features/search/work-record-search.ts
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 
 test('Voice UX mirrors the strongest web recording affordances', () => {
-  assert.match(voice, /width: 148, height: 148/);
+  assert.match(voice, /width: 124, height: 124/);
+  assert.doesNotMatch(voice, /marginTop: -28/);
+  assert.match(voice, /title="취소"/);
   assert.match(voice, /backgroundColor: '#b91c1c'/);
   assert.match(voice, /● 녹음 중 ·/);
   assert.match(voice, /recordingElapsedMs/);

@@ -90,8 +90,11 @@ test('Home reserves measured space for the variable-height Quick Voice dock', ()
   assert.match(homeSource, /quickDockHeight \+ 32/);
 });
 
-test('Quick Voice polish keeps a large web-like microphone, full red recording state, and elapsed timer', () => {
-  assert.match(recorderSource, /width: 148, height: 148/);
+test('Quick Voice keeps an uncrowded microphone row, explicit recording cancellation, and elapsed timer', () => {
+  assert.match(recorderSource, /width: 124, height: 124/);
+  assert.doesNotMatch(recorderSource, /marginTop: -28/);
+  assert.match(recorderSource, /title="취소"/);
+  assert.match(recorderSource, /cancelQuickVoice/);
   assert.match(recorderSource, /quickMicActive: \{ backgroundColor: '#b91c1c'/);
   assert.match(recorderSource, /recordingElapsedMs/);
   assert.match(recorderSource, /● 녹음 중 ·/);
