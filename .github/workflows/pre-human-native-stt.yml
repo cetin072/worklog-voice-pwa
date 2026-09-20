@@ -83,7 +83,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             cd mobile/android
             ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
             APK=app/build/outputs/apk/release/app-release.apk
