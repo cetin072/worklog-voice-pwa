@@ -133,10 +133,11 @@ test("Stage 4 postpone and attention SQL are invoker-scoped, owner-scoped, and n
 });
 
 test("worklog edit endpoint keeps Stage 4 actions on the Data Core path and fail-closes legacy mode",()=>{
-  assert.match(endpointSource,/\["read","postpone","undo_postpone","attention"\]/);
+  assert.match(endpointSource,/\["read","postpone","undo_postpone","attention","undo_attention"\]/);
   assert.match(endpointSource,/editor\.postpone/);
   assert.match(endpointSource,/editor\.undoPostpone/);
   assert.match(endpointSource,/editor\.setAttention/);
+  assert.match(endpointSource,/editor\.undoAttention/);
   assert.match(endpointSource,/미루기와 다시 알림은 Data Core 업무에서만 지원합니다/);
 });
 
