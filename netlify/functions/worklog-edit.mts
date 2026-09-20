@@ -111,7 +111,8 @@ function dataCoreErrorResponse(error:any){
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_UNCLASSIFIED" || error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_SCHEDULE_LINKED") return json(409,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_POSTPONE_SCHEDULE_LINKED" || error?.code==="WORKLOG_DATA_CORE_POSTPONE_UNDO_UNAVAILABLE" || error?.code==="WORKLOG_DATA_CORE_POSTPONE_UNDO_STALE" || error?.code==="WORKLOG_DATA_CORE_ATTENTION_UNDO_STALE") return json(409,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_POSTPONE_DUE_REQUIRED" || error?.code==="WORKLOG_DATA_CORE_ATTENTION_MUST_BE_FUTURE") return json(400,{error:error.message});
-  if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_CONVERSION_UNAVAILABLE") return json(503,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_CONVERSION_UNAVAILABLE" || error?.code==="WORKLOG_DATA_CORE_EDIT_RPC_UNAVAILABLE") return json(503,{error:error.message});
+  if(error?.code==="WORKLOG_DATA_CORE_EDIT_NETWORK_FAILED") return json(503,{error:error.message});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN") return json(404,{error:error.message});
   console.error("Data Core worklog edit error",String(error?.code || "unknown"),String(error?.message || "unknown").slice(0,200));
   return json(502,{error:"업무를 수정하지 못했습니다. 잠시 후 다시 시도해주세요."});
