@@ -140,4 +140,13 @@ if [[ "$recording" != "1" ]]; then
   exit 1
 fi
 
+# The CI-only timer freeze keeps this rendered state idle. Require the actual
+# mic accessibility node to change; a click/console event alone is insufficient.
+dump_window /sdcard/worklog-mic-after.xml /tmp/worklog-mic-after.xml
+if ! grep -Eq '음성 기록 종료 후 바로 저장|녹음 중' /tmp/worklog-mic-after.xml; then
+  echo "Authenticated-home Quick Voice recording UI did not render after Android tap."
+  cat /tmp/worklog-mic-after.xml
+  exit 1
+fi
+
 echo "Android authenticated-home touch smoke PASS: header and Quick Voice taps reached React Native."

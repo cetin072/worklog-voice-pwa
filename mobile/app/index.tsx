@@ -288,6 +288,7 @@ function AuthenticatedHomeTouchSmoke() {
       <VoiceRecorderCard
         mode="quick"
         onOpenWorklogInput={markHeaderTap}
+        freezeQuickVoiceTimer
         onQuickVoicePhaseChange={(phase) => {
           setQuickVoicePhase(phase);
           console.info(`[android-touch-smoke] quick-voice-phase=${phase}`);
