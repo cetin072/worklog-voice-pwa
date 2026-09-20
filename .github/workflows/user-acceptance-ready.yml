@@ -1,9 +1,9 @@
 name: User Acceptance Ready
 
+# Deploy Preview UAR is intentionally PR-only. Main post-merge acceptance is
+# revalidated by the Mobile App workflow against the exact main SHA.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
   workflow_dispatch:
 
