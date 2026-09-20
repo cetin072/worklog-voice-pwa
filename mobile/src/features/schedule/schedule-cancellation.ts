@@ -33,6 +33,11 @@ function isMissingCancelRpc(error: { code?: string; message?: string } | null | 
     || /cancel_my_schedule.*schema cache/i.test(message);
 }
 
+function canConfirmCancellationDirectly(error: { code?: string; message?: string } | null | undefined) {
+  return isMissingCancelRpc(error)
+    || /SCHEDULE_NOT_FOUND_OR_FORBIDDEN/i.test(String(error?.message || ''));
+}
+
 async function cancelScheduleDirectly(client: PlatformSupabaseClient, scheduleId: string) {
   const { data: userData, error: userError } = await client.auth.getUser();
   const userId = userData.user?.id;
@@ -48,14 +53,25 @@ async function cancelScheduleDirectly(client: PlatformSupabaseClient, scheduleId
     .maybeSingle();
 
   if (error) throw new Error(error.message || '일정을 취소하지 못했습니다.');
-  if (!data?.id || data.status !== 'cancelled') {
-    throw new Error('취소할 일정을 찾지 못했거나 이미 변경된 일정입니다.');
-  }
+  if (data?.id && data.status === 'cancelled') return { alreadyCancelled: false };
+
+  // Idempotency: a prior tap/retry may already have committed the server
+  // cancellation. Confirm that exact creator-owned row before treating it as
+  // success; missing/foreign rows still fail closed.
+  const { data: existing, error: existingError } = await client
+    .from('schedules')
+    .select('id, status')
+    .eq('id', scheduleId)
+    .eq('created_by_user_id', userId)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message || '취소된 일정 상태를 확인하지 못했습니다.');
+  if (existing?.id && existing.status === 'cancelled') return { alreadyCancelled: true };
+  throw new Error('취소할 일정을 찾지 못했거나 취소할 수 없는 상태입니다.');
 }
 
-async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
+async function cleanupDeviceScheduleArtifacts(scheduleId: string, startsAt?: string) {
   const results = await Promise.allSettled([
-    removeScheduleFromCalendar(scheduleId),
+    removeScheduleFromCalendar(scheduleId, startsAt),
     cancelAllScheduleReminders(scheduleId),
   ]);
   const failed = results.find((result) => result.status === 'rejected');
@@ -67,22 +83,38 @@ async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
  * pending list is recorded only after server confirmation, so restart recovery
  * never removes device artifacts for a schedule whose cancellation is unknown.
  */
-export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseClient, scheduleId: string) {
+export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseClient, scheduleId: string, startsAt?: string) {
   if (!UUID_PATTERN.test(scheduleId)) throw new Error('취소할 일정 정보를 확인하지 못했습니다.');
 
-  const { error } = await client.rpc('cancel_my_schedule', { p_schedule_id: scheduleId });
+  let alreadyCancelled = false;
+  const { data, error } = await client.rpc('cancel_my_schedule', { p_schedule_id: scheduleId });
   if (error) {
-    if (!isMissingCancelRpc(error)) throw new Error(error.message || '일정을 취소하지 못했습니다.');
-    await cancelScheduleDirectly(client, scheduleId);
+    if (!canConfirmCancellationDirectly(error)) throw new Error(error.message || '일정을 취소하지 못했습니다.');
+    const confirmed = await cancelScheduleDirectly(client, scheduleId);
+    alreadyCancelled = confirmed.alreadyCancelled;
+  } else {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    alreadyCancelled = rows[0]?.schedule_status === 'cancelled' && rows[0]?.already_cancelled === true;
   }
 
+  // Persist the recovery marker before entering the retryable OS cleanup boundary.
+  // Corrupt/unwritable cancellation state must fail closed rather than being
+  // mistaken for a successful cancellation with pending cleanup.
+  await updatePendingScheduleIds((ids) => [...ids, scheduleId]);
+
+  let cleanupPending = false;
   try {
-    await updatePendingScheduleIds((ids) => [...ids, scheduleId]);
-    await cleanupDeviceScheduleArtifacts(scheduleId);
+    await cleanupDeviceScheduleArtifacts(scheduleId, startsAt);
     await updatePendingScheduleIds((ids) => ids.filter((value) => value !== scheduleId));
-  } catch {
-    throw new Error('일정은 취소됐지만 휴대폰 Calendar 또는 알림 정리가 남았습니다. 앱을 다시 열면 자동으로 다시 시도합니다.');
+  } catch (cleanupError) {
+    cleanupPending = true;
+    console.warn('[schedule-cancellation] device cleanup pending', {
+      scheduleId,
+      detail: cleanupError instanceof Error ? cleanupError.message : 'unknown_error',
+    });
   }
+
+  return Object.freeze({ scheduleId, alreadyCancelled, cleanupPending });
 }
 
 /**
@@ -105,23 +137,26 @@ export async function reconcileCanceledScheduleArtifacts(client: PlatformSupabas
 
   const { data, error } = await client
     .from('schedules')
-    .select('id, status')
+    .select('id, status, starts_at')
     .in('id', candidateIds)
     .eq('status', 'cancelled');
   if (error) throw new Error(error.message || '취소된 일정 상태를 확인하지 못했습니다.');
 
-  const cancelledIds = new Set(
+  const cancelledSchedules = new Map(
     (data || []).flatMap((schedule) => (
-      typeof schedule.id === 'string' && schedule.status === 'cancelled' ? [schedule.id] : []
+      typeof schedule.id === 'string' && schedule.status === 'cancelled'
+        ? [[schedule.id, typeof schedule.starts_at === 'string' ? schedule.starts_at : undefined] as const]
+        : []
     )),
   );
+  const cancelledIds = new Set(cancelledSchedules.keys());
   const remaining = pending.filter((scheduleId) => !cancelledIds.has(scheduleId));
   let cleaned = 0;
   const cleanedIds = new Set<string>();
   for (const scheduleId of candidateIds) {
     if (!cancelledIds.has(scheduleId)) continue;
     try {
-      await cleanupDeviceScheduleArtifacts(scheduleId);
+      await cleanupDeviceScheduleArtifacts(scheduleId, cancelledSchedules.get(scheduleId));
       cleaned += 1; cleanedIds.add(scheduleId);
     } catch {
       remaining.push(scheduleId);

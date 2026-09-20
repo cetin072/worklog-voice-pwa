@@ -238,9 +238,9 @@ function JournalScheduleRows({ schedules, empty }: { schedules?: BriefingSchedul
   </View>);
 }
 
-function ScheduleRows({ schedules, empty, showDeviceActions = false, showDeviceStatus = false }: { schedules?: BriefingSchedule[]; empty: string; showDeviceActions?: boolean; showDeviceStatus?: boolean }) {
+function ScheduleRows({ schedules, empty, showDeviceActions = false, showDeviceStatus = false, onScheduleCancelled }: { schedules?: BriefingSchedule[]; empty: string; showDeviceActions?: boolean; showDeviceStatus?: boolean; onScheduleCancelled?: (scheduleId: string) => void | Promise<void> }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
-  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{showDeviceActions ? <ScheduleDeviceActions schedule={schedule} /> : showDeviceStatus ? <ScheduleDeviceActions schedule={schedule} compactOnly /> : null}</View>);
+  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{showDeviceActions ? <ScheduleDeviceActions schedule={schedule} onCancelled={onScheduleCancelled} /> : showDeviceStatus ? <ScheduleDeviceActions schedule={schedule} compactOnly /> : null}</View>);
 }
 
 function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary' | 'secondary'; disabled?: boolean; onPress: () => void }) {
@@ -429,6 +429,14 @@ export default function HomeScreen() {
         if (epoch === briefingRefreshEpoch.current) setBriefingBusy(false);
       }
     });
+  }
+
+  async function handleScheduleCancelled(scheduleId: string) {
+    if (notificationScheduleId === scheduleId) {
+      setNotificationScheduleId(null);
+      setScheduleFocusReason(null);
+    }
+    await refreshBriefing();
   }
 
   async function runEmailSignIn() {
@@ -948,7 +956,7 @@ export default function HomeScreen() {
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
     {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>알림</Text><SettingsMenuItem eyebrow="NOTIFICATIONS" title="알림·리마인더" description="앱 권한, 일정 Local Notification, 웹/PWA 서버 Push 상태를 확인합니다." onPress={() => setScreen('reminderSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>일정·알림</Text><CalendarConnectionSummary compact refreshKey={calendarConnectionVersion} onPressManage={() => setScreen('scheduleSettings')} /><SettingsMenuItem eyebrow="CALENDAR · REMINDER" title="일정·알림 관리" description="Google/휴대폰 Calendar 연결과 일정별 알림을 관리합니다." onPress={() => setScreen('scheduleSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 계정 세션을 종료합니다." destructive onPress={confirmSignOut} /></View></View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings accessToken={session.access_token} onOpenScheduleSettings={() => setScreen('scheduleSettings')} /></View> : null}
-    {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text><CalendarConnectionSummary refreshKey={calendarConnectionVersion} /><CalendarConnectionManager onChanged={() => setCalendarConnectionVersion((value) => value + 1)} />{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
+    {screen === 'scheduleSettings' ? <View style={styles.card}><PanelHead eyebrow="설정" title="일정·알림 관리" onClose={() => setScreen('settings')} /><Text style={styles.body}>휴대폰/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다.</Text><CalendarConnectionSummary refreshKey={calendarConnectionVersion} /><CalendarConnectionManager onChanged={() => setCalendarConnectionVersion((value) => value + 1)} />{briefing?.scheduleEnabled ? <><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘 일정</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." showDeviceActions onScheduleCancelled={handleScheduleCancelled} /></View><View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내 일정</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." showDeviceActions onScheduleCancelled={handleScheduleCancelled} /></View></> : <Text style={styles.emptyText}>현재 계정의 일정 기능이 활성화되지 않았습니다.</Text>}</View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   <WorkRecordEditSheet

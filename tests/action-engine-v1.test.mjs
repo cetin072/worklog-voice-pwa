@@ -112,3 +112,20 @@ test("지난 금요일 is never reinterpreted as a future schedule weekday",()=>
   const schedule=extractScheduleFromText(transcript,RECORDED_AT);
   assert.equal(schedule.matched,false);
 });
+
+
+test("Human QA timed event phrases remain Schedule while deadline work remains Task",()=>{
+  const cases=[
+    ["오늘 오후 2시 미팅","schedule","2026-09-19T14:00:00+09:00"],
+    ["오늘 오후 2시쯤 미팅","schedule","2026-09-19T14:00:00+09:00"],
+    ["내일 오전 10시 전화","schedule","2026-09-20T10:00:00+09:00"],
+    ["금요일 오후 3시 회의","schedule","2026-09-25T15:00:00+09:00"],
+    ["오늘까지 견적 보내기","task","2026-09-19"],
+  ];
+  for(const [transcript,kind,dueStart] of cases){
+    const schedule=extractScheduleFromText(transcript,RECORDED_AT);
+    const result=classifyWorklogAction({transcript,recordedAt:RECORDED_AT,schedule});
+    assert.equal(result.kind,kind,transcript);
+    assert.equal(schedule.dueStart,dueStart,transcript);
+  }
+});

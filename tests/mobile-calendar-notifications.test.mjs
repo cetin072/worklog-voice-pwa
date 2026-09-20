@@ -28,7 +28,7 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(calendarSource, /current\?\.calendarId === calendarId/);
   assert.match(calendarSource, /current\.eventId !== event\.id/);
   assert.match(calendarSource, /deleteCalendarEvent\(cleanup\.eventId, cleanup\.calendarId/);
-  assert.match(calendarSource, /deleteCalendarEvent\(event\.id, intent\.calendarId, intent\.marker\)/);
+  assert.match(calendarSource, /deleteCalendarEvent\(event\.id, intent\.calendarId, intent\.marker, intent\.schedule\.startsAt\)/);
   assert.match(calendarSource, /pendingCleanup/);
   assert.match(calendarSource, /reconcileCalendarEventCleanup/);
   assert.match(calendarSource, /Retain the mapping so a user-initiated removal or cancellation can retry/);
@@ -60,8 +60,12 @@ test('Calendar and reminder V2 keep the OS-provider selection and multiple expli
   assert.match(scheduleActionsSource, /REMINDER_PRESETS/);
   assert.match(scheduleActionsSource, /이 일정 알림 모두 취소/);
   assert.match(scheduleActionsSource, /이 일정 취소/);
-  assert.match(scheduleActionsSource, /cancelScheduleWithDeviceCleanup/);
+  assert.match(scheduleActionsSource, /cancelScheduleWithDeviceCleanup\(client, scheduleId, startsAt\)/);
+  assert.match(scheduleActionsSource, /onCancelled/);
+  assert.match(scheduleActionsSource, /cleanupPending/);
   assert.match(cancellationSource, /reconcileCanceledScheduleArtifacts/);
+  assert.match(homeSource, /handleScheduleCancelled/);
+  assert.match(homeSource, /onScheduleCancelled=\{handleScheduleCancelled\}/);
 });
 
 test('Notifications reconcile after app restart and route the linked schedule into the home schedule section', () => {
@@ -123,4 +127,14 @@ test('new schedules auto-sync into the selected preferred Calendar', () => {
   assert.match(calendarSource, /calendarOperation/);
   assert.match(calendarSource, /syncCalendarUnlocked\(calendarId, schedule\)/);
   assert.match(scheduleActionsSource, /synchronizeScheduleToPreferredCalendar\(deviceSchedule\)/);
+});
+
+
+test('Calendar Human QA path avoids raw SharedObject lookup when schedule time is known', () => {
+  assert.match(calendarSource, /calendar\.listEvents/);
+  assert.match(calendarSource, /findEvent\(current\.eventId, current\.calendarId, current\.startsAt \|\| schedule\.startsAt\)/);
+  assert.match(calendarSource, /startsAt: intent\.schedule\.startsAt/);
+  assert.match(calendarSource, /WORKLOG_CALENDAR_NATIVE_/);
+  assert.match(scheduleActionsSource, /deviceActionMessage/);
+  assert.match(scheduleActionsSource, /setPrototypeOf\|prototype\|TypeError\|not coercible to Object/);
 });

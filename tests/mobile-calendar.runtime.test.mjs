@@ -44,9 +44,9 @@ test('temporary update failure never falls through to event creation', async () 
   assert.equal(w.calls.filter(([k]) => k === 'create').length, 1); assert.equal(w.events.size, 1);
 });
 
-test('equal fingerprint verifies the OS; only explicit native not-found allows recreation', async () => {
+test('equal fingerprint verifies the OS through bounded calendar listing and recreates only after confirmed absence', async () => {
   const w = fake.reset(); const first = await calendar.syncScheduleToCalendar('work', schedule());
-  w.failure = (kind) => { if (kind === 'get-event') throw new Error('permission error'); };
+  w.failure = (kind) => { if (kind === 'list-events') throw new Error('setPrototypeOf argument is not coercible to Object'); };
   await assert.rejects(calendar.syncScheduleToCalendar('work', schedule())); assert.equal(w.events.size, 1);
   w.failure = () => {}; w.events.delete(first.eventId);
   await calendar.syncScheduleToCalendar('work', schedule()); assert.equal(w.events.size, 1);
@@ -166,4 +166,14 @@ test('overlapping revisions wait for a blocked native create; neither the latest
   assert.deepEqual(settled.map((r) => r.status), ['fulfilled', 'fulfilled']);
   assert.equal(w.events.size, 1);
   assert.equal(new Date([...w.events.values()][0].startDate).getTime(), Date.parse(later));
+});
+
+
+test('normal sync and removal use schedule-time bounded lookup instead of static event SharedObject lookup', async () => {
+  const w = fake.reset();
+  await calendar.syncScheduleToCalendar('work', schedule());
+  await calendar.syncScheduleToCalendar('work', schedule('A', later));
+  await calendar.removeScheduleFromCalendar('A', later);
+  assert.equal(w.calls.filter(([kind]) => kind === 'get-event').length, 0);
+  assert.ok(w.calls.filter(([kind]) => kind === 'list-events').length > 0);
 });

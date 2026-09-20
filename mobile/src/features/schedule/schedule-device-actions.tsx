@@ -44,7 +44,14 @@ function calendarSubtitle(calendar: WritableCalendarOption) {
   return account || calendar.sourceName || '휴대폰 캘린더';
 }
 
-export function ScheduleDeviceActions({ schedule, compactOnly = false }: { schedule: BriefingSchedule; compactOnly?: boolean }) {
+function deviceActionMessage(area: string, error: unknown, fallback: string) {
+  const detail = error instanceof Error ? error.message : '';
+  console.warn('[schedule-device-action]', { area, detail: detail || 'unknown_error' });
+  if (detail && /[가-힣]/.test(detail) && !/setPrototypeOf|prototype|TypeError|not coercible to Object/i.test(detail)) return detail;
+  return fallback;
+}
+
+export function ScheduleDeviceActions({ schedule, compactOnly = false, onCancelled }: { schedule: BriefingSchedule; compactOnly?: boolean; onCancelled?: (scheduleId: string) => void | Promise<void> }) {
   const { client } = usePlatform();
   const [calendarOptions, setCalendarOptions] = useState<WritableCalendarOption[]>([]);
   const [calendarId, setCalendarId] = useState<string | null>(null);
@@ -87,7 +94,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       setSyncResult(result); setBusy(false);
     })().catch((error) => {
       if (version !== requestVersion.current) return;
-      const text = error instanceof Error ? error.message : '기기 동기화 상태를 확인하지 못했습니다.';
+      const text = deviceActionMessage('initial_sync', error, '기기 동기화 상태를 확인하지 못했습니다. 다시 확인해주세요.');
       setBusy(false); setCalendarSynced(false);
       setSyncResult({ reminders: { status: 'error', message: text }, calendar: { status: 'error', message: text } });
     });
@@ -108,7 +115,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       setCalendarId(current?.id || null);
       setMessage('이 일정에 사용할 계정과 캘린더를 직접 선택해주세요. 기본값은 변경하지 않습니다.');
     } catch (error) {
-      const text = error instanceof Error ? error.message : '캘린더 목록을 불러오지 못했습니다.';
+      const text = deviceActionMessage('calendar_list', error, '캘린더 목록을 불러오지 못했습니다. 다시 확인해주세요.');
       setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } }));
     } finally { setBusy(false); }
   }
@@ -133,7 +140,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       setSyncResult((s) => ({ ...s, calendar: { status: 'synced', message: '' } }));
       setCalendarMapping(await getScheduleCalendarMapping(scheduleId));
       setMessage(result.created ? '선택한 캘린더에 일정을 추가했습니다.' : '선택한 캘린더 일정이 최신 상태입니다.');
-    } catch (error) { const text = error instanceof Error ? error.message : '캘린더 동기화에 실패했습니다.'; setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } })); } finally { setBusy(false); }
+    } catch (error) { const text = deviceActionMessage('calendar_sync', error, '캘린더 동기화에 실패했습니다. 다시 확인해주세요.'); setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } })); } finally { setBusy(false); }
   }
 
   async function removeCalendarEvent() {
@@ -144,13 +151,13 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       setCalendarMapping(null);
       setSyncResult((s) => ({ ...s, calendar: { status: 'not-connected', message: '이 일정의 캘린더 연결을 해제했습니다.' } }));
       setMessage(removed ? '휴대폰/Google Calendar에서 이 일정을 제거했습니다.' : '연결된 캘린더 일정이 없습니다.');
-    } catch (error) { const text = error instanceof Error ? error.message : '캘린더 일정 제거에 실패했습니다.'; setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } })); } finally { setBusy(false); }
+    } catch (error) { const text = deviceActionMessage('calendar_remove', error, '캘린더 일정 제거에 실패했습니다. 다시 확인해주세요.'); setMessage(text); setCalendarSynced(false); setSyncResult((s) => ({ ...s, calendar: { status: 'error', message: text } })); } finally { setBusy(false); }
   }
 
   async function refreshReminders() {
     try { setReminders(await listScheduleReminders(scheduleId)); }
     catch (error) {
-      const text = error instanceof Error ? error.message : '알림 기록을 확인하지 못했습니다.';
+      const text = deviceActionMessage('reminder_read', error, '알림 기록을 확인하지 못했습니다. 다시 확인해주세요.');
       setSyncResult((s) => ({ ...s, reminders: { status: 'error', message: text } }));
     }
   }
@@ -170,7 +177,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       if (verified.failed) throw new Error(`요청한 알림 작업은 반영했지만 다른 알림 ${verified.failed}개 확인이 필요합니다.`);
       setSyncResult((s) => ({ ...s, reminders: { status: 'synced', message: '' } }));
     } catch (error) {
-      const text = error instanceof Error ? error.message : '일정 알림을 변경하지 못했습니다.';
+      const text = deviceActionMessage('reminder_toggle', error, '일정 알림을 변경하지 못했습니다. 다시 확인해주세요.');
       setMessage(text); setSyncResult((s) => ({ ...s, reminders: { status: 'error', message: text } }));
     } finally { await refreshReminders(); setBusy(false); }
   }
@@ -185,7 +192,7 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
       setSyncResult((s) => ({ ...s, reminders: { status: 'synced', message: '' } }));
       setMessage(count ? `${count}개의 일정 알림을 모두 취소했습니다.` : '예약된 일정 알림이 없습니다.');
     } catch (error) {
-      const text = error instanceof Error ? error.message : '일정 알림을 취소하지 못했습니다.';
+      const text = deviceActionMessage('reminder_clear', error, '일정 알림을 취소하지 못했습니다. 다시 확인해주세요.');
       setMessage(text); setSyncResult((s) => ({ ...s, reminders: { status: 'error', message: text } }));
     } finally { await refreshReminders(); setBusy(false); }
   }
@@ -197,14 +204,20 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false }: { sched
     }
     requestVersion.current += 1; setBusy(true); setMessage('');
     try {
-      await cancelScheduleWithDeviceCleanup(client, scheduleId);
+      const result = await cancelScheduleWithDeviceCleanup(client, scheduleId, startsAt);
       setCalendarSynced(false);
       setCalendarMapping(null);
       setReminders([]);
-      setSyncResult({ reminders: { status: 'synced', message: '' }, calendar: { status: 'not-connected', message: '' } });
-      setMessage('일정을 취소하고 연결된 Calendar 이벤트와 알림을 정리했습니다. 브리핑을 다시 정리하면 목록에서 사라집니다.');
+      setSyncResult({ reminders: { status: result.cleanupPending ? 'error' : 'synced', message: result.cleanupPending ? '기기 알림 정리가 남아 앱 재실행 시 다시 확인합니다.' : '' }, calendar: { status: 'not-connected', message: result.cleanupPending ? 'Calendar 정리가 남아 앱 재실행 시 다시 확인합니다.' : '' } });
+      try { await onCancelled?.(scheduleId); }
+      catch (refreshError) { console.warn('[schedule-device-action]', { area: 'briefing_refresh_after_cancel', detail: refreshError instanceof Error ? refreshError.message : 'unknown_error' }); }
+      setMessage(result.cleanupPending
+        ? '일정은 취소했습니다. 휴대폰 Calendar 또는 알림 정리는 앱을 다시 열면 자동으로 다시 시도합니다.'
+        : result.alreadyCancelled
+          ? '이미 취소된 일정입니다. 남아 있던 기기 연결 상태를 정리했습니다.'
+          : '일정을 취소하고 연결된 Calendar 이벤트와 알림을 정리했습니다.');
     } catch (error) {
-      const text = error instanceof Error ? error.message : '일정을 취소하지 못했습니다.';
+      const text = deviceActionMessage('schedule_cancel', error, '일정을 취소하지 못했습니다. 다시 확인해주세요.');
       setMessage(text); setCalendarSynced(false);
       setSyncResult({ reminders: { status: 'error', message: text }, calendar: { status: 'error', message: text } });
     } finally { setBusy(false); }
