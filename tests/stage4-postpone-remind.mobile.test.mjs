@@ -50,3 +50,23 @@ test('mobile exposes reminder controls only from task detail and retains home-ro
   assert.match(taskRow, /완료/);
   assert.doesNotMatch(taskRow, /TaskReminderActions|미루기|다시 알림/);
 });
+
+
+test('Human QA mutations acquire the current Supabase session before edit, postpone, attention, and undo requests', () => {
+  assert.match(appSource, /getFreshAccessToken/);
+  const postpone = appSource.slice(appSource.indexOf('async function postponeSelectedTask'), appSource.indexOf('async function remindSelectedTask'));
+  const attention = appSource.slice(appSource.indexOf('async function remindSelectedTask'), appSource.indexOf('async function undoPostponedTask'));
+  const undoPostpone = appSource.slice(appSource.indexOf('async function undoPostponedTask'), appSource.indexOf('async function undoTaskAttention'));
+  const undoAttention = appSource.slice(appSource.indexOf('async function undoTaskAttention'), appSource.indexOf('async function loadTaskEditorDetails'));
+  const editLoad = appSource.slice(appSource.indexOf('async function loadTaskEditorDetails'), appSource.indexOf('function removeVisibleNote'));
+  const editSave = appSource.slice(appSource.indexOf('async function saveTaskEditor'), appSource.indexOf('function confirmSignOut'));
+  const completion = appSource.slice(appSource.indexOf('async function completeTaskInline'), appSource.indexOf('async function postponeSelectedTask'));
+
+  for (const source of [postpone, attention, undoPostpone, undoAttention, editLoad, editSave, completion]) {
+    assert.match(source, /await getFreshAccessToken\(client\)/);
+  }
+  assert.doesNotMatch(postpone, /session\.access_token/);
+  assert.doesNotMatch(attention, /session\.access_token/);
+  assert.doesNotMatch(editLoad, /session\.access_token/);
+  assert.doesNotMatch(editSave, /session\.access_token/);
+});
