@@ -26,7 +26,7 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
   return Object.freeze({
     async rpc(functionName, body = {}) {
       const safeFunction = String(functionName || "");
-      if (!/^[a-z_]{1,80}$/.test(safeFunction) || !body || typeof body !== "object" || Array.isArray(body)) {
+      if (!/^[a-z_][a-z0-9_]{0,79}$/.test(safeFunction) || !body || typeof body !== "object" || Array.isArray(body)) {
         throw clientError("SUPABASE_DATA_CORE_RPC_INVALID", "Data Core RPC 이름 또는 body가 올바르지 않습니다.");
       }
       let response;
