@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SAMPLE_URL='https://raw.githubusercontent.com/jyshin0926/KoreanTTS/master/samples_90000step_griffinlim/%E1%84%86%E1%85%A7%E1%86%BC%E1%84%8B%E1%85%A8%E1%84%89%E1%85%A9%E1%84%87%E1%85%A1%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB_kss.wav'
+          SAMPLE_URL='https://raw.githubusercontent.com/jymsuper/SpeakerRecognition_tutorial/master/test_wavs/103F3021/test.wav'
           curl --fail --location --retry 3 --retry-delay 2 "$SAMPLE_URL" -o /tmp/pre-human-ko.wav
           ffmpeg -hide_banner -loglevel error -y -i /tmp/pre-human-ko.wav -ac 1 -ar 16000 -f s16le /tmp/pre-human-ko.pcm
           python3 - <<'PY'
