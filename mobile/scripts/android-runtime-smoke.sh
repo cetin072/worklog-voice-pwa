@@ -113,7 +113,7 @@ read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
 adb shell input tap "$HEADER_X" "$HEADER_Y"
 sleep 1
 dump_window /sdcard/worklog-header-after.xml /tmp/worklog-header-after.xml
-if ! grep -q 'QA 홈 상단 PASS' /tmp/worklog-header-after.xml; then
+if ! grep -q 'QA 홈 상단 PASS 1' /tmp/worklog-header-after.xml; then
   echo "Authenticated-home header Pressable did not react to Android tap."
   cat /tmp/worklog-header-after.xml
   exit 1
@@ -146,6 +146,28 @@ dump_window /sdcard/worklog-mic-after.xml /tmp/worklog-mic-after.xml
 if ! grep -Eq '음성 기록 종료 후 바로 저장|녹음 중' /tmp/worklog-mic-after.xml; then
   echo "Authenticated-home Quick Voice recording UI did not render after Android tap."
   cat /tmp/worklog-mic-after.xml
+  exit 1
+fi
+
+CANCEL_COORDS="$(find_node_center /tmp/worklog-mic-after.xml "녹음 취소")"
+read -r CANCEL_X CANCEL_Y <<<"$CANCEL_COORDS"
+adb shell input tap "$CANCEL_X" "$CANCEL_Y"
+sleep 1
+dump_window /sdcard/worklog-cancel-after.xml /tmp/worklog-cancel-after.xml
+if ! grep -q '음성 기록 시작' /tmp/worklog-cancel-after.xml; then
+  echo "Quick Voice cancel did not return the authenticated Home recorder to idle."
+  cat /tmp/worklog-cancel-after.xml
+  exit 1
+fi
+
+HEADER_COORDS="$(find_node_center /tmp/worklog-cancel-after.xml "업무일지 열기")"
+read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
+adb shell input tap "$HEADER_X" "$HEADER_Y"
+sleep 1
+dump_window /sdcard/worklog-header-retry.xml /tmp/worklog-header-retry.xml
+if ! grep -q 'QA 홈 상단 PASS 2' /tmp/worklog-header-retry.xml; then
+  echo "Authenticated-home header Pressable did not remain touchable after Quick Voice cancellation."
+  cat /tmp/worklog-header-retry.xml
   exit 1
 fi
 

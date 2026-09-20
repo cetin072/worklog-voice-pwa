@@ -276,15 +276,15 @@ function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onO
 
 function AuthenticatedHomeTouchSmoke() {
   const insets = useSafeAreaInsets();
-  const [headerTapped, setHeaderTapped] = useState(false);
+  const [headerTapCount, setHeaderTapCount] = useState(0);
   const [quickVoicePhase, setQuickVoicePhase] = useState('idle');
-  const markHeaderTap = () => setHeaderTapped(true);
+  const markHeaderTap = () => setHeaderTapCount((count) => count + 1);
   return <View style={[styles.page, { paddingTop: insets.top }]} accessibilityLabel="QA authenticated Home">
     <StatusBar style="dark" />
     <View style={styles.authenticatedShell}>
     <ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled">
       <HomeHeader onOpenJournal={markHeaderTap} onOpenRecordSearch={markHeaderTap} onOpenSettings={markHeaderTap} />
-      <Text accessibilityLabel="QA 홈 상단 결과" style={styles.statusText}>{headerTapped ? 'QA 홈 상단 PASS' : 'QA 홈 상단 대기'}</Text>
+      <Text accessibilityLabel="QA 홈 상단 결과" style={styles.statusText}>{headerTapCount ? `QA 홈 상단 PASS ${headerTapCount}` : 'QA 홈 상단 대기'}</Text>
       <VoiceRecorderCard
         mode="quick"
         onOpenWorklogInput={markHeaderTap}
