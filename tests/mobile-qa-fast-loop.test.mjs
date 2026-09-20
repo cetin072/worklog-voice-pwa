@@ -46,7 +46,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /QA 홈 상단 버튼/);
   assert.match(smokeScript, /음성 기록 시작/);
   assert.match(smokeScript, /adb shell input tap/);
-  assert.match(smokeScript, /authenticated-home Quick Voice/);
+  assert.match(smokeScript, /Authenticated-home Quick Voice Pressable/);
   assert.match(smokeScript, /Android authenticated-home touch smoke PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);
 });
