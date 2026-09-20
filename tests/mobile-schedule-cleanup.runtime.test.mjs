@@ -16,7 +16,8 @@ test('parallel server-confirmed cancellations cannot overwrite other pending cle
   // Failure at an OS boundary, NOT a mocked app function, keeps each cleanup pending.
   w.failure = (kind) => { if (kind === 'list-notifications') throw new Error('OS unavailable'); };
   const results = await Promise.allSettled(ids.map((sid) => cancellation.cancelScheduleWithDeviceCleanup(goodClient, sid)));
-  assert.ok(results.every((r) => r.status === 'rejected'));
+  assert.ok(results.every((r) => r.status === 'fulfilled'));
+  assert.ok(results.every((r) => r.status === 'fulfilled' && r.value.cleanupPending === true));
   assert.deepEqual(new Set(JSON.parse(await fake.secureSessionStorage.getItem(key))), new Set(ids));
 });
 test('RPC denial makes no calendar/notification cleanup changes', async () => {
