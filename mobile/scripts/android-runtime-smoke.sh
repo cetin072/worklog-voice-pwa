@@ -23,37 +23,59 @@ adb shell pidof "$PACKAGE"
 # assertion is the rendered accessibility tree below instead of an internal
 # focus field.
 WINDOW_XML=/tmp/worklog-window.xml
+
+dump_window() {
+  local remote="$1"
+  local local_path="$2"
+  adb shell uiautomator dump "$remote" >/dev/null
+  adb pull "$remote" "$local_path" >/dev/null
+}
+
+find_password_toggle_center() {
+  python3 - "$1" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+root = ET.parse(sys.argv[1]).getroot()
+for node in root.iter("node"):
+    text = node.attrib.get("text", "")
+    description = node.attrib.get("content-desc", "")
+    if text != "보기" and description != "비밀번호 보기":
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+    if not match:
+        continue
+    x1, y1, x2, y2 = map(int, match.groups())
+    print((x1 + x2) // 2, (y1 + y2) // 2)
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+password_toggle_changed() {
+  python3 - "$1" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+root = ET.parse(sys.argv[1]).getroot()
+for node in root.iter("node"):
+    text = node.attrib.get("text", "")
+    description = node.attrib.get("content-desc", "")
+    if text == "숨기기" or description == "비밀번호 숨기기":
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+rendered=0
 for attempt in 1 2 3; do
-  adb shell uiautomator dump /sdcard/worklog-window.xml >/dev/null
-  adb pull /sdcard/worklog-window.xml "$WINDOW_XML" >/dev/null
+  dump_window /sdcard/worklog-window.xml "$WINDOW_XML"
 
   if grep -Eq '업무수첩|연결을 확인해주세요' "$WINDOW_XML"; then
-    if grep -q 'text="보기"' "$WINDOW_XML"; then
-      BOUNDS=$(python3 - "$WINDOW_XML" <<'PY'
-import re, sys
-xml = open(sys.argv[1], encoding='utf-8').read()
-match = re.search(r'text="보기"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"', xml)
-if not match:
-    match = re.search(r'bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"[^>]*text="보기"', xml)
-if not match:
-    raise SystemExit(1)
-x1, y1, x2, y2 = map(int, match.groups())
-print((x1 + x2) // 2, (y1 + y2) // 2)
-PY
-      )
-      read -r TAP_X TAP_Y <<<"$BOUNDS"
-      adb shell input tap "$TAP_X" "$TAP_Y"
-      sleep 1
-      adb shell uiautomator dump /sdcard/worklog-window-after-tap.xml >/dev/null
-      adb pull /sdcard/worklog-window-after-tap.xml /tmp/worklog-window-after-tap.xml >/dev/null
-      if ! grep -q 'text="숨기기"' /tmp/worklog-window-after-tap.xml; then
-        echo "First-screen Pressable did not react to a real Android tap."
-        cat /tmp/worklog-window-after-tap.xml
-        exit 1
-      fi
-    fi
-    echo "Android runtime smoke PASS: app rendered and a real Pressable tap reached React Native."
-    exit 0
+    rendered=1
+    break
   fi
 
   # API 35's launcher can show a transient Quickstep ANR dialog while the
@@ -65,9 +87,45 @@ PY
   sleep 3
 done
 
-echo "Expected first-screen text was not found after retrying the rendered UI."
-echo "---- Window XML ----"
-cat "$WINDOW_XML"
-echo "---- Recent logcat ----"
-adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime" || true
-exit 1
+if [[ "$rendered" != "1" ]]; then
+  echo "Expected first-screen text was not found after retrying the rendered UI."
+  echo "---- Window XML ----"
+  cat "$WINDOW_XML"
+  echo "---- Recent logcat ----"
+  adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime" || true
+  exit 1
+fi
+
+# Regression for #414: rendering is not enough. Exercise a real React Native
+# Pressable through Android input and require a visible state change.
+TAP_COORDS=""
+for scroll_attempt in 0 1 2 3; do
+  dump_window /sdcard/worklog-touch-before.xml /tmp/worklog-touch-before.xml
+  if TAP_COORDS="$(find_password_toggle_center /tmp/worklog-touch-before.xml)"; then
+    break
+  fi
+  adb shell input swipe 540 1600 540 600 300
+  sleep 1
+done
+
+if [[ -z "$TAP_COORDS" ]]; then
+  echo "Could not locate the password visibility Pressable in the Android accessibility tree."
+  echo "---- Window XML ----"
+  cat /tmp/worklog-touch-before.xml
+  exit 1
+fi
+
+read -r TAP_X TAP_Y <<<"$TAP_COORDS"
+adb shell input tap "$TAP_X" "$TAP_Y"
+sleep 1
+
+dump_window /sdcard/worklog-touch-after.xml /tmp/worklog-touch-after.xml
+if ! password_toggle_changed /tmp/worklog-touch-after.xml; then
+  echo "First-screen Pressable did not react to a real Android tap."
+  echo "Tapped at: $TAP_X $TAP_Y"
+  echo "---- Window XML after tap ----"
+  cat /tmp/worklog-touch-after.xml
+  exit 1
+fi
+
+echo "Android runtime smoke PASS: app rendered and a real Pressable tap reached React Native."
