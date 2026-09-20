@@ -21,13 +21,27 @@ function title(value){
 
 function rpcUnavailable(error,name){
   if(error?.code!=="SUPABASE_DATA_CORE_RPC_FAILED") return false;
+  if(String(error?.remoteCode || "")==="PGRST202") return true;
   const message=String(error?.message || "");
   return new RegExp(`(?:could not find|schema cache)[\\s\\S]*${name}|${name}[\\s\\S]*(?:could not find|schema cache)`,"i").test(message);
 }
 
 function translateRpcError(error){
+  if(error?.code==="SUPABASE_DATA_CORE_NETWORK_FAILED"){
+    return editError("WORKLOG_DATA_CORE_EDIT_NETWORK_FAILED","업무 서버에 연결하지 못했습니다. 네트워크를 확인하고 다시 시도해주세요.");
+  }
   if(error?.code!=="SUPABASE_DATA_CORE_RPC_FAILED") return error;
   const message=String(error?.message || "");
+  const remoteCode=String(error?.remoteCode || "");
+  if(["PGRST301","PGRST303"].includes(remoteCode) || /(?:JWT|token)[\\s\\S]*(?:expired|invalid)|(?:expired|invalid)[\\s\\S]*(?:JWT|token)/i.test(message)){
+    return editError("WORKLOG_DATA_CORE_EDIT_AUTH_REQUIRED","로그인 세션이 만료되었습니다. 다시 로그인해주세요.");
+  }
+  if(remoteCode==="42501" || /permission denied/i.test(message)){
+    return editError("WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN","수정할 업무를 찾지 못했거나 수정 권한이 없습니다.");
+  }
+  if(remoteCode==="PGRST202"){
+    return editError("WORKLOG_DATA_CORE_EDIT_RPC_UNAVAILABLE","업무 수정 기능 연결이 아직 갱신되지 않았습니다. 잠시 후 다시 시도해주세요.");
+  }
   if(/AUTHENTICATION_REQUIRED/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_AUTH_REQUIRED","로그인 세션을 확인하지 못했습니다.");
   if(/PERSONAL_WORKSPACE_MISSING/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_WORKSPACE_MISSING","개인 업무공간을 찾지 못했습니다.");
   if(/WORK_RECORD_NOT_FOUND_OR_FORBIDDEN/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN","수정할 업무를 찾지 못했거나 수정 권한이 없습니다.");

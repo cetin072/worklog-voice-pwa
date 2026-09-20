@@ -22,6 +22,7 @@ import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
 import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, postponeWorklog, readWorklogDetails, saveWorklog, setWorklogAttention, undoPostponeWorklog, undoWorklogAttention, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
+import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
@@ -412,14 +413,14 @@ export default function HomeScreen() {
   }
 
   async function refreshBriefing() {
-    if (!session) return;
-    const accessToken = session.access_token;
+    if (!session || !client) return;
     const epoch = briefingRefreshEpoch.current;
     await briefingRefreshQueue.current.run(async () => {
       if (epoch !== briefingRefreshEpoch.current) return;
       setBriefingBusy(true);
       setBriefingError('');
       try {
+        const accessToken = await getFreshAccessToken(client);
         const next = await loadBriefing(accessToken);
         if (epoch === briefingRefreshEpoch.current) setBriefing(next);
       } catch (nextError) {
@@ -487,9 +488,10 @@ export default function HomeScreen() {
   }
 
   async function changeTaskStatus(status: '완료' | '진행중' | '대기' | '확인필요') {
-    if (!session || !selectedTask?.task.pageId || busy) return;
+    if (!session || !client || !selectedTask?.task.pageId || busy) return;
     await run(async () => {
-      await updateWorklogStatus(session.access_token, selectedTask.task.pageId!, status);
+      const accessToken = await getFreshAccessToken(client);
+      await updateWorklogStatus(accessToken, selectedTask.task.pageId!, status);
       showMessage(`업무 상태를 ${status}(으)로 변경했습니다.`, 'success');
       setSelectedTask(null); setScreen('home');
       await refreshBriefing();
@@ -497,12 +499,13 @@ export default function HomeScreen() {
   }
 
   async function completeTaskInline(task: BriefingTask) {
-    if (!session || !task.pageId || taskBusyId) return;
+    if (!session || !client || !task.pageId || taskBusyId) return;
     const previousStatus: WorkStatus = task.status === '대기' || task.status === '확인필요' || task.status === '진행중' ? task.status : '진행중';
     setTaskBusyId(task.pageId);
     clearMessage();
     try {
-      await updateWorklogStatus(session.access_token, task.pageId, '완료');
+      const accessToken = await getFreshAccessToken(client);
+      await updateWorklogStatus(accessToken, task.pageId, '완료');
       setUndoTask({ pageId: task.pageId, status: previousStatus, title: task.title || '업무', previousAttentionAt: task.nextAttentionAt || null });
       await refreshBriefing();
     } catch (nextError) {
@@ -513,16 +516,17 @@ export default function HomeScreen() {
   }
 
   async function undoCompletedTask() {
-    if (!session || !undoTask || taskBusyId) return;
+    if (!session || !client || !undoTask || taskBusyId) return;
     const target = undoTask;
     setTaskBusyId(target.pageId);
     clearMessage();
     try {
-      await updateWorklogStatus(session.access_token, target.pageId, target.status);
+      const accessToken = await getFreshAccessToken(client);
+      await updateWorklogStatus(accessToken, target.pageId, target.status);
       let attentionError = '';
       if (target.previousAttentionAt) {
         try {
-          await undoWorklogAttention(session.access_token, target.pageId, null, target.previousAttentionAt);
+          await undoWorklogAttention(accessToken, target.pageId, null, target.previousAttentionAt);
         } catch (nextError) {
           attentionError = messageOf(nextError, '기존 다시 알림을 복원하지 못했습니다.');
         }
@@ -542,12 +546,13 @@ export default function HomeScreen() {
 
   async function postponeSelectedTask(date: string) {
     const task = selectedTask?.task;
-    if (!session || !task?.pageId || reminderBusyId) return;
+    if (!session || !client || !task?.pageId || reminderBusyId) return;
     setReminderBusyId(task.pageId);
     clearMessage();
     try {
-      const current = await readWorklogDetails(session.access_token, task.pageId);
-      await postponeWorklog(session.access_token, { pageId: task.pageId, dueDate: date, dueTime: current.dueTime });
+      const accessToken = await getFreshAccessToken(client);
+      const current = await readWorklogDetails(accessToken, task.pageId);
+      await postponeWorklog(accessToken, { pageId: task.pageId, dueDate: date, dueTime: current.dueTime });
       setUndoPostpone({ pageId: task.pageId, title: task.title || '업무' });
       setSelectedTask(null);
       setScreen('home');
@@ -562,11 +567,12 @@ export default function HomeScreen() {
 
   async function remindSelectedTask(date: string | null) {
     const task = selectedTask?.task;
-    if (!session || !task?.pageId || reminderBusyId) return;
+    if (!session || !client || !task?.pageId || reminderBusyId) return;
     setReminderBusyId(task.pageId);
     clearMessage();
     try {
-      const result = await setWorklogAttention(session.access_token, task.pageId, date ? `${date}T09:00:00+09:00` : null);
+      const accessToken = await getFreshAccessToken(client);
+      const result = await setWorklogAttention(accessToken, task.pageId, date ? `${date}T09:00:00+09:00` : null);
       setUndoAttention({
         pageId: task.pageId,
         title: task.title || '업무',
@@ -585,12 +591,13 @@ export default function HomeScreen() {
   }
 
   async function undoPostponedTask() {
-    if (!session || !undoPostpone || reminderBusyId) return;
+    if (!session || !client || !undoPostpone || reminderBusyId) return;
     const target = undoPostpone;
     setReminderBusyId(target.pageId);
     clearMessage();
     try {
-      await undoPostponeWorklog(session.access_token, target.pageId);
+      const accessToken = await getFreshAccessToken(client);
+      await undoPostponeWorklog(accessToken, target.pageId);
       setUndoPostpone(null);
       showMessage(`${target.title} 미루기를 되돌렸습니다.`, 'success');
       await refreshBriefing();
@@ -602,12 +609,13 @@ export default function HomeScreen() {
   }
 
   async function undoTaskAttention() {
-    if (!session || !undoAttention || reminderBusyId) return;
+    if (!session || !client || !undoAttention || reminderBusyId) return;
     const target = undoAttention;
     setReminderBusyId(target.pageId);
     clearMessage();
     try {
-      await undoWorklogAttention(session.access_token, target.pageId, target.appliedAttentionAt, target.previousAttentionAt);
+      const accessToken = await getFreshAccessToken(client);
+      await undoWorklogAttention(accessToken, target.pageId, target.appliedAttentionAt, target.previousAttentionAt);
       setUndoAttention(null);
       showMessage(`${target.title} 다시 알림을 되돌렸습니다.`, 'success');
       await refreshBriefing();
@@ -619,13 +627,14 @@ export default function HomeScreen() {
   }
 
   async function loadTaskEditorDetails(pageId: string, fallbackTitle = '', fallbackDate = '') {
-    if (!session || editBusy || editLoading) return;
+    if (!session || !client || editBusy || editLoading) return;
     setEditLoading(true);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
     try {
-      const details = await readWorklogDetails(session.access_token, pageId);
+      const accessToken = await getFreshAccessToken(client);
+      const details = await readWorklogDetails(accessToken, pageId);
       setEditTitle(details.title || fallbackTitle);
       setEditDate(details.dueDate || fallbackDate);
       setEditTime(details.dueTime || '');
@@ -751,7 +760,7 @@ export default function HomeScreen() {
   }
 
   async function saveTaskEditor() {
-    if (!session || !editTaskId || editBusy || editLoading || !editReady) return;
+    if (!session || !client || !editTaskId || editBusy || editLoading || !editReady) return;
     const recordId = editTaskId;
     const nextTitle = editTitle.replace(/\s+/g, ' ').trim();
     if (!nextTitle) {
@@ -773,7 +782,8 @@ export default function HomeScreen() {
     setEditStatus('');
     setEditStatusTone('neutral');
     try {
-      const result = await updateWorklogDetails(session.access_token, {
+      const accessToken = await getFreshAccessToken(client);
+      const result = await updateWorklogDetails(accessToken, {
         pageId: recordId,
         title: nextTitle,
         dueDate: editDate.trim(),

@@ -1,6 +1,7 @@
-function clientError(code, message) {
+function clientError(code, message, metadata = {}) {
   const error = new Error(message);
   error.code = code;
+  Object.assign(error, metadata);
   return error;
 }
 
@@ -25,16 +26,36 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
   return Object.freeze({
     async rpc(functionName, body = {}) {
       const safeFunction = String(functionName || "");
-      if (!/^[a-z_]{1,80}$/.test(safeFunction) || !body || typeof body !== "object" || Array.isArray(body)) {
+      if (!/^[a-z_][a-z0-9_]{0,79}$/.test(safeFunction) || !body || typeof body !== "object" || Array.isArray(body)) {
         throw clientError("SUPABASE_DATA_CORE_RPC_INVALID", "Data Core RPC 이름 또는 body가 올바르지 않습니다.");
       }
-      const response = await fetchImpl(`${origin}/rest/v1/rpc/${safeFunction}`, {
-        method: "POST",
-        headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      let response;
+      try {
+        response = await fetchImpl(`${origin}/rest/v1/rpc/${safeFunction}`, {
+          method: "POST",
+          headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (causeValue) {
+        throw clientError(
+          "SUPABASE_DATA_CORE_NETWORK_FAILED",
+          "Data Core에 연결하지 못했습니다.",
+          { causeValue },
+        );
+      }
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw clientError("SUPABASE_DATA_CORE_RPC_FAILED", String(data?.message || data?.hint || "Data Core RPC 호출에 실패했습니다."));
+      if (!response.ok) {
+        throw clientError(
+          "SUPABASE_DATA_CORE_RPC_FAILED",
+          String(data?.message || data?.hint || "Data Core RPC 호출에 실패했습니다."),
+          {
+            remoteCode: String(data?.code || ""),
+            remoteDetails: String(data?.details || ""),
+            remoteHint: String(data?.hint || ""),
+            httpStatus: response.status,
+          },
+        );
+      }
       return data;
     },
     async update(table, row, query = {}) {
