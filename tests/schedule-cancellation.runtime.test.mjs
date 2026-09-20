@@ -27,6 +27,7 @@ test('already-cancelled server state is a successful idempotent cancellation and
     scheduleId,
     startsAt,
   );
+  assert.equal(result.scheduleId, scheduleId);
   assert.equal(result.alreadyCancelled, true);
   assert.equal(result.cleanupPending, false);
   assert.deepEqual(world.calls, [
@@ -42,6 +43,7 @@ test('server cancellation remains successful when native cleanup fails and leave
     scheduleId,
     startsAt,
   );
+  assert.equal(result.scheduleId, scheduleId);
   assert.equal(result.alreadyCancelled, false);
   assert.equal(result.cleanupPending, true);
 });
