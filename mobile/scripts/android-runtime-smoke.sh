@@ -8,20 +8,24 @@ PACKAGE="com.cetin072.worklog"
 ACTIVITY="$PACKAGE/.MainActivity"
 
 cd "$ANDROID_DIR"
-# A debug APK expects a Metro server. The release APK packages the JavaScript
-# bundle, so this is an actual offline app-runtime check in CI.
-./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
+if [[ ! -f "$APK" ]]; then
+  echo "Prebuilt authenticated-home touch APK is missing: $APK"
+  exit 1
+fi
+
+# Suppress unrelated launcher ANR dialogs; the emulator is started only after
+# the release APK is fully built, so app interaction is measured in isolation.
+adb shell settings put global hide_error_dialogs 1 || true
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
 
 adb install -r "$APK"
+adb shell pm grant "$PACKAGE" android.permission.RECORD_AUDIO || true
 adb shell am force-stop "$PACKAGE" || true
+adb logcat -c || true
 adb shell am start -W -n "$ACTIVITY"
 sleep 8
 
 adb shell pidof "$PACKAGE"
-# `am start -W` verifies the requested activity launches. Android 35's
-# window-focus dump label varies across emulator images, so the reliable UI
-# assertion is the rendered accessibility tree below instead of an internal
-# focus field.
 WINDOW_XML=/tmp/worklog-window.xml
 
 dump_window() {
@@ -31,40 +35,23 @@ dump_window() {
   adb pull "$remote" "$local_path" >/dev/null
 }
 
-find_password_toggle_center() {
-  python3 - "$1" <<'PY'
+find_node_center() {
+  python3 - "$1" "$2" <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
 
 root = ET.parse(sys.argv[1]).getroot()
+needle = sys.argv[2]
 for node in root.iter("node"):
-    text = node.attrib.get("text", "")
-    description = node.attrib.get("content-desc", "")
-    if text != "보기" and description != "비밀번호 보기":
+    if node.attrib.get("text", "") != needle and node.attrib.get("content-desc", "") != needle:
         continue
-    bounds = node.attrib.get("bounds", "")
-    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
     if not match:
         continue
     x1, y1, x2, y2 = map(int, match.groups())
     print((x1 + x2) // 2, (y1 + y2) // 2)
     raise SystemExit(0)
-raise SystemExit(1)
-PY
-}
-
-password_toggle_changed() {
-  python3 - "$1" <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-
-root = ET.parse(sys.argv[1]).getroot()
-for node in root.iter("node"):
-    text = node.attrib.get("text", "")
-    description = node.attrib.get("content-desc", "")
-    if text == "숨기기" or description == "비밀번호 숨기기":
-        raise SystemExit(0)
 raise SystemExit(1)
 PY
 }
@@ -93,14 +80,11 @@ rendered=0
 for attempt in 1 2 3 4 5 6; do
   dump_window /sdcard/worklog-window.xml "$WINDOW_XML"
 
-  if grep -Eq '업무수첩|연결을 확인해주세요' "$WINDOW_XML"; then
+  if grep -q '업무일지 열기' "$WINDOW_XML" && grep -q '음성 기록 시작' "$WINDOW_XML"; then
     rendered=1
     break
   fi
 
-  # API 35's launcher can show a transient Quickstep ANR dialog while the
-  # newly installed app takes foreground. Explicitly choose "Wait" on that
-  # system dialog, then foreground the app again before re-reading its UI.
   if grep -q "Quickstep isn't responding" "$WINDOW_XML"; then
     if WAIT_COORDS="$(find_quickstep_wait_center "$WINDOW_XML")"; then
       read -r WAIT_X WAIT_Y <<<"$WAIT_COORDS"
@@ -117,44 +101,87 @@ for attempt in 1 2 3 4 5 6; do
 done
 
 if [[ "$rendered" != "1" ]]; then
-  echo "Expected first-screen text was not found after retrying the rendered UI."
-  echo "---- Window XML ----"
+  echo "Production HomeScreenApp did not render its authenticated controls."
   cat "$WINDOW_XML"
-  echo "---- Recent logcat ----"
   adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime" || true
   exit 1
 fi
 
-# Regression for #414: rendering is not enough. Exercise a real React Native
-# Pressable through Android input and require a visible state change.
-TAP_COORDS=""
-for scroll_attempt in 0 1 2 3; do
-  dump_window /sdcard/worklog-touch-before.xml /tmp/worklog-touch-before.xml
-  if TAP_COORDS="$(find_password_toggle_center /tmp/worklog-touch-before.xml)"; then
+# Tap the production header and require HomeScreenApp's real setScreen('journal')
+# navigation, then return through the production panel close action.
+HEADER_COORDS="$(find_node_center "$WINDOW_XML" "업무일지 열기")"
+read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
+adb shell input tap "$HEADER_X" "$HEADER_Y"
+sleep 1
+dump_window /sdcard/worklog-header-after.xml /tmp/worklog-header-after.xml
+if ! grep -q '업무일지' /tmp/worklog-header-after.xml || ! grep -q '닫기' /tmp/worklog-header-after.xml; then
+  echo "HomeScreenApp did not navigate to the production journal screen."
+  cat /tmp/worklog-header-after.xml
+  exit 1
+fi
+
+CLOSE_COORDS="$(find_node_center /tmp/worklog-header-after.xml "닫기")"
+read -r CLOSE_X CLOSE_Y <<<"$CLOSE_COORDS"
+adb shell input tap "$CLOSE_X" "$CLOSE_Y"
+sleep 1
+dump_window /sdcard/worklog-home-return.xml /tmp/worklog-home-return.xml
+if ! grep -q '음성 기록 시작' /tmp/worklog-home-return.xml; then
+  echo "Production journal close did not return to HomeScreenApp."
+  cat /tmp/worklog-home-return.xml
+  exit 1
+fi
+
+# Tap the actual Quick Voice Pressable. Audio streaming keeps React Native busy
+# enough that uiautomator may not produce a post-tap XML dump, so verify the
+# VoiceRecorderCard's state transition through the release runtime log instead.
+MIC_COORDS="$(find_node_center /tmp/worklog-home-return.xml "음성 기록 시작")"
+read -r MIC_X MIC_Y <<<"$MIC_COORDS"
+adb shell input tap "$MIC_X" "$MIC_Y"
+recording=0
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if adb logcat -d -v brief | grep -q 'quick-voice-phase=recording'; then
+    recording=1
     break
   fi
-  adb shell input swipe 540 1600 540 600 300
   sleep 1
 done
-
-if [[ -z "$TAP_COORDS" ]]; then
-  echo "Could not locate the password visibility Pressable in the Android accessibility tree."
-  echo "---- Window XML ----"
-  cat /tmp/worklog-touch-before.xml
+if [[ "$recording" != "1" ]]; then
+  echo "HomeScreenApp Quick Voice Pressable did not enter recording state."
+  echo "Tapped at: $MIC_X $MIC_Y"
+  adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime|quick-voice" || true
   exit 1
 fi
 
-read -r TAP_X TAP_Y <<<"$TAP_COORDS"
-adb shell input tap "$TAP_X" "$TAP_Y"
+# The CI-only timer freeze keeps this rendered state idle. Require the actual
+# mic accessibility node to change; a click/console event alone is insufficient.
+dump_window /sdcard/worklog-mic-after.xml /tmp/worklog-mic-after.xml
+if ! grep -Eq '음성 기록 종료 후 바로 저장|녹음 중' /tmp/worklog-mic-after.xml; then
+  echo "HomeScreenApp Quick Voice recording UI did not render after Android tap."
+  cat /tmp/worklog-mic-after.xml
+  exit 1
+fi
+
+CANCEL_COORDS="$(find_node_center /tmp/worklog-mic-after.xml "녹음 취소")"
+read -r CANCEL_X CANCEL_Y <<<"$CANCEL_COORDS"
+adb shell input tap "$CANCEL_X" "$CANCEL_Y"
 sleep 1
-
-dump_window /sdcard/worklog-touch-after.xml /tmp/worklog-touch-after.xml
-if ! password_toggle_changed /tmp/worklog-touch-after.xml; then
-  echo "First-screen Pressable did not react to a real Android tap."
-  echo "Tapped at: $TAP_X $TAP_Y"
-  echo "---- Window XML after tap ----"
-  cat /tmp/worklog-touch-after.xml
+dump_window /sdcard/worklog-cancel-after.xml /tmp/worklog-cancel-after.xml
+if ! grep -q '음성 기록 시작' /tmp/worklog-cancel-after.xml; then
+  echo "Quick Voice cancel did not return HomeScreenApp recorder to idle."
+  cat /tmp/worklog-cancel-after.xml
   exit 1
 fi
 
-echo "Android runtime smoke PASS: app rendered and a real Pressable tap reached React Native."
+# After cancellation, exercise the same production navigation path again.
+HEADER_COORDS="$(find_node_center /tmp/worklog-cancel-after.xml "업무일지 열기")"
+read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
+adb shell input tap "$HEADER_X" "$HEADER_Y"
+sleep 1
+dump_window /sdcard/worklog-header-retry.xml /tmp/worklog-header-retry.xml
+if ! grep -q '업무일지' /tmp/worklog-header-retry.xml || ! grep -q '닫기' /tmp/worklog-header-retry.xml; then
+  echo "HomeScreenApp did not navigate after Quick Voice cancellation."
+  cat /tmp/worklog-header-retry.xml
+  exit 1
+fi
+
+echo "Android production HomeScreenApp E2E PASS: navigation, Quick Voice recording, cancel, and post-cancel navigation."

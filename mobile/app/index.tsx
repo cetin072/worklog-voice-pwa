@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Session } from '@supabase/supabase-js';
 
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
+import { createConfiguredMobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { MeetingRecordingBanner } from '@/src/features/voice/meeting-recording-banner';
 import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers/whisper-rn-quick-voice-runtime';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
@@ -24,6 +26,7 @@ import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
 import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, postponeWorklog, readWorklogDetails, saveWorklog, setWorklogAttention, undoPostponeWorklog, undoWorklogAttention, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { usePlatform } from '@/src/providers/platform-provider';
+import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import { mobileTheme } from '@/src/ui/theme';
 
 type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'scheduleSettings' | 'reminderSettings' | 'patchNotes';
@@ -256,8 +259,51 @@ function SettingsMenuItem({ eyebrow, title, description, onPress, destructive = 
   </Pressable>;
 }
 
+const ANDROID_TOUCH_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_SMOKE === '1';
+const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider({
+  provider: 'android-touch-smoke',
+  async transcribe() { return { text: 'android touch smoke' }; },
+});
+const ANDROID_TOUCH_SMOKE_SESSION = {
+  access_token: 'android-touch-smoke-token',
+  user: { id: 'android-touch-smoke-user', email: 'android-touch-smoke@example.invalid' },
+} as Session;
+// This client is never allowed to reach Supabase: HomeScreenApp substitutes its
+// startup reads/recovery calls with the no-op adapter below in smoke mode.
+const ANDROID_TOUCH_SMOKE_CLIENT = {} as PlatformSupabaseClient;
+const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
+  today: '2026-09-20', counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
+  structure: { overdue: [], today: [], upcoming: [], undated: [] }, resurface: [], notes: [], schedules: { today: [], upcoming: [], total: 0 },
+};
+
+function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onOpenJournal: () => void; onOpenRecordSearch: () => void; onOpenSettings: () => void }) {
+  return <View style={styles.header}>
+    <View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View>
+    <View style={styles.headerActions}>
+      <Pressable accessibilityRole="button" accessibilityLabel="업무일지 열기" style={styles.headerButton} onPress={onOpenJournal}><Text style={styles.headerButtonIcon}>📒</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={onOpenRecordSearch}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={onOpenSettings}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable>
+    </View>
+  </View>;
+}
+
 export default function HomeScreen() {
-  const { phase, session, error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut, config, client } = usePlatform();
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} />;
+}
+
+function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
+  const platform = usePlatform();
+  const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
+  const phase = androidTouchSmoke ? 'ready' : platform.phase;
+  const session = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION : platform.session;
+  const client = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
+  const config = androidTouchSmoke ? null : platform.config;
+  const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
+  const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
+  const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => ANDROID_TOUCH_SMOKE_SESSION.access_token : getFreshAccessToken;
+  const reconcileHomeCancelledSchedules = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCanceledScheduleArtifacts;
+  const reconcileHomeCalendar = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCalendarEventCleanup;
+  const reconcileHomeReminders = androidTouchSmoke ? async () => ({ restored: 0, removed: 0, cleanedPending: 0, failed: 0, untracked: 0, pending: 0 }) : reconcileScheduleReminders;
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -320,7 +366,6 @@ export default function HomeScreen() {
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
   const [calendarConnectionVersion, setCalendarConnectionVersion] = useState(0);
-  const [quickDockHeight, setQuickDockHeight] = useState(220);
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
@@ -336,7 +381,7 @@ export default function HomeScreen() {
     setJournal(null);
     setJournalBusy(true);
     setJournalError('');
-    void loadWorkJournalDay(token, journalDate)
+    void loadHomeJournal(token, journalDate)
       .then((next) => { if (alive) setJournal(next); })
       .catch((nextError) => { if (alive) setJournalError(messageOf(nextError, '업무일지를 불러오지 못했습니다.')); })
       .finally(() => { if (alive) setJournalBusy(false); });
@@ -375,9 +420,9 @@ export default function HomeScreen() {
     // Calendar rollback artifacts, then reminder restoration/cleanup.
     if (client && session) {
       void (async () => {
-        await reconcileCanceledScheduleArtifacts(client);
-        const calendarRecovery = await reconcileCalendarEventCleanup();
-        const reminderRecovery = await reconcileScheduleReminders();
+        await reconcileHomeCancelledSchedules(client);
+        const calendarRecovery = await reconcileHomeCalendar();
+        const reminderRecovery = await reconcileHomeReminders();
         if (calendarRecovery.remaining || reminderRecovery.failed || reminderRecovery.pending || reminderRecovery.untracked) {
           showMessage('일부 캘린더·알림은 복구 또는 확인이 필요합니다. 일정별 상태와 다시 확인 버튼을 확인해주세요.', 'error');
         }
@@ -420,8 +465,8 @@ export default function HomeScreen() {
       setBriefingBusy(true);
       setBriefingError('');
       try {
-        const accessToken = await getFreshAccessToken(client);
-        const next = await loadBriefing(accessToken);
+        const accessToken = await freshHomeAccessToken(client);
+        const next = await loadHomeBriefing(accessToken);
         if (epoch === briefingRefreshEpoch.current) setBriefing(next);
       } catch (nextError) {
         if (epoch === briefingRefreshEpoch.current) setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.'));
@@ -874,9 +919,10 @@ export default function HomeScreen() {
   const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
-  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: screen === 'home' ? quickDockHeight + 32 : 28 }]} keyboardShouldPersistTaps="handled"><View style={styles.header}><View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="업무일지 열기" style={styles.headerButton} onPress={openJournal}><Text style={styles.headerButtonIcon}>📒</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={() => setScreen('recordSearch')}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={() => setScreen('settings')}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable></View></View>
+  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
+      <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, draftScope: androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION.user.id : session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
         <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>✅ 업무 저장 완료</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
         <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
@@ -979,7 +1025,7 @@ export default function HomeScreen() {
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
   />
-  {screen === 'home' ? <View pointerEvents="box-none" onLayout={(event) => setQuickDockHeight(Math.max(220, Math.ceil(event.nativeEvent.layout.height)))} style={[styles.quickDockShell, { paddingBottom: Math.max(insets.bottom, 8) }]}><VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} quickVoice={{ ensureProvider: prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} /></View> : null}</View></View>;
+</View></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
@@ -991,7 +1037,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   authenticatedShell: { flex: 1 },
   contentScroll: { flex: 1 },
-  quickDockShell: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: mobileTheme.spacing.section, padding: 24, backgroundColor: mobileTheme.colors.background },
   scroll: { padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section, paddingBottom: 28 },
   loginScroll: { flexGrow: 1, justifyContent: 'center', padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section },

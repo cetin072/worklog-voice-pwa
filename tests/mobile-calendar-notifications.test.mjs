@@ -79,9 +79,9 @@ test('Notifications reconcile after app restart and route the linked schedule in
   assert.match(homeSource, /reconcileCanceledScheduleArtifacts/);
   assert.match(homeSource, /reconcileCalendarEventCleanup/);
   assert.doesNotMatch(homeSource, /Promise\.all\(\[reconcileScheduleReminders\(\), reconcileCanceledScheduleArtifacts\(\), reconcileCalendarEventCleanup\(\)\]\)/);
-  const cancellation = homeSource.indexOf('await reconcileCanceledScheduleArtifacts(client);');
-  const calendarCleanup = homeSource.indexOf('await reconcileCalendarEventCleanup();', cancellation);
-  const reminderCleanup = homeSource.indexOf('await reconcileScheduleReminders();', calendarCleanup);
+  const cancellation = homeSource.indexOf('await reconcileHomeCancelledSchedules(client);');
+  const calendarCleanup = homeSource.indexOf('await reconcileHomeCalendar();', cancellation);
+  const reminderCleanup = homeSource.indexOf('await reconcileHomeReminders();', calendarCleanup);
   assert.ok(cancellation >= 0, 'server-confirmed cancellation cleanup starts first');
   assert.ok(calendarCleanup > cancellation, 'calendar rollback cleanup follows cancellation cleanup');
   assert.ok(reminderCleanup > calendarCleanup, 'reminder reconcile runs after all calendar cleanup');
