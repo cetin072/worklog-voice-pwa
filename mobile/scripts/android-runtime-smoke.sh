@@ -8,9 +8,15 @@ PACKAGE="com.cetin072.worklog"
 ACTIVITY="$PACKAGE/.MainActivity"
 
 cd "$ANDROID_DIR"
-# Build a release APK with the authenticated-home touch harness enabled.
-# Production standalone builds do not set this environment variable.
-EXPO_PUBLIC_ANDROID_TOUCH_SMOKE=1 ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
+if [[ ! -f "$APK" ]]; then
+  echo "Prebuilt authenticated-home touch APK is missing: $APK"
+  exit 1
+fi
+
+# Suppress unrelated launcher ANR dialogs; the emulator is started only after
+# the release APK is fully built, so app interaction is measured in isolation.
+adb shell settings put global hide_error_dialogs 1 || true
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
 
 adb install -r "$APK"
 adb shell pm grant "$PACKAGE" android.permission.RECORD_AUDIO || true
