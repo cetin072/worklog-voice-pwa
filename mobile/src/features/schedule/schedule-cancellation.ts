@@ -97,9 +97,13 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
     alreadyCancelled = rows[0]?.schedule_status === 'cancelled' && rows[0]?.already_cancelled === true;
   }
 
+  // Persist the recovery marker before entering the retryable OS cleanup boundary.
+  // Corrupt/unwritable cancellation state must fail closed rather than being
+  // mistaken for a successful cancellation with pending cleanup.
+  await updatePendingScheduleIds((ids) => [...ids, scheduleId]);
+
   let cleanupPending = false;
   try {
-    await updatePendingScheduleIds((ids) => [...ids, scheduleId]);
     await cleanupDeviceScheduleArtifacts(scheduleId, startsAt);
     await updatePendingScheduleIds((ids) => ids.filter((value) => value !== scheduleId));
   } catch (cleanupError) {
