@@ -39,9 +39,8 @@ test('settings mirrors the web grouping instead of rendering a flat action list'
 });
 
 
-test('Quick Voice keeps the web-like transparent floating treatment and Home keeps Calendar truth visible', () => {
-  assert.match(mobileHome, /quickDockShell: \{ position: 'absolute'/);
-  assert.match(mobileHome, /backgroundColor: 'transparent'/);
+test('Quick Voice keeps the web-like transparent treatment without an authenticated-home overlay and Home keeps Calendar truth visible', () => {
+  assert.doesNotMatch(mobileHome, /quickDockShell|quickDockHeight|position: 'absolute'/);
   assert.match(voiceDock, /quickDock: \{ backgroundColor: 'transparent'/);
   assert.match(mobileHome, /showDeviceStatus/);
   assert.match(scheduleActions, /compactOnly/);
