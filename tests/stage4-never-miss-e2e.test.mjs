@@ -23,6 +23,13 @@ test('future attention preserves due date, stays quiet until due, then resurface
   assert.equal(focus([waiting], '2026-09-21T09:00:00.000Z', '2026-09-21')[0].reason, 'attention');
 });
 
+test('future explicit attention suppresses today and overdue focus until the chosen attention time', () => {
+  const futureAttention = '2026-09-21T09:00:00.000Z';
+  assert.deepEqual(focus([task({ dueKey: '2026-09-20', nextAttentionAt: futureAttention })]), []);
+  assert.deepEqual(focus([task({ dueKey: '2026-09-18', nextAttentionAt: futureAttention })]), []);
+  assert.equal(focus([task({ dueKey: '2026-09-18', nextAttentionAt: futureAttention })], futureAttention, '2026-09-21')[0].reason, 'attention');
+});
+
 test('postpone, undo, attention undo, ownership, and linked schedules stay fail-closed at the trusted SQL boundary', () => {
   assert.match(migration, /set due_at = p_due_at/);
   assert.match(migration, /stage4Postpone/);
