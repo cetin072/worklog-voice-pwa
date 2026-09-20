@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const migration = readFileSync(new URL('../supabase/migrations/20260920093000_stage4_final_audit_fixes.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../supabase/migrations/20260920003428_stage4_final_audit_fixes.sql', import.meta.url), 'utf8');
 
 test('postpone undo is compare-and-swap safe after later due edits', () => {
   assert.match(migration, /'appliedDueAt', p_due_at/);
