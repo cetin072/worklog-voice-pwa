@@ -335,25 +335,26 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
       </View>
       {quickPhase === 'preparing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
-      <View style={styles.quickPrimaryControl}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isRecording ? '음성 기록 종료 후 바로 저장' : '음성 기록 시작'}
-          disabled={quickActive && !isRecording}
-          style={[styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
-          onPress={() => void (isRecording ? stopQuickVoice() : canStart ? startQuickVoice() : undefined)}
-        >
-          <Text style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
-          <Text style={styles.quickMicLabel}>{isRecording ? '녹음 중' : quickActive ? '처리 중' : '음성 기록'}</Text>
-          {isRecording ? <Text style={styles.quickMicTimer}>{formatDuration(recordingElapsedMs)}</Text> : null}
-        </Pressable>
-      </View>
-
-      <View style={styles.quickAuxiliaryControls}>
+      <View style={styles.quickOrbitalRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
           <Text style={styles.quickSideIcon}>✏️</Text>
           <Text style={styles.quickSideLabel}>메모</Text>
         </Pressable>
+
+        <View style={styles.quickPrimaryControl}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isRecording ? '음성 기록 종료 후 바로 저장' : '음성 기록 시작'}
+            disabled={quickActive && !isRecording}
+            style={[styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
+            onPress={() => void (isRecording ? stopQuickVoice() : canStart ? startQuickVoice() : undefined)}
+          >
+            <Text style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
+            <Text style={styles.quickMicLabel}>{isRecording ? '녹음 중' : quickActive ? '처리 중' : '음성 기록'}</Text>
+            {isRecording ? <Text style={styles.quickMicTimer}>{formatDuration(recordingElapsedMs)}</Text> : null}
+          </Pressable>
+        </View>
+
         <View style={styles.quickAuxiliaryStatus}>
           <Text style={styles.quickStatusIcon}>{statusDone ? '✓' : quickPhase === 'transcript_error' || quickPhase === 'save_error' ? '!' : '●'}</Text>
           <Text style={styles.quickSideLabel}>{statusDone ? '저장됨' : isRecording ? '녹음 중' : quickPhase === 'idle' ? '대기' : '처리 중'}</Text>
@@ -403,17 +404,17 @@ const styles = StyleSheet.create({
   quickStatusBubbleTextRecording: { color: '#fff' },
   quickStatusBubbleTextDone: { color: mobileTheme.colors.success },
   quickProgress: { textAlign: 'center', fontSize: 11, color: '#475569' },
-  quickPrimaryControl: { height: QUICK_VOICE_LAYOUT.micSize, alignItems: 'center', justifyContent: 'center' },
+  quickOrbitalRow: { height: QUICK_VOICE_LAYOUT.micSize, flexDirection: 'row', alignItems: 'center', gap: QUICK_VOICE_LAYOUT.horizontalGap },
+  quickPrimaryControl: { width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   quickMic: { width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize, borderRadius: QUICK_VOICE_LAYOUT.micSize / 2, alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: mobileTheme.colors.primary, borderWidth: 5, borderColor: mobileTheme.colors.surface, shadowColor: mobileTheme.colors.primary, shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
   quickMicActive: { backgroundColor: '#b91c1c', shadowColor: '#b91c1c', shadowOpacity: 0.34 },
   quickMicBusy: { opacity: 0.65 },
   quickMicIcon: { fontSize: 38, color: '#fff' },
   quickMicLabel: { fontSize: 15, fontWeight: '900', color: '#fff' },
   quickMicTimer: { fontSize: 13, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] },
-  quickAuxiliaryControls: { minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, flexDirection: 'row', gap: QUICK_VOICE_LAYOUT.verticalGap },
-  quickAuxiliaryAction: { flex: 1, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.92)' },
+  quickAuxiliaryAction: { flex: 1, minWidth: QUICK_VOICE_LAYOUT.auxiliaryMinWidth, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.92)' },
   quickSideActionDisabled: { opacity: 0.4 },
-  quickAuxiliaryStatus: { flex: 1, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(248,250,252,0.92)' },
+  quickAuxiliaryStatus: { flex: 1, minWidth: QUICK_VOICE_LAYOUT.auxiliaryMinWidth, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(248,250,252,0.92)' },
   quickCancel: { minHeight: QUICK_VOICE_LAYOUT.cancelHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#b91c1c', backgroundColor: '#fff1f2' },
   quickCancelText: { color: '#b91c1c', fontSize: 14, fontWeight: '900' },
   quickSideIcon: { fontSize: 18 },
