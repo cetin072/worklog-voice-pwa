@@ -149,7 +149,6 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     speechSession.current?.dispose();
     speechSession.current = null;
   }, []);
-
   useEffect(() => {
     if (mode !== 'quick' || !quickVoice || !quickDraftScope) return;
     let cancelled = false;
@@ -490,7 +489,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
           : quickPhase === 'refreshing'
             ? '브리핑에 반영하는 중…'
             : quickPhase === 'saved'
-              ? '✓ 저장 완료'
+              ? quickSave?.scheduleCreated ? '✓ 저장 완료 · 일정 반영' : '✓ 저장 완료'
               : quickStatus(quickPhase);
     const guidance = isRecording
       ? '말씀하세요. 끝나면 빨간 버튼을 누르세요.'
@@ -511,10 +510,13 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
       {quickPhase === 'transcribing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
       <View pointerEvents="box-none" style={styles.quickOrbitalRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
+        {isRecording ? <Pressable accessibilityRole="button" accessibilityLabel="녹음 취소" style={styles.quickAuxiliaryAction} onPress={() => void cancelQuickVoice()}>
+          <Text style={[styles.quickSideIcon, styles.quickCancelIcon]}>✕</Text>
+          <Text style={[styles.quickSideLabel, styles.quickCancelLabel]}>취소</Text>
+        </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
           <Text style={styles.quickSideIcon}>✏️</Text>
           <Text style={styles.quickSideLabel}>메모</Text>
-        </Pressable>
+        </Pressable>}
 
         <View pointerEvents="box-none" style={styles.quickPrimaryControl}>
           <Pressable
@@ -535,7 +537,6 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
           <Text style={styles.quickSideLabel}>{statusDone ? '저장됨' : isRecording ? '녹음 중' : quickPhase === 'idle' ? '대기' : '처리 중'}</Text>
         </View>
       </View>
-      {isRecording ? <Pressable accessibilityRole="button" accessibilityLabel="녹음 취소" style={styles.quickCancel} onPress={() => void cancelQuickVoice()}><Text style={styles.quickCancelText}>취소</Text></Pressable> : null}
 
       {guidance ? <Text style={styles.quickGuidance}>{guidance}</Text> : null}
       {isRecording && speechPreview ? <Text style={styles.quickGuidance}>{speechPreview}</Text> : null}
@@ -546,13 +547,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
       {quickPhase === 'transcript_error' ? <Button title="녹음 버리기" onPress={discardQuickVoice} /> : null}
       {quickPhase === 'save_error' && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 브리핑 카드의 ✏️에서 바로 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
       {quickPhase === 'refresh_error' ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>✅ 저장 완료 · 브리핑 갱신 실패</Text><Button title="브리핑만 다시 불러오기" onPress={() => void retryBriefing()} /></View> : null}
-      {quickTranscript && (quickPhase === 'saved' || quickPhase === 'refresh_error') ? <View style={styles.quickResult}>
-        <Text style={styles.quickResultTitle}>✅ 업무 저장 완료</Text>
-        {quickAudio ? <Text style={styles.meta}>PCM {quickAudio.sampleRate}Hz · {quickAudio.channels}ch · 녹음 {formatDuration(quickAudio.durationMs)} · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 모델 {formatMs(providerPrepareMs)} · 전사 {formatMs(flowTimings?.transcribeMs ?? null)} · 저장 {formatMs(flowTimings?.saveMs ?? null)} · 브리핑 {formatMs(flowTimings?.briefingRefreshMs ?? null)}</Text> : null}
-        {quickSave?.scheduleCreated ? <Text style={styles.scheduleSuccess}>📅 일정 생성 완료{formatSavedDue(quickSave.dueStart) ? ` · ${formatSavedDue(quickSave.dueStart)}` : ''}</Text> : <Text style={styles.scheduleNeutral}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
-        <Text style={styles.transcript}>{quickTranscript.text}</Text>
-      </View> : null}
-      {!quickActive && !quickTranscript && !error ? <Text style={styles.quickHint}>가운데 마이크를 누르면 녹음·전사 후 바로 브리핑에 저장합니다. 오타는 브리핑 카드의 ✏️에서 수정하세요.</Text> : null}
+      {!quickActive && !quickTranscript && !error ? <Text style={styles.quickHint}>가운데 마이크를 누르면 바로 기록합니다.</Text> : null}
     </View>;
   }
 
@@ -572,34 +567,34 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 }
 
 const styles = StyleSheet.create({
-  quickDock: { backgroundColor: 'transparent', borderTopWidth: 0, paddingHorizontal: QUICK_VOICE_LAYOUT.horizontalPadding, paddingTop: mobileTheme.spacing.compact, paddingBottom: mobileTheme.spacing.compact, gap: QUICK_VOICE_LAYOUT.verticalGap },
-  quickTopControl: { minHeight: QUICK_VOICE_LAYOUT.topHitHeight, alignItems: 'center', justifyContent: 'center' },
-  quickStatusBubble: { minHeight: QUICK_VOICE_LAYOUT.topHitHeight, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.94)' },
+  quickDock: { width: QUICK_VOICE_LAYOUT.dockWidth, height: QUICK_VOICE_LAYOUT.dockHeight, alignSelf: 'center', position: 'relative', backgroundColor: 'transparent' },
+  quickTopControl: { position: 'absolute', top: 0, left: 0, right: 0, height: QUICK_VOICE_LAYOUT.timerSize, alignItems: 'center', justifyContent: 'center' },
+  quickStatusBubble: { minHeight: QUICK_VOICE_LAYOUT.timerSize, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.94)', shadowColor: '#111827', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
   quickStatusBubbleRecording: { backgroundColor: '#b91c1c' },
   quickStatusBubbleDone: { backgroundColor: '#eaf4ea' },
   quickStatusBubbleText: { fontSize: 12, fontWeight: '900', color: '#475569' },
   quickStatusBubbleTextRecording: { color: '#fff' },
   quickStatusBubbleTextDone: { color: mobileTheme.colors.success },
-  quickProgress: { textAlign: 'center', fontSize: 11, color: '#475569' },
-  quickOrbitalRow: { height: QUICK_VOICE_LAYOUT.micSize, flexDirection: 'row', alignItems: 'center', gap: QUICK_VOICE_LAYOUT.horizontalGap },
+  quickProgress: { position: 'absolute', top: QUICK_VOICE_LAYOUT.timerSize + 4, left: 8, right: 8, textAlign: 'center', fontSize: 11, color: '#475569' },
+  quickOrbitalRow: { position: 'absolute', left: 0, right: 0, bottom: 0, height: QUICK_VOICE_LAYOUT.micSize, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   quickPrimaryControl: { width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
-  quickMic: { width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize, borderRadius: QUICK_VOICE_LAYOUT.micSize / 2, alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: mobileTheme.colors.primary, borderWidth: 5, borderColor: mobileTheme.colors.surface, shadowColor: mobileTheme.colors.primary, shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  quickMic: { width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize, borderRadius: QUICK_VOICE_LAYOUT.micSize / 2, alignItems: 'center', justifyContent: 'center', gap: 2, backgroundColor: mobileTheme.colors.primary, borderWidth: 5, borderColor: mobileTheme.colors.surface, shadowColor: mobileTheme.colors.primary, shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
   quickMicActive: { backgroundColor: '#b91c1c', shadowColor: '#b91c1c', shadowOpacity: 0.34 },
   quickMicBusy: { opacity: 0.65 },
-  quickMicIcon: { fontSize: 38, color: '#fff' },
-  quickMicLabel: { fontSize: 15, fontWeight: '900', color: '#fff' },
+  quickMicIcon: { fontSize: 34, color: '#fff' },
+  quickMicLabel: { fontSize: 13, fontWeight: '900', color: '#fff' },
   quickMicTimer: { fontSize: 13, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] },
-  quickAuxiliaryAction: { flex: 1, minWidth: QUICK_VOICE_LAYOUT.auxiliaryMinWidth, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.92)' },
+  quickAuxiliaryAction: { width: QUICK_VOICE_LAYOUT.sideActionSize, height: QUICK_VOICE_LAYOUT.sideActionSize, marginBottom: QUICK_VOICE_LAYOUT.sideActionBottom, borderRadius: QUICK_VOICE_LAYOUT.sideActionSize / 2, alignItems: 'center', justifyContent: 'center', gap: 1, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.96)', shadowColor: '#111827', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   quickSideActionDisabled: { opacity: 0.4 },
-  quickAuxiliaryStatus: { flex: 1, minWidth: QUICK_VOICE_LAYOUT.auxiliaryMinWidth, minHeight: QUICK_VOICE_LAYOUT.auxiliaryHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(248,250,252,0.92)' },
-  quickCancel: { minHeight: QUICK_VOICE_LAYOUT.cancelHitHeight, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#b91c1c', backgroundColor: '#fff1f2' },
-  quickCancelText: { color: '#b91c1c', fontSize: 14, fontWeight: '900' },
+  quickAuxiliaryStatus: { width: QUICK_VOICE_LAYOUT.sideActionSize, height: QUICK_VOICE_LAYOUT.sideActionSize, marginBottom: QUICK_VOICE_LAYOUT.sideActionBottom, borderRadius: QUICK_VOICE_LAYOUT.sideActionSize / 2, alignItems: 'center', justifyContent: 'center', gap: 1, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(248,250,252,0.96)' },
   quickSideIcon: { fontSize: 18 },
+  quickCancelIcon: { color: '#b91c1c', fontWeight: '900' },
+  quickCancelLabel: { color: '#b91c1c' },
   quickStatusIcon: { fontSize: 16, fontWeight: '900', color: '#245c2a' },
   quickSideLabel: { fontSize: 10, fontWeight: '800', color: '#374151' },
-  quickHint: { textAlign: 'center', fontSize: 11, color: '#737985', lineHeight: 16 },
-  quickGuidance: { textAlign: 'center', fontSize: 12, fontWeight: '700', color: mobileTheme.colors.textSecondary, lineHeight: 18 },
-  quickResult: { gap: 6, paddingHorizontal: 4, paddingBottom: 2 },
+  quickHint: { display: 'none' },
+  quickGuidance: { position: 'absolute', top: QUICK_VOICE_LAYOUT.timerSize + 5, left: 8, right: 8, textAlign: 'center', fontSize: 12, fontWeight: '700', color: mobileTheme.colors.textSecondary, lineHeight: 18 },
+  quickResult: { position: 'absolute', left: 0, right: 0, bottom: QUICK_VOICE_LAYOUT.dockHeight + 10, gap: 6, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: 'rgba(255,255,255,0.98)', shadowColor: '#111827', shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   quickResultTitle: { textAlign: 'center', fontSize: 12, fontWeight: '800', color: mobileTheme.colors.success },
   card: { backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.card, padding: mobileTheme.spacing.card, gap: 14 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: mobileTheme.colors.text },
@@ -608,7 +603,7 @@ const styles = StyleSheet.create({
   timer: { fontSize: 30, fontWeight: '800', color: '#17191d', fontVariant: ['tabular-nums'] },
   status: { fontSize: 14, fontWeight: '700', color: '#4b515c' },
   notice: { fontSize: 12, color: '#737985', lineHeight: 18 },
-  errorText: { color: mobileTheme.colors.danger, lineHeight: 20, fontSize: 12 },
+  errorText: { position: 'absolute', left: 6, right: 6, bottom: QUICK_VOICE_LAYOUT.dockHeight + 8, padding: 10, borderRadius: 12, backgroundColor: '#fff1f2', color: mobileTheme.colors.danger, lineHeight: 18, fontSize: 12 },
   result: { borderWidth: 1, borderColor: '#e0e3e8', borderRadius: 12, padding: 14, gap: 8 },
   resultTitle: { fontSize: 15, fontWeight: '700', color: '#17191d' },
   meta: { fontSize: 11, color: '#737985', lineHeight: 16 },

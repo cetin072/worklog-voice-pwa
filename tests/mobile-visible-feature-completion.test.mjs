@@ -12,14 +12,15 @@ const search = fs.readFileSync('mobile/src/features/search/work-record-search.ts
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 const editSheet = fs.readFileSync('mobile/src/features/work/work-record-edit-sheet.tsx', 'utf8');
 
-test('Visible feature gate keeps Quick Voice fail-closed and result-visible', () => {
+test('Visible feature gate keeps Quick Voice fail-closed with a lightweight save acknowledgement', () => {
   assert.match(voice, /전사 재시도 필요/);
   assert.match(voice, /음성은 보존했습니다/);
   assert.match(voice, /다시 전사/);
   assert.match(voice, /업무 직접 입력/);
   assert.match(voice, /Peak/);
   assert.match(voice, /RMS/);
-  assert.match(voice, /일정 생성 완료/);
+  assert.match(voice, /업무 저장 완료/);
+  assert.match(voice, /일정 반영/);
 });
 
 test('Visible feature gate keeps meeting recording inspectable after capture', () => {

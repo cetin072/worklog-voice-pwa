@@ -143,10 +143,34 @@ if ! grep -q '음성 기록 시작' /tmp/worklog-home-return.xml; then
   exit 1
 fi
 
+# The floating dock wrapper must be pass-through: its actual side action opens
+# the production direct-input screen and Home remains reachable afterwards.
+MANUAL_COORDS="$(find_node_center /tmp/worklog-home-return.xml "업무 직접 입력 열기")"
+read -r MANUAL_X MANUAL_Y <<<"$MANUAL_COORDS"
+adb shell input tap "$MANUAL_X" "$MANUAL_Y"
+sleep 1
+dump_window /sdcard/worklog-manual-input.xml /tmp/worklog-manual-input.xml
+if ! grep -q '직접 입력' /tmp/worklog-manual-input.xml || ! grep -q '닫기' /tmp/worklog-manual-input.xml; then
+  echo "Floating Quick Voice side action did not open the production direct-input screen."
+  cat /tmp/worklog-manual-input.xml
+  exit 1
+fi
+
+CLOSE_COORDS="$(find_node_center /tmp/worklog-manual-input.xml "닫기")"
+read -r CLOSE_X CLOSE_Y <<<"$CLOSE_COORDS"
+adb shell input tap "$CLOSE_X" "$CLOSE_Y"
+sleep 1
+dump_window /sdcard/worklog-home-after-manual.xml /tmp/worklog-home-after-manual.xml
+if ! grep -q '음성 기록 시작' /tmp/worklog-home-after-manual.xml; then
+  echo "Quick Voice side-action close did not return to HomeScreenApp."
+  cat /tmp/worklog-home-after-manual.xml
+  exit 1
+fi
+
 # Tap the actual Quick Voice Pressable. Audio streaming keeps React Native busy
 # enough that uiautomator may not produce a post-tap XML dump, so verify the
 # VoiceRecorderCard's state transition through the release runtime log instead.
-MIC_COORDS="$(find_node_center /tmp/worklog-home-return.xml "음성 기록 시작")"
+MIC_COORDS="$(find_node_center /tmp/worklog-home-after-manual.xml "음성 기록 시작")"
 read -r MIC_X MIC_Y <<<"$MIC_COORDS"
 adb shell input tap "$MIC_X" "$MIC_Y"
 recording=0

@@ -1,39 +1,35 @@
 export const QUICK_VOICE_LAYOUT = Object.freeze({
   minScreenWidth: 320,
-  horizontalPadding: 18,
-  verticalGap: 12,
-  horizontalGap: 10,
-  topHitHeight: 48,
-  micSize: 128,
-  auxiliaryHitHeight: 48,
-  auxiliaryMinWidth: 48,
-  cancelHitHeight: 48,
+  dockWidth: 292,
+  dockHeight: 196,
+  dockReserveHeight: 208,
+  micSize: 116,
+  sideActionSize: 56,
+  timerSize: 48,
+  sideActionBottom: 30,
 });
 
 type Bounds = Readonly<{ left: number; top: number; width: number; height: number }>;
 
-export function quickVoiceControlBounds(screenWidth = QUICK_VOICE_LAYOUT.minScreenWidth) {
-  const width = Math.max(QUICK_VOICE_LAYOUT.minScreenWidth, screenWidth) - QUICK_VOICE_LAYOUT.horizontalPadding * 2;
-  const availableForSides = width - QUICK_VOICE_LAYOUT.micSize - QUICK_VOICE_LAYOUT.horizontalGap * 2;
-  const auxiliaryWidth = availableForSides / 2;
-  if (auxiliaryWidth < QUICK_VOICE_LAYOUT.auxiliaryMinWidth) {
-    throw new Error('Quick Voice 주변 컨트롤을 안전하게 배치할 화면 너비가 부족합니다.');
-  }
-
-  const orbitTop = QUICK_VOICE_LAYOUT.topHitHeight + QUICK_VOICE_LAYOUT.verticalGap;
-  const auxiliaryTop = orbitTop + (QUICK_VOICE_LAYOUT.micSize - QUICK_VOICE_LAYOUT.auxiliaryHitHeight) / 2;
-  const micLeft = auxiliaryWidth + QUICK_VOICE_LAYOUT.horizontalGap;
-  const rightLeft = micLeft + QUICK_VOICE_LAYOUT.micSize + QUICK_VOICE_LAYOUT.horizontalGap;
-  const cancelTop = orbitTop + QUICK_VOICE_LAYOUT.micSize + QUICK_VOICE_LAYOUT.verticalGap;
-
+/** Geometry of the only touchable controls inside the bottom floating overlay. */
+export function quickVoiceDockBounds(screenWidth = QUICK_VOICE_LAYOUT.minScreenWidth) {
+  const viewportWidth = Math.max(QUICK_VOICE_LAYOUT.minScreenWidth, screenWidth);
+  const width = Math.min(QUICK_VOICE_LAYOUT.dockWidth, viewportWidth);
+  const dockLeft = (viewportWidth - width) / 2;
+  const micLeft = dockLeft + (width - QUICK_VOICE_LAYOUT.micSize) / 2;
+  const micTop = QUICK_VOICE_LAYOUT.dockHeight - QUICK_VOICE_LAYOUT.micSize;
+  const sideTop = QUICK_VOICE_LAYOUT.dockHeight - QUICK_VOICE_LAYOUT.sideActionBottom - QUICK_VOICE_LAYOUT.sideActionSize;
   return Object.freeze({
-    top: Object.freeze({ left: 0, top: 0, width, height: QUICK_VOICE_LAYOUT.topHitHeight }),
-    left: Object.freeze({ left: 0, top: auxiliaryTop, width: auxiliaryWidth, height: QUICK_VOICE_LAYOUT.auxiliaryHitHeight }),
-    mic: Object.freeze({ left: micLeft, top: orbitTop, width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize }),
-    right: Object.freeze({ left: rightLeft, top: auxiliaryTop, width: auxiliaryWidth, height: QUICK_VOICE_LAYOUT.auxiliaryHitHeight }),
-    cancel: Object.freeze({ left: 0, top: cancelTop, width, height: QUICK_VOICE_LAYOUT.cancelHitHeight }),
+    dock: Object.freeze({ left: dockLeft, top: 0, width, height: QUICK_VOICE_LAYOUT.dockHeight }),
+    timer: Object.freeze({ left: dockLeft + (width - QUICK_VOICE_LAYOUT.timerSize) / 2, top: 0, width: QUICK_VOICE_LAYOUT.timerSize, height: QUICK_VOICE_LAYOUT.timerSize }),
+    left: Object.freeze({ left: dockLeft, top: sideTop, width: QUICK_VOICE_LAYOUT.sideActionSize, height: QUICK_VOICE_LAYOUT.sideActionSize }),
+    mic: Object.freeze({ left: micLeft, top: micTop, width: QUICK_VOICE_LAYOUT.micSize, height: QUICK_VOICE_LAYOUT.micSize }),
+    right: Object.freeze({ left: dockLeft + width - QUICK_VOICE_LAYOUT.sideActionSize, top: sideTop, width: QUICK_VOICE_LAYOUT.sideActionSize, height: QUICK_VOICE_LAYOUT.sideActionSize }),
   });
 }
+
+/** @deprecated Kept as a stable import name for existing callers during the UI migration. */
+export const quickVoiceControlBounds = quickVoiceDockBounds;
 
 export function quickVoiceBoundsOverlap(left: Bounds, right: Bounds) {
   return left.left < right.left + right.width

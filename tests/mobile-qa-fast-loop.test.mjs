@@ -75,6 +75,9 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /녹음 취소/);
   assert.match(smokeScript, /production journal screen/);
   assert.match(smokeScript, /Production journal close did not return to HomeScreenApp/);
+  assert.match(smokeScript, /업무 직접 입력 열기/);
+  assert.match(smokeScript, /Floating Quick Voice side action did not open the production direct-input screen/);
+  assert.match(smokeScript, /Quick Voice side-action close did not return to HomeScreenApp/);
   assert.match(smokeScript, /did not navigate after Quick Voice cancellation/);
   assert.match(smokeScript, /Android production HomeScreenApp E2E PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);

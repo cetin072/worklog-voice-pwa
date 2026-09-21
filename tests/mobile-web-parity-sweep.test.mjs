@@ -37,9 +37,10 @@ test('settings keeps account, notifications, app info, and account actions witho
   assert.doesNotMatch(mobileHome, /일정·알림 관리|CalendarConnection|scheduleSettings|Google\/휴대폰 Calendar/);
 });
 
-test('Quick Voice stays in a bottom non-overlay footer while Home keeps internal schedules visible', () => {
-  assert.doesNotMatch(mobileHome, /quickDockShell|quickDockHeight|position: 'absolute'/);
-  assert.match(voiceDock, /quickDock: \{ backgroundColor: 'transparent'/);
+test('Quick Voice mirrors the web dock with a pass-through floating overlay while Home keeps schedules visible', () => {
+  assert.match(mobileHome, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(mobileHome, /pointerEvents="box-none"/);
+  assert.match(voiceDock, /quickDock: \{ width: QUICK_VOICE_LAYOUT\.dockWidth/);
   assert.match(mobileHome, /quickVoiceFooter/);
   assert.match(mobileHome, /오늘과 다가오는 일정/);
   assert.match(mobileHome, /업무수첩 내부에 저장합니다/);
