@@ -10,9 +10,15 @@ function createPort({ available = true, onDevice = true, installedLocales = ['ko
   let events;
   const starts = [];
   let stops = 0;
+  let aborts = 0;
+  let subscriptions = 0;
+  let unsubscriptions = 0;
   return {
     starts,
     get stops() { return stops; },
+    get aborts() { return aborts; },
+    get subscriptions() { return subscriptions; },
+    get unsubscriptions() { return unsubscriptions; },
     port: {
       isRecognitionAvailable: () => available,
       supportsOnDeviceRecognition: () => onDevice,
@@ -20,8 +26,8 @@ function createPort({ available = true, onDevice = true, installedLocales = ['ko
       requestPermissions: async () => ({ granted: true }),
       start: (options) => starts.push(options),
       stop: () => { stops += 1; events?.end(); },
-      abort: () => undefined,
-      subscribe: (next) => { events = next; return () => { events = undefined; }; },
+      abort: () => { aborts += 1; },
+      subscribe: (next) => { events = next; subscriptions += 1; return () => { events = undefined; unsubscriptions += 1; }; },
     },
     result: (text, isFinal) => events.result({ isFinal, transcripts: [text] }),
     error: (code, message = code) => events.error({ code, message }),
@@ -96,4 +102,53 @@ test('locale capability lookup failure still starts the default Android recognit
   const value = speech.createQuickVoiceRecognitionSession(fake.port);
   await value.start();
   assert.deepEqual(fake.starts[0], { locale: 'ko-KR', requiresOnDeviceRecognition: false });
+});
+
+test('overlapping Korean finals keep their shared suffix once instead of duplicating it', () => {
+  assert.equal(
+    speech.mergeRecognitionFinal('내일 오전 10시', '오전 10시부터 환경 정비 시작'),
+    '내일 오전 10시부터 환경 정비 시작',
+  );
+});
+
+test('a rapid duplicate start waits on one permission request and starts one recognizer session', async () => {
+  const fake = createPort();
+  let grant;
+  fake.port.requestPermissions = () => new Promise((resolve) => { grant = () => resolve({ granted: true }); });
+  const value = speech.createQuickVoiceRecognitionSession(fake.port);
+  const first = value.start();
+  const second = value.start();
+  grant();
+  await Promise.all([first, second]);
+  assert.equal(fake.starts.length, 1);
+});
+
+test('stop retains a final result delivered in the stop/end callback race', async () => {
+  const { fake, value } = await session();
+  fake.result('내일 오전', true);
+  fake.port.stop = () => {
+    fake.result('10시부터 환경 정비 시작', true);
+    fake.end();
+  };
+  assert.equal(await value.stop(), '내일 오전 10시부터 환경 정비 시작');
+  assert.equal(value.snapshot().active, false);
+});
+
+test('recoverable busy errors have a bounded restart budget and dispose aborts the native session once', async () => {
+  const { fake, value, fatals } = await session({ maxConsecutiveRestarts: 2 });
+  fake.error('busy');
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  fake.error('busy');
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  fake.error('busy');
+  assert.equal(fake.starts.length, 3);
+  assert.equal(fatals.length, 1);
+  value.dispose();
+  assert.equal(fake.aborts, 0, 'a fatal session is already inactive');
+
+  const active = await session();
+  active.value.dispose();
+  assert.equal(active.fake.aborts, 1);
+  assert.equal(active.fake.subscriptions, 1);
+  assert.equal(active.fake.unsubscriptions, 1);
 });

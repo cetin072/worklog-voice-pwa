@@ -116,6 +116,13 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     return () => clearInterval(timer);
   }, [freezeQuickVoiceTimer, quickPhase]);
 
+  useEffect(() => () => {
+    // Leaving Home or recreating the screen must not leave an Android native
+    // recognizer or its listeners alive behind the next Quick Voice session.
+    speechSession.current?.dispose();
+    speechSession.current = null;
+  }, []);
+
   useEffect(() => {
     if (mode !== 'quick' || !quickVoice || !quickDraftScope) return;
     let cancelled = false;

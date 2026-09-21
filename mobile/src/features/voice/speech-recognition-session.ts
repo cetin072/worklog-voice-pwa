@@ -65,6 +65,12 @@ export function mergeRecognitionFinal(committed: string, incoming: string) {
   const next = clean(incoming);
   if (!next || before === next || before.endsWith(next) || before.includes(next)) return before;
   if (next.startsWith(before)) return next;
+  // Android services may send overlapping final chunks, for example
+  // "내일 오전 10시" followed by "오전 10시부터 환경 정비 시작". Preserve the
+  // shared suffix only once instead of treating it as a wholly new segment.
+  for (let overlap = Math.min(before.length, next.length); overlap >= 2; overlap -= 1) {
+    if (before.endsWith(next.slice(0, overlap))) return clean(`${before}${next.slice(overlap)}`);
+  }
   return clean(`${before} ${next}`);
 }
 
@@ -81,6 +87,7 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
   const restartDelayMs = options.restartDelayMs ?? 250;
   const maxConsecutiveRestarts = options.maxConsecutiveRestarts ?? 3;
   let active = false;
+  let starting = false;
   let stopping = false;
   let disposed = false;
   let committedText = '';
@@ -95,6 +102,8 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
   const publish = () => options.onUpdate?.(snapshot());
   const fatal = (message: string) => {
     active = false;
+    starting = false;
+    stopping = false;
     interimText = '';
     if (restartTimer) clearTimeout(restartTimer);
     restartTimer = null;
@@ -158,28 +167,35 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
 
   return Object.freeze({
     async start() {
-      if (active || disposed) return;
-      if (!port.isRecognitionAvailable()) throw new Error('이 기기에서 음성 인식을 사용할 수 없습니다.');
-      const permission = await port.requestPermissions();
-      if (!permission.granted) throw new Error('마이크 권한을 허용한 뒤 다시 시도해주세요.');
-      const supportsOnDevice = port.supportsOnDeviceRecognition();
-      let localeInstalled = false;
-      if (supportsOnDevice) {
-        try {
-          const supported = await port.getSupportedLocales();
-          localeInstalled = supported.installedLocales.some((value) => value.toLowerCase() === locale.toLowerCase());
-        } catch {
-          // Locale introspection is unavailable on some services/API levels.
-          // Fall back to the normal Android recognizer instead of blocking dictation.
+      if (active || disposed || starting) return;
+      starting = true;
+      try {
+        if (!port.isRecognitionAvailable()) throw new Error('이 기기에서 음성 인식을 사용할 수 없습니다.');
+        const permission = await port.requestPermissions();
+        if (disposed) return;
+        if (!permission.granted) throw new Error('마이크 권한을 허용한 뒤 다시 시도해주세요.');
+        const supportsOnDevice = port.supportsOnDeviceRecognition();
+        let localeInstalled = false;
+        if (supportsOnDevice) {
+          try {
+            const supported = await port.getSupportedLocales();
+            localeInstalled = supported.installedLocales.some((value) => value.toLowerCase() === locale.toLowerCase());
+          } catch {
+            // Locale introspection is unavailable on some services/API levels.
+            // Fall back to the normal Android recognizer instead of blocking dictation.
+          }
         }
+        if (disposed) return;
+        onDevice = supportsOnDevice && localeInstalled;
+        active = true;
+        stopping = false;
+        restartCount = 0;
+        publish();
+        try { port.start({ locale, requiresOnDeviceRecognition: onDevice }); }
+        catch (error) { fatal(error instanceof Error ? error.message : '음성 인식을 시작하지 못했습니다.'); throw error; }
+      } finally {
+        starting = false;
       }
-      onDevice = supportsOnDevice && localeInstalled;
-      active = true;
-      stopping = false;
-      restartCount = 0;
-      publish();
-      try { port.start({ locale, requiresOnDeviceRecognition: onDevice }); }
-      catch (error) { fatal(error instanceof Error ? error.message : '음성 인식을 시작하지 못했습니다.'); throw error; }
     },
     async stop() {
       if (!active) return committedText;
@@ -194,9 +210,17 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
           finish = null;
           complete?.(committedText);
         }, 600);
-        try { port.stop(); } catch { resolve(committedText); }
+        try { port.stop(); }
+        catch {
+          if (finishTimer) clearTimeout(finishTimer);
+          finishTimer = null;
+          const complete = finish;
+          finish = null;
+          complete?.(committedText);
+        }
       });
       active = false;
+      stopping = false;
       interimText = '';
       publish();
       return finalText;
@@ -218,11 +242,25 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
     },
     snapshot,
     dispose() {
+      if (disposed) return;
       disposed = true;
+      const shouldAbort = active || stopping || starting;
+      active = false;
+      starting = false;
+      stopping = true;
       if (restartTimer) clearTimeout(restartTimer);
       restartTimer = null;
       if (finishTimer) clearTimeout(finishTimer);
       finishTimer = null;
+      const complete = finish;
+      finish = null;
+      complete?.(committedText);
+      // A removed React screen must not leave the Android recognizer recording
+      // without listeners. `disposed` is set first, so synchronous native events
+      // cannot publish stale state while this cleanup runs.
+      if (shouldAbort) {
+        try { port.abort(); } catch { /* Best-effort native cleanup. */ }
+      }
       unsubscribe();
     },
   });

@@ -71,5 +71,6 @@ test('Quick Voice automatically persists a valid STT transcript without a review
 
 test('Quick Voice runtime is not released merely because its home card unmounts', () => {
   assert.doesNotMatch(recorder, /releaseProvider/);
-  assert.doesNotMatch(recorder, /useEffect\(\(\) => \(\) =>/);
+  assert.match(recorder, /speechSession\.current\?\.dispose\(\)/);
+  assert.doesNotMatch(recorder, /quickProvider\.current\s*\.\s*(?:dispose|release)/);
 });
