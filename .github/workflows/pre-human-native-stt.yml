@@ -83,3 +83,5 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: bash mobile/scripts/pre-human-native-stt.sh
+
+# qa-421-main-target-trigger
