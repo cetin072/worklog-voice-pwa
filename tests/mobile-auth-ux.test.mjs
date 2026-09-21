@@ -50,6 +50,17 @@ test('Platform provider handles initial and foreground Google auth callbacks', (
   assert.match(providerSource, /Google 로그인을 취소했습니다/);
 });
 
+test('Android touch smoke restores its QA session through PlatformProvider instead of bypassing Home auth state', () => {
+  assert.match(providerSource, /seedAndroidTouchSmokeSession/);
+  assert.match(providerSource, /await nextClient\.auth\.getSession\(\)/);
+  assert.match(providerSource, /setSession\(data\.session\)/);
+  assert.match(providerSource, /setPhase\('ready'\)/);
+  assert.match(homeSource, /const phase = platform\.phase/);
+  assert.match(homeSource, /const session = platform\.session/);
+  assert.match(homeSource, /const client = platform\.client/);
+  assert.doesNotMatch(homeSource, /ANDROID_TOUCH_SMOKE_SESSION|ANDROID_TOUCH_SMOKE_CLIENT/);
+});
+
 test('Login UI exposes Google first plus password visibility and autofill hints', () => {
   assert.match(homeSource, /Google로 시작/);
   assert.match(homeSource, /secureTextEntry=\{!showPassword\}/);
