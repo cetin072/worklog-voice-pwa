@@ -59,7 +59,7 @@ function formatSavedDue(value?: string) {
   }).format(date);
 }
 function quickStatus(phase: QuickVoicePhase) {
-  return ({ idle: '대기', preparing: '음성 모델 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
+  return ({ idle: '대기', preparing: '녹음 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
 }
 
 export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoice, navigationGuard, onQuickVoicePhaseChange, freezeQuickVoiceTimer = false }: VoiceRecorderCardProps) {
@@ -152,25 +152,21 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     saveAttempt.current = null;
     inFlight.current = true; setError(null); setModelDownload(null); setProviderPrepareMs(null); setFlowTimings(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setQuickPhase('preparing');
     try {
-      reportQuickVoiceDebug('provider_prepare', 'started');
-      const providerStartedAt = Date.now();
-      quickProvider.current = await quickVoice.ensureProvider((progress) => setModelDownload(progress));
-      reportQuickVoiceDebug('provider_prepare', 'succeeded');
-      setProviderPrepareMs(Math.max(0, Date.now() - providerStartedAt));
+      // Recording must be the first expensive action after the user taps the mic.
+      // Whisper model download / verification / native initialization is deferred
+      // until after capture so a slow first-use model can never block recording.
       reportQuickVoiceDebug('capture', 'started');
-      try {
-        await quickCapture.start();
-        reportQuickVoiceDebug('capture', 'succeeded');
-      } catch (error) {
-        reportQuickVoiceDebug('capture', 'failed', error);
-        throw error;
-      }
+      await quickCapture.start();
+      reportQuickVoiceDebug('capture', 'succeeded');
       clientRequestId.current = createQuickVoiceClientRequestId();
       recordingStartedAt.current = Date.now();
       setRecordingElapsedMs(0);
       setQuickPhase('recording');
-    } catch (nextError) { reportQuickVoiceDebug('provider_prepare', 'failed', nextError); setQuickPhase('idle'); setError(messageOf(nextError, 'Quick Voice를 시작하지 못했습니다.')); }
-    finally { inFlight.current = false; }
+    } catch (nextError) {
+      reportQuickVoiceDebug('capture', 'failed', nextError);
+      setQuickPhase('idle');
+      setError(messageOf(nextError, 'Quick Voice 녹음을 시작하지 못했습니다.'));
+    } finally { inFlight.current = false; }
   }
 
   async function retryQuickVoiceSave() {
@@ -230,7 +226,21 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     inFlight.current = true; setError(null); setQuickPhase('transcribing'); saveAttempt.current = null;
     let recoveryWarning = '';
     try {
-      const result = await transcribeQuickVoiceCapture({ provider: quickProvider.current || await quickVoice.ensureProvider(), audio });
+      let provider = quickProvider.current;
+      if (!provider) {
+        reportQuickVoiceDebug('provider_prepare', 'started');
+        const providerStartedAt = Date.now();
+        try {
+          provider = await quickVoice.ensureProvider((progress) => setModelDownload(progress));
+          quickProvider.current = provider;
+          setProviderPrepareMs(Math.max(0, Date.now() - providerStartedAt));
+          reportQuickVoiceDebug('provider_prepare', 'succeeded');
+        } catch (providerError) {
+          reportQuickVoiceDebug('provider_prepare', 'failed', providerError);
+          throw providerError;
+        }
+      }
+      const result = await transcribeQuickVoiceCapture({ provider, audio });
       setQuickTranscript(result.transcript); setEditableTranscript(result.transcript.text);
       setFlowTimings({ transcribeMs: result.transcribeMs, saveMs: 0, briefingRefreshMs: 0 });
 
@@ -351,7 +361,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
           <Text style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
         </View>
       </View>
-      {quickPhase === 'preparing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
+      {quickPhase === 'transcribing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
       <View pointerEvents="box-none" style={styles.quickOrbitalRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
