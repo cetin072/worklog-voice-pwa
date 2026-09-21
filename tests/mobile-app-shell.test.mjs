@@ -50,7 +50,8 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
   assert.match(homeSource, /tasks\.slice\(0, 3\)/);
   assert.match(homeSource, /개 더 보기/);
   assert.doesNotMatch(homeSource, /quickDockShell|quickDockHeight|setQuickDockHeight/);
-  assert.match(homeSource, /MeetingRecordingBanner[\s\S]*VoiceRecorderCard mode="quick"/);
+  assert.match(homeSource, /quickVoiceFooter/);
+  assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
 });
 
 
