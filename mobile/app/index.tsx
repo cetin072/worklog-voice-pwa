@@ -260,6 +260,7 @@ function SettingsMenuItem({ eyebrow, title, description, onPress, destructive = 
 }
 
 const ANDROID_TOUCH_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_SMOKE === '1';
+const ANDROID_TOUCH_RECOVERY_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_SMOKE === '1';
 const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider({
   provider: 'android-touch-smoke',
   async transcribe() { return { text: 'android touch smoke' }; },
@@ -288,19 +289,20 @@ function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onO
 }
 
 export default function HomeScreen() {
-  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} />;
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} androidTouchRecoverySmoke={ANDROID_TOUCH_RECOVERY_SMOKE_MODE} />;
 }
 
-function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
+function HomeScreenApp({ androidTouchSmoke = false, androidTouchRecoverySmoke = false }: { androidTouchSmoke?: boolean; androidTouchRecoverySmoke?: boolean }) {
+  const touchSmoke = androidTouchSmoke || androidTouchRecoverySmoke;
   const platform = usePlatform();
   const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
-  const phase = androidTouchSmoke ? 'ready' : platform.phase;
-  const session = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION : platform.session;
-  const client = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
-  const config = androidTouchSmoke ? null : platform.config;
-  const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
-  const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
-  const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => ANDROID_TOUCH_SMOKE_SESSION.access_token : getFreshAccessToken;
+  const phase = touchSmoke ? 'ready' : platform.phase;
+  const session = touchSmoke ? ANDROID_TOUCH_SMOKE_SESSION : platform.session;
+  const client = touchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
+  const config = touchSmoke ? null : platform.config;
+  const loadHomeBriefing = touchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
+  const loadHomeJournal = touchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
+  const freshHomeAccessToken = touchSmoke ? async (_client: PlatformSupabaseClient) => ANDROID_TOUCH_SMOKE_SESSION.access_token : getFreshAccessToken;
   const reconcileHomeCancelledSchedules = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCanceledScheduleArtifacts;
   const reconcileHomeCalendar = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCalendarEventCleanup;
   const reconcileHomeReminders = androidTouchSmoke ? async () => ({ restored: 0, removed: 0, cleanedPending: 0, failed: 0, untracked: 0, pending: 0 }) : reconcileScheduleReminders;
@@ -1006,7 +1008,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, draftScope: androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION.user.id : session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={touchSmoke} onQuickVoicePhaseChange={touchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: touchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, draftScope: touchSmoke ? ANDROID_TOUCH_SMOKE_SESSION.user.id : session.user.id, saveWorklog: touchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
   <WorkRecordEditSheet
     visible={Boolean(editTaskId)}
