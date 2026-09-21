@@ -62,6 +62,9 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(appShell, /freezeQuickVoiceTimer/);
   assert.match(smokeScript, /업무일지 열기/);
   assert.match(smokeScript, /음성 기록 시작/);
+  assert.match(smokeScript, /android.permission.POST_NOTIFICATIONS/);
+  assert.match(smokeScript, /android.permission.READ_CALENDAR/);
+  assert.match(smokeScript, /android.permission.WRITE_CALENDAR/);
   assert.match(smokeScript, /adb shell input tap/);
   assert.match(smokeScript, /quick-voice-phase=recording/);
   assert.match(smokeScript, /음성 기록 종료 후 바로 저장\|녹음 중/);
