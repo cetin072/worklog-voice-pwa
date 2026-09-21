@@ -18,6 +18,7 @@ import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-a
 import { CalendarConnectionSummary } from '@/src/features/schedule/calendar-connection-summary';
 import { CalendarConnectionManager } from '@/src/features/schedule/calendar-connection-manager';
 import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
+import { seedAndroidTouchDirtyRecoveryFixture } from '@/src/features/schedule/android-touch-recovery-fixture';
 import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-calendar';
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
@@ -261,6 +262,7 @@ function SettingsMenuItem({ eyebrow, title, description, onPress, destructive = 
 
 const ANDROID_TOUCH_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_SMOKE === '1';
 const ANDROID_TOUCH_RECOVERY_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_SMOKE === '1';
+const ANDROID_TOUCH_DIRTY_RECOVERY_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_DIRTY_RECOVERY === '1';
 const ANDROID_TOUCH_RECOVERY_CANCELLED = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED !== '0';
 const ANDROID_TOUCH_RECOVERY_CALENDAR = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CALENDAR !== '0';
 const ANDROID_TOUCH_RECOVERY_REMINDERS = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_REMINDERS !== '0';
@@ -301,6 +303,15 @@ const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
   },
 };
 
+let androidTouchDirtyRecoverySeed: Promise<unknown> | null = null;
+function ensureAndroidTouchDirtyRecoverySeed() {
+  if (!ANDROID_TOUCH_DIRTY_RECOVERY_MODE) return Promise.resolve();
+  if (!androidTouchDirtyRecoverySeed) {
+    androidTouchDirtyRecoverySeed = seedAndroidTouchDirtyRecoveryFixture();
+  }
+  return androidTouchDirtyRecoverySeed;
+}
+
 function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onOpenJournal: () => void; onOpenRecordSearch: () => void; onOpenSettings: () => void }) {
   return <View style={styles.header}>
     <View style={styles.headerTitleWrap}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.headerTitle}>🎙 업무수첩</Text></View>
@@ -324,7 +335,12 @@ function HomeScreenApp({ androidTouchSmoke = false, androidTouchRecoverySmoke = 
   const session = touchSmoke ? ANDROID_TOUCH_SMOKE_SESSION : platform.session;
   const client = touchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
   const config = touchSmoke ? null : platform.config;
-  const loadHomeBriefing = touchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
+  const loadHomeBriefing = touchSmoke
+    ? async () => {
+      if (androidTouchRecoverySmoke) await ensureAndroidTouchDirtyRecoverySeed();
+      return ANDROID_TOUCH_SMOKE_BRIEFING;
+    }
+    : loadBriefing;
   const loadHomeJournal = touchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
   const freshHomeAccessToken = touchSmoke ? async (_client: PlatformSupabaseClient) => ANDROID_TOUCH_SMOKE_SESSION.access_token : getFreshAccessToken;
   const reconcileHomeCancelledSchedules = androidTouchSmoke || (androidTouchRecoverySmoke && !ANDROID_TOUCH_RECOVERY_CANCELLED)
@@ -460,6 +476,7 @@ function HomeScreenApp({ androidTouchSmoke = false, androidTouchRecoverySmoke = 
     // Calendar rollback artifacts, then reminder restoration/cleanup.
     if (client && session) {
       void (async () => {
+        if (androidTouchRecoverySmoke) await ensureAndroidTouchDirtyRecoverySeed();
         await reconcileHomeCancelledSchedules(client);
         const calendarRecovery = await reconcileHomeCalendar();
         const reminderRecovery = await reconcileHomeReminders();
