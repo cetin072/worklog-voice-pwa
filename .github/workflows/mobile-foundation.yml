@@ -213,11 +213,11 @@ jobs:
         env:
           CI: '1'
         run: npx expo prebuild --platform android --no-install
-      - name: Build x86_64 authenticated-home touch APK
+      - name: Build x86_64 authenticated-home recovery touch APK
         working-directory: mobile/android
         env:
           NODE_ENV: production
-          EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '1'
+          EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_SMOKE: '1'
         run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
       - name: Enable KVM group permissions
         run: |
