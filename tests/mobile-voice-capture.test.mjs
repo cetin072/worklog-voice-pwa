@@ -75,6 +75,16 @@ test('Quick voice memo uses a non-overlay authenticated-home footer and auto-sav
 });
 
 
+test('Quick Voice mic tap cannot be blocked by first-use Whisper model preparation', () => {
+  const startBegin = recorderSource.indexOf('async function startQuickVoice()');
+  const startEnd = recorderSource.indexOf('async function retryQuickVoiceSave()', startBegin);
+  const startBody = recorderSource.slice(startBegin, startEnd);
+  assert.match(startBody, /await quickCapture\.start\(\)/);
+  assert.doesNotMatch(startBody, /ensureProvider/);
+  assert.match(recorderSource, /Quick Voice 녹음을 시작하지 못했습니다/);
+  assert.match(recorderSource, /quickPhase === 'transcribing' && modelDownload/);
+});
+
 test('Meeting recorder is owned by an app-wide session instead of the meeting card lifecycle', () => {
   const rootLayout = fs.readFileSync('mobile/app/_layout.tsx', 'utf8');
   const banner = fs.readFileSync('mobile/src/features/voice/meeting-recording-banner.tsx', 'utf8');

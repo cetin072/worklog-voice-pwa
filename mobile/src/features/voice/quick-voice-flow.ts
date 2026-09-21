@@ -186,7 +186,11 @@ export function createQuickVoiceSaveAttempt<TSave>(input: Parameters<typeof save
   });
 }
 
-/** Screen changes must not discard an in-flight capture or an uncertain save. */
+/**
+ * Screen changes must not discard an active capture or captured/transcribed work.
+ * The pre-capture permission/setup phase has no audio to preserve, so it must
+ * never lock the rest of Home if native microphone startup is slow.
+ */
 export function quickVoiceNeedsAttention(phase: string) {
-  return !['idle', 'saved', 'refresh_error'].includes(phase);
+  return !['idle', 'preparing', 'saved', 'refresh_error'].includes(phase);
 }
