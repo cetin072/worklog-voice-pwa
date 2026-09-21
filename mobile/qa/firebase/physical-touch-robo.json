@@ -1,0 +1,114 @@
+[
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "app_under_test_shown"
+    }
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "contentDescription": "업무일지 열기"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "업무일지 열기"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "text": "업무일지"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "닫기"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "contentDescription": "음성 기록 시작"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "음성 기록 시작"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "contentDescription": "녹음 취소"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "녹음 취소"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "contentDescription": "음성 기록 시작"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "설정 열기"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "text": "내 업무공간"
+        }
+      ]
+    }
+  }
+]
