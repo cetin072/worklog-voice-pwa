@@ -53,7 +53,7 @@ test('empty and token-only transcripts cannot reach persistence; a legitimate se
   const real = '시청해주셔서 감사합니다'; assert.equal((await flow.transcribeQuickVoiceCapture({ provider: provider(real), audio })).transcript.text, real);
   let writes = 0; await assert.rejects(flow.saveQuickVoiceTranscript(defaults({ ...(await transcript()), text: ' ' }, async () => { writes++; }))); assert.equal(writes, 0);
 });
-test('screen navigation remains guarded through recording, automatic save, and uncertain save', () => {
-  for (const phase of ['preparing', 'recording', 'captured', 'transcribing', 'saving', 'save_error', 'transcript_error']) assert.equal(flow.quickVoiceNeedsAttention(phase), true);
-  for (const phase of ['idle', 'saved', 'refresh_error']) assert.equal(flow.quickVoiceNeedsAttention(phase), false);
+test('screen navigation remains guarded only after audio exists or save/transcription needs attention', () => {
+  for (const phase of ['recording', 'captured', 'transcribing', 'saving', 'save_error', 'transcript_error']) assert.equal(flow.quickVoiceNeedsAttention(phase), true);
+  for (const phase of ['idle', 'preparing', 'saved', 'refresh_error']) assert.equal(flow.quickVoiceNeedsAttention(phase), false);
 });
