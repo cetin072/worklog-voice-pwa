@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 45
     env:
       FIREBASE_PROJECT_ID: worklog-mobile-qa
-      WIF_PROVIDER: projects/406892117471/locations/global/workloadIdentityPools/github-actions/providers/github
+      WIF_PROVIDER: projects/406892117471/locations/global/workloadIdentityPools/github-actions/providers/github-actions
       TESTLAB_SERVICE_ACCOUNT: worklog-testlab-ci@worklog-mobile-qa.iam.gserviceaccount.com
     steps:
       - uses: actions/checkout@v4
