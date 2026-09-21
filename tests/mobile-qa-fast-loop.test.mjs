@@ -76,6 +76,10 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /production journal screen/);
   assert.match(smokeScript, /Production journal close did not return to HomeScreenApp/);
   assert.match(smokeScript, /did not navigate after Quick Voice cancellation/);
+  assert.match(smokeScript, /dirty-device fixture seeded/);
+  assert.match(smokeScript, /calendar-complete/);
+  assert.match(smokeScript, /reminders-complete/);
+  assert.match(smokeScript, /schedule-device-sync-\(complete\|failed\)/);
   assert.match(smokeScript, /Android production HomeScreenApp E2E PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);
 });
