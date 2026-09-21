@@ -110,6 +110,26 @@ if [[ "$rendered" != "1" ]]; then
   exit 1
 fi
 
+# Dirty recovery mode must prove the real device-state paths actually ran.
+recovery_ready=0
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  RECOVERY_LOG="$(adb logcat -d -v brief | grep 'android-touch-recovery' || true)"
+  schedule_done="$(printf '%s\n' "$RECOVERY_LOG" | grep -Ec 'schedule-device-sync-(complete|failed)' || true)"
+  if printf '%s\n' "$RECOVERY_LOG" | grep -q 'dirty-device fixture seeded' \
+    && printf '%s\n' "$RECOVERY_LOG" | grep -q 'calendar-complete' \
+    && printf '%s\n' "$RECOVERY_LOG" | grep -q 'reminders-complete' \
+    && [[ "$schedule_done" -ge 2 ]]; then
+    recovery_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$recovery_ready" != "1" ]]; then
+  echo "Dirty Calendar/Reminder recovery did not complete before touch verification."
+  adb logcat -d -t 500 | grep -E 'android-touch-recovery|device-calendar|schedule-device|AndroidRuntime|ReactNativeJS' || true
+  exit 1
+fi
+
 # Tap the production header and require HomeScreenApp's real setScreen('journal')
 # navigation, then return through the production panel close action.
 HEADER_COORDS="$(find_node_center "$WINDOW_XML" "업무일지 열기")"
