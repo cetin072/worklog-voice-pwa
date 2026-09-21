@@ -1,3 +1,5 @@
+import * as Calendar from 'expo-calendar';
+
 import { secureSessionStorage } from '@/src/platform/secure-storage';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 
@@ -44,20 +46,49 @@ const REMINDER_STATE_KEY = 'worklog.mobile.schedule-notifications.v3';
 export async function seedAndroidTouchDirtyRecoveryFixture(now = Date.now()) {
   const scheduleId = ANDROID_TOUCH_DIRTY_SCHEDULE_ID;
   const startsAt = new Date(now + 3 * 86_400_000).toISOString();
+  const endsAt = new Date(now + 3 * 86_400_000 + 3_600_000).toISOString();
+  const obsoleteStartsAt = new Date(now + 2 * 86_400_000).toISOString();
+  const obsoleteEndsAt = new Date(now + 2 * 86_400_000 + 3_600_000).toISOString();
   const triggerAt = new Date(now + 2 * 86_400_000).toISOString();
+  const eventMarker = 'worklog-sync:11111111-1111-4111-8111-111111111111';
+  const obsoleteMarker = 'worklog-sync:22222222-2222-4222-8222-222222222222';
 
-  await secureSessionStorage.setItem(PREFERRED_CALENDAR_KEY, 'android-touch-dirty-calendar');
+  const calendar = await Calendar.createCalendar({
+    title: 'Worklog Android Touch QA',
+    color: '#275daf',
+    entityType: Calendar.EntityTypes.EVENT,
+  });
+  const event = await calendar.createEvent({
+    title: 'Android touch dirty calendar event',
+    startDate: startsAt,
+    endDate: endsAt,
+    allDay: false,
+    notes: eventMarker,
+    timeZone: 'Asia/Seoul',
+  });
+  const obsoleteEvent = await calendar.createEvent({
+    title: 'Android touch obsolete cleanup event',
+    startDate: obsoleteStartsAt,
+    endDate: obsoleteEndsAt,
+    allDay: false,
+    notes: obsoleteMarker,
+    timeZone: 'Asia/Seoul',
+  });
+
+  await secureSessionStorage.setItem(PREFERRED_CALENDAR_KEY, calendar.id);
   await secureSessionStorage.setItem(CALENDAR_INTENT_KEY, JSON.stringify({}));
   await secureSessionStorage.setItem(CALENDAR_MAPPING_KEY, JSON.stringify({
     [scheduleId]: {
-      calendarId: 'android-touch-dirty-calendar',
-      eventId: 'android-touch-dirty-event',
+      calendarId: calendar.id,
+      eventId: event.id,
+      eventMarker,
       fingerprint: 'android-touch-dirty',
       startsAt,
       pendingCleanup: [{
-        calendarId: 'android-touch-dirty-calendar',
-        eventId: 'android-touch-dirty-obsolete-event',
-        startsAt,
+        calendarId: calendar.id,
+        eventId: obsoleteEvent.id,
+        marker: obsoleteMarker,
+        startsAt: obsoleteStartsAt,
       }],
     },
   }));
@@ -78,6 +109,12 @@ export async function seedAndroidTouchDirtyRecoveryFixture(now = Date.now()) {
     legacyCleanup: {},
   }));
 
+  console.info('[android-touch-recovery] native-calendar fixture seeded', {
+    scheduleId,
+    calendarCreated: Boolean(calendar.id),
+    eventCreated: Boolean(event.id),
+    obsoleteEventCreated: Boolean(obsoleteEvent.id),
+  });
   console.info('[android-touch-recovery] dirty-device fixture seeded', { scheduleId });
   return Object.freeze({ scheduleId, startsAt, triggerAt });
 }
