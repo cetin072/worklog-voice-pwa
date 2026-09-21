@@ -6,23 +6,35 @@ on:
       device_model:
         description: 'Firebase Test Lab physical Android model id'
         required: true
-        default: 'shiba'
+        default: 'redfin'
         type: string
       android_version:
-        description: 'Android API/version id supported by the selected model'
+        description: 'Android OS version id supported by the selected model'
         required: true
-        default: '35'
+        default: '30'
         type: string
+  pull_request:
+    paths:
+      - '.github/workflows/firebase-test-lab.yml'
+      - 'mobile/qa/firebase/**'
+      - 'mobile/app/**'
+      - 'mobile/src/providers/platform-provider.tsx'
+      - 'mobile/package-lock.json'
+      - 'mobile/app.json'
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   physical-touch:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/418-real-session-touch-gate-v3'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_TEST_LAB_PROJECT_ID }}
+      FIREBASE_PROJECT_ID: worklog-mobile-qa
+      WIF_PROVIDER: projects/406892117471/locations/global/workloadIdentityPools/github-actions/providers/github
+      TESTLAB_SERVICE_ACCOUNT: worklog-testlab-ci@worklog-mobile-qa.iam.gserviceaccount.com
     steps:
       - uses: actions/checkout@v4
 
@@ -37,22 +49,28 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Validate Firebase Test Lab configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${FIREBASE_PROJECT_ID:-}" || {
-            echo "Repository variable FIREBASE_TEST_LAB_PROJECT_ID is required."
-            exit 1
-          }
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v3
         with:
-          credentials_json: ${{ secrets.FIREBASE_TEST_LAB_CREDENTIALS }}
+          project_id: ${{ env.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.TESTLAB_SERVICE_ACCOUNT }}
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Confirm Test Lab target is physical Pixel 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL="${{ github.event_name == 'workflow_dispatch' && inputs.device_model || 'redfin' }}"
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.android_version || '30' }}"
+          gcloud firebase test android models describe "$MODEL" --project="$FIREBASE_PROJECT_ID" | tee /tmp/testlab-model.txt
+          grep -qi 'physical' /tmp/testlab-model.txt || {
+            echo "Requested Test Lab model is not confirmed physical: $MODEL"
+            exit 1
+          }
+          echo "Test Lab physical target: $MODEL / $VERSION"
 
       - name: Install locked mobile dependencies
         working-directory: mobile
@@ -76,12 +94,14 @@ jobs:
         run: |
           set -euo pipefail
           APK="mobile/android/app/build/outputs/apk/release/app-release.apk"
+          MODEL="${{ github.event_name == 'workflow_dispatch' && inputs.device_model || 'redfin' }}"
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.android_version || '30' }}"
           test -f "$APK"
           gcloud firebase test android run \
             --project="$FIREBASE_PROJECT_ID" \
             --type=robo \
             --app="$APK" \
             --robo-script="mobile/qa/firebase/physical-touch-robo.json" \
-            --device="model=${{ inputs.device_model }},version=${{ inputs.android_version }},locale=ko,orientation=portrait" \
+            --device="model=$MODEL,version=$VERSION,locale=ko,orientation=portrait" \
             --timeout=5m \
             --client-details="matrixLabel=worklog-physical-touch-${GITHUB_SHA::8}"
