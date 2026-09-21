@@ -278,6 +278,14 @@ const ANDROID_TOUCH_SMOKE_SESSION = {
 // startup reads/recovery calls with the no-op adapter below in smoke mode.
 const ANDROID_TOUCH_SMOKE_CLIENT = {} as PlatformSupabaseClient;
 const ANDROID_TOUCH_RECOVERY_CLIENT = createAndroidTouchCancelledRecoveryClient();
+const ANDROID_TOUCH_STRESS_SCHEDULES: BriefingSchedule[] = Array.from({ length: 18 }, (_, index) => ({
+  scheduleId: `android-touch-stress-${String(index + 1).padStart(2, '0')}`,
+  title: `Android touch startup stress ${index + 1}`,
+  startsAt: new Date(Date.now() + (index + 6) * 3_600_000).toISOString(),
+  dateKey: '2026-09-21',
+  allDay: false,
+}));
+
 const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
   today: '2026-09-21',
   counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
@@ -299,8 +307,8 @@ const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
       startsAt: '2026-09-22T10:00:00+09:00',
       dateKey: '2026-09-22',
       allDay: false,
-    }],
-    total: 2,
+    }, ...ANDROID_TOUCH_STRESS_SCHEDULES],
+    total: 20,
   },
 };
 
