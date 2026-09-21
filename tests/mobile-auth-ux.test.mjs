@@ -73,6 +73,7 @@ test('App shell applies safe-area insets without depending on a bottom navigatio
   assert.match(appShellSource, /paddingTop: insets\.top/);
   assert.doesNotMatch(appShellSource, /quickDockShell|quickDockHeight|setQuickDockHeight/);
   assert.match(appShellSource, /paddingBottom: 28 \+ insets\.bottom/);
+  assert.match(appShellSource, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.doesNotMatch(appShellSource, /PrimaryNavigation/);
 });
 
