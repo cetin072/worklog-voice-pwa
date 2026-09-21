@@ -1,6 +1,40 @@
 import { secureSessionStorage } from '@/src/platform/secure-storage';
+import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 
 export const ANDROID_TOUCH_DIRTY_SCHEDULE_ID = 'android-touch-schedule-today';
+
+export function createAndroidTouchCancelledRecoveryClient(): PlatformSupabaseClient {
+  return {
+    from(table: string) {
+      if (table !== 'schedules') throw new Error('Android touch recovery client only supports schedules.');
+      return {
+        select(_columns: string) {
+          return {
+            in(_column: string, candidateIds: string[]) {
+              return {
+                async eq(_statusColumn: string, _status: string) {
+                  const matched = candidateIds.includes(ANDROID_TOUCH_DIRTY_SCHEDULE_ID);
+                  console.info('[android-touch-recovery] cancelled-server-query', {
+                    candidates: candidateIds.length,
+                    matched,
+                  });
+                  return {
+                    data: matched ? [{
+                      id: ANDROID_TOUCH_DIRTY_SCHEDULE_ID,
+                      status: 'cancelled',
+                      starts_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+                    }] : [],
+                    error: null,
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as PlatformSupabaseClient;
+}
 
 const CALENDAR_MAPPING_KEY = 'worklog.mobile.calendar-event-mappings.v1';
 const PREFERRED_CALENDAR_KEY = 'worklog.mobile.preferred-calendar.v1';
