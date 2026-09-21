@@ -96,6 +96,25 @@ test('Quick Voice Stage 1 hardening persists recoverable drafts and clears them 
   assert.doesNotMatch(home, /ANDROID_TOUCH_SMOKE_SESSION/);
 });
 
+test('Quick Voice starts microphone capture before any Whisper provider preparation and does not guard Home during pre-capture setup', () => {
+  const startBegin = card.indexOf('async function startQuickVoice()');
+  const startEnd = card.indexOf('async function retryQuickVoiceSave()', startBegin);
+  const startBody = card.slice(startBegin, startEnd);
+  assert.ok(startBegin >= 0 && startEnd > startBegin);
+  assert.match(startBody, /await quickCapture\.start\(\)/);
+  assert.doesNotMatch(startBody, /ensureProvider/);
+
+  const transcribeBegin = card.indexOf('async function transcribeCapturedAudio(');
+  const transcribeEnd = card.indexOf('function discardQuickVoice()', transcribeBegin);
+  const transcribeBody = card.slice(transcribeBegin, transcribeEnd);
+  assert.match(transcribeBody, /await quickVoice\.ensureProvider\(\(progress\) => setModelDownload\(progress\)\)/);
+  assert.match(transcribeBody, /reportQuickVoiceDebug\('provider_prepare', 'started'\)/);
+
+  assert.match(flow, /\['idle', 'preparing', 'saved', 'refresh_error'\]/);
+  assert.match(card, /preparing: '녹음 준비 중'/);
+  assert.match(card, /quickPhase === 'transcribing' && modelDownload/);
+});
+
 test('Quick Voice fallback can leave the guarded voice flow only after explicitly clearing it', () => {
   assert.match(card, /function openDirectInputFallback\(\)/);
   assert.match(card, /navigationGuard\.current = false/);
