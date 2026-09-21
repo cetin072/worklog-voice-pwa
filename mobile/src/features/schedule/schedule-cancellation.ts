@@ -1,4 +1,3 @@
-import { listTrackedCalendarScheduleIds, removeScheduleFromCalendar } from './device-calendar';
 import { cancelAllScheduleReminders, listTrackedReminderScheduleIds } from './local-notifications';
 import { secureSessionStorage } from '@/src/platform/secure-storage';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
@@ -69,13 +68,8 @@ async function cancelScheduleDirectly(client: PlatformSupabaseClient, scheduleId
   throw new Error('취소할 일정을 찾지 못했거나 취소할 수 없는 상태입니다.');
 }
 
-async function cleanupDeviceScheduleArtifacts(scheduleId: string, startsAt?: string) {
-  const results = await Promise.allSettled([
-    removeScheduleFromCalendar(scheduleId, startsAt),
-    cancelAllScheduleReminders(scheduleId),
-  ]);
-  const failed = results.find((result) => result.status === 'rejected');
-  if (failed?.status === 'rejected') throw failed.reason;
+async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
+  await cancelAllScheduleReminders(scheduleId);
 }
 
 /**
@@ -104,7 +98,7 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
 
   let cleanupPending = false;
   try {
-    await cleanupDeviceScheduleArtifacts(scheduleId, startsAt);
+    await cleanupDeviceScheduleArtifacts(scheduleId);
     await updatePendingScheduleIds((ids) => ids.filter((value) => value !== scheduleId));
   } catch (cleanupError) {
     cleanupPending = true;
@@ -122,17 +116,14 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
  *
  * The cancellation RPC and SecureStore cannot share one transaction.  If the
  * app exits after the RPC commits but before its marker is persisted, existing
- * Calendar/reminder mappings still identify the orphaned device artifacts.
+ * reminder mappings still identify the orphaned device artifacts.
  * Conversely, a stale marker never authorizes cleanup by itself: only a
  * server-confirmed `cancelled` schedule is eligible for deletion.
  */
 export async function reconcileCanceledScheduleArtifacts(client: PlatformSupabaseClient) {
   const pending = await pendingScheduleIds();
-  const [calendarScheduleIds, reminderScheduleIds] = await Promise.all([
-    listTrackedCalendarScheduleIds(),
-    listTrackedReminderScheduleIds(),
-  ]);
-  const candidateIds = [...new Set([...pending, ...calendarScheduleIds, ...reminderScheduleIds])];
+  const reminderScheduleIds = await listTrackedReminderScheduleIds();
+  const candidateIds = [...new Set([...pending, ...reminderScheduleIds])];
   if (!candidateIds.length) return { cleaned: 0, remaining: 0 };
 
   const { data, error } = await client
@@ -156,7 +147,7 @@ export async function reconcileCanceledScheduleArtifacts(client: PlatformSupabas
   for (const scheduleId of candidateIds) {
     if (!cancelledIds.has(scheduleId)) continue;
     try {
-      await cleanupDeviceScheduleArtifacts(scheduleId, cancelledSchedules.get(scheduleId));
+      await cleanupDeviceScheduleArtifacts(scheduleId);
       cleaned += 1; cleanedIds.add(scheduleId);
     } catch {
       remaining.push(scheduleId);
