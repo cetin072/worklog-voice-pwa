@@ -53,7 +53,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_REMINDERS/);
   assert.match(appShell, /\[android-touch-recovery\]/);
   assert.match(appShell, /const touchSmoke = androidTouchSmoke \|\| androidTouchRecoverySmoke/);
-  assert.match(appShell, /reconcileHomeReminders = androidTouchSmoke \? async/);
+  assert.match(appShell, /reconcileHomeReminders = androidTouchSmoke \|\| \(androidTouchRecoverySmoke && !ANDROID_TOUCH_RECOVERY_REMINDERS\)/);
   assert.doesNotMatch(appShell, /AuthenticatedHomeTouchSmoke/);
   assert.match(appShell, /onQuickVoicePhaseChange/);
   assert.match(appShell, /freezeQuickVoiceTimer/);
