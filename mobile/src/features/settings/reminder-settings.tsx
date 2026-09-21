@@ -25,7 +25,7 @@ function ToggleRow({ title, detail, enabled, disabled, onPress }: { title: strin
   </Pressable>;
 }
 
-export function ReminderSettings({ accessToken, onOpenScheduleSettings }: { accessToken: string; onOpenScheduleSettings: () => void }) {
+export function ReminderSettings({ accessToken }: { accessToken: string }) {
   const [permission, setPermission] = useState<PermissionState>('checking');
   const [permissionDetail, setPermissionDetail] = useState('알림 권한을 확인하고 있습니다.');
   const [localCount, setLocalCount] = useState<number | null>(null);
@@ -72,7 +72,7 @@ export function ReminderSettings({ accessToken, onOpenScheduleSettings }: { acce
       {permission !== 'allowed' ? <Pressable accessibilityRole="button" disabled={busy} style={styles.action} onPress={() => void requestPermission()}><Text style={styles.actionText}>알림 권한 확인</Text></Pressable> : null}
     </View>
 
-    <View style={styles.section}><Text style={styles.heading}>일정 리마인더</Text><Text style={styles.detail}>이 모바일 앱의 Local Notification입니다. 새 일정 알림은 30분 전 또는 1일 전만 선택합니다.</Text><Text style={styles.status}>{localCount === null ? '예약 상태 확인 중' : localCount ? `예약된 일정 알림 ${localCount}개` : '예약된 일정 알림 없음'}</Text><Pressable accessibilityRole="button" style={styles.action} onPress={onOpenScheduleSettings}><Text style={styles.actionText}>일정 리마인더 관리</Text></Pressable></View>
+    <View style={styles.section}><Text style={styles.heading}>일정 리마인더</Text><Text style={styles.detail}>기존 Local Notification 상태만 확인합니다. 외부 Calendar와 일정별 기기 동기화는 보이스 안정화 후 다시 설계합니다.</Text><Text style={styles.status}>{localCount === null ? '예약 상태 확인 중' : localCount ? `예약된 일정 알림 ${localCount}개` : '예약된 일정 알림 없음'}</Text></View>
 
     <View style={styles.section}><Text style={styles.heading}>서버 Push</Text><Text style={styles.detail}>이 모바일 앱은 서버 Push를 직접 받지 않습니다. 아래 상태는 같은 계정으로 연결한 웹/PWA 알림에만 적용됩니다.</Text>
       {serverError ? <Text style={styles.error}>{serverError}</Text> : null}
