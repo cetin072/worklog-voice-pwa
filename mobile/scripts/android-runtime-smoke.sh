@@ -20,6 +20,9 @@ adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 
 
 adb install -r "$APK"
 adb shell pm grant "$PACKAGE" android.permission.RECORD_AUDIO || true
+adb shell pm grant "$PACKAGE" android.permission.POST_NOTIFICATIONS || true
+adb shell pm grant "$PACKAGE" android.permission.READ_CALENDAR || true
+adb shell pm grant "$PACKAGE" android.permission.WRITE_CALENDAR || true
 adb shell am force-stop "$PACKAGE" || true
 adb logcat -c || true
 adb shell am start -W -n "$ACTIVITY"
