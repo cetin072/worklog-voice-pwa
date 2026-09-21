@@ -8,8 +8,6 @@ const meetingLibrary = fs.readFileSync('mobile/src/features/voice/meeting-record
 const meetingRepo = fs.readFileSync('mobile/src/features/voice/meeting-recordings.ts', 'utf8');
 const meetingProvider = fs.readFileSync('mobile/src/features/voice/meeting-recording-provider.tsx', 'utf8');
 const meetingBanner = fs.readFileSync('mobile/src/features/voice/meeting-recording-banner.tsx', 'utf8');
-const calendarSummary = fs.readFileSync('mobile/src/features/schedule/calendar-connection-summary.tsx', 'utf8');
-const deviceCalendar = fs.readFileSync('mobile/src/features/schedule/device-calendar.ts', 'utf8');
 const search = fs.readFileSync('mobile/src/features/search/work-record-search.tsx', 'utf8');
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 const editSheet = fs.readFileSync('mobile/src/features/work/work-record-edit-sheet.tsx', 'utf8');
@@ -45,12 +43,10 @@ test('Visible feature gate keeps direct input and schedule creation truth explic
   assert.match(home, /scheduleCreated/);
 });
 
-test('Visible feature gate keeps Calendar state visible without requiring a schedule row', () => {
-  assert.match(deviceCalendar, /Google Calendar 연결됨/);
-  assert.match(deviceCalendar, /캘린더 권한 필요/);
-  assert.match(deviceCalendar, /캘린더 미선택/);
-  assert.match(calendarSummary, /readCalendarConnectionStatus/);
-  assert.match(home, /CalendarConnectionSummary compact/);
+test('Visible feature gate keeps internal schedules visible without external Calendar state', () => {
+  assert.match(home, /오늘과 다가오는 일정/);
+  assert.match(home, /업무수첩 내부에 저장합니다/);
+  assert.doesNotMatch(home, /CalendarConnection|scheduleSettings|Google\/휴대폰 Calendar/);
 });
 
 test('Visible feature gate keeps work completion, undo, editing and search editing reachable', () => {

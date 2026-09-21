@@ -19,31 +19,29 @@ test('Schedule cancellation is owner-scoped soft cancellation, never a hard dele
   assert.match(migration, /grant execute on function public\.cancel_my_schedule\(uuid\) to authenticated, service_role/i);
 });
 
-test('Mobile cancellation records recoverable cleanup only after the server cancellation is confirmed', () => {
+test('Mobile cancellation records recoverable reminder cleanup only after the server cancellation is confirmed', () => {
   assert.match(mobileCancellation, /PENDING_SCHEDULE_CLEANUP_KEY/);
   assert.match(mobileCancellation, /client\.rpc\('cancel_my_schedule'/);
   const rpc = mobileCancellation.indexOf("client.rpc('cancel_my_schedule'");
   const pending = mobileCancellation.indexOf('updatePendingScheduleIds((ids) => [...ids, scheduleId]);');
-  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId, startsAt);');
+  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId);');
   assert.ok(rpc >= 0);
   assert.ok(pending > rpc, 'pending cleanup must be saved after a successful server RPC');
   assert.ok(cleanup > pending, 'device cleanup must start only after the confirmed pending marker exists');
-  assert.match(mobileCancellation, /removeScheduleFromCalendar\(scheduleId, startsAt\)/);
   assert.match(mobileCancellation, /cancelAllScheduleReminders\(scheduleId\)/);
   assert.match(mobileCancellation, /reconcileCanceledScheduleArtifacts/);
   assert.match(mobileCancellation, /cleanupPending/);
 });
 
-test('Startup cancellation recovery verifies Data Core cancellation before cleanup and can recover a lost marker', () => {
-  assert.match(mobileCancellation, /listTrackedCalendarScheduleIds/);
+test('Startup cancellation recovery verifies Data Core cancellation before reminder cleanup', () => {
   assert.match(mobileCancellation, /listTrackedReminderScheduleIds/);
   assert.match(mobileCancellation, /\.from\('schedules'\)/);
   assert.match(mobileCancellation, /\.eq\('status', 'cancelled'\)/);
   assert.match(mobileCancellation, /a stale marker never authorizes cleanup by itself/);
   const candidates = mobileCancellation.indexOf('const candidateIds =');
   const serverState = mobileCancellation.indexOf(".from('schedules')", candidates);
-  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId, cancelledSchedules.get(scheduleId));', serverState);
-  assert.ok(candidates >= 0, 'pending and device mappings must both be reconciliation candidates');
+  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId);', serverState);
+  assert.ok(candidates >= 0, 'pending and reminder mappings must both be reconciliation candidates');
   assert.ok(serverState > candidates, 'server state must be read after local candidates are collected');
-  assert.ok(cleanup > serverState, 'device cleanup must follow a server cancelled-state check');
+  assert.ok(cleanup > serverState, 'reminder cleanup must follow a server cancelled-state check');
 });

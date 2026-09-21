@@ -52,7 +52,7 @@ test('Briefing App Shell shows progress plus typed result or error next to the a
   assert.match(homeSource, /briefingError/);
 });
 
-test('Quick voice memo uses normal authenticated-home flow and auto-saves a valid STT transcript', () => {
+test('Quick voice memo uses a non-overlay authenticated-home footer and auto-saves a valid STT transcript', () => {
   assert.match(recorderSource, /useQuickVoicePcmCapture/);
   assert.match(recorderSource, /transcribeQuickVoiceCapture/);
   assert.match(recorderSource, /createQuickVoiceSaveAttempt/);
@@ -67,7 +67,7 @@ test('Quick voice memo uses normal authenticated-home flow and auto-saves a vali
   assert.match(recorderSource, /업무 저장 완료/);
   assert.match(recorderSource, /업무 직접 입력 열기/);
   assert.doesNotMatch(homeSource, /quickDockShell|quickDockHeight|setQuickDockHeight|position: 'absolute'/);
-  assert.match(homeSource, /MeetingRecordingBanner[\s\S]*VoiceRecorderCard mode="quick"/);
+  assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{styles\.quickDock\}>/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
   assert.match(homeSource, /saveWorklog: androidTouchSmoke \? async \(\) => \(\{\}\) : async \(transcript, options\)/);
@@ -86,9 +86,10 @@ test('Meeting recorder is owned by an app-wide session instead of the meeting ca
 });
 
 
-test('Home keeps Quick Voice in normal scroll flow so it cannot overlay authenticated controls', () => {
-  assert.doesNotMatch(homeSource, /quickDockHeight|setQuickDockHeight|quickDockShell/);
-  assert.match(homeSource, /paddingBottom: 28 \+ insets\.bottom/);
+test('Home keeps Quick Voice in a non-absolute bottom footer so it cannot overlay authenticated controls', () => {
+  assert.doesNotMatch(homeSource, /quickDockHeight|setQuickDockHeight|quickDockShell|position: 'absolute'/);
+  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(homeSource, /ANDROID_TOUCH_SMOKE_MODE/);
 });
 

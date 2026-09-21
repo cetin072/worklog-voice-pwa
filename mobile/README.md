@@ -26,10 +26,11 @@ Push, Share Intent, Widget, 실제 오디오 업로드/STT는 후속 Issue에서
 
 ## 일정과 알림
 
-- 브리핑의 일정 행에서 사용자가 직접 휴대폰의 수정 가능한 Calendar를 선택해 일정을 추가할 수 있다. Android Calendar Provider가 Google 계정 Calendar와 동기화하는 경우 그 계정을 그대로 사용한다.
-- 앱은 기기에 저장한 Schedule → Calendar event ID mapping으로 같은 일정의 중복 생성을 막고, 변경·삭제를 재시도할 수 있는 경계를 둔다.
-- 일정 알림은 사용자가 직접 선택한 일정의 시작 시각에만 local notification으로 예약한다. 제품 기본 알림 시각은 임의로 정하지 않는다.
-- Calendar/알림 권한이 거부되면 설정에서 허용하도록 안내하며, Google Calendar REST API 토큰은 사용하거나 저장하지 않는다.
+- 일정 데이터는 Data Core의 내부 `schedules`에 유지하며 Home과 업무일지에서 계속 표시한다.
+- 외부 Google/휴대폰 Calendar 연동은 보이스 안정화를 위해 현재 모바일 런타임에서 제거했다.
+- Calendar native dependency, 권한, event mapping, startup Calendar recovery는 사용하지 않는다.
+- Local Notification과 웹/PWA 서버 Push 설정은 Calendar와 독립적으로 유지한다.
+- 보이스 안정화 이후 외부 Calendar 연동은 별도 기획으로 다시 설계한다.
 
 ## 실행
 
@@ -95,7 +96,7 @@ npm ci
 npm run android:device
 ```
 
-이 명령은 현재 native 구성(whisper.rn, Calendar, Notifications, background recording 포함)으로 Android development build를 생성해 연결된 기기에 설치한다.
+이 명령은 현재 native 구성(whisper.rn, Notifications, background recording 포함)으로 Android development build를 생성해 연결된 기기에 설치한다.
 
 새 native dependency, Expo config plugin, Android permission/manifest, Expo/RN native version이 바뀌지 않는 한 매 UI 수정마다 다시 설치하지 않는다.
 
@@ -114,7 +115,7 @@ npm run start:device
 - 일반 TypeScript business logic
 - API 요청/응답 처리
 - Quick Voice 상태 UI
-- Calendar/notification 화면 문구와 상태 표시
+- notification 화면 문구와 상태 표시
 
 ### 3) development build를 다시 만들어야 하는 경우
 

@@ -4,7 +4,6 @@ import { register } from 'node:module';
 
 const fixture = new URL('./helpers/schedule-cancellation-native-fake.mjs', import.meta.url).href;
 register('./helpers/mobile-ts-loader.mjs', import.meta.url, { data: { mocks: {
-  './device-calendar': fixture,
   './local-notifications': fixture,
   '@/src/platform/secure-storage': fixture,
 } } });
@@ -31,13 +30,12 @@ test('already-cancelled server state is a successful idempotent cancellation and
   assert.equal(result.alreadyCancelled, true);
   assert.equal(result.cleanupPending, false);
   assert.deepEqual(world.calls, [
-    ['calendar', scheduleId, startsAt],
     ['reminders', scheduleId],
   ]);
 });
 
 test('server cancellation remains successful when native cleanup fails and leaves recovery pending', async () => {
-  fake.reset({ failCalendar: true });
+  fake.reset({ failReminders: true });
   const result = await cancellation.cancelScheduleWithDeviceCleanup(
     rpcClient({ schedule_id: scheduleId, schedule_status: 'cancelled', already_cancelled: false }),
     scheduleId,
