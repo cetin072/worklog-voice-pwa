@@ -77,7 +77,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /quick-voice-phase=recording/);
   assert.match(smokeScript, /음성 기록 종료 후 바로 저장\|녹음 중/);
   assert.match(smokeScript, /녹음 취소/);
-  assert.match(smokeScript, /production journal screen/);
+  assert.match(smokeScript, /touch was blocked while startup device sync was still running/);
   assert.match(smokeScript, /Production journal close did not return to HomeScreenApp/);
   assert.match(smokeScript, /did not navigate after Quick Voice cancellation/);
   assert.doesNotMatch(smokeScript, /sleep 8/);
