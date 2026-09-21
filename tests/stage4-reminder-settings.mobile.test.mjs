@@ -8,7 +8,6 @@ const { loadNotificationPreferences, updateNotificationPreferences } = await imp
 const appSource = readFileSync(new URL('../mobile/app/index.tsx', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../mobile/src/features/settings/reminder-settings.tsx', import.meta.url), 'utf8');
 const localNotificationSource = readFileSync(new URL('../mobile/src/features/schedule/local-notifications.ts', import.meta.url), 'utf8');
-const scheduleActionsSource = readFileSync(new URL('../mobile/src/features/schedule/schedule-device-actions.tsx', import.meta.url), 'utf8');
 
 const preferences = {
   ok: true,
@@ -59,12 +58,9 @@ test('settings separates native Local Notification from Web/PWA Push and keeps d
   assert.match(settingsSource, /Linking\.openSettings\(\)/);
 });
 
-test('new schedule reminder choices expose only 30 minutes and one day while legacy reservations remain cancellable', () => {
+test('notification infrastructure remains available while per-schedule device UI is temporarily removed', () => {
   assert.match(localNotificationSource, /PRIMARY_REMINDER_PRESETS = REMINDER_PRESETS\.filter\(\(preset\) => preset\.offsetMinutes === 30 \|\| preset\.offsetMinutes === 1440\)/);
-  assert.match(scheduleActionsSource, /PRIMARY_REMINDER_PRESETS\.map/);
-  assert.doesNotMatch(scheduleActionsSource.slice(scheduleActionsSource.indexOf('이 일정 알림'), scheduleActionsSource.indexOf('legacyReminders')), /REMINDER_PRESETS\.map/);
-  assert.match(scheduleActionsSource, /const legacyReminders = reminders\.filter/);
-  assert.match(scheduleActionsSource, /기존 예약/);
-  assert.match(scheduleActionsSource, /toggleReminder\(reminder\.offsetMinutes/);
+  assert.equal(readFileSync(new URL('../mobile/src/features/settings/reminder-settings.tsx', import.meta.url), 'utf8').includes('외부 Calendar와 일정별 기기 동기화는 보이스 안정화 후 다시 설계합니다.'), true);
+  assert.doesNotMatch(appSource, /scheduleSettings|ScheduleDeviceActions|CalendarConnection/);
 });
 
