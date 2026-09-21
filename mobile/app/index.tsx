@@ -261,6 +261,9 @@ function SettingsMenuItem({ eyebrow, title, description, onPress, destructive = 
 
 const ANDROID_TOUCH_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_SMOKE === '1';
 const ANDROID_TOUCH_RECOVERY_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_SMOKE === '1';
+const ANDROID_TOUCH_RECOVERY_CANCELLED = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED !== '0';
+const ANDROID_TOUCH_RECOVERY_CALENDAR = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CALENDAR !== '0';
+const ANDROID_TOUCH_RECOVERY_REMINDERS = process.env.EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_REMINDERS !== '0';
 const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider({
   provider: 'android-touch-smoke',
   async transcribe() { return { text: 'android touch smoke' }; },
@@ -303,9 +306,15 @@ function HomeScreenApp({ androidTouchSmoke = false, androidTouchRecoverySmoke = 
   const loadHomeBriefing = touchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
   const loadHomeJournal = touchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
   const freshHomeAccessToken = touchSmoke ? async (_client: PlatformSupabaseClient) => ANDROID_TOUCH_SMOKE_SESSION.access_token : getFreshAccessToken;
-  const reconcileHomeCancelledSchedules = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCanceledScheduleArtifacts;
-  const reconcileHomeCalendar = androidTouchSmoke ? async () => ({ cleaned: 0, remaining: 0 }) : reconcileCalendarEventCleanup;
-  const reconcileHomeReminders = androidTouchSmoke ? async () => ({ restored: 0, removed: 0, cleanedPending: 0, failed: 0, untracked: 0, pending: 0 }) : reconcileScheduleReminders;
+  const reconcileHomeCancelledSchedules = androidTouchSmoke || (androidTouchRecoverySmoke && !ANDROID_TOUCH_RECOVERY_CANCELLED)
+    ? async () => ({ cleaned: 0, remaining: 0 })
+    : reconcileCanceledScheduleArtifacts;
+  const reconcileHomeCalendar = androidTouchSmoke || (androidTouchRecoverySmoke && !ANDROID_TOUCH_RECOVERY_CALENDAR)
+    ? async () => ({ cleaned: 0, remaining: 0 })
+    : reconcileCalendarEventCleanup;
+  const reconcileHomeReminders = androidTouchSmoke || (androidTouchRecoverySmoke && !ANDROID_TOUCH_RECOVERY_REMINDERS)
+    ? async () => ({ restored: 0, removed: 0, cleanedPending: 0, failed: 0, untracked: 0, pending: 0 })
+    : reconcileScheduleReminders;
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -416,6 +425,14 @@ function HomeScreenApp({ androidTouchSmoke = false, androidTouchRecoverySmoke = 
       // Expo retains this response across a cold start unless the app consumes it.
       await Notifications.clearLastNotificationResponseAsync();
     };
+
+    if (androidTouchRecoverySmoke) {
+      console.info('[android-touch-recovery]', {
+        cancelled: ANDROID_TOUCH_RECOVERY_CANCELLED,
+        calendar: ANDROID_TOUCH_RECOVERY_CALENDAR,
+        reminders: ANDROID_TOUCH_RECOVERY_REMINDERS,
+      });
+    }
 
     // All three reconcilers read and rewrite device mappings. Keep this order
     // deterministic: server-confirmed schedule cancellation first, then
