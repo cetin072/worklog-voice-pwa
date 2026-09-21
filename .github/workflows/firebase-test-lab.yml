@@ -19,6 +19,7 @@ on:
       - 'mobile/qa/firebase/**'
       - 'mobile/app/**'
       - 'mobile/src/providers/platform-provider.tsx'
+      - 'mobile/src/features/voice/**'
       - 'mobile/package-lock.json'
       - 'mobile/app.json'
 
@@ -28,7 +29,7 @@ permissions:
 
 jobs:
   physical-touch:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/418-real-session-touch-gate-v3'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'fix/418-')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
