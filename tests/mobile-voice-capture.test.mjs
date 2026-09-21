@@ -75,12 +75,17 @@ test('Quick voice memo uses a non-overlay authenticated-home footer and auto-sav
 });
 
 
-test('Quick Voice mic tap cannot be blocked by first-use Whisper model preparation', () => {
+test('Quick Voice primary recognition starts without Whisper preparation and retains PCM capture as fallback', () => {
   const startBegin = recorderSource.indexOf('async function startQuickVoice()');
   const startEnd = recorderSource.indexOf('async function retryQuickVoiceSave()', startBegin);
   const startBody = recorderSource.slice(startBegin, startEnd);
-  assert.match(startBody, /await quickCapture\.start\(\)/);
+  assert.match(startBody, /createQuickVoiceRecognitionSession\(quickVoice\.speechRecognition/);
+  assert.match(startBody, /await session\.start\(\)/);
+  assert.match(startBody, /await startWhisperCapture\(\)/);
   assert.doesNotMatch(startBody, /ensureProvider/);
+  const fallbackBegin = recorderSource.indexOf('async function startWhisperCapture()');
+  const fallbackEnd = recorderSource.indexOf('async function retryWhisperFallback()', fallbackBegin);
+  assert.match(recorderSource.slice(fallbackBegin, fallbackEnd), /await quickCapture\.start\(\)/);
   assert.match(recorderSource, /Quick Voice 녹음을 시작하지 못했습니다/);
   assert.match(recorderSource, /quickPhase === 'transcribing' && modelDownload/);
 });
