@@ -28,6 +28,8 @@ import type { BriefingSchedule } from '@/src/platform/worklog-api';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { mobileTheme } from '@/src/ui/theme';
 
+const ANDROID_TOUCH_DIRTY_RECOVERY_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_DIRTY_RECOVERY === '1';
+
 function reminderTime(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
     timeZone: 'Asia/Seoul',
@@ -73,6 +75,9 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false, onCancell
     if (!scheduleId) return;
     const version = ++requestVersion.current;
     setBusy(true); setSyncResult(CHECKING_DEVICE_SYNC); setCalendarSynced(false);
+    if (ANDROID_TOUCH_DIRTY_RECOVERY_MODE) {
+      console.info('[android-touch-recovery] schedule-device-sync-start', { scheduleId, compactOnly });
+    }
     void (async () => {
       const deviceSchedule = { scheduleId, title: schedule.title || '업무수첩 일정', startsAt, allDay: schedule.allDay, location: schedule.location };
       const result = await collectDeviceSyncResult({
@@ -92,11 +97,21 @@ export function ScheduleDeviceActions({ schedule, compactOnly = false, onCancell
       else result.reminders = { status: 'error', message: '알림 예약 기록을 읽지 못했습니다. 다시 확인해주세요.' };
       setCalendarSynced(result.calendar.status === 'synced' && mapping.status === 'fulfilled' && Boolean(mapping.value));
       setSyncResult(result); setBusy(false);
+      if (ANDROID_TOUCH_DIRTY_RECOVERY_MODE) {
+        console.info('[android-touch-recovery] schedule-device-sync-complete', {
+          scheduleId,
+          calendar: result.calendar.status,
+          reminders: result.reminders.status,
+        });
+      }
     })().catch((error) => {
       if (version !== requestVersion.current) return;
       const text = deviceActionMessage('initial_sync', error, '기기 동기화 상태를 확인하지 못했습니다. 다시 확인해주세요.');
       setBusy(false); setCalendarSynced(false);
       setSyncResult({ reminders: { status: 'error', message: text }, calendar: { status: 'error', message: text } });
+      if (ANDROID_TOUCH_DIRTY_RECOVERY_MODE) {
+        console.info('[android-touch-recovery] schedule-device-sync-failed', { scheduleId });
+      }
     });
     return () => { if (requestVersion.current === version) requestVersion.current += 1; };
   }, [scheduleId, startsAt, schedule.title, schedule.allDay, schedule.location, retryKey]);
