@@ -185,6 +185,55 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  android-physical-qa-apk:
+    needs:
+      - changes
+      - typecheck
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install locked mobile dependencies
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+      - name: Generate Android project
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+      - name: Build ARM64 authenticated-home physical QA APK
+        working-directory: mobile/android
+        env:
+          NODE_ENV: production
+          EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '1'
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+      - name: Package physical-device QA bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p physical-qa-bundle
+          cp mobile/android/app/build/outputs/apk/release/app-release.apk physical-qa-bundle/worklog-physical-qa-arm64.apk
+          cp mobile/qa/firebase/physical-touch-robo.json physical-qa-bundle/physical-touch-robo.json
+      - name: Upload physical-device QA bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-physical-qa-bundle
+          path: physical-qa-bundle/
+          if-no-files-found: error
+          retention-days: 7
+
   android-runtime-smoke:
     needs:
       - changes
