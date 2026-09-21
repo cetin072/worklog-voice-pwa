@@ -134,6 +134,21 @@ test('stop retains a final result delivered in the stop/end callback race', asyn
   assert.equal(value.snapshot().active, false);
 });
 
+test('stop preserves the last interim tail when Android ends without a final callback', async () => {
+  const { fake, value } = await session();
+  fake.result('내일 오전', true);
+  fake.result('내일 오전 10시부터 환경 정비 시작', false);
+  fake.port.stop = () => {
+    // Mirrors the Android continuous/on-device failure mode where stop can end
+    // the session without promoting the last visible interim hypothesis to final.
+    fake.error('client', 'recognizer stopped before final');
+    fake.end();
+  };
+  assert.equal(await value.stop(), '내일 오전 10시부터 환경 정비 시작');
+  assert.equal(value.snapshot().active, false);
+  assert.equal(value.snapshot().interimText, '');
+});
+
 test('recoverable busy errors have a bounded restart budget and dispose aborts the native session once', async () => {
   const { fake, value, fatals } = await session({ maxConsecutiveRestarts: 2 });
   fake.error('busy');
