@@ -219,7 +219,7 @@ jobs:
           NODE_ENV: production
           EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_SMOKE: '1'
           EXPO_PUBLIC_ANDROID_TOUCH_DIRTY_RECOVERY: '1'
-          EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED: '0'
+          EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED: '1'
         run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
       - name: Enable KVM group permissions
         run: |
