@@ -39,6 +39,10 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /adb shell am start -W -n "\$ACTIVITY"/);
   assert.match(workflow, /Build x86_64 authenticated-home recovery touch APK/);
   assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_SMOKE: '1'/);
+  assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_DIRTY_RECOVERY: '1'/);
+  assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED: '0'/);
+  assert.match(appShell, /ensureAndroidTouchDirtyRecoverySeed/);
+  assert.match(appShell, /seedAndroidTouchDirtyRecoveryFixture/);
   assert.match(workflow, /assembleRelease -PreactNativeArchitectures=x86_64/);
   assert.match(smokeScript, /app-release\.apk/);
   assert.match(smokeScript, /uiautomator dump/);
