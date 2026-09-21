@@ -70,7 +70,7 @@ test('Quick voice memo uses a non-overlay authenticated-home footer and auto-sav
   assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{styles\.quickDock\}>/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
-  assert.match(homeSource, /saveWorklog: androidTouchSmoke \? async \(\) => \(\{\}\) : async \(transcript, options\)/);
+  assert.match(homeSource, /saveWorklog: touchSmoke \? async \(\) => \(\{\}\) : async \(transcript, options\)/);
   assert.match(homeSource, /refreshBriefing/);
 });
 
