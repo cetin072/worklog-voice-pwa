@@ -25,9 +25,10 @@ test('Voice UX mirrors the strongest web recording affordances', () => {
   assert.match(voice, /브리핑에 반영하는 중/);
 });
 
-test('Home keeps the larger voice controls in normal scroll flow without a floating touch overlay', () => {
-  assert.doesNotMatch(home, /quickDockHeight|setQuickDockHeight|quickDockShell/);
-  assert.match(home, /MeetingRecordingBanner[\s\S]*VoiceRecorderCard mode="quick"/);
+test('Home keeps the larger voice controls in a non-overlay bottom footer', () => {
+  assert.doesNotMatch(home, /quickDockHeight|setQuickDockHeight|quickDockShell|position: 'absolute'/);
+  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(home, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
 });
 
 test('Native direct input keeps the useful web manual fields instead of collapsing them to transcript only', () => {
