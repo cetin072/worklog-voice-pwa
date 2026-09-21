@@ -56,6 +56,8 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(appShell, /scheduleEnabled: true/);
   assert.match(appShell, /android-touch-schedule-today/);
   assert.match(appShell, /android-touch-schedule-upcoming/);
+  assert.match(appShell, /ANDROID_TOUCH_STRESS_SCHEDULES/);
+  assert.match(appShell, /Array\.from\(\{ length: 18 \}/);
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_SMOKE_MODE/);
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_CANCELLED/);
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_CALENDAR/);
@@ -78,6 +80,10 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /production journal screen/);
   assert.match(smokeScript, /Production journal close did not return to HomeScreenApp/);
   assert.match(smokeScript, /did not navigate after Quick Voice cancellation/);
+  assert.doesNotMatch(smokeScript, /sleep 8/);
+  assert.match(smokeScript, /schedule-device-sync-start/);
+  assert.match(smokeScript, /sync_finished.*-lt.*sync_started/);
+  assert.match(smokeScript, /Android startup-touch PASS/);
   assert.match(smokeScript, /dirty-device fixture seeded/);
   assert.match(smokeScript, /cancelled-server-query/);
   assert.match(smokeScript, /cancelled-complete/);
