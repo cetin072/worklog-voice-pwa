@@ -1,0 +1,87 @@
+name: Android Physical Device Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_model:
+        description: 'Firebase Test Lab physical Android model id'
+        required: true
+        default: 'shiba'
+        type: string
+      android_version:
+        description: 'Android API/version id supported by the selected model'
+        required: true
+        default: '35'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  physical-touch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_TEST_LAB_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Validate Firebase Test Lab configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${FIREBASE_PROJECT_ID:-}" || {
+            echo "Repository variable FIREBASE_TEST_LAB_PROJECT_ID is required."
+            exit 1
+          }
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_TEST_LAB_CREDENTIALS }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install locked mobile dependencies
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Android project
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build ARM64 physical-device QA APK
+        working-directory: mobile/android
+        env:
+          NODE_ENV: production
+          EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '1'
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Run physical-device Robo gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="mobile/android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK"
+          gcloud firebase test android run \
+            --project="$FIREBASE_PROJECT_ID" \
+            --type=robo \
+            --app="$APK" \
+            --robo-script="mobile/qa/firebase/physical-touch-robo.json" \
+            --device="model=${{ inputs.device_model }},version=${{ inputs.android_version }},locale=ko,orientation=portrait" \
+            --timeout=5m \
+            --client-details="matrixLabel=worklog-physical-touch-${GITHUB_SHA::8}"
