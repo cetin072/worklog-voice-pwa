@@ -91,8 +91,19 @@ export function compactQuickVoicePcmSilence(
   }
 
   const noiseFloor = percentile(frames.map((frame) => frame.rms), 0.2);
-  const rmsThreshold = clamp(noiseFloor * 2.5 + 0.001, MIN_RMS_THRESHOLD, MAX_RMS_THRESHOLD);
-  const peakThreshold = clamp(rmsThreshold * 4, MIN_PEAK_THRESHOLD, MAX_PEAK_THRESHOLD);
+  const maxRms = Math.max(...frames.map((frame) => frame.rms));
+  const maxPeak = Math.max(...frames.map((frame) => frame.peak));
+  const adaptiveRms = noiseFloor * 2.5 + 0.001;
+  const rmsThreshold = clamp(
+    Math.min(adaptiveRms, Math.max(MIN_RMS_THRESHOLD, maxRms * 0.65)),
+    MIN_RMS_THRESHOLD,
+    MAX_RMS_THRESHOLD,
+  );
+  const peakThreshold = clamp(
+    Math.min(rmsThreshold * 4, Math.max(MIN_PEAK_THRESHOLD, maxPeak * 0.65)),
+    MIN_PEAK_THRESHOLD,
+    MAX_PEAK_THRESHOLD,
+  );
   const active = frames.map((frame) => frame.rms >= rmsThreshold || frame.peak >= peakThreshold);
   const activeFrameCount = active.reduce((count, value) => count + (value ? 1 : 0), 0);
   const activeSpeechMs = Math.round(activeFrameCount * QUICK_VOICE_SILENCE_FRAME_MS);
