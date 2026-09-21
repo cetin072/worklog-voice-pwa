@@ -159,7 +159,8 @@ recovery_ready=0
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
   RECOVERY_LOG="$(adb logcat -d -v brief | grep 'android-touch-recovery' || true)"
   schedule_done="$(printf '%s\n' "$RECOVERY_LOG" | grep -Ec 'schedule-device-sync-(complete|failed)' || true)"
-  if printf '%s\n' "$RECOVERY_LOG" | grep -q 'dirty-device fixture seeded' \
+  if printf '%s\n' "$RECOVERY_LOG" | grep -q 'native-calendar fixture seeded' \
+    && printf '%s\n' "$RECOVERY_LOG" | grep -q 'dirty-device fixture seeded' \
     && printf '%s\n' "$RECOVERY_LOG" | grep -q 'cancelled-server-query' \
     && printf '%s\n' "$RECOVERY_LOG" | grep -q 'cancelled-complete' \
     && printf '%s\n' "$RECOVERY_LOG" | grep -q 'calendar-complete' \
