@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { Session } from '@supabase/supabase-js';
 
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { createConfiguredMobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
@@ -258,13 +257,6 @@ const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider
   provider: 'android-touch-smoke',
   async transcribe() { return { text: 'android touch smoke' }; },
 });
-const ANDROID_TOUCH_SMOKE_SESSION = {
-  access_token: 'android-touch-smoke-token',
-  user: { id: 'android-touch-smoke-user', email: 'android-touch-smoke@example.invalid' },
-} as Session;
-// This client is never allowed to reach Supabase: HomeScreenApp substitutes its
-// startup reads/recovery calls with the no-op adapter below in smoke mode.
-const ANDROID_TOUCH_SMOKE_CLIENT = {} as PlatformSupabaseClient;
 const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
   today: '2026-09-20', counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
   structure: { overdue: [], today: [], upcoming: [], undated: [] }, resurface: [], notes: [], schedules: { today: [], upcoming: [], total: 0 },
@@ -288,13 +280,13 @@ export default function HomeScreen() {
 function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
   const platform = usePlatform();
   const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
-  const phase = androidTouchSmoke ? 'ready' : platform.phase;
-  const session = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION : platform.session;
-  const client = androidTouchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
-  const config = androidTouchSmoke ? null : platform.config;
+  const phase = platform.phase;
+  const session = platform.session;
+  const client = platform.client;
+  const config = platform.config;
   const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
   const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
-  const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => ANDROID_TOUCH_SMOKE_SESSION.access_token : getFreshAccessToken;
+  const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => session?.access_token || 'android-touch-smoke-token' : getFreshAccessToken;
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -973,7 +965,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, draftScope: androidTouchSmoke ? ANDROID_TOUCH_SMOKE_SESSION.user.id : session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
   <WorkRecordEditSheet
     visible={Boolean(editTaskId)}
