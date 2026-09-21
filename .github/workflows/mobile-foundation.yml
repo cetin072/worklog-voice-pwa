@@ -47,6 +47,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   changes:
@@ -184,6 +185,24 @@ jobs:
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
+      - name: Publish exact-main APK evidence
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const body = [
+              'MAIN_MOBILE_ARTIFACT',
+              `sha: ${context.sha}`,
+              `run_id: ${context.runId}`,
+              'artifact: worklog-mobile-auth-ux-arm64-apk',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 418,
+              body,
+            });
 
   android-physical-qa-apk:
     needs:
