@@ -89,3 +89,11 @@ test('on-device mode is not assumed when Korean is not installed', async () => {
   const { fake } = await session({}, { onDevice: true, installedLocales: [] });
   assert.equal(fake.starts[0].requiresOnDeviceRecognition, false);
 });
+
+test('locale capability lookup failure still starts the default Android recognition service', async () => {
+  const fake = createPort();
+  fake.port.getSupportedLocales = async () => { throw new Error('unsupported API'); };
+  const value = speech.createQuickVoiceRecognitionSession(fake.port);
+  await value.start();
+  assert.deepEqual(fake.starts[0], { locale: 'ko-KR', requiresOnDeviceRecognition: false });
+});

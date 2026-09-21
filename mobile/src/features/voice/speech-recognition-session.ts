@@ -162,9 +162,18 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
       if (!port.isRecognitionAvailable()) throw new Error('이 기기에서 음성 인식을 사용할 수 없습니다.');
       const permission = await port.requestPermissions();
       if (!permission.granted) throw new Error('마이크 권한을 허용한 뒤 다시 시도해주세요.');
-      const supported = await port.getSupportedLocales();
-      const localeInstalled = supported.installedLocales.some((value) => value.toLowerCase() === locale.toLowerCase());
-      onDevice = port.supportsOnDeviceRecognition() && localeInstalled;
+      const supportsOnDevice = port.supportsOnDeviceRecognition();
+      let localeInstalled = false;
+      if (supportsOnDevice) {
+        try {
+          const supported = await port.getSupportedLocales();
+          localeInstalled = supported.installedLocales.some((value) => value.toLowerCase() === locale.toLowerCase());
+        } catch {
+          // Locale introspection is unavailable on some services/API levels.
+          // Fall back to the normal Android recognizer instead of blocking dictation.
+        }
+      }
+      onDevice = supportsOnDevice && localeInstalled;
       active = true;
       stopping = false;
       restartCount = 0;
