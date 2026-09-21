@@ -276,8 +276,29 @@ const ANDROID_TOUCH_SMOKE_SESSION = {
 // startup reads/recovery calls with the no-op adapter below in smoke mode.
 const ANDROID_TOUCH_SMOKE_CLIENT = {} as PlatformSupabaseClient;
 const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
-  today: '2026-09-20', counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
-  structure: { overdue: [], today: [], upcoming: [], undated: [] }, resurface: [], notes: [], schedules: { today: [], upcoming: [], total: 0 },
+  today: '2026-09-21',
+  counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
+  structure: { overdue: [], today: [], upcoming: [], undated: [] },
+  resurface: [],
+  notes: [],
+  scheduleEnabled: true,
+  schedules: {
+    today: [{
+      scheduleId: 'android-touch-schedule-today',
+      title: 'Android touch recovery 오늘 일정',
+      startsAt: '2026-09-21T16:00:00+09:00',
+      dateKey: '2026-09-21',
+      allDay: false,
+    }],
+    upcoming: [{
+      scheduleId: 'android-touch-schedule-upcoming',
+      title: 'Android touch recovery 다음 일정',
+      startsAt: '2026-09-22T10:00:00+09:00',
+      dateKey: '2026-09-22',
+      allDay: false,
+    }],
+    total: 2,
+  },
 };
 
 function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onOpenJournal: () => void; onOpenRecordSearch: () => void; onOpenSettings: () => void }) {
