@@ -477,9 +477,15 @@ function HomeScreenApp({ androidTouchSmoke = false, androidTouchRecoverySmoke = 
     if (client && session) {
       void (async () => {
         if (androidTouchRecoverySmoke) await ensureAndroidTouchDirtyRecoverySeed();
+        if (androidTouchRecoverySmoke) console.info('[android-touch-recovery] cancelled-start');
         await reconcileHomeCancelledSchedules(client);
+        if (androidTouchRecoverySmoke) console.info('[android-touch-recovery] cancelled-complete');
+        if (androidTouchRecoverySmoke) console.info('[android-touch-recovery] calendar-start');
         const calendarRecovery = await reconcileHomeCalendar();
+        if (androidTouchRecoverySmoke) console.info('[android-touch-recovery] calendar-complete', calendarRecovery);
+        if (androidTouchRecoverySmoke) console.info('[android-touch-recovery] reminders-start');
         const reminderRecovery = await reconcileHomeReminders();
+        if (androidTouchRecoverySmoke) console.info('[android-touch-recovery] reminders-complete', reminderRecovery);
         if (calendarRecovery.remaining || reminderRecovery.failed || reminderRecovery.pending || reminderRecovery.untracked) {
           showMessage('일부 캘린더·알림은 복구 또는 확인이 필요합니다. 일정별 상태와 다시 확인 버튼을 확인해주세요.', 'error');
         }
