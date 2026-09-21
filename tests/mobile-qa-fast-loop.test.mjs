@@ -43,6 +43,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED: '1'/);
   assert.match(appShell, /ensureAndroidTouchDirtyRecoverySeed/);
   assert.match(appShell, /seedAndroidTouchDirtyRecoveryFixture/);
+  assert.match(appShell, /android-touch-recovery-fixture/);
   assert.match(appShell, /createAndroidTouchCancelledRecoveryClient/);
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_CLIENT/);
   assert.match(workflow, /assembleRelease -PreactNativeArchitectures=x86_64/);
@@ -84,6 +85,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /schedule-device-sync-start/);
   assert.match(smokeScript, /sync_finished.*-lt.*sync_started/);
   assert.match(smokeScript, /Android startup-touch PASS/);
+  assert.match(smokeScript, /native-calendar fixture seeded/);
   assert.match(smokeScript, /dirty-device fixture seeded/);
   assert.match(smokeScript, /cancelled-server-query/);
   assert.match(smokeScript, /cancelled-complete/);
