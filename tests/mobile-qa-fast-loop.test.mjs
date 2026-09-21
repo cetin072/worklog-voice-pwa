@@ -8,6 +8,7 @@ const plan = fs.readFileSync('docs/planning/MOBILE_QA_FAST_LOOP_V1.md', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/mobile-foundation.yml', 'utf8');
 const smokeScript = fs.readFileSync('mobile/scripts/android-runtime-smoke.sh', 'utf8');
 const appShell = fs.readFileSync('mobile/app/index.tsx', 'utf8');
+const platformProvider = fs.readFileSync('mobile/src/providers/platform-provider.tsx', 'utf8');
 
 test('Mobile QA fast loop exposes local device scripts without adding a new native dependency', () => {
   assert.equal(packageJson.scripts['android:device'], 'expo run:android --device');
@@ -42,11 +43,26 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /assembleRelease -PreactNativeArchitectures=x86_64/);
   assert.match(smokeScript, /app-release\.apk/);
   assert.match(smokeScript, /uiautomator dump/);
-  assert.match(smokeScript, /for attempt in 1 2 3/);
+  assert.match(smokeScript, /for attempt in \$\(seq 1 24\)/);
   assert.match(smokeScript, /Quickstep isn't responding/);
+  assert.doesNotMatch(smokeScript, /sleep 8/);
+  assert.match(smokeScript, /sleep 0\.25/);
+  assert.match(smokeScript, /platform-phase=loading/);
+  assert.match(smokeScript, /platform-session-restored/);
+  assert.match(smokeScript, /platform-phase=ready/);
+  assert.match(smokeScript, /Android first-touch latency after activity start/);
   assert.match(appShell, /HomeScreenApp androidTouchSmoke/);
-  assert.match(appShell, /ANDROID_TOUCH_SMOKE_SESSION/);
   assert.match(appShell, /ANDROID_TOUCH_SMOKE_BRIEFING/);
+  assert.match(platformProvider, /ANDROID_TOUCH_SMOKE_SESSION/);
+  assert.match(platformProvider, /seedAndroidTouchSmokeSession/);
+  assert.match(platformProvider, /createAndroidTouchSmokeClient/);
+  assert.match(platformProvider, /platform-session-restored/);
+  assert.match(platformProvider, /platform-phase=ready/);
+  assert.match(appShell, /const phase = platform\.phase/);
+  assert.match(appShell, /const session = platform\.session/);
+  assert.match(appShell, /const client = platform\.client/);
+  assert.doesNotMatch(appShell, /androidTouchSmoke \? ['"]ready['"] : platform\.phase/);
+  assert.doesNotMatch(appShell, /ANDROID_TOUCH_SMOKE_CLIENT/);
   assert.doesNotMatch(appShell, /AuthenticatedHomeTouchSmoke/);
   assert.match(appShell, /onQuickVoicePhaseChange/);
   assert.match(appShell, /freezeQuickVoiceTimer/);
