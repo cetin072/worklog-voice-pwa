@@ -59,6 +59,15 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Enable required Test Lab APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud services enable \
+            testing.googleapis.com \
+            toolresults.googleapis.com \
+            --project="$FIREBASE_PROJECT_ID"
+
       - name: Confirm Test Lab target is physical Pixel 5
         shell: bash
         run: |
