@@ -18,7 +18,7 @@ import { ScheduleDeviceActions } from '@/src/features/schedule/schedule-device-a
 import { CalendarConnectionSummary } from '@/src/features/schedule/calendar-connection-summary';
 import { CalendarConnectionManager } from '@/src/features/schedule/calendar-connection-manager';
 import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
-import { seedAndroidTouchDirtyRecoveryFixture } from '@/src/features/schedule/android-touch-recovery-fixture';
+import { createAndroidTouchCancelledRecoveryClient, seedAndroidTouchDirtyRecoveryFixture } from '@/src/features/schedule/android-touch-recovery-fixture';
 import { reconcileCalendarEventCleanup } from '@/src/features/schedule/device-calendar';
 import { reconcileScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
@@ -277,6 +277,7 @@ const ANDROID_TOUCH_SMOKE_SESSION = {
 // This client is never allowed to reach Supabase: HomeScreenApp substitutes its
 // startup reads/recovery calls with the no-op adapter below in smoke mode.
 const ANDROID_TOUCH_SMOKE_CLIENT = {} as PlatformSupabaseClient;
+const ANDROID_TOUCH_RECOVERY_CLIENT = createAndroidTouchCancelledRecoveryClient();
 const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
   today: '2026-09-21',
   counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
@@ -333,7 +334,7 @@ function HomeScreenApp({ androidTouchSmoke = false, androidTouchRecoverySmoke = 
   const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
   const phase = touchSmoke ? 'ready' : platform.phase;
   const session = touchSmoke ? ANDROID_TOUCH_SMOKE_SESSION : platform.session;
-  const client = touchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
+  const client = androidTouchRecoverySmoke ? ANDROID_TOUCH_RECOVERY_CLIENT : androidTouchSmoke ? ANDROID_TOUCH_SMOKE_CLIENT : platform.client;
   const config = touchSmoke ? null : platform.config;
   const loadHomeBriefing = touchSmoke
     ? async () => {
