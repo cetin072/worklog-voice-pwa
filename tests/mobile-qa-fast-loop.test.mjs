@@ -47,6 +47,9 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(appShell, /HomeScreenApp androidTouchSmoke=.*androidTouchRecoverySmoke/);
   assert.match(appShell, /ANDROID_TOUCH_SMOKE_SESSION/);
   assert.match(appShell, /ANDROID_TOUCH_SMOKE_BRIEFING/);
+  assert.match(appShell, /scheduleEnabled: true/);
+  assert.match(appShell, /android-touch-schedule-today/);
+  assert.match(appShell, /android-touch-schedule-upcoming/);
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_SMOKE_MODE/);
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_CANCELLED/);
   assert.match(appShell, /ANDROID_TOUCH_RECOVERY_CALENDAR/);
