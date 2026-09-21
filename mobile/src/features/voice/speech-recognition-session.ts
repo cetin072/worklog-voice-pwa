@@ -100,6 +100,11 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
 
   const snapshot = (): QuickVoiceRecognitionSnapshot => Object.freeze({ active, committedText, interimText, restartCount, onDevice });
   const publish = () => options.onUpdate?.(snapshot());
+  // Some Android recognizers can end a user-requested stop without promoting the
+  // last interim hypothesis to a final result. Only during explicit stop do we
+  // preserve that visible interim text as a last-chance tail, merged through the
+  // same de-duplication logic as normal final callbacks.
+  const stoppingText = () => interimText ? mergeRecognitionFinal(committedText, interimText) : committedText;
   const fatal = (message: string) => {
     active = false;
     starting = false;
@@ -158,7 +163,7 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
         finish = null;
         if (finishTimer) clearTimeout(finishTimer);
         finishTimer = null;
-        complete?.(committedText);
+        complete?.(stoppingText());
         return;
       }
       restart('세션 종료');
@@ -208,7 +213,7 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
           finishTimer = null;
           const complete = finish;
           finish = null;
-          complete?.(committedText);
+          complete?.(stoppingText());
         }, 600);
         try { port.stop(); }
         catch {
@@ -216,7 +221,7 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
           finishTimer = null;
           const complete = finish;
           finish = null;
-          complete?.(committedText);
+          complete?.(stoppingText());
         }
       });
       active = false;
