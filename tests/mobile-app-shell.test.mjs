@@ -54,12 +54,10 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
 });
 
 
-test('Calendar and reminder management live under Settings while schedule summaries stay on Home', () => {
-  assert.match(homeSource, /일정·알림 관리/);
-  assert.match(homeSource, /screen === 'scheduleSettings'/);
-  assert.match(homeSource, /휴대폰\/Google Calendar 연결과 일정별 알림을 여기에서 관리합니다/);
-  assert.match(homeSource, /showDeviceActions/);
-  assert.match(homeSource, /showDeviceStatus/);
-  assert.match(homeSource, /compactOnly/);
+test('Internal schedule summaries stay on Home while external Calendar controls stay removed', () => {
+  assert.match(homeSource, /오늘과 다가오는 일정/);
+  assert.match(homeSource, /업무수첩 내부에 저장합니다/);
+  assert.match(homeSource, /알림 설정/);
+  assert.doesNotMatch(homeSource, /scheduleSettings|CalendarConnection|showDeviceActions|showDeviceStatus|Google\/휴대폰 Calendar/);
   assert.doesNotMatch(homeSource, /type PrimaryTab/);
 });
