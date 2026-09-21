@@ -92,7 +92,8 @@ test('Quick Voice Stage 1 hardening persists recoverable drafts and clears them 
   assert.match(card, /await clearQuickVoiceDraft\(\)/);
   assert.match(card, /저장 전에 중단된 음성 기록을 복구했습니다/);
   assert.match(draft, /quick_voice_draft_v1_/);
-  assert.match(home, /draftScope: androidTouchSmoke \? ANDROID_TOUCH_SMOKE_SESSION\.user\.id : session\.user\.id/);
+  assert.match(home, /draftScope: session\.user\.id/);
+  assert.doesNotMatch(home, /ANDROID_TOUCH_SMOKE_SESSION/);
 });
 
 test('Quick Voice fallback can leave the guarded voice flow only after explicitly clearing it', () => {
