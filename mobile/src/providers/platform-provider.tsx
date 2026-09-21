@@ -4,6 +4,7 @@ import { AppState } from 'react-native';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 
 import { loadRememberedLoginEmail, saveRememberedLoginEmail } from '@/src/platform/auth-preferences';
+import { secureSessionStorage } from '@/src/platform/secure-storage';
 import { loadPublicPlatformConfig, type PublicPlatformConfig } from '@/src/platform/config';
 import {
   beginGoogleOAuth,
@@ -34,6 +35,66 @@ type PlatformContextValue = {
 };
 
 const PlatformContext = createContext<PlatformContextValue | null>(null);
+
+const ANDROID_TOUCH_SMOKE_MODE = process.env.EXPO_PUBLIC_ANDROID_TOUCH_SMOKE === '1';
+const ANDROID_TOUCH_SMOKE_SESSION_KEY = 'worklog.mobile.qa.android-touch-session.v1';
+const ANDROID_TOUCH_SMOKE_CONFIG: PublicPlatformConfig = {
+  configured: true,
+  supabaseUrl: 'https://android-touch-smoke.invalid',
+  publishableKey: 'android-touch-smoke-publishable-key',
+  dataCorePrimaryEnabled: true,
+};
+const ANDROID_TOUCH_SMOKE_SESSION = {
+  access_token: 'android-touch-smoke-token',
+  refresh_token: 'android-touch-smoke-refresh-token',
+  expires_in: 3600,
+  expires_at: 4_102_444_800,
+  token_type: 'bearer',
+  user: {
+    id: 'android-touch-smoke-user',
+    aud: 'authenticated',
+    role: 'authenticated',
+    email: 'android-touch-smoke@example.invalid',
+    app_metadata: {},
+    user_metadata: {},
+    created_at: '2026-09-21T00:00:00.000Z',
+  },
+} as Session;
+
+async function seedAndroidTouchSmokeSession() {
+  await secureSessionStorage.setItem(ANDROID_TOUCH_SMOKE_SESSION_KEY, JSON.stringify(ANDROID_TOUCH_SMOKE_SESSION));
+}
+
+function createAndroidTouchSmokeClient() {
+  let listener: ((event: string, session: Session | null) => void) | null = null;
+  return {
+    auth: {
+      async getSession() {
+        const raw = await secureSessionStorage.getItem(ANDROID_TOUCH_SMOKE_SESSION_KEY);
+        const session = raw ? JSON.parse(raw) as Session : null;
+        console.info('[android-touch-smoke] platform-session-restored', { restored: Boolean(session) });
+        return { data: { session }, error: null };
+      },
+      onAuthStateChange(callback: (event: string, session: Session | null) => void) {
+        listener = callback;
+        return { data: { subscription: { unsubscribe() { listener = null; } } } };
+      },
+      startAutoRefresh() {
+        console.info('[android-touch-smoke] platform-auto-refresh=start');
+      },
+      stopAutoRefresh() {
+        console.info('[android-touch-smoke] platform-auto-refresh=stop');
+      },
+      async signInWithPassword() { return { data: { session: ANDROID_TOUCH_SMOKE_SESSION }, error: null }; },
+      async signUp() { return { data: { session: ANDROID_TOUCH_SMOKE_SESSION }, error: null }; },
+      async signOut() {
+        await secureSessionStorage.removeItem(ANDROID_TOUCH_SMOKE_SESSION_KEY);
+        listener?.('SIGNED_OUT', null);
+        return { error: null };
+      },
+    },
+  } as unknown as PlatformSupabaseClient;
+}
 
 function authErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '로그인 처리 중 오류가 발생했습니다.';
@@ -67,8 +128,12 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
     void (async () => {
       try {
-        const nextConfig = await loadPublicPlatformConfig();
-        const nextClient = createPlatformSupabaseClient(nextConfig);
+        if (ANDROID_TOUCH_SMOKE_MODE) {
+          console.info('[android-touch-smoke] platform-phase=loading');
+          await seedAndroidTouchSmokeSession();
+        }
+        const nextConfig = ANDROID_TOUCH_SMOKE_MODE ? ANDROID_TOUCH_SMOKE_CONFIG : await loadPublicPlatformConfig();
+        const nextClient = ANDROID_TOUCH_SMOKE_MODE ? createAndroidTouchSmokeClient() : createPlatformSupabaseClient(nextConfig);
         activeClient = nextClient;
 
         const initialUrl = await Linking.getInitialURL();
@@ -93,6 +158,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
           void saveRememberedLoginEmail(data.session.user.email).catch(() => undefined);
         }
         setPhase('ready');
+        if (ANDROID_TOUCH_SMOKE_MODE) console.info('[android-touch-smoke] platform-phase=ready');
 
         const { data: authData } = nextClient.auth.onAuthStateChange((_event, nextSession) => {
           if (!alive) return;

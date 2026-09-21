@@ -1,0 +1,116 @@
+name: Android Physical Device Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_model:
+        description: 'Firebase Test Lab physical Android model id'
+        required: true
+        default: 'redfin'
+        type: string
+      android_version:
+        description: 'Android OS version id supported by the selected model'
+        required: true
+        default: '30'
+        type: string
+  pull_request:
+    paths:
+      - '.github/workflows/firebase-test-lab.yml'
+      - 'mobile/qa/firebase/**'
+      - 'mobile/app/**'
+      - 'mobile/src/providers/platform-provider.tsx'
+      - 'mobile/package-lock.json'
+      - 'mobile/app.json'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  physical-touch:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/418-real-session-touch-gate-v3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_PROJECT_ID: worklog-mobile-qa
+      WIF_PROVIDER: projects/406892117471/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+      TESTLAB_SERVICE_ACCOUNT: worklog-testlab-ci@worklog-mobile-qa.iam.gserviceaccount.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.TESTLAB_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Enable required Test Lab APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud services enable \
+            testing.googleapis.com \
+            toolresults.googleapis.com \
+            --project="$FIREBASE_PROJECT_ID"
+
+      - name: Confirm Test Lab target is physical Pixel 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL="${{ github.event_name == 'workflow_dispatch' && inputs.device_model || 'redfin' }}"
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.android_version || '30' }}"
+          gcloud firebase test android models describe "$MODEL" --project="$FIREBASE_PROJECT_ID" | tee /tmp/testlab-model.txt
+          grep -qi 'physical' /tmp/testlab-model.txt || {
+            echo "Requested Test Lab model is not confirmed physical: $MODEL"
+            exit 1
+          }
+          echo "Test Lab physical target: $MODEL / $VERSION"
+
+      - name: Install locked mobile dependencies
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Android project
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build ARM64 physical-device QA APK
+        working-directory: mobile/android
+        env:
+          NODE_ENV: production
+          EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '1'
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Run physical-device Robo gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="mobile/android/app/build/outputs/apk/release/app-release.apk"
+          MODEL="${{ github.event_name == 'workflow_dispatch' && inputs.device_model || 'redfin' }}"
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.android_version || '30' }}"
+          test -f "$APK"
+          gcloud firebase test android run \
+            --project="$FIREBASE_PROJECT_ID" \
+            --type=robo \
+            --app="$APK" \
+            --robo-script="mobile/qa/firebase/physical-touch-robo.json" \
+            --device="model=$MODEL,version=$VERSION,locale=ko,orientation=portrait" \
+            --timeout=5m \
+            --client-details="matrixLabel=worklog-physical-touch-${GITHUB_SHA::8}"

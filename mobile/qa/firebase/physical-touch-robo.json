@@ -1,0 +1,154 @@
+[
+  {
+    "eventType": "WAIT_FOR_ELEMENT",
+    "delayTime": 15000,
+    "elementDescriptors": [
+      {
+        "contentDescription": "업무일지 열기"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "contentDescription": "업무일지 열기"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "업무일지 열기"
+      }
+    ]
+  },
+  {
+    "eventType": "WAIT_FOR_ELEMENT",
+    "delayTime": 10000,
+    "elementDescriptors": [
+      {
+        "text": "업무일지"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "text": "업무일지"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "text": "닫기"
+      }
+    ]
+  },
+  {
+    "eventType": "WAIT_FOR_ELEMENT",
+    "delayTime": 10000,
+    "elementDescriptors": [
+      {
+        "contentDescription": "음성 기록 시작"
+      }
+    ]
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "음성 기록 시작"
+      }
+    ]
+  },
+  {
+    "eventType": "WAIT_FOR_ELEMENT",
+    "delayTime": 10000,
+    "elementDescriptors": [
+      {
+        "contentDescription": "녹음 취소"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "contentDescription": "녹음 취소"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "녹음 취소"
+      }
+    ]
+  },
+  {
+    "eventType": "WAIT_FOR_ELEMENT",
+    "delayTime": 10000,
+    "elementDescriptors": [
+      {
+        "contentDescription": "음성 기록 시작"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "contentDescription": "음성 기록 시작"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "VIEW_CLICKED",
+    "elementDescriptors": [
+      {
+        "contentDescription": "설정 열기"
+      }
+    ]
+  },
+  {
+    "eventType": "WAIT_FOR_ELEMENT",
+    "delayTime": 10000,
+    "elementDescriptors": [
+      {
+        "text": "내 업무공간"
+      }
+    ]
+  },
+  {
+    "eventType": "ASSERTION",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "text": "내 업무공간"
+        }
+      ]
+    }
+  },
+  {
+    "eventType": "TERMINATE_CRAWL"
+  }
+]

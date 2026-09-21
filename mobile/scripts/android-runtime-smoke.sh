@@ -22,8 +22,8 @@ adb install -r "$APK"
 adb shell pm grant "$PACKAGE" android.permission.RECORD_AUDIO || true
 adb shell am force-stop "$PACKAGE" || true
 adb logcat -c || true
+APP_START_MS="$(date +%s%3N)"
 adb shell am start -W -n "$ACTIVITY"
-sleep 8
 
 adb shell pidof "$PACKAGE"
 WINDOW_XML=/tmp/worklog-window.xml
@@ -77,7 +77,7 @@ PY
 }
 
 rendered=0
-for attempt in 1 2 3 4 5 6; do
+for attempt in $(seq 1 24); do
   dump_window /sdcard/worklog-window.xml "$WINDOW_XML"
 
   if grep -q '업무일지 열기' "$WINDOW_XML" && grep -q '음성 기록 시작' "$WINDOW_XML"; then
@@ -89,7 +89,7 @@ for attempt in 1 2 3 4 5 6; do
     if WAIT_COORDS="$(find_quickstep_wait_center "$WINDOW_XML")"; then
       read -r WAIT_X WAIT_Y <<<"$WAIT_COORDS"
       adb shell input tap "$WAIT_X" "$WAIT_Y"
-      sleep 2
+      sleep 1
       adb shell am start -W -n "$ACTIVITY" >/dev/null || true
     else
       echo "Quickstep ANR was visible but its Wait action could not be located."
@@ -97,7 +97,7 @@ for attempt in 1 2 3 4 5 6; do
       exit 1
     fi
   fi
-  sleep 3
+  sleep 0.25
 done
 
 if [[ "$rendered" != "1" ]]; then
@@ -106,6 +106,18 @@ if [[ "$rendered" != "1" ]]; then
   adb logcat -d -t 300 | grep -E "$PACKAGE|ReactNativeJS|AndroidRuntime" || true
   exit 1
 fi
+
+PLATFORM_LOG="$(adb logcat -d -v brief | grep '\[android-touch-smoke\]' || true)"
+for marker in 'platform-phase=loading' 'platform-session-restored' 'platform-phase=ready'; do
+  if ! printf '%s\n' "$PLATFORM_LOG" | grep -q "$marker"; then
+    echo "PlatformProvider smoke lifecycle marker missing: $marker"
+    printf '%s\n' "$PLATFORM_LOG"
+    exit 1
+  fi
+done
+
+FIRST_TOUCH_MS="$(date +%s%3N)"
+echo "Android first-touch latency after activity start: $((FIRST_TOUCH_MS - APP_START_MS)) ms"
 
 # Tap the production header and require HomeScreenApp's real setScreen('journal')
 # navigation, then return through the production panel close action.
