@@ -59,6 +59,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Announce exact-main mobile revalidation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const body = [
+              'MAIN_MOBILE_RUN_START',
+              `sha: ${context.sha}`,
+              `run_id: ${context.runId}`,
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 418,
+              body,
+            });
       - id: scope
         name: Detect native Android build scope
         env:
