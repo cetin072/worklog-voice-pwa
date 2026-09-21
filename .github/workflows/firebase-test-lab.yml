@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   physical-touch:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'fix/418-')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'fix/418-') || startsWith(github.head_ref, 'fix/431-')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

@@ -23,12 +23,14 @@ test('Quick Voice PCM verifies actual device sample rate and channels instead of
   assert.match(source, /mono PCM이 필요합니다/);
 });
 
-test('Quick Voice PCM bounds in-memory capture and derives duration from actual PCM bytes', () => {
+test('Quick Voice PCM bounds in-memory capture and derives STT duration from compacted PCM', () => {
   assert.match(source, /MAX_CAPTURE_BYTES/);
   assert.match(source, /overflowed/);
-  assert.match(source, /bytesPerSample = 2/);
-  assert.match(source, /samplesPerChannel/);
-  assert.match(source, /durationMs/);
+  assert.match(source, /compactQuickVoicePcmSilence/);
+  assert.match(source, /data: compacted\.data/);
+  assert.match(source, /durationMs: compacted\.processedDurationMs/);
+  assert.match(source, /originalDurationMs: compacted\.originalDurationMs/);
+  assert.match(source, /removedSilenceMs: compacted\.removedSilenceMs/);
 });
 
 test('Quick Voice PCM returns trusted audio evidence for provider-neutral STT', () => {
