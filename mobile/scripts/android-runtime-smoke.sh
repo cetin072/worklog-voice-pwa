@@ -26,7 +26,7 @@ adb shell pm grant "$PACKAGE" android.permission.WRITE_CALENDAR || true
 adb shell am force-stop "$PACKAGE" || true
 adb logcat -c || true
 adb shell am start -W -n "$ACTIVITY"
-sleep 8
+sleep 1
 
 adb shell pidof "$PACKAGE"
 WINDOW_XML=/tmp/worklog-window.xml
@@ -110,6 +110,50 @@ if [[ "$rendered" != "1" ]]; then
   exit 1
 fi
 
+# Before waiting for startup recovery to settle, prove the user can tap Home
+# while schedule Calendar/Reminder sync is still in flight.
+startup_sync_ready=0
+for attempt in 1 2 3 4 5 6 7 8; do
+  STARTUP_LOG="$(adb logcat -d -v brief | grep 'android-touch-recovery' || true)"
+  sync_started="$(printf '%s\n' "$STARTUP_LOG" | grep -c 'schedule-device-sync-start' || true)"
+  sync_finished="$(printf '%s\n' "$STARTUP_LOG" | grep -Ec 'schedule-device-sync-(complete|failed)' || true)"
+  if [[ "$sync_started" -ge 6 && "$sync_finished" -lt "$sync_started" ]]; then
+    startup_sync_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$startup_sync_ready" != "1" ]]; then
+  echo "Could not observe in-flight startup schedule sync before the first touch."
+  adb logcat -d -t 500 | grep -E 'android-touch-recovery|schedule-device|AndroidRuntime|ReactNativeJS' || true
+  exit 1
+fi
+
+HEADER_COORDS="$(find_node_center "$WINDOW_XML" "업무일지 열기")"
+read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
+adb shell input tap "$HEADER_X" "$HEADER_Y"
+sleep 1
+dump_window /sdcard/worklog-header-during-startup.xml /tmp/worklog-header-during-startup.xml
+if ! grep -q '업무일지' /tmp/worklog-header-during-startup.xml || ! grep -q '닫기' /tmp/worklog-header-during-startup.xml; then
+  echo "HomeScreenApp touch was blocked while startup device sync was still running."
+  cat /tmp/worklog-header-during-startup.xml
+  adb logcat -d -t 500 | grep -E 'android-touch-recovery|schedule-device|AndroidRuntime|ReactNativeJS' || true
+  exit 1
+fi
+
+CLOSE_COORDS="$(find_node_center /tmp/worklog-header-during-startup.xml "닫기")"
+read -r CLOSE_X CLOSE_Y <<<"$CLOSE_COORDS"
+adb shell input tap "$CLOSE_X" "$CLOSE_Y"
+sleep 1
+dump_window /sdcard/worklog-home-return.xml /tmp/worklog-home-return.xml
+if ! grep -q '음성 기록 시작' /tmp/worklog-home-return.xml; then
+  echo "Production journal close did not return to HomeScreenApp during startup sync."
+  cat /tmp/worklog-home-return.xml
+  exit 1
+fi
+
+echo "Android startup-touch PASS: Home navigation responded while schedule device sync was still in flight."
+
 # Dirty recovery mode must prove the real device-state paths actually ran.
 recovery_ready=0
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
@@ -132,29 +176,6 @@ if [[ "$recovery_ready" != "1" ]]; then
   exit 1
 fi
 
-# Tap the production header and require HomeScreenApp's real setScreen('journal')
-# navigation, then return through the production panel close action.
-HEADER_COORDS="$(find_node_center "$WINDOW_XML" "업무일지 열기")"
-read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
-adb shell input tap "$HEADER_X" "$HEADER_Y"
-sleep 1
-dump_window /sdcard/worklog-header-after.xml /tmp/worklog-header-after.xml
-if ! grep -q '업무일지' /tmp/worklog-header-after.xml || ! grep -q '닫기' /tmp/worklog-header-after.xml; then
-  echo "HomeScreenApp did not navigate to the production journal screen."
-  cat /tmp/worklog-header-after.xml
-  exit 1
-fi
-
-CLOSE_COORDS="$(find_node_center /tmp/worklog-header-after.xml "닫기")"
-read -r CLOSE_X CLOSE_Y <<<"$CLOSE_COORDS"
-adb shell input tap "$CLOSE_X" "$CLOSE_Y"
-sleep 1
-dump_window /sdcard/worklog-home-return.xml /tmp/worklog-home-return.xml
-if ! grep -q '음성 기록 시작' /tmp/worklog-home-return.xml; then
-  echo "Production journal close did not return to HomeScreenApp."
-  cat /tmp/worklog-home-return.xml
-  exit 1
-fi
 
 # Tap the actual Quick Voice Pressable. Audio streaming keeps React Native busy
 # enough that uiautomator may not produce a post-tap XML dump, so verify the
