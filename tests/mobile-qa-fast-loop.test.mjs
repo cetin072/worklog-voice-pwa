@@ -40,9 +40,11 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /Build x86_64 authenticated-home recovery touch APK/);
   assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_SMOKE: '1'/);
   assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_DIRTY_RECOVERY: '1'/);
-  assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED: '0'/);
+  assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_RECOVERY_CANCELLED: '1'/);
   assert.match(appShell, /ensureAndroidTouchDirtyRecoverySeed/);
   assert.match(appShell, /seedAndroidTouchDirtyRecoveryFixture/);
+  assert.match(appShell, /createAndroidTouchCancelledRecoveryClient/);
+  assert.match(appShell, /ANDROID_TOUCH_RECOVERY_CLIENT/);
   assert.match(workflow, /assembleRelease -PreactNativeArchitectures=x86_64/);
   assert.match(smokeScript, /app-release\.apk/);
   assert.match(smokeScript, /uiautomator dump/);
@@ -77,6 +79,8 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /Production journal close did not return to HomeScreenApp/);
   assert.match(smokeScript, /did not navigate after Quick Voice cancellation/);
   assert.match(smokeScript, /dirty-device fixture seeded/);
+  assert.match(smokeScript, /cancelled-server-query/);
+  assert.match(smokeScript, /cancelled-complete/);
   assert.match(smokeScript, /calendar-complete/);
   assert.match(smokeScript, /reminders-complete/);
   assert.match(smokeScript, /schedule-device-sync-\(complete\|failed\)/);
