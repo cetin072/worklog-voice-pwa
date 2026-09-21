@@ -29,6 +29,16 @@
           "enableBackgroundRecording": true
         }
       ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "업무수첩이 빠른 음성 업무 기록을 위해 마이크를 사용하도록 허용해주세요.",
+          "speechRecognitionPermission": "업무수첩이 말한 업무를 텍스트로 변환하도록 허용해주세요.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
       "expo-web-browser",
       "expo-notifications",
       "@react-native-community/datetimepicker"

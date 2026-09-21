@@ -7,7 +7,8 @@ import { createQuickVoiceClientRequestId, createQuickVoiceSaveAttempt, quickVoic
 import { MeetingRecordingLibrary } from '@/src/features/voice/meeting-recording-library';
 import { useMeetingRecordingSession } from '@/src/features/voice/meeting-recording-provider';
 import { useQuickVoicePcmCapture } from '@/src/features/voice/quick-voice-pcm';
-import type { MobileTranscriptV1, MobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
+import { createLiveSpeechTranscript, type MobileTranscriptV1, type MobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
+import { createQuickVoiceRecognitionSession, type QuickVoiceRecognitionPort, type QuickVoiceRecognitionSession } from '@/src/features/voice/speech-recognition-session';
 import { secureSessionStorage } from '@/src/platform/secure-storage';
 import { mobileTheme } from '@/src/ui/theme';
 import { reportQuickVoiceDebug } from '@/src/features/voice/quick-voice-debug';
@@ -17,6 +18,7 @@ type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transc
 type QuickVoiceSaveResult = Readonly<{ recordId?: string; scheduleDetected?: boolean; scheduleCreated?: boolean; scheduleId?: string; dueStart?: string }>;
 type QuickVoiceProps = Readonly<{
   ensureProvider(onProgress?: (progress: { bytesWritten: number; totalBytes: number | null }) => void): Promise<MobileTranscriptionProvider>;
+  speechRecognition?: QuickVoiceRecognitionPort;
   saveWorklog(transcript: string, options: { clientRequestId: string; recordedAt: string }): Promise<QuickVoiceSaveResult>;
   refreshBriefing(): Promise<unknown>;
   draftScope: string;
@@ -78,6 +80,8 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   const recordingStartedAt = useRef<number | null>(null);
   const inFlight = useRef(false);
   const quickProvider = useRef<MobileTranscriptionProvider | null>(null);
+  const speechSession = useRef<QuickVoiceRecognitionSession | null>(null);
+  const [speechPreview, setSpeechPreview] = useState('');
   const clientRequestId = useRef<string | null>(null);
   // createQuickVoiceSaveAttempt retains the saveQuickVoiceTranscript payload across retries.
   const saveAttempt = useRef<ReturnType<typeof createQuickVoiceSaveAttempt<QuickVoiceSaveResult>> | null>(null);
@@ -150,18 +154,40 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
   async function startQuickVoice() {
     if (!quickVoice || inFlight.current || quickPhase === 'recording') return;
     saveAttempt.current = null;
-    inFlight.current = true; setError(null); setModelDownload(null); setProviderPrepareMs(null); setFlowTimings(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setQuickPhase('preparing');
+    inFlight.current = true; setError(null); setSpeechPreview(''); setModelDownload(null); setProviderPrepareMs(null); setFlowTimings(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setQuickPhase('preparing');
     try {
+      if (quickVoice.speechRecognition) {
+        clientRequestId.current = createQuickVoiceClientRequestId();
+        const session = createQuickVoiceRecognitionSession(quickVoice.speechRecognition, {
+          locale: 'ko-KR',
+          onUpdate(snapshot) {
+            setSpeechPreview([snapshot.committedText, snapshot.interimText].filter(Boolean).join(' '));
+          },
+          onFatalError(nextError) {
+            speechSession.current?.dispose();
+            speechSession.current = null;
+            recordingStartedAt.current = null;
+            setQuickPhase('transcript_error');
+            setError(`${messageOf(nextError, '음성 인식을 계속할 수 없습니다.')} 기존 Whisper 경로로 다시 시도하거나 직접 입력할 수 있습니다.`);
+          },
+        });
+        speechSession.current = session;
+        try {
+          await session.start();
+          recordingStartedAt.current = Date.now();
+          setRecordingElapsedMs(0);
+          setQuickPhase('recording');
+          return;
+        } catch (recognitionError) {
+          session.dispose();
+          speechSession.current = null;
+          setError(`${messageOf(recognitionError, 'Android 음성 인식을 사용할 수 없습니다.')} Whisper 음성 전사로 전환합니다.`);
+        }
+      }
       // Recording must be the first expensive action after the user taps the mic.
       // Whisper model download / verification / native initialization is deferred
       // until after capture so a slow first-use model can never block recording.
-      reportQuickVoiceDebug('capture', 'started');
-      await quickCapture.start();
-      reportQuickVoiceDebug('capture', 'succeeded');
-      clientRequestId.current = createQuickVoiceClientRequestId();
-      recordingStartedAt.current = Date.now();
-      setRecordingElapsedMs(0);
-      setQuickPhase('recording');
+      await startWhisperCapture();
     } catch (nextError) {
       reportQuickVoiceDebug('capture', 'failed', nextError);
       setQuickPhase('idle');
@@ -191,9 +217,20 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 
   async function stopQuickVoice() {
     if (quickPhase !== 'recording' || inFlight.current) return;
+    const recognitionStartedAt = recordingStartedAt.current || Date.now();
     recordingStartedAt.current = null;
     inFlight.current = true; setError(null); setQuickPhase('captured');
-    try { const audio = await quickCapture.stop(); setQuickAudio(audio); inFlight.current = false; await transcribeCapturedAudio(audio); }
+    try {
+      const session = speechSession.current;
+      if (session) {
+        const transcriptText = await session.stop();
+        session.dispose();
+        speechSession.current = null;
+        await saveRecognizedSpeech(transcriptText, recognitionStartedAt);
+      } else {
+        const audio = await quickCapture.stop(); setQuickAudio(audio); inFlight.current = false; await transcribeCapturedAudio(audio);
+      }
+    }
     catch (nextError) { setQuickPhase('transcript_error'); setError(messageOf(nextError, '녹음된 음성을 확인하지 못했습니다.')); inFlight.current = false; }
   }
 
@@ -201,7 +238,11 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     if (quickPhase !== 'recording' || inFlight.current) return;
     inFlight.current = true;
     try {
-      await quickCapture.cancel();
+      if (speechSession.current) {
+        speechSession.current.cancel();
+        speechSession.current.dispose();
+        speechSession.current = null;
+      } else await quickCapture.cancel();
     } catch {
       // The capture hook has already discarded chunks and attempted to restore
       // the audio mode. Cancellation never creates a transcript or save.
@@ -211,13 +252,67 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
       recordingStartedAt.current = null;
       setRecordingElapsedMs(0);
       setError(null);
-      setQuickAudio(null);
+      setSpeechPreview(''); setQuickAudio(null);
       setQuickTranscript(null);
       setQuickSave(null);
       setEditableTranscript('');
       setFlowTimings(null);
       setQuickPhase('idle');
       inFlight.current = false;
+    }
+  }
+
+  async function startWhisperCapture() {
+    reportQuickVoiceDebug('capture', 'started');
+    await quickCapture.start();
+    reportQuickVoiceDebug('capture', 'succeeded');
+    clientRequestId.current = createQuickVoiceClientRequestId();
+    recordingStartedAt.current = Date.now();
+    setRecordingElapsedMs(0);
+    setQuickPhase('recording');
+  }
+
+  async function retryWhisperFallback() {
+    if (!quickVoice || inFlight.current) return;
+    inFlight.current = true;
+    clientRequestId.current = null; saveAttempt.current = null; setSpeechPreview(''); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setFlowTimings(null); setError(null); setQuickPhase('preparing');
+    try { await startWhisperCapture(); }
+    catch (nextError) { setQuickPhase('transcript_error'); setError(messageOf(nextError, 'Whisper 음성 전사를 시작하지 못했습니다.')); }
+    finally { inFlight.current = false; }
+  }
+
+  async function saveRecognizedSpeech(text: string, startedAt: number) {
+    if (!quickVoice) return;
+    let recoveryWarning = '';
+    try {
+      const requestId = clientRequestId.current;
+      const transcript = createLiveSpeechTranscript({
+        text,
+        language: 'ko-KR',
+        provider: 'android-speech-recognition',
+        sourceRef: `speech-recognition://${requestId || 'unknown'}`,
+        createdAt: new Date(startedAt).toISOString(),
+        durationMs: Math.max(0, Date.now() - startedAt),
+      });
+      setQuickTranscript(transcript); setEditableTranscript(transcript.text);
+      setFlowTimings({ transcribeMs: 0, saveMs: 0, briefingRefreshMs: 0 });
+      if (!requestId) throw new Error('Quick Voice 저장 요청 ID를 확인하지 못했습니다. 전사문은 보존했습니다.');
+      try {
+        await draftStorage()?.save({ version: 1, transcript, clientRequestId: requestId, recordedAt: transcript.createdAt });
+      } catch { recoveryWarning = ' 기기 임시 복구 저장도 완료하지 못했습니다.'; }
+      const onProgress = (stage: 'transcribing' | 'saving' | 'refreshing') => { if (stage !== 'transcribing') setQuickPhase(stage); };
+      saveAttempt.current = createQuickVoiceSaveAttempt({ transcript, clientRequestId: requestId, recordedAt: transcript.createdAt, saveWorklog: quickVoice.saveWorklog, refreshBriefing: quickVoice.refreshBriefing, onProgress, transcribeMs: 0 });
+      const saved = await saveAttempt.current.save();
+      await clearQuickVoiceDraft();
+      savedFeedback();
+      setQuickTranscript(saved.transcript); setQuickSave(saved.saveResult); setEditableTranscript(saved.transcript.text); setFlowTimings(saved.timings);
+      setQuickPhase(saved.briefingRefreshError ? 'refresh_error' : 'saved');
+      if (saved.briefingRefreshError) setError(saved.briefingRefreshError.message);
+    } catch (nextError) {
+      if (nextError instanceof QuickVoiceFlowError && nextError.stage === 'save') {
+        setQuickTranscript(nextError.transcript); setEditableTranscript(nextError.transcript?.text || editableTranscript); setQuickPhase('save_error');
+        setError(`${messageOf(nextError, '음성 업무 저장을 확인하지 못했습니다.')}${recoveryWarning}`);
+      } else { setQuickPhase('transcript_error'); setError(messageOf(nextError, '말한 내용을 찾지 못했습니다. 다시 말씀하거나 직접 입력해주세요.')); }
     }
   }
 
@@ -298,8 +393,9 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     const clear = async () => {
       await clearQuickVoiceDraft();
       clientRequestId.current = null; saveAttempt.current = null;
+      speechSession.current?.cancel(); speechSession.current?.dispose(); speechSession.current = null;
       recordingStartedAt.current = null; setRecordingElapsedMs(0);
-      setError(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setFlowTimings(null); setQuickPhase('idle');
+      setError(null); setSpeechPreview(''); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setFlowTimings(null); setQuickPhase('idle');
     };
     if (quickPhase === 'save_error') {
       Alert.alert('저장 결과 확인 필요', '서버에 이미 저장됐을 수 있습니다. 같은 업무 다시 저장으로 먼저 확인할 수 있습니다. 전사문을 버려도 서버 기록을 취소하지는 않습니다.', [
@@ -312,8 +408,9 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     if (!onOpenWorklogInput || inFlight.current) return;
     void clearQuickVoiceDraft();
     clientRequestId.current = null; saveAttempt.current = null;
+    speechSession.current?.cancel(); speechSession.current?.dispose(); speechSession.current = null;
     recordingStartedAt.current = null; setRecordingElapsedMs(0);
-    setError(null); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setFlowTimings(null);
+    setError(null); setSpeechPreview(''); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setFlowTimings(null);
     if (navigationGuard) navigationGuard.current = false;
     applyQuickPhase('idle');
     onOpenWorklogInput();
@@ -391,9 +488,11 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
       {isRecording ? <Pressable accessibilityRole="button" accessibilityLabel="녹음 취소" style={styles.quickCancel} onPress={() => void cancelQuickVoice()}><Text style={styles.quickCancelText}>취소</Text></Pressable> : null}
 
       {guidance ? <Text style={styles.quickGuidance}>{guidance}</Text> : null}
+      {isRecording && speechPreview ? <Text style={styles.quickGuidance}>{speechPreview}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>입력 신호 · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
+      {quickPhase === 'transcript_error' && !quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성 인식 경로를 다시 시작할 수 없습니다.</Text><Button title="Whisper로 다시 녹음" onPress={() => void retryWhisperFallback()} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
       {quickPhase === 'transcript_error' ? <Button title="녹음 버리기" onPress={discardQuickVoice} /> : null}
       {quickPhase === 'save_error' && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 브리핑 카드의 ✏️에서 바로 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
       {quickPhase === 'refresh_error' ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>✅ 저장 완료 · 브리핑 갱신 실패</Text><Button title="브리핑만 다시 불러오기" onPress={() => void retryBriefing()} /></View> : null}

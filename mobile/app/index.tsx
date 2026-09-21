@@ -9,6 +9,7 @@ import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
 import { createConfiguredMobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { MeetingRecordingBanner } from '@/src/features/voice/meeting-recording-banner';
 import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers/whisper-rn-quick-voice-runtime';
+import { createExpoSpeechRecognitionAdapter } from '@/src/features/voice/providers/expo-speech-recognition-adapter';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
@@ -17,10 +18,13 @@ import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
 import { type BriefingNote, type BriefingSchedule, type BriefingTask, type MobileBriefing, type WorkJournalDay, type WorkJournalNote, type WorkJournalRecord, loadBriefing, loadWorkJournalDay, postponeWorklog, readWorklogDetails, saveWorklog, setWorklogAttention, undoPostponeWorklog, undoWorklogAttention, updateBriefingNoteState, updateWorklogDetails, updateWorklogStatus } from '@/src/platform/worklog-api';
+
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { usePlatform } from '@/src/providers/platform-provider';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import { mobileTheme } from '@/src/ui/theme';
+
+const QUICK_VOICE_SPEECH_RECOGNITION = createExpoSpeechRecognitionAdapter();
 
 type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
@@ -965,7 +969,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
   <WorkRecordEditSheet
     visible={Boolean(editTaskId)}

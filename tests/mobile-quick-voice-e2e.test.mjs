@@ -96,13 +96,20 @@ test('Quick Voice Stage 1 hardening persists recoverable drafts and clears them 
   assert.doesNotMatch(home, /ANDROID_TOUCH_SMOKE_SESSION/);
 });
 
-test('Quick Voice starts microphone capture before any Whisper provider preparation and does not guard Home during pre-capture setup', () => {
+test('Quick Voice starts Android recognition before Whisper preparation, keeping capture as an explicit fallback', () => {
   const startBegin = card.indexOf('async function startQuickVoice()');
   const startEnd = card.indexOf('async function retryQuickVoiceSave()', startBegin);
   const startBody = card.slice(startBegin, startEnd);
   assert.ok(startBegin >= 0 && startEnd > startBegin);
-  assert.match(startBody, /await quickCapture\.start\(\)/);
+  assert.match(startBody, /createQuickVoiceRecognitionSession\(quickVoice\.speechRecognition/);
+  assert.match(startBody, /await session\.start\(\)/);
+  assert.match(startBody, /await startWhisperCapture\(\)/);
   assert.doesNotMatch(startBody, /ensureProvider/);
+
+  const fallbackBegin = card.indexOf('async function startWhisperCapture()');
+  const fallbackEnd = card.indexOf('async function retryWhisperFallback()', fallbackBegin);
+  const fallbackBody = card.slice(fallbackBegin, fallbackEnd);
+  assert.match(fallbackBody, /await quickCapture\.start\(\)/);
 
   const transcribeBegin = card.indexOf('async function transcribeCapturedAudio(');
   const transcribeEnd = card.indexOf('function discardQuickVoice()', transcribeBegin);

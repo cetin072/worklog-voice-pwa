@@ -92,6 +92,36 @@ export function normalizeTranscriptText(value: unknown) {
   return withoutWhisperControlTokens;
 }
 
+/** Converts live system recognition into the provider-neutral Transcript V1 save contract. */
+export function createLiveSpeechTranscript(input: {
+  text: unknown;
+  language?: string;
+  provider: string;
+  sourceRef: string;
+  createdAt: string;
+  durationMs: number;
+}): MobileTranscriptV1 {
+  const text = normalizeTranscriptText(input.text);
+  const provider = providerName(input.provider);
+  const sourceRef = cleanText(input.sourceRef, 500, 'speech.sourceRef');
+  if (!sourceRef) throw new Error('음성 인식 세션 참조가 필요합니다.');
+  const createdAt = new Date(input.createdAt).toISOString();
+  if (!Number.isFinite(new Date(createdAt).getTime())) throw new Error('음성 인식 시각이 올바르지 않습니다.');
+  const language = cleanText(input.language, 24, 'speech.language') || 'ko-KR';
+  return Object.freeze({
+    schemaVersion: 'v1' as const,
+    text,
+    segments: Object.freeze([]),
+    language,
+    provider,
+    model: 'system',
+    providerRequestId: '',
+    durationMs: Math.max(0, Math.round(input.durationMs)),
+    sourceAudioRef: Object.freeze({ localRef: sourceRef }),
+    createdAt,
+  });
+}
+
 function finiteNumber(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
