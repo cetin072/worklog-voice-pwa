@@ -40,6 +40,34 @@ function actionKind(value) {
   return normalized === "task" || normalized === "note" ? normalized : null;
 }
 
+function confirmedSchedule(row, expectedId) {
+  const id = String(row?.id || "").trim();
+  const title = String(row?.title || "").trim();
+  const startsAt = row?.starts_at ? String(row.starts_at) : "";
+  const status = String(row?.status || "").trim();
+  if (id !== expectedId || !title || !startsAt || !status || !Number.isFinite(new Date(startsAt).getTime())) {
+    throw adapterError("WORKLOG_DATA_CORE_SCHEDULE_SNAPSHOT_INVALID", "확정된 일정 정보를 확인하지 못했습니다.");
+  }
+  return Object.freeze({ id, title, startsAt, status, allDay: row?.all_day === true });
+}
+
+async function confirmedSchedules(client, workspaceId, scheduleIds) {
+  const ids = [...new Set(scheduleIds.map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!ids.length) return Object.freeze([]);
+  // Older unit adapters only exercise the write contract. The production REST
+  // client always supplies select; without it we deliberately omit a snapshot
+  // so no mobile reminder can be created from an unconfirmed target.
+  if (typeof client?.select !== "function") return Object.freeze([]);
+  const query = {
+    select: "id,title,starts_at,status,all_day",
+    id: `in.(${ids.join(",")})`,
+  };
+  if (workspaceId) query.workspace_id = `eq.${workspaceId}`;
+  const rows = await client.select("schedules", query);
+  const snapshots = ids.map((id) => confirmedSchedule((rows || []).find((row) => String(row?.id || "") === id), id));
+  return Object.freeze(snapshots);
+}
+
 export function quickWorklogSchedule(record = {}, normalized = {}) {
   if (!isTimedScheduleIntent({
     source: record.transcript,
@@ -136,6 +164,7 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
       if (!captureId || savedCount !== records.length || workRecordIds.length !== records.length || sourceRefIds.length !== records.length) {
         throw adapterError("WORKLOG_DATA_CORE_MULTI_RESPONSE_INVALID", "다중 업무 저장 결과가 올바르지 않습니다.");
       }
+      const schedules = await confirmedSchedules(client, "", scheduleIds);
 
       return Object.freeze({
         captureId,
@@ -143,9 +172,11 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
         workRecordIds: Object.freeze(workRecordIds),
         sourceRefIds: Object.freeze(sourceRefIds),
         scheduleIds: Object.freeze(scheduleIds),
+        schedules,
         workRecordId: workRecordIds[0] || "",
         sourceRefId: sourceRefIds[0] || "",
         scheduleId: scheduleIds[0] || "",
+        schedule: schedules[0],
         fastPath: true,
         multiAction: true,
       });
@@ -180,7 +211,8 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
       if (!workspaceId) throw adapterError("WORKLOG_DATA_CORE_FAST_WORKSPACE_MISSING", "개인 업무공간을 찾지 못했습니다.");
       if (!userId || !workRecordId || !sourceRefId) throw adapterError("WORKLOG_DATA_CORE_FAST_RESPONSE_INVALID", "Data Core fast save 결과가 올바르지 않습니다.");
       if (schedule && !scheduleId) throw adapterError("WORKLOG_DATA_CORE_SCHEDULE_RESPONSE_INVALID", "일정 저장 결과를 확인하지 못했습니다.");
-      return Object.freeze({ userId, workRecordId, sourceRefId, scheduleId, workspaceId, fastPath: true });
+      const schedules = await confirmedSchedules(client, workspaceId, scheduleId ? [scheduleId] : []);
+      return Object.freeze({ userId, workRecordId, sourceRefId, scheduleId, schedule: schedules[0], schedules, workspaceId, fastPath: true });
     },
     async persist(record = {}, workspaceContext) {
       const normalized = normalizedRecord(record);

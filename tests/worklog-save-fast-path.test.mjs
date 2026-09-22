@@ -43,6 +43,10 @@ function rpcOnlyClient(calls, overrides = {}) {
       calls.push({ name, body });
       return rpcRow(overrides);
     },
+    async select(_table, query) {
+      const ids = String(query.id || '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
+      return ids.map((id) => ({ id, title: '삼현 미팅', starts_at: '2026-09-17T14:00:00+09:00', status: 'confirmed', all_day: false }));
+    },
   };
 }
 
@@ -88,6 +92,7 @@ test("clear timed meeting intent is saved as a confirmed Schedule in the same RP
   assert.equal(calls[0].body.p_schedule_title, "삼현 미팅");
   assert.equal(calls[0].body.p_schedule_starts_at, "2026-09-17T14:00:00+09:00");
   assert.equal(result.scheduleId, "55555555-5555-5555-5555-555555555555");
+  assert.deepEqual(result.schedule, { id: "55555555-5555-5555-5555-555555555555", title: '삼현 미팅', startsAt: '2026-09-17T14:00:00+09:00', status: 'confirmed', allDay: false });
 });
 
 test("timed person meeting creates a schedule even when the work type is a generic task", () => {

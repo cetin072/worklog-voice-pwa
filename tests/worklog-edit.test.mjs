@@ -40,7 +40,7 @@ test("Data Core editor reads and updates through scoped RPCs",async()=>{
     async rpc(name,body){
       calls.push({name,body});
       if(name==="get_my_work_record_edit_v2") return [{record_id:id,title_value:"기존 업무",due_at_value:"2026-09-18T05:30:00+00:00",due_has_time:true,action_kind_value:"task",action_conversion_allowed:true}];
-      return [{record_id:id,title_value:"수정 업무",due_at_value:"2026-09-19T00:00:00+09:00",due_has_time:false,schedule_updated:true}];
+      return [{record_id:id,title_value:"수정 업무",due_at_value:"2026-09-19T00:00:00+09:00",due_has_time:false,schedule_updated:true,schedule_id:"33333333-3333-4333-8333-333333333333",schedule_title:"수정 업무",schedule_starts_at:"2026-09-19T00:00:00+09:00",schedule_status:"confirmed",schedule_all_day:false}];
     }
   };
   const editor=createWorklogDataCoreEditor({client});
@@ -48,10 +48,10 @@ test("Data Core editor reads and updates through scoped RPCs",async()=>{
   const updated=await editor.updateDetails({recordId:id,title:"  수정   업무 ",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false});
   assert.deepEqual(calls,[
     {name:"get_my_work_record_edit_v2",body:{p_record_id:id}},
-    {name:"update_my_work_record_details",body:{p_record_id:id,p_title:"수정 업무",p_due_at:"2026-09-19T00:00:00+09:00",p_due_has_time:false}}
+    {name:"update_my_work_record_details_v3",body:{p_record_id:id,p_title:"수정 업무",p_due_at:"2026-09-19T00:00:00+09:00",p_due_has_time:false,p_action_kind:null}}
   ]);
   assert.deepEqual(current,{recordId:id,title:"기존 업무",dueAt:"2026-09-18T05:30:00+00:00",dueHasTime:true,actionKind:"task",actionConversionAllowed:true});
-  assert.deepEqual(updated,{recordId:id,title:"수정 업무",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false,actionKind:null,actionKindChanged:false,scheduleUpdated:true});
+  assert.deepEqual(updated,{recordId:id,title:"수정 업무",dueAt:"2026-09-19T00:00:00+09:00",dueHasTime:false,actionKind:null,actionKindChanged:false,scheduleUpdated:true,schedule:{id:"33333333-3333-4333-8333-333333333333",title:"수정 업무",startsAt:"2026-09-19T00:00:00+09:00",status:"confirmed",allDay:false}});
 });
 
 test("Data Core editor fails closed for missing/forbidden records",async()=>{

@@ -38,7 +38,9 @@ test('Local notifications remain available without Calendar startup recovery', (
   assert.match(notificationSource, /REMINDER_PRESETS/);
   assert.match(homeSource, /getLastNotificationResponseAsync/);
   assert.match(homeSource, /addNotificationResponseReceivedListener/);
-  assert.doesNotMatch(homeSource, /reconcileScheduleReminders|reconcileCanceledScheduleArtifacts|reconcileHomeCalendar|reconcileHomeReminders/);
+  assert.match(homeSource, /scheduleReminderCoordinator\.recover/);
+  assert.match(homeSource, /reconcileCanceledScheduleArtifacts/);
+  assert.doesNotMatch(homeSource, /reconcileHomeCalendar|reconcileHomeReminders/);
 });
 
 test('Schedule cancellation cleans only local reminder artifacts', () => {

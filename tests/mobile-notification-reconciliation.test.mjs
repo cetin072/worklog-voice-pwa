@@ -17,8 +17,9 @@ test('Source contract: notification adapter delegates to journalled production s
   assert.match(service, /OWNERSHIP_MISMATCH/);
 });
 
-test('Home does not auto-run device schedule synchronization during voice-first stabilization', () => {
-  assert.doesNotMatch(home, /ScheduleDeviceActions|collectDeviceSyncResult|synchronizeScheduleToPreferredCalendar|reconcileScheduleReminders/);
+test('Home runs only the durable reminder coordinator recovery, not a Calendar synchronizer', () => {
+  assert.doesNotMatch(home, /ScheduleDeviceActions|collectDeviceSyncResult|synchronizeScheduleToPreferredCalendar/);
+  assert.match(home, /scheduleReminderCoordinator\.recover/);
   assert.match(home, /screen === 'reminderSettings'/);
   assert.match(home, /Notifications\.getLastNotificationResponseAsync/);
 });

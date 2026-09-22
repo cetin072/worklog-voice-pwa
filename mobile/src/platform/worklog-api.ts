@@ -218,7 +218,37 @@ export type SavedWorklog = Readonly<{
   splitCount?: number;
   dataCoreWorkRecordIds?: string[];
   scheduleIds?: string[];
+  schedule?: ConfirmedScheduleSnapshot | null;
+  schedules?: ConfirmedScheduleSnapshot[];
 }>;
+
+/** A Schedule returned after its server mutation has committed. */
+export type ConfirmedScheduleSnapshot = Readonly<{
+  id: string;
+  title?: string;
+  startsAt?: string;
+  status: string;
+  allDay?: boolean;
+}>;
+
+function parseConfirmedSchedule(value: unknown): ConfirmedScheduleSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const id = typeof row.id === 'string' ? row.id.trim() : '';
+  const status = typeof row.status === 'string' ? row.status.trim() : '';
+  if (!id || !status) return null;
+  const title = typeof row.title === 'string' ? row.title.trim() : undefined;
+  const startsAt = typeof row.startsAt === 'string' && Number.isFinite(new Date(row.startsAt).getTime()) ? row.startsAt : undefined;
+  return { id, status, ...(title ? { title } : {}), ...(startsAt ? { startsAt } : {}), ...(typeof row.allDay === 'boolean' ? { allDay: row.allDay } : {}) };
+}
+
+function parseSavedWorklog(body: Record<string, unknown>): SavedWorklog {
+  const schedule = parseConfirmedSchedule(body.schedule);
+  const schedules = Array.isArray(body.schedules)
+    ? body.schedules.map(parseConfirmedSchedule).filter((value): value is ConfirmedScheduleSnapshot => value !== null)
+    : [];
+  return { ...body, ...(schedule ? { schedule } : {}), ...(schedules.length ? { schedules } : {}) } as SavedWorklog;
+}
 
 function normalizedRecordedAt(value?: string) {
   if (!value) return new Date().toISOString();
@@ -323,7 +353,7 @@ export async function saveWorklog(
       ...(options.followUp ? { followUp: options.followUp.trim() } : {}),
     }),
   });
-  return readJson(response) as Promise<SavedWorklog>;
+  return parseSavedWorklog(await readJson(response));
 }
 
 /** Reuses the canonical worklog edit endpoint for post-transcription correction. */
@@ -424,6 +454,7 @@ export type WorklogUpdateResult = Readonly<{
   actionKindChanged?: boolean;
   unchanged?: boolean;
   mode?: string;
+  schedule?: ConfirmedScheduleSnapshot | null;
 }>;
 
 export type WorklogReminderResult = Readonly<{
@@ -478,7 +509,8 @@ export async function updateWorklogDetails(
       ...(input.actionKind ? { actionKind: input.actionKind } : {}),
     }),
   });
-  return readJson(response) as Promise<WorklogUpdateResult>;
+  const body = await readJson(response);
+  return { ...body, schedule: parseConfirmedSchedule(body.schedule) } as WorklogUpdateResult;
 }
 
 function parseNotificationPreferences(body: Record<string, unknown>): NotificationPreferences {

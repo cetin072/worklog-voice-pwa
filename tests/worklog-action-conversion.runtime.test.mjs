@@ -56,7 +56,7 @@ test("missing V2 reader falls back to v1 without enabling conversion",async()=>{
   assert.equal(result.actionConversionAllowed,false);
 });
 
-test("conversion update uses V2 RPC and preserves normal edit fields",async()=>{
+test("conversion update uses the v3 Schedule snapshot RPC and preserves normal edit fields",async()=>{
   const calls=[];
   const editor=createWorklogDataCoreEditor({client:rpcClient(async(name,body)=>{
     calls.push({name,body});
@@ -78,16 +78,17 @@ test("conversion update uses V2 RPC and preserves normal edit fields",async()=>{
     actionKind:"task",
   });
 
-  assert.equal(calls[0].name,"update_my_work_record_details_v2");
+  assert.equal(calls[0].name,"update_my_work_record_details_v3");
   assert.equal(calls[0].body.p_action_kind,"task");
   assert.equal(calls[0].body.p_due_at,"2026-09-25T00:00:00+09:00");
   assert.equal(result.actionKind,"task");
   assert.equal(result.actionKindChanged,true);
 });
 
-test("conversion fails closed when V2 mutation is unavailable",async()=>{
-  const error=Object.assign(new Error("Could not find update_my_work_record_details_v2 in the schema cache"),{code:"SUPABASE_DATA_CORE_RPC_FAILED"});
-  const editor=createWorklogDataCoreEditor({client:rpcClient(async()=>{throw error;})});
+test("conversion fails closed when the v3 and v2 mutations are unavailable",async()=>{
+  const v3Error=Object.assign(new Error("Could not find update_my_work_record_details_v3 in the schema cache"),{code:"SUPABASE_DATA_CORE_RPC_FAILED"});
+  const v2Error=Object.assign(new Error("Could not find update_my_work_record_details_v2 in the schema cache"),{code:"SUPABASE_DATA_CORE_RPC_FAILED"});
+  const editor=createWorklogDataCoreEditor({client:rpcClient(async(name)=>{throw name==="update_my_work_record_details_v3" ? v3Error : v2Error;})});
   await assert.rejects(
     ()=>editor.updateDetails({
       recordId:"11111111-1111-4111-8111-111111111111",
@@ -98,7 +99,7 @@ test("conversion fails closed when V2 mutation is unavailable",async()=>{
   );
 });
 
-test("non-conversion editing still uses the legacy RPC for deploy compatibility",async()=>{
+test("non-conversion editing uses v3 when the authoritative snapshot contract is deployed",async()=>{
   const calls=[];
   const editor=createWorklogDataCoreEditor({client:rpcClient(async(name,body)=>{
     calls.push({name,body});
@@ -108,8 +109,8 @@ test("non-conversion editing still uses the legacy RPC for deploy compatibility"
     recordId:"11111111-1111-4111-8111-111111111111",
     title:"업무 수정",
   });
-  assert.equal(calls[0].name,"update_my_work_record_details");
-  assert.equal("p_action_kind" in calls[0].body,false);
+  assert.equal(calls[0].name,"update_my_work_record_details_v3");
+  assert.equal(calls[0].body.p_action_kind,null);
 });
 
 test("conversion RPC is creator-scoped SECURITY INVOKER and rejects linked Schedule sources",()=>{
