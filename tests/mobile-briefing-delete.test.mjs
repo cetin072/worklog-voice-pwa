@@ -14,7 +14,7 @@ test('mobile briefing exposes confirmed delete beside tasks and notes without us
   assert.match(home, /style: 'destructive'/);
   assert.match(home, /완료 기록이나 업무일지에는 남기지 않습니다/);
   assert.match(home, /deleteWorklog\(accessToken, recordId\)/);
-  assert.match(home, /reconcileCanceledScheduleArtifacts\(client\)/);
+  assert.match(home, /cancelAllScheduleReminders\(scheduleId\)/);
   assert.match(home, /inlineDelete/);
 });
 
