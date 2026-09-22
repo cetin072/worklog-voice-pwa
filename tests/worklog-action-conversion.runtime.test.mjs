@@ -154,7 +154,7 @@ test("shared edit sheet shows human labels only and hides conversion when action
 });
 
 test("Home Note row keeps 확인했어요 primary while adding lower-priority edit access",()=>{
-  assert.match(home,/function NoteRow\(\{ note, onEdit, onAcknowledge/);
+  assert.match(home,/function NoteRow\(\{ note, onEdit, onDelete, onAcknowledge/);
   assert.match(home,/note\.title \|\| '메모'[\s\S]{0,100}수정/);
   assert.match(home,/확인했어요/);
   assert.match(home,/async function openNoteEditor/);

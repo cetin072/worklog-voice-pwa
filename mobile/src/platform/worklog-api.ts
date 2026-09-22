@@ -158,6 +158,7 @@ export async function searchMyWorkRecords(
     if (!value || !workRecordId) return [];
 
     const status = asText(value.status);
+    if (status === 'cancelled') return [];
     if (selectedStatuses.size > 0 && !selectedStatuses.has(status)) return [];
 
     return [{
@@ -355,6 +356,33 @@ export async function updateWorklogStatus(accessToken: string, recordId: string,
     body: JSON.stringify({ recordId, status }),
   });
   return readJson(response);
+}
+
+export type WorklogDeleteResult = Readonly<{
+  pageId: string;
+  deleted: true;
+  alreadyDeleted: boolean;
+  cancelledScheduleIds: string[];
+}>;
+
+export async function deleteWorklog(client: PlatformSupabaseClient, pageId: string): Promise<WorklogDeleteResult> {
+  const normalizedId = pageId.trim();
+  if (!normalizedId) throw new Error('삭제할 업무 식별자가 없습니다.');
+  const { data, error } = await client.rpc('cancel_my_work_record', { p_record_id: normalizedId });
+  if (error) throw new Error(error.message || '업무를 삭제하지 못했습니다.');
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row || String(row.record_id || '') !== normalizedId || String(row.status_value || '') !== 'cancelled') {
+    throw new Error('삭제할 업무를 찾지 못했거나 삭제 권한이 없습니다.');
+  }
+  return {
+    pageId: normalizedId,
+    deleted: true,
+    alreadyDeleted: row.already_cancelled === true,
+    cancelledScheduleIds: Array.isArray(row.cancelled_schedule_ids)
+      ? row.cancelled_schedule_ids.map((value) => String(value || '').trim()).filter(Boolean)
+      : [],
+  };
 }
 
 export async function updateBriefingNoteState(
