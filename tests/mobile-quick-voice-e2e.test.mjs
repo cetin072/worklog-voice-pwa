@@ -96,13 +96,20 @@ test('Quick Voice Stage 1 hardening persists recoverable drafts and clears them 
   assert.doesNotMatch(home, /ANDROID_TOUCH_SMOKE_SESSION/);
 });
 
-test('Quick Voice starts microphone capture before any Whisper provider preparation and does not guard Home during pre-capture setup', () => {
+test('Quick Voice starts Android recognition before Whisper preparation, keeping capture as an explicit fallback', () => {
   const startBegin = card.indexOf('async function startQuickVoice()');
   const startEnd = card.indexOf('async function retryQuickVoiceSave()', startBegin);
   const startBody = card.slice(startBegin, startEnd);
   assert.ok(startBegin >= 0 && startEnd > startBegin);
-  assert.match(startBody, /await quickCapture\.start\(\)/);
+  assert.match(startBody, /createQuickVoiceRecognitionSession\(quickVoice\.speechRecognition/);
+  assert.match(startBody, /await session\.start\(\)/);
+  assert.match(startBody, /await startWhisperCapture\(\)/);
   assert.doesNotMatch(startBody, /ensureProvider/);
+
+  const fallbackBegin = card.indexOf('async function startWhisperCapture()');
+  const fallbackEnd = card.indexOf('async function retryWhisperFallback()', fallbackBegin);
+  const fallbackBody = card.slice(fallbackBegin, fallbackEnd);
+  assert.match(fallbackBody, /await quickCapture\.start\(\)/);
 
   const transcribeBegin = card.indexOf('async function transcribeCapturedAudio(');
   const transcribeEnd = card.indexOf('function discardQuickVoice()', transcribeBegin);
@@ -126,6 +133,23 @@ test('Quick Voice fallback can leave the guarded voice flow only after explicitl
 test('Quick Voice save success has immediate tactile feedback like the web fast-save flow', () => {
   assert.match(card, /Vibration\.vibrate\(120\)/);
   assert.match(card, /savedFeedback\(\)/);
+});
+
+test('Quick Voice always releases the operation latch after Stop and returns saved/silent speech to idle', () => {
+  const stopBegin = card.indexOf('async function stopQuickVoice()');
+  const stopEnd = card.indexOf('async function cancelQuickVoice()', stopBegin);
+  const stopBody = card.slice(stopBegin, stopEnd);
+  assert.match(stopBody, /finally\s*\{[\s\S]*inFlight\.current = false/);
+
+  const speechBegin = card.indexOf('async function saveRecognizedSpeech(');
+  const speechEnd = card.indexOf('async function transcribeCapturedAudio(', speechBegin);
+  const speechBody = card.slice(speechBegin, speechEnd);
+  assert.match(speechBody, /if \(!text\.trim\(\)\)/);
+  assert.match(speechBody, /resetQuickVoiceToIdle\(\)/);
+
+  assert.match(card, /const SAVED_FEEDBACK_MS = 900/);
+  assert.match(card, /quickPhase !== 'saved'/);
+  assert.match(card, /setTimeout\(\(\) => \{[\s\S]*resetQuickVoiceToIdle\(\)[\s\S]*\}, SAVED_FEEDBACK_MS\)/);
 });
 
 test('briefing refreshes serialize instead of dropping a voice-triggered refresh while another load is busy', () => {
