@@ -8,7 +8,6 @@ const home = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 const manual = fs.readFileSync('mobile/src/features/work/manual-work-input.tsx', 'utf8');
 const sheet = fs.readFileSync('mobile/src/features/work/work-record-edit-sheet.tsx', 'utf8');
 const search = fs.readFileSync('mobile/src/features/search/work-record-search.tsx', 'utf8');
-const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 
 test('Voice UX mirrors the strongest web recording affordances', () => {
   assert.match(voice, /QUICK_VOICE_LAYOUT\.micSize/);
@@ -32,18 +31,15 @@ test('Home uses a compact pass-through floating voice dock', () => {
   assert.match(home, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
 });
 
-test('Native direct input keeps the useful web manual fields instead of collapsing them to transcript only', () => {
-  for (const label of ['기관', '상태', '유형', '금액', '담당자', '기한', '후속조치']) {
+test('Native direct input is limited to input, date, time, and save', () => {
+  for (const label of ['입력', '날짜', '시간', '저장']) {
     assert.match(manual, new RegExp(label));
   }
+  for (const removed of ['기관', '상태', '유형', '금액', '담당자', '후속조치', '태장', '미래여성가족진흥원']) {
+    assert.doesNotMatch(manual, new RegExp(removed));
+  }
   assert.match(home, /<ManualWorkInput/);
-  assert.match(home, /institutionSource: 'user_selected'/);
-  assert.match(home, /manualInput\.status/);
-  assert.match(home, /manualInput\.type/);
-  assert.match(home, /manualInput\.amount/);
-  assert.match(api, /institutionSource\?: 'user_selected' \| 'user_confirmed'/);
-  assert.match(api, /dueDate\?: string/);
-  assert.match(api, /followUp\?: string/);
+  assert.match(home, /manualScheduleText\(manualInput\.dueDate, manualInput\.dueTime\)/);
 });
 
 test('Stage 2 edit sheet adds native polish without losing the shared editing model', () => {
