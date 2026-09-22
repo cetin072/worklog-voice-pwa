@@ -359,24 +359,30 @@ export async function updateWorklogStatus(accessToken: string, recordId: string,
 }
 
 export type WorklogDeleteResult = Readonly<{
-  pageId?: string;
-  deleted?: boolean;
-  alreadyDeleted?: boolean;
-  cancelledScheduleIds?: string[];
-  mode?: string;
+  pageId: string;
+  deleted: true;
+  alreadyDeleted: boolean;
+  cancelledScheduleIds: string[];
 }>;
 
-export async function deleteWorklog(accessToken: string, pageId: string): Promise<WorklogDeleteResult> {
-  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ action: 'delete', pageId }),
-  });
-  return readJson(response) as Promise<WorklogDeleteResult>;
+export async function deleteWorklog(client: PlatformSupabaseClient, pageId: string): Promise<WorklogDeleteResult> {
+  const normalizedId = pageId.trim();
+  if (!normalizedId) throw new Error('삭제할 업무 식별자가 없습니다.');
+  const { data, error } = await client.rpc('cancel_my_work_record', { p_record_id: normalizedId });
+  if (error) throw new Error(error.message || '업무를 삭제하지 못했습니다.');
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row || String(row.record_id || '') !== normalizedId || String(row.status_value || '') !== 'cancelled') {
+    throw new Error('삭제할 업무를 찾지 못했거나 삭제 권한이 없습니다.');
+  }
+  return {
+    pageId: normalizedId,
+    deleted: true,
+    alreadyDeleted: row.already_cancelled === true,
+    cancelledScheduleIds: Array.isArray(row.cancelled_schedule_ids)
+      ? row.cancelled_schedule_ids.map((value) => String(value || '').trim()).filter(Boolean)
+      : [],
+  };
 }
 
 export async function updateBriefingNoteState(
