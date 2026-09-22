@@ -91,3 +91,21 @@ test("preserves invalid schedule instead of falling back to today",()=>{
   assert.equal(result.dueStart,"");
   assert.equal(result.text,"2월 30일 오후 3시에 잘못된 일정 확인");
 });
+
+test("recognizes the Human-QA phrase with 부터 after the time",()=>{
+  const result=extractScheduleFromText("내일 오전 10시부터 환경 정비 시작",RECORDED_AT);
+  assert.equal(result.matched,true);
+  assert.equal(result.dueStart,"2026-09-13T10:00:00+09:00");
+  assert.equal(result.text,"환경 정비 시작");
+  assert.equal(result.hasTime,true);
+});
+
+test("recognizes common 시작 and 부터 time expressions without making single-digit bare time guesses",()=>{
+  const afternoon=extractScheduleFromText("내일 오후 2시부터 고객 미팅",RECORDED_AT);
+  assert.equal(afternoon.dueStart,"2026-09-13T14:00:00+09:00");
+  assert.equal(afternoon.text,"고객 미팅");
+
+  const ten=extractScheduleFromText("내일 10시 시작 계약서 검토",RECORDED_AT);
+  assert.equal(ten.dueStart,"2026-09-13T10:00:00+09:00");
+  assert.equal(ten.text,"시작 계약서 검토");
+});
