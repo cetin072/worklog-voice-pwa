@@ -29,7 +29,8 @@ permissions:
 
 jobs:
   physical-touch:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'fix/418-')
+    # The workflow path filter already limits PR runs to meaningful Android/mobile changes.
+    # Keep the job itself unconditional so every matching PR gets the real physical-device gate.
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
