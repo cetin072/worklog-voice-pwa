@@ -15,7 +15,7 @@ import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
-import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
+import { cancelAllScheduleReminders } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
@@ -562,13 +562,15 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     let cleanupWarning = '';
     try {
       const accessToken = await getFreshAccessToken(client);
-      await deleteWorklog(accessToken, recordId);
+      const result = await deleteWorklog(accessToken, recordId);
       removeVisibleRecordForConversion(recordId);
       setSelectedTask((current) => current?.task.pageId === recordId ? null : current);
       try {
-        await reconcileCanceledScheduleArtifacts(client);
+        for (const scheduleId of result.cancelledScheduleIds || []) {
+          await cancelAllScheduleReminders(scheduleId);
+        }
       } catch (nextError) {
-        cleanupWarning = messageOf(nextError, '휴대폰 알림 정리가 남아 있습니다.');
+        cleanupWarning = messageOf(nextError, '취소된 일정의 휴대폰 알림 일부를 정리하지 못했습니다.');
       }
       showMessage(
         cleanupWarning
