@@ -561,8 +561,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     clearMessage();
     let cleanupWarning = '';
     try {
-      const accessToken = await getFreshAccessToken(client);
-      const result = await deleteWorklog(accessToken, recordId);
+      const result = await deleteWorklog(client, recordId);
       removeVisibleRecordForConversion(recordId);
       setSelectedTask((current) => current?.task.pageId === recordId ? null : current);
       try {
