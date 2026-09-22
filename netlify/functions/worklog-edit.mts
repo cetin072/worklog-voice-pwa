@@ -126,7 +126,7 @@ export default async (req:Request,_context:Context)=>{
   catch{ return json(400,{error:"요청 형식이 올바르지 않습니다."}); }
 
   const requestedAction=String(body.action || "update").trim();
-  const action=["read","delete","postpone","undo_postpone","attention","undo_attention"].includes(requestedAction) ? requestedAction : "update";
+  const action=["read","postpone","undo_postpone","attention","undo_attention"].includes(requestedAction) ? requestedAction : "update";
   const pageId=String(body.pageId || "").trim();
   const hasDueFields=Object.prototype.hasOwnProperty.call(body,"dueDate") || Object.prototype.hasOwnProperty.call(body,"dueTime");
   const accessToken=bearerToken(req);
@@ -142,18 +142,6 @@ export default async (req:Request,_context:Context)=>{
         const current=await editor.readDetails({recordId:pageId});
         const due=seoulDueFields(current.dueAt,current.dueHasTime);
         return json(200,{ok:true,pageId:current.recordId,title:current.title,...due,actionKind:current.actionKind || "",actionConversionAllowed:current.actionConversionAllowed===true,mode:"data_core"});
-      }
-
-      if(action==="delete"){
-        const result=await editor.deleteRecord({recordId:pageId});
-        return json(200,{
-          ok:true,
-          deleted:true,
-          pageId:result.recordId,
-          alreadyDeleted:result.alreadyDeleted===true,
-          cancelledScheduleIds:result.cancelledScheduleIds || [],
-          mode:"data_core"
-        });
       }
 
       if(action==="postpone"){
@@ -229,8 +217,8 @@ export default async (req:Request,_context:Context)=>{
   const {token,dataSourceId,mode}=connection;
   if(!validWorklogPageId(pageId)) return json(400,{error:"수정할 업무 식별자가 올바르지 않습니다."});
 
-  if(action==="delete" || action==="postpone" || action==="undo_postpone" || action==="attention" || action==="undo_attention"){
-    return json(409,{error:action==="delete" ? "삭제는 Data Core 업무에서만 지원합니다." : "미루기와 다시 알림은 Data Core 업무에서만 지원합니다."});
+  if(action==="postpone" || action==="undo_postpone" || action==="attention" || action==="undo_attention"){
+    return json(409,{error:"미루기와 다시 알림은 Data Core 업무에서만 지원합니다."});
   }
 
   try{
