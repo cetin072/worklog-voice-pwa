@@ -49,6 +49,7 @@ function emptyManualWorkInput(): ManualWorkInputValue {
     amount: '',
     assignee: '',
     dueDate: '',
+    dueTime: '',
     followUp: '',
   };
 }
@@ -480,22 +481,13 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   async function persistDraft() {
     if (!session || !manualInput.transcript.trim() || busy) return;
     const original = manualInput.transcript.trim();
-    const amountText = manualInput.amount.trim().replaceAll(',', '');
-    const amount = amountText ? Number(amountText) : null;
-    if (amountText && (!Number.isFinite(amount) || Number(amount) < 0)) {
-      showMessage('금액은 0 이상의 숫자로 입력해주세요.', 'error');
-      return;
-    }
+    const dueSuffix = manualInput.dueDate
+      ? ` ${manualInput.dueDate}${manualInput.dueTime ? ` ${manualInput.dueTime}` : ''}`
+      : '';
+    const saveText = `${original}${dueSuffix}`.trim();
     await run(async () => {
-      const saved = await saveWorklog(session.access_token, original, {
-        institution: manualInput.institution,
-        institutionSource: 'user_selected',
-        status: manualInput.status,
-        type: manualInput.type,
-        amount,
-        assignee: manualInput.assignee,
+      const saved = await saveWorklog(session.access_token, saveText, {
         dueDate: manualInput.dueDate,
-        followUp: manualInput.followUp,
       });
       const feedback = {
         transcript: saved.cleanTranscript?.trim() || original,
@@ -1014,7 +1006,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
 
     {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
-    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><Text style={styles.body}>웹 업무수첩처럼 업무 내용과 필요한 세부값을 한 화면에서 저장합니다.</Text><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
+    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
     {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>알림</Text><SettingsMenuItem eyebrow="NOTIFICATIONS" title="알림·리마인더" description="앱 알림 권한과 웹/PWA 서버 Push 상태를 확인합니다." onPress={() => setScreen('reminderSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 최근 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 업무수첩 계정 세션을 종료합니다." destructive onPress={confirmSignOut} /></View></View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings accessToken={session.access_token} /></View> : null}
