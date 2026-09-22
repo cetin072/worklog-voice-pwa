@@ -41,11 +41,10 @@ function rpcOnlyClient(calls, overrides = {}) {
     upsert: async () => { throw new Error("upsert must not be called"); },
     async rpc(name, body) {
       calls.push({ name, body });
-      return rpcRow(overrides);
-    },
-    async select(_table, query) {
-      const ids = String(query.id || '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
-      return ids.map((id) => ({ id, title: '삼현 미팅', starts_at: '2026-09-17T14:00:00+09:00', status: 'confirmed', all_day: false }));
+      return rpcRow({
+        ...overrides,
+        ...(overrides.schedule_id ? { title: '삼현 미팅', starts_at: '2026-09-17T14:00:00+09:00', status: 'confirmed', all_day: false } : {}),
+      });
     },
   };
 }
@@ -54,7 +53,7 @@ test("worklog fast adapter persists WorkRecord + SourceRef with exactly one RPC"
   const calls = [];
   const result = await createWorklogDataCoreAdapter({ client: rpcOnlyClient(calls) }).persistFast(record());
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].name, "save_my_worklog_with_schedule");
+  assert.equal(calls[0].name, "save_my_worklog_with_schedule_v2");
   assert.equal(calls[0].body.p_client_request_id, "req-20260916-1234567890");
   assert.equal(calls[0].body.p_record_type, "task");
   assert.equal(calls[0].body.p_status, "waiting");
@@ -135,6 +134,41 @@ test("schedule RPC stays SECURITY INVOKER and authenticated-only", () => {
   assert.doesNotMatch(guardMigration, /security definer/i);
   assert.match(guardMigration, /revoke all on function public\.save_my_worklog_with_schedule[\s\S]*from public, anon/i);
   assert.match(guardMigration, /grant execute on function public\.save_my_worklog_with_schedule[\s\S]*to authenticated, service_role/i);
+});
+
+test("fast saves return the committed Schedule snapshot without a post-commit REST select", () => {
+  const snapshotMigration = fs.readFileSync(new URL("../supabase/migrations/20260923120000_reminder_v1_create_snapshots.sql", import.meta.url), "utf8");
+  const adapter = fs.readFileSync(new URL("../netlify/shared/worklog-data-core-adapter.mjs", import.meta.url), "utf8");
+  assert.match(snapshotMigration, /save_my_worklog_with_schedule_v2/);
+  assert.match(snapshotMigration, /save_my_multi_action_worklog_v2/);
+  assert.match(snapshotMigration, /security invoker/i);
+  assert.match(adapter, /save_my_worklog_with_schedule_v2/);
+  assert.match(adapter, /save_my_multi_action_worklog_v2/);
+  assert.doesNotMatch(adapter, /client\.select\("schedules"/);
+});
+
+test("snapshot RPC rollout fallback keeps an already-saved worklog successful without scheduling from an unconfirmed snapshot", async () => {
+  const calls = [];
+  const client = {
+    insert: async () => { throw new Error('insert must not be called'); },
+    upsert: async () => { throw new Error('upsert must not be called'); },
+    async rpc(name, body) {
+      calls.push({ name, body });
+      if (name === 'save_my_worklog_with_schedule_v2') {
+        const error = new Error('Could not find the function in the schema cache');
+        error.code = 'SUPABASE_DATA_CORE_RPC_FAILED';
+        error.remoteCode = 'PGRST202';
+        throw error;
+      }
+      return rpcRow({ schedule_id: '55555555-5555-5555-5555-555555555555' });
+    },
+  };
+  const result = await createWorklogDataCoreAdapter({ client }).persistFast(record({
+    transcript: '내일 오후 2시에 삼현 미팅', cleanTranscript: '삼현 미팅', type: '회의·통화', dueStart: '2026-09-17T14:00:00+09:00',
+  }));
+  assert.deepEqual(calls.map((call) => call.name), ['save_my_worklog_with_schedule_v2', 'save_my_worklog_with_schedule']);
+  assert.equal(result.workRecordId, '33333333-3333-3333-3333-333333333333');
+  assert.equal(result.schedule, undefined);
 });
 
 test("schedule RPC delegates canonical WorkRecord + SourceRef persistence to guarded save_my_worklog", () => {

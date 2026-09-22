@@ -15,9 +15,7 @@ import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
-import { cancelAllScheduleReminders, reconcileScheduleReminders, scheduleReminder } from '@/src/features/schedule/local-notifications';
-import { createScheduleReminderCoordinator } from '@/src/features/schedule/schedule-reminder-coordinator';
-import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
+import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder } from '@/src/features/schedule/schedule-reminder-post-save';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
@@ -29,10 +27,6 @@ import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import { mobileTheme } from '@/src/ui/theme';
 
 const QUICK_VOICE_SPEECH_RECOGNITION = createExpoSpeechRecognitionAdapter();
-const scheduleReminderCoordinator = createScheduleReminderCoordinator({
-  reminders: { scheduleReminder, cancelAllScheduleReminders, reconcileScheduleReminders },
-});
-
 type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
@@ -382,9 +376,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     if (!session || !client || androidTouchSmoke) return;
     let alive = true;
     const recover = () => {
-      void scheduleReminderCoordinator.recover({
-        reconcileCanceledScheduleArtifacts: () => reconcileCanceledScheduleArtifacts(client),
-      }).catch((nextError) => {
+      void recoverSavedScheduleReminders(client).catch((nextError) => {
         if (alive) console.warn('[schedule-reminder] recovery pending', messageOf(nextError, 'unknown'));
       });
     };
@@ -515,7 +507,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         dueStart: saved.dueStart?.trim() || '',
       };
       let reminderWarning = '';
-      try { await scheduleReminderCoordinator.synchronizeMany(saved.schedules?.length ? saved.schedules : [saved.schedule]); }
+      try { await synchronizeSavedScheduleReminders(saved); }
       catch (nextError) { reminderWarning = messageOf(nextError, '휴대폰 일정 알림을 예약하지 못했습니다. 앱을 다시 열면 복구를 시도합니다.'); }
       setManualInput(emptyManualWorkInput());
       setLastDirectSave(feedback);
@@ -578,7 +570,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       removeVisibleRecordForConversion(recordId);
       setSelectedTask((current) => current?.task.pageId === recordId ? null : current);
       try {
-        await scheduleReminderCoordinator.cancelConfirmed(result.cancelledScheduleIds || []);
+        await cancelSavedScheduleReminders(result.cancelledScheduleIds || []);
       } catch (nextError) {
         cleanupWarning = messageOf(nextError, '취소된 일정의 휴대폰 알림 일부를 정리하지 못했습니다.');
       }
@@ -875,7 +867,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       });
       const visibleTitle = result.title?.trim() || nextTitle;
       let reminderWarning = '';
-      try { await scheduleReminderCoordinator.synchronize(result.schedule); }
+      try { await synchronizeUpdatedScheduleReminder(result.schedule); }
       catch (nextError) { reminderWarning = messageOf(nextError, '휴대폰 일정 알림을 바꾸지 못했습니다. 앱을 다시 열면 복구를 시도합니다.'); }
       if (result.actionKindChanged) removeVisibleRecordForConversion(recordId);
       else updateVisibleTaskTitle(recordId, visibleTitle);
@@ -1035,7 +1027,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); try { await scheduleReminderCoordinator.synchronizeMany(saved.schedules?.length ? saved.schedules : [saved.schedule]); } catch (nextError) { console.warn('[schedule-reminder] save sync pending', messageOf(nextError, 'unknown')); } if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); try { await synchronizeSavedScheduleReminders(saved); } catch (nextError) { console.warn('[schedule-reminder] save sync pending', messageOf(nextError, 'unknown')); } if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
   <WorkRecordEditSheet
     visible={Boolean(editTaskId)}

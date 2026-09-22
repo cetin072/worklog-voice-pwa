@@ -41,31 +41,38 @@ function actionKind(value) {
 }
 
 function confirmedSchedule(row, expectedId) {
-  const id = String(row?.id || "").trim();
+  const id = String(row?.id || row?.schedule_id || "").trim();
   const title = String(row?.title || "").trim();
-  const startsAt = row?.starts_at ? String(row.starts_at) : "";
+  const startsAt = row?.startsAt || row?.starts_at || row?.schedule_starts_at ? String(row.startsAt || row.starts_at || row.schedule_starts_at) : "";
   const status = String(row?.status || "").trim();
   if (id !== expectedId || !title || !startsAt || !status || !Number.isFinite(new Date(startsAt).getTime())) {
-    throw adapterError("WORKLOG_DATA_CORE_SCHEDULE_SNAPSHOT_INVALID", "확정된 일정 정보를 확인하지 못했습니다.");
+    return null;
   }
-  return Object.freeze({ id, title, startsAt, status, allDay: row?.all_day === true });
+  return Object.freeze({ id, title, startsAt, status, allDay: row?.allDay === true || row?.all_day === true || row?.schedule_all_day === true });
 }
 
-async function confirmedSchedules(client, workspaceId, scheduleIds) {
+function snapshotRpcUnavailable(error, name) {
+  if (error?.code !== "SUPABASE_DATA_CORE_RPC_FAILED") return false;
+  if (String(error?.remoteCode || "") === "PGRST202") return true;
+  const message = String(error?.message || "");
+  return new RegExp(`(?:could not find|schema cache)[\\s\\S]*${name}|${name}[\\s\\S]*(?:could not find|schema cache)`, "i").test(message);
+}
+
+async function invokeSnapshotRpc(client, snapshotName, fallbackName, body) {
+  try {
+    return { result: await client.rpc(snapshotName, body), hasSnapshot: true };
+  } catch (error) {
+    if (!snapshotRpcUnavailable(error, snapshotName)) throw error;
+    return { result: await client.rpc(fallbackName, body), hasSnapshot: false };
+  }
+}
+
+function snapshotsFromRow(row, scheduleIds, hasSnapshot) {
+  if (!hasSnapshot) return Object.freeze([]);
   const ids = [...new Set(scheduleIds.map((value) => String(value || "").trim()).filter(Boolean))];
   if (!ids.length) return Object.freeze([]);
-  // Older unit adapters only exercise the write contract. The production REST
-  // client always supplies select; without it we deliberately omit a snapshot
-  // so no mobile reminder can be created from an unconfirmed target.
-  if (typeof client?.select !== "function") return Object.freeze([]);
-  const query = {
-    select: "id,title,starts_at,status,all_day",
-    id: `in.(${ids.join(",")})`,
-  };
-  if (workspaceId) query.workspace_id = `eq.${workspaceId}`;
-  const rows = await client.select("schedules", query);
-  const snapshots = ids.map((id) => confirmedSchedule((rows || []).find((row) => String(row?.id || "") === id), id));
-  return Object.freeze(snapshots);
+  const raw = Array.isArray(row?.schedule_snapshots) ? row.schedule_snapshots : [];
+  return Object.freeze(ids.map((id) => confirmedSchedule(raw.find((value) => String(value?.id || "").trim() === id), id)).filter(Boolean));
 }
 
 export function quickWorklogSchedule(record = {}, normalized = {}) {
@@ -131,7 +138,7 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
         return { normalized, schedule };
       });
 
-      const result = await client.rpc("save_my_multi_action_worklog", {
+      const input = {
         p_parent_request_id: parentId,
         p_original_text: raw,
         p_source_type: sourceType(source),
@@ -153,7 +160,8 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
           scheduleTitle: schedule?.title || null,
           scheduleStartsAt: schedule?.startsAt || null,
         })),
-      });
+      };
+      const { result, hasSnapshot } = await invokeSnapshotRpc(client, "save_my_multi_action_worklog_v2", "save_my_multi_action_worklog", input);
 
       const row = Array.isArray(result) ? result[0] : result;
       const captureId = String(row?.capture_id || "").trim();
@@ -164,7 +172,7 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
       if (!captureId || savedCount !== records.length || workRecordIds.length !== records.length || sourceRefIds.length !== records.length) {
         throw adapterError("WORKLOG_DATA_CORE_MULTI_RESPONSE_INVALID", "다중 업무 저장 결과가 올바르지 않습니다.");
       }
-      const schedules = await confirmedSchedules(client, "", scheduleIds);
+      const schedules = snapshotsFromRow(row, scheduleIds, hasSnapshot);
 
       return Object.freeze({
         captureId,
@@ -185,7 +193,7 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
       if (typeof client?.rpc !== "function") throw adapterError("WORKLOG_DATA_CORE_FAST_RPC_REQUIRED", "Data Core fast save에는 RPC client가 필요합니다.");
       const normalized = normalizedRecord(record);
       const schedule = quickWorklogSchedule(record, normalized);
-      const result = await client.rpc("save_my_worklog_with_schedule", {
+      const input = {
         p_client_request_id: normalized.clientRequestId,
         p_title: normalized.title,
         p_content: normalized.content,
@@ -201,7 +209,8 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
         p_source_excerpt: normalized.sourceExcerpt,
         p_schedule_title: schedule?.title || null,
         p_schedule_starts_at: schedule?.startsAt || null,
-      });
+      };
+      const { result, hasSnapshot } = await invokeSnapshotRpc(client, "save_my_worklog_with_schedule_v2", "save_my_worklog_with_schedule", input);
       const row = Array.isArray(result) ? result[0] : result;
       const userId = String(row?.user_id || "").trim();
       const workspaceId = String(row?.workspace_id || "").trim();
@@ -211,7 +220,7 @@ export function createWorklogDataCoreAdapter({ client } = {}) {
       if (!workspaceId) throw adapterError("WORKLOG_DATA_CORE_FAST_WORKSPACE_MISSING", "개인 업무공간을 찾지 못했습니다.");
       if (!userId || !workRecordId || !sourceRefId) throw adapterError("WORKLOG_DATA_CORE_FAST_RESPONSE_INVALID", "Data Core fast save 결과가 올바르지 않습니다.");
       if (schedule && !scheduleId) throw adapterError("WORKLOG_DATA_CORE_SCHEDULE_RESPONSE_INVALID", "일정 저장 결과를 확인하지 못했습니다.");
-      const schedules = await confirmedSchedules(client, workspaceId, scheduleId ? [scheduleId] : []);
+      const schedules = hasSnapshot && scheduleId ? [confirmedSchedule(row, scheduleId)].filter(Boolean) : [];
       return Object.freeze({ userId, workRecordId, sourceRefId, scheduleId, schedule: schedules[0], schedules, workspaceId, fastPath: true });
     },
     async persist(record = {}, workspaceContext) {

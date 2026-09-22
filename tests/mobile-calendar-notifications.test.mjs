@@ -38,8 +38,8 @@ test('Local notifications remain available without Calendar startup recovery', (
   assert.match(notificationSource, /REMINDER_PRESETS/);
   assert.match(homeSource, /getLastNotificationResponseAsync/);
   assert.match(homeSource, /addNotificationResponseReceivedListener/);
-  assert.match(homeSource, /scheduleReminderCoordinator\.recover/);
-  assert.match(homeSource, /reconcileCanceledScheduleArtifacts/);
+  assert.match(homeSource, /recoverSavedScheduleReminders/);
+  assert.doesNotMatch(homeSource, /reconcileCanceledScheduleArtifacts/);
   assert.doesNotMatch(homeSource, /reconcileHomeCalendar|reconcileHomeReminders/);
 });
 

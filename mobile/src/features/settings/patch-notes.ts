@@ -9,6 +9,15 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-09-23',
+    title: '확정 일정 시작 알림',
+    summary: '서버에 확정된 시간이 있는 일정은 휴대폰에서 시작 시각에 한 번 알려드리도록 보강했습니다.',
+    items: [
+      '확정된 일정만 시작 시각에 맞춰 한 번 알림을 예약합니다.',
+      '일정을 수정하거나 취소하면 기존 휴대폰 예약을 정리하고 앱을 다시 열 때 복구를 시도합니다.',
+    ],
+  },
+  {
     date: '2026-09-22',
     title: 'Quick Voice 안정화·플로팅 UI·업무 삭제',
     summary: '빠르게 말하고 저장하는 흐름을 실기기 기준으로 안정화하고 브리핑 관리를 더 단순하게 만들었습니다.',

@@ -5,6 +5,7 @@ import test from 'node:test';
 const adapter = fs.readFileSync('mobile/src/features/schedule/local-notifications.ts', 'utf8');
 const service = fs.readFileSync('mobile/src/features/schedule/schedule-reminder-service.ts', 'utf8');
 const home = fs.readFileSync('mobile/app/index.tsx', 'utf8');
+const postSave = fs.readFileSync('mobile/src/features/schedule/schedule-reminder-post-save.ts', 'utf8');
 
 test('Source contract: notification adapter delegates to journalled production state machine', () => {
   assert.match(adapter, /createScheduleReminderService/);
@@ -19,7 +20,8 @@ test('Source contract: notification adapter delegates to journalled production s
 
 test('Home runs only the durable reminder coordinator recovery, not a Calendar synchronizer', () => {
   assert.doesNotMatch(home, /ScheduleDeviceActions|collectDeviceSyncResult|synchronizeScheduleToPreferredCalendar/);
-  assert.match(home, /scheduleReminderCoordinator\.recover/);
+  assert.match(home, /recoverSavedScheduleReminders/);
+  assert.match(postSave, /coordinator\.recover/);
   assert.match(home, /screen === 'reminderSettings'/);
   assert.match(home, /Notifications\.getLastNotificationResponseAsync/);
 });

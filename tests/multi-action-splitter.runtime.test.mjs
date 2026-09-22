@@ -136,7 +136,7 @@ test("atomic adapter sends every child in one RPC with one original capture",asy
   });
 
   assert.equal(calls.length,1);
-  assert.equal(calls[0].name,"save_my_multi_action_worklog");
+  assert.equal(calls[0].name,"save_my_multi_action_worklog_v2");
   assert.equal(calls[0].body.p_parent_request_id,parent);
   assert.equal(calls[0].body.p_source_type,"voice");
   assert.equal(calls[0].body.p_items.length,3);
