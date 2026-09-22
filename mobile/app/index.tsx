@@ -43,15 +43,16 @@ type DirectSaveFeedback = Readonly<{
 function emptyManualWorkInput(): ManualWorkInputValue {
   return {
     transcript: '',
-    institution: '기타',
-    status: '진행중',
-    type: '기타',
-    amount: '',
-    assignee: '',
     dueDate: '',
     dueTime: '',
-    followUp: '',
   };
+}
+
+function manualScheduleText(dueDate: string, dueTime: string) {
+  if (!dueDate) return '';
+  const date = dueDate.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1년 $2월 $3일');
+  const time = dueTime ? dueTime.replace(/^(\d{2}):(\d{2})$/, ' $1시 $2분') : '';
+  return ` ${date}${time}`;
 }
 
 const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' }> = [
@@ -481,13 +482,11 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   async function persistDraft() {
     if (!session || !manualInput.transcript.trim() || busy) return;
     const original = manualInput.transcript.trim();
-    const dueSuffix = manualInput.dueDate
-      ? ` ${manualInput.dueDate}${manualInput.dueTime ? ` ${manualInput.dueTime}` : ''}`
-      : '';
-    const saveText = `${original}${dueSuffix}`.trim();
+    const saveText = `${original}${manualScheduleText(manualInput.dueDate, manualInput.dueTime)}`.trim();
     await run(async () => {
       const saved = await saveWorklog(session.access_token, saveText, {
         dueDate: manualInput.dueDate,
+        ...(manualInput.dueTime ? { type: '회의·통화' } : {}),
       });
       const feedback = {
         transcript: saved.cleanTranscript?.trim() || original,

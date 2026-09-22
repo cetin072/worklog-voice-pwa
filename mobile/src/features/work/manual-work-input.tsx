@@ -6,14 +6,8 @@ import { mobileTheme } from '@/src/ui/theme';
 
 export type ManualWorkInputValue = Readonly<{
   transcript: string;
-  institution: string;
-  status: string;
-  type: string;
-  amount: string;
-  assignee: string;
   dueDate: string;
-  dueTime?: string;
-  followUp: string;
+  dueTime: string;
 }>;
 
 type Props = Readonly<{
@@ -99,7 +93,7 @@ export function ManualWorkInput({ value, busy, onChange, onSave }: Props) {
     <View style={styles.field}>
       <Text style={styles.label}>시간</Text>
       <View style={styles.row}>
-        <Pressable accessibilityRole="button" accessibilityLabel="시간 선택" disabled={busy} style={[styles.select, busy ? styles.disabled : null]} onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="시간 선택" disabled={busy || !value.dueDate} style={[styles.select, busy || !value.dueDate ? styles.disabled : null]} onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}>
           <Text style={[styles.selectText, value.dueTime ? null : styles.placeholder]}>{timeLabel(value.dueTime)}</Text>
         </Pressable>
         {value.dueTime ? <Pressable accessibilityRole="button" disabled={busy} style={styles.clear} onPress={() => { setShowTimePicker(false); update({ dueTime: '' }); }}><Text style={styles.clearText}>지우기</Text></Pressable> : null}

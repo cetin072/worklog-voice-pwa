@@ -6,16 +6,15 @@ const home = fs.readFileSync('mobile/app/index.tsx', 'utf8');
 const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 const worklog = fs.readFileSync('netlify/functions/worklog.mts', 'utf8');
 
-test('Direct input reuses canonical save, sends web manual fields, and only clears after success', () => {
+test('Direct input reuses the canonical save and only clears after success', () => {
   assert.match(home, /async function persistDraft\(\)/);
   assert.match(home, /const original = manualInput\.transcript\.trim\(\)/);
-  assert.match(home, /await saveWorklog\(session\.access_token, original, \{/);
-  assert.match(home, /institutionSource: 'user_selected'/);
-  assert.match(home, /status: manualInput\.status/);
-  assert.match(home, /type: manualInput\.type/);
+  assert.match(home, /manualScheduleText\(manualInput\.dueDate, manualInput\.dueTime\)/);
+  assert.match(home, /await saveWorklog\(session\.access_token, saveText, \{/);
   assert.match(home, /dueDate: manualInput\.dueDate/);
+  assert.doesNotMatch(home.slice(home.indexOf('async function persistDraft()'), home.indexOf('async function changeTaskStatus')), /institutionSource|manualInput\.status|manualInput\.type|manualInput\.amount|manualInput\.assignee|manualInput\.followUp/);
   assert.ok(
-    home.indexOf('setManualInput(emptyManualWorkInput())') > home.indexOf('await saveWorklog(session.access_token, original, {'),
+    home.indexOf('setManualInput(emptyManualWorkInput())') > home.indexOf('await saveWorklog(session.access_token, saveText, {'),
     'manual input is only cleared after canonical save succeeds',
   );
 });
