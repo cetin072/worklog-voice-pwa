@@ -194,6 +194,9 @@ jobs:
         working-directory: mobile/android
         env:
           NODE_ENV: production
+          # PR Human QA must exercise the same PR backend contract, not production main.
+          # Main/dispatch builds continue to use the production API.
+          EXPO_PUBLIC_API_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--worklog-voice-pwa.netlify.app', github.event.pull_request.number) || 'https://worklog-voice-pwa.netlify.app' }}
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
