@@ -9,7 +9,6 @@ const clientSource=read("public/briefing-edit.js");
 const endpointSource=read("netlify/functions/worklog-edit.mts");
 const indexSource=read("public/index.html");
 const migrationSource=read("supabase/migrations/20260916143047_worklog_edit_details_v1.sql");
-const deleteMigrationSource=read("supabase/migrations/20260922103000_work_record_soft_delete_v1.sql");
 
 test("normalizeWorklogTitle trims and collapses whitespace",()=>{
   assert.equal(normalizeWorklogTitle("  범한매카텍   견적\n확인  "),"범한매카텍 견적 확인");
@@ -79,36 +78,6 @@ test("Stage 4 reminder editor keeps postpone and attention as separate scoped RP
   ]);
 });
 
-test("Data Core editor soft-deletes through the owner-scoped RPC and returns linked cancelled schedules",async()=>{
-  const calls=[];
-  const id="12345678-1234-1234-1234-1234567890ab";
-  const scheduleId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  const editor=createWorklogDataCoreEditor({client:{rpc:async(name,body)=>{
-    calls.push({name,body});
-    return [{record_id:id,status_value:"cancelled",already_cancelled:false,cancelled_schedule_ids:[scheduleId]}];
-  }}});
-  assert.deepEqual(await editor.deleteRecord({recordId:id}),{
-    recordId:id,
-    status:"cancelled",
-    alreadyDeleted:false,
-    cancelledScheduleIds:[scheduleId]
-  });
-  assert.deepEqual(calls,[{name:"cancel_my_work_record",body:{p_record_id:id}}]);
-});
-
-test("work record soft-delete migration is invoker/owner scoped, cancels linked schedules, and never hard deletes",()=>{
-  assert.match(deleteMigrationSource,/create or replace function public\.cancel_my_work_record/i);
-  assert.match(deleteMigrationSource,/security invoker/i);
-  assert.match(deleteMigrationSource,/wr\.created_by_user_id = v_user_id/);
-  assert.match(deleteMigrationSource,/s\.created_by_user_id = v_user_id/);
-  assert.match(deleteMigrationSource,/s\.metadata ->> 'workRecordId' = p_record_id::text/);
-  assert.match(deleteMigrationSource,/set status = 'cancelled'/i);
-  assert.match(deleteMigrationSource,/next_attention_at = null/i);
-  assert.match(deleteMigrationSource,/briefing_state = 'acknowledged'/i);
-  assert.doesNotMatch(deleteMigrationSource,/delete\s+from\s+public\.(?:work_records|schedules)/i);
-  assert.match(deleteMigrationSource,/grant execute on function public\.cancel_my_work_record\(uuid\) to authenticated, service_role/i);
-});
-
 test("Platform briefing edit loads current details and saves title date and time without legacy prompt",()=>{
   assert.match(clientSource,/mode\(\)===\"data_core\"/);
   assert.match(clientSource,/WorklogPlatformAuth\?\.readSession\?\.\(\)/);
@@ -130,8 +99,6 @@ test("worklog edit endpoint uses Data Core detail RPCs first and preserves legac
   assert.match(endpointSource,/createWorklogDataCoreEditor/);
   assert.match(endpointSource,/editor\.readDetails/);
   assert.match(endpointSource,/editor\.updateDetails/);
-  assert.match(endpointSource,/editor\.deleteRecord/);
-  assert.match(endpointSource,/action==="delete"/);
   assert.match(endpointSource,/hasDueFields/);
   assert.match(endpointSource,/updateNotionWorklog/);
   assert.match(endpointSource,/mode:\"data_core\"/);
@@ -166,12 +133,11 @@ test("Stage 4 postpone and attention SQL are invoker-scoped, owner-scoped, and n
 });
 
 test("worklog edit endpoint keeps Stage 4 actions on the Data Core path and fail-closes legacy mode",()=>{
-  assert.match(endpointSource,/\["read","delete","postpone","undo_postpone","attention","undo_attention"\]/);
+  assert.match(endpointSource,/\["read","postpone","undo_postpone","attention","undo_attention"\]/);
   assert.match(endpointSource,/editor\.postpone/);
   assert.match(endpointSource,/editor\.undoPostpone/);
   assert.match(endpointSource,/editor\.setAttention/);
   assert.match(endpointSource,/editor\.undoAttention/);
-  assert.match(endpointSource,/삭제는 Data Core 업무에서만 지원합니다/);
   assert.match(endpointSource,/미루기와 다시 알림은 Data Core 업무에서만 지원합니다/);
 });
 
