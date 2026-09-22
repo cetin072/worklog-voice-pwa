@@ -44,7 +44,7 @@ function translateRpcError(error){
   }
   if(/AUTHENTICATION_REQUIRED/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_AUTH_REQUIRED","로그인 세션을 확인하지 못했습니다.");
   if(/PERSONAL_WORKSPACE_MISSING/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_WORKSPACE_MISSING","개인 업무공간을 찾지 못했습니다.");
-  if(/WORK_RECORD_NOT_FOUND_OR_FORBIDDEN/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN","수정할 업무를 찾지 못했거나 수정 권한이 없습니다.");
+  if(/WORK_RECORD_NOT_FOUND_OR_FORBIDDEN/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_NOT_FOUND_OR_FORBIDDEN","업무를 찾지 못했거나 변경 권한이 없습니다.");
   if(/WORK_RECORD_TITLE_INVALID/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_TITLE_INVALID","업무명을 확인해주세요.");
   if(/WORK_RECORD_DUE_INVALID/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_DUE_INVALID","날짜와 시간을 확인해주세요.");
   if(/WORK_RECORD_ACTION_KIND_INVALID/i.test(message)) return editError("WORKLOG_DATA_CORE_EDIT_ACTION_KIND_INVALID","업무 종류를 확인해주세요.");
@@ -156,6 +156,22 @@ export function createWorklogDataCoreEditor({client}={}){
       }catch(error){
         throw translateRpcError(error);
       }
+    },
+
+    async deleteRecord({recordId:rawRecordId}={}){
+      const id=recordId(rawRecordId);
+      try{
+        const row=singleRow(await client.rpc("cancel_my_work_record",{p_record_id:id}));
+        const scheduleIds=Array.isArray(row.cancelled_schedule_ids)
+          ? row.cancelled_schedule_ids.map((value)=>String(value || "").trim()).filter(Boolean)
+          : [];
+        return Object.freeze({
+          recordId:id,
+          status:String(row.status_value || "cancelled"),
+          alreadyDeleted:row.already_cancelled===true,
+          cancelledScheduleIds:Object.freeze(scheduleIds)
+        });
+      }catch(error){ throw translateRpcError(error); }
     },
 
     async postpone({recordId:rawRecordId,dueAt,dueHasTime=false}={}){
