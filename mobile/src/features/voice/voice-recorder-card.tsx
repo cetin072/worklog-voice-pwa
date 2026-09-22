@@ -15,6 +15,7 @@ import { reportQuickVoiceDebug } from '@/src/features/voice/quick-voice-debug';
 import { QUICK_VOICE_LAYOUT } from '@/src/features/voice/quick-voice-layout';
 
 type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transcribing' | 'saving' | 'refreshing' | 'saved' | 'transcript_error' | 'save_error' | 'refresh_error';
+const SAVED_FEEDBACK_MS = 900;
 type QuickVoiceSaveResult = Readonly<{ recordId?: string; scheduleDetected?: boolean; scheduleCreated?: boolean; scheduleId?: string; dueStart?: string }>;
 type QuickVoiceProps = Readonly<{
   ensureProvider(onProgress?: (progress: { bytesWritten: number; totalBytes: number | null }) => void): Promise<MobileTranscriptionProvider>;
@@ -107,6 +108,23 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     try { Vibration.vibrate(120); } catch { /* feedback cannot change save truth */ }
   }
 
+  function resetQuickVoiceToIdle() {
+    clientRequestId.current = null;
+    saveAttempt.current = null;
+    recordingStartedAt.current = null;
+    setRecordingElapsedMs(0);
+    setError(null);
+    setSpeechPreview('');
+    setModelDownload(null);
+    setProviderPrepareMs(null);
+    setQuickAudio(null);
+    setQuickTranscript(null);
+    setQuickSave(null);
+    setEditableTranscript('');
+    setFlowTimings(null);
+    setQuickPhase('idle');
+  }
+
   useEffect(() => {
     if (quickPhase !== 'recording' || recordingStartedAt.current === null) return;
     if (freezeQuickVoiceTimer) return;
@@ -115,6 +133,15 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
     const timer = setInterval(update, 250);
     return () => clearInterval(timer);
   }, [freezeQuickVoiceTimer, quickPhase]);
+
+  useEffect(() => {
+    if (quickPhase !== 'saved') return;
+    const timer = setTimeout(() => {
+      if (inFlight.current) return;
+      resetQuickVoiceToIdle();
+    }, SAVED_FEEDBACK_MS);
+    return () => clearTimeout(timer);
+  }, [quickPhase]);
 
   useEffect(() => () => {
     // Leaving Home or recreating the screen must not leave an Android native
@@ -235,10 +262,20 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
         speechSession.current = null;
         await saveRecognizedSpeech(transcriptText, recognitionStartedAt);
       } else {
-        const audio = await quickCapture.stop(); setQuickAudio(audio); inFlight.current = false; await transcribeCapturedAudio(audio);
+        const audio = await quickCapture.stop();
+        setQuickAudio(audio);
+        inFlight.current = false;
+        await transcribeCapturedAudio(audio);
       }
+    } catch (nextError) {
+      setQuickPhase('transcript_error');
+      setError(messageOf(nextError, '녹음된 음성을 확인하지 못했습니다.'));
+    } finally {
+      // SpeechRecognizer used to leave this latch true after both success and
+      // empty-speech/error outcomes, making every recovery/new-recording button inert
+      // until Home was remounted. Never carry the operation lock past Stop.
+      inFlight.current = false;
     }
-    catch (nextError) { setQuickPhase('transcript_error'); setError(messageOf(nextError, '녹음된 음성을 확인하지 못했습니다.')); inFlight.current = false; }
   }
 
   async function cancelQuickVoice() {
@@ -290,6 +327,12 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
 
   async function saveRecognizedSpeech(text: string, startedAt: number) {
     if (!quickVoice) return;
+    if (!text.trim()) {
+      // Silence is a normal user action, not a broken STT path. Save nothing and
+      // immediately make Quick Voice ready for the next tap.
+      resetQuickVoiceToIdle();
+      return;
+    }
     let recoveryWarning = '';
     try {
       const requestId = clientRequestId.current;
