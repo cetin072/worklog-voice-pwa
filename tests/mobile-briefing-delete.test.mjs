@@ -18,9 +18,11 @@ test('mobile briefing exposes confirmed delete beside tasks and notes without us
   assert.match(home, /inlineDelete/);
 });
 
-test('mobile delete calls the edit API and hides retained cancelled rows from search', () => {
-  assert.match(api, /export async function deleteWorklog/);
-  assert.match(api, /JSON\.stringify\(\{ action: 'delete', pageId \}\)/);
+test('mobile delete calls the owner-scoped Supabase RPC directly and hides retained cancelled rows from search', () => {
+  assert.match(api, /export async function deleteWorklog\(client: PlatformSupabaseClient/);
+  assert.match(api, /client\.rpc\('cancel_my_work_record', \{ p_record_id: normalizedId \}\)/);
+  assert.match(api, /status_value \|\| ''\) !== 'cancelled'/);
+  assert.match(api, /cancelled_schedule_ids/);
   assert.match(api, /if \(status === 'cancelled'\) return \[\]/);
 });
 
@@ -29,6 +31,13 @@ test('soft-deleted work records are excluded from briefing and automatic work jo
   assert.match(journalMigration, /where wr\.status = 'completed'/);
   assert.match(journalMigration, /where wr\.status in \('in_progress', 'waiting', 'needs_review'\)/);
   assert.match(journalMigration, /wr\.status <> 'cancelled'/);
+  assert.match(deleteMigration, /security invoker/i);
+  assert.match(deleteMigration, /wr\.created_by_user_id = v_user_id/);
+  assert.match(deleteMigration, /s\.created_by_user_id = v_user_id/);
+  assert.match(deleteMigration, /s\.metadata ->> 'workRecordId' = p_record_id::text/);
   assert.match(deleteMigration, /set status = 'cancelled'/);
-  assert.doesNotMatch(deleteMigration, /delete\s+from\s+public\.work_records/i);
+  assert.match(deleteMigration, /next_attention_at = null/);
+  assert.match(deleteMigration, /briefing_state = 'acknowledged'/);
+  assert.doesNotMatch(deleteMigration, /delete\s+from\s+public\.(?:work_records|schedules)/i);
+  assert.match(deleteMigration, /grant execute on function public\.cancel_my_work_record\(uuid\) to authenticated, service_role/i);
 });
