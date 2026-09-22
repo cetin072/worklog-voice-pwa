@@ -49,15 +49,14 @@ test('runtime model resolver preserves resumable partial downloads and promotes 
 });
 
 
-test('Quick Voice exposes device timing metrics for human benchmark without provider leakage', () => {
+test('Quick Voice retains timing metrics for diagnostics without provider leakage', () => {
   assert.match(flow, /QuickVoiceFlowTimings/);
   assert.match(flow, /transcribeStartedAt = Date\.now\(\)/);
   assert.match(flow, /saveStartedAt = Date\.now\(\)/);
   assert.match(flow, /refreshStartedAt = Date\.now\(\)/);
   assert.match(card, /providerPrepareMs/);
-  assert.match(card, /PCM \{quickAudio\.sampleRate\}Hz/);
-  assert.match(card, /모델 \{formatMs\(providerPrepareMs\)\}/);
-  assert.match(card, /전사 \{formatMs\(flowTimings\?\.transcribeMs/);
+  assert.match(card, /setFlowTimings/);
+  assert.match(card, /flowTimings/);
   assert.doesNotMatch(card, /whisper\.rn|initWhisper|transcribeData/);
 });
 
@@ -79,9 +78,12 @@ test('Quick Voice accuracy checkpoint uses the larger multilingual base model ou
 });
 
 
-test('Quick Voice displays actual schedule creation truth instead of parser detection alone', () => {
+test('Quick Voice retains actual schedule creation truth while success returns to the briefing', () => {
   assert.match(card, /scheduleCreated/);
-  assert.match(card, /일정 생성 완료/);
+  assert.match(card, /setQuickSave\(saved\.saveResult\)/);
+  assert.match(card, /업무 저장 완료/);
+  assert.match(card, /일정 반영/);
+  assert.match(card, /setTimeout\(\(\) => \{/);
   assert.doesNotMatch(card, /quickSave\?\.scheduleDetected \? <Text style=\{styles\.scheduleSuccess\}/);
 });
 

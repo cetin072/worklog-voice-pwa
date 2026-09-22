@@ -12,7 +12,7 @@ const api = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 
 test('Voice UX mirrors the strongest web recording affordances', () => {
   assert.match(voice, /QUICK_VOICE_LAYOUT\.micSize/);
-  assert.match(quickVoiceLayout, /micSize: 128/);
+  assert.match(quickVoiceLayout, /micSize: 116/);
   assert.doesNotMatch(voice, /marginTop: -28/);
   assert.match(voice, /accessibilityLabel="녹음 취소"/);
   assert.match(voice, /backgroundColor: '#b91c1c'/);
@@ -25,9 +25,10 @@ test('Voice UX mirrors the strongest web recording affordances', () => {
   assert.match(voice, /브리핑에 반영하는 중/);
 });
 
-test('Home keeps the larger voice controls in a non-overlay bottom footer', () => {
-  assert.doesNotMatch(home, /quickDockHeight|setQuickDockHeight|quickDockShell|position: 'absolute'/);
-  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
+test('Home uses a compact pass-through floating voice dock', () => {
+  assert.match(home, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(home, /pointerEvents="box-none"/);
+  assert.match(home, /QUICK_VOICE_LAYOUT\.dockReserveHeight/);
   assert.match(home, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
 });
 
