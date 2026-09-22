@@ -158,6 +158,7 @@ export async function searchMyWorkRecords(
     if (!value || !workRecordId) return [];
 
     const status = asText(value.status);
+    if (status === 'cancelled') return [];
     if (selectedStatuses.size > 0 && !selectedStatuses.has(status)) return [];
 
     return [{
@@ -355,6 +356,27 @@ export async function updateWorklogStatus(accessToken: string, recordId: string,
     body: JSON.stringify({ recordId, status }),
   });
   return readJson(response);
+}
+
+export type WorklogDeleteResult = Readonly<{
+  pageId?: string;
+  deleted?: boolean;
+  alreadyDeleted?: boolean;
+  cancelledScheduleIds?: string[];
+  mode?: string;
+}>;
+
+export async function deleteWorklog(accessToken: string, pageId: string): Promise<WorklogDeleteResult> {
+  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ action: 'delete', pageId }),
+  });
+  return readJson(response) as Promise<WorklogDeleteResult>;
 }
 
 export async function updateBriefingNoteState(
