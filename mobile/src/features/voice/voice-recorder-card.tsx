@@ -538,8 +538,9 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
         </View>
       </View>
 
-      {guidance ? <Text style={styles.quickGuidance}>{guidance}</Text> : null}
-      {isRecording && speechPreview ? <Text style={styles.quickGuidance}>{speechPreview}</Text> : null}
+      {isRecording
+        ? <Text numberOfLines={1} ellipsizeMode="tail" style={styles.quickGuidance}>{speechPreview || guidance}</Text>
+        : guidance ? <Text numberOfLines={1} ellipsizeMode="tail" style={styles.quickGuidance}>{guidance}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>입력 신호 · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
