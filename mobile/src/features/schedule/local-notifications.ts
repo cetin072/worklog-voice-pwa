@@ -1,4 +1,6 @@
 import { Linking, Platform } from 'react-native';
+import Constants from 'expo-constants';
+import * as IntentLauncher from 'expo-intent-launcher';
 import * as Notifications from 'expo-notifications';
 import * as Crypto from 'expo-crypto';
 
@@ -38,10 +40,21 @@ export async function openExactAlarmPermissionSettings() {
     await Linking.openSettings();
     return;
   }
+
+  const packageName = Constants.expoConfig?.android?.package?.trim();
   try {
-    await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+    await IntentLauncher.startActivityAsync(
+      IntentLauncher.ActivityAction.REQUEST_SCHEDULE_EXACT_ALARM,
+      packageName ? { data: `package:${packageName}` } : {},
+    );
+    return;
   } catch {
-    await Linking.openSettings();
+    try {
+      await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+      return;
+    } catch {
+      await Linking.openSettings();
+    }
   }
 }
 
