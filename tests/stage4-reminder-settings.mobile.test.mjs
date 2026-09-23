@@ -26,6 +26,16 @@ test('mobile no longer carries the Web/PWA push preferences API client', () => {
   assert.doesNotMatch(mobileApiSource, /NotificationPreferences|notification-preferences|loadNotificationPreferences|updateNotificationPreferences/);
 });
 
+test('first timed schedule guides Android exact-alarm special access in context', () => {
+  assert.match(appSource, /정확한 시간 알림 설정/);
+  assert.match(appSource, /한 번만 설정하면 됩니다/);
+  assert.match(appSource, /maybeGuideExactAlarmPermission/);
+  assert.match(appSource, /shouldGuideExactAlarmPermission/);
+  assert.match(appSource, /markExactAlarmPermissionGuided/);
+  assert.match(localNotificationSource, /worklog\.mobile\.exact-alarm-guidance\.v1/);
+  assert.match(localNotificationSource, /android\.settings\.REQUEST_SCHEDULE_EXACT_ALARM/);
+});
+
 test('local reminder infrastructure stays available without external Calendar UI', () => {
   assert.match(localNotificationSource, /scheduleNotificationAsync/);
   assert.match(localNotificationSource, /android\.settings\.REQUEST_SCHEDULE_EXACT_ALARM/);
