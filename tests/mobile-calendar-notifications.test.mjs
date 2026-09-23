@@ -33,7 +33,7 @@ test('Internal schedules stay visible and creatable without external Calendar', 
 });
 
 test('Local notifications remain available without Calendar startup recovery', () => {
-  assert.equal(packageJson.dependencies['expo-notifications'], '57.0.19');
+  assert.equal(packageJson.dependencies['expo-notifications'], '57.0.20');
   assert.match(notificationSource, /requestScheduleNotificationPermission/);
   assert.match(notificationSource, /scheduleNotificationAsync/);
   assert.match(notificationSource, /cancelScheduledNotificationAsync/);
