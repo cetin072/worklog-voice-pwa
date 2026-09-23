@@ -35,11 +35,15 @@ export function synchronizeBriefingScheduleReminders(input?: Readonly<{
   upcoming?: readonly BriefingScheduleProjection[];
 }> | null) {
   const rows = [...(input?.today || []), ...(input?.upcoming || [])];
+  const seen = new Set<string>();
   const schedules = rows.map((row): ConfirmedSchedule | null => {
     const id = row.scheduleId?.trim() || '';
     const title = row.title?.trim() || '';
     const startsAt = row.startsAt?.trim() || '';
-    if (!id || !title || !startsAt) return null;
+    if (!id || !title || !startsAt || seen.has(id)) return null;
+    const startsAtMs = new Date(startsAt).getTime();
+    if (!Number.isFinite(startsAtMs) || startsAtMs <= Date.now()) return null;
+    seen.add(id);
     const status = row.status === '확정' || row.status === 'confirmed' ? 'confirmed' : (row.status || '');
     return { id, title, startsAt, status, allDay: row.allDay === true };
   }).filter((value): value is ConfirmedSchedule => value !== null);
