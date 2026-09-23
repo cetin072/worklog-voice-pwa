@@ -129,3 +129,20 @@ test("Human QA timed event phrases remain Schedule while deadline work remains T
     assert.equal(schedule.dueStart,dueStart,transcript);
   }
 });
+
+
+test("explicit short relative reminder becomes Schedule",()=>{
+  const transcript="알림 테스트 2분 뒤로 오늘";
+  const schedule=extractScheduleFromText(transcript,RECORDED_AT);
+  const result=classifyWorklogAction({transcript,recordedAt:RECORDED_AT,schedule});
+  assert.equal(schedule.dueStart,"2026-09-19T17:02:00+09:00");
+  assert.equal(result.kind,"schedule");
+  assert.equal(result.reason,"timed_event");
+});
+
+test("relative time without reminder or event signal does not silently become Schedule",()=>{
+  const transcript="2분 뒤 자료 정리";
+  const schedule=extractScheduleFromText(transcript,RECORDED_AT);
+  const result=classifyWorklogAction({transcript,recordedAt:RECORDED_AT,schedule});
+  assert.notEqual(result.kind,"schedule");
+});
