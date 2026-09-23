@@ -16,6 +16,7 @@ import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
 import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder } from '@/src/features/schedule/schedule-reminder-post-save';
+import { openExactAlarmPermissionSettings } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
 import { createSerialTaskQueue } from '@/src/platform/serial-task-queue';
@@ -112,6 +113,11 @@ function formatJournalTime(value?: string) {
 
 function messageOf(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function exactAlarmAccessError(error: unknown) {
+  const message = messageOf(error, '');
+  return /SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM|SecurityException|exact alarm|exact-alarm/i.test(message);
 }
 
 function formatSchedule(schedule: BriefingSchedule) {
@@ -513,7 +519,22 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       };
       let reminderWarning = '';
       try { await synchronizeSavedScheduleReminders(saved); }
-      catch (nextError) { reminderWarning = messageOf(nextError, '휴대폰 일정 알림을 예약하지 못했습니다. 앱을 다시 열면 복구를 시도합니다.'); }
+      catch (nextError) {
+        const exactAlarmNeeded = Platform.OS === 'android' && exactAlarmAccessError(nextError);
+        reminderWarning = exactAlarmNeeded
+          ? '일정은 저장됐습니다. 정확한 일정 알림 권한을 허용해주세요.'
+          : messageOf(nextError, '휴대폰 일정 알림을 예약하지 못했습니다. 앱을 다시 열면 복구를 시도합니다.');
+        if (exactAlarmNeeded) {
+          Alert.alert(
+            '정확한 일정 알림 권한 필요',
+            'Android의 ‘알람 및 리마인더’에서 업무수첩을 허용하면 방금 일정을 다시 예약합니다.',
+            [
+              { text: '나중에', style: 'cancel' },
+              { text: '권한 열기', onPress: () => { void openExactAlarmPermissionSettings(); } },
+            ],
+          );
+        }
+      }
       setManualInput(emptyManualWorkInput());
       setLastDirectSave(feedback);
       if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
@@ -1032,7 +1053,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); try { await synchronizeSavedScheduleReminders(saved); } catch (nextError) { console.warn('[schedule-reminder] save sync pending', messageOf(nextError, 'unknown')); } if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); try { await synchronizeSavedScheduleReminders(saved); } catch (nextError) { console.warn('[schedule-reminder] save sync pending', messageOf(nextError, 'unknown')); if (Platform.OS === 'android' && exactAlarmAccessError(nextError)) { showMessage('일정은 저장됐습니다. 정확한 일정 알림 권한을 허용해주세요.', 'info'); Alert.alert('정확한 일정 알림 권한 필요', 'Android의 ‘알람 및 리마인더’에서 업무수첩을 허용하면 방금 일정을 다시 예약합니다.', [{ text: '나중에', style: 'cancel' }, { text: '권한 열기', onPress: () => { void openExactAlarmPermissionSettings(); } }]); } } if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
   <WorkRecordEditSheet
     visible={Boolean(editTaskId)}
