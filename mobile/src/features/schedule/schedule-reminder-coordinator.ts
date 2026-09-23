@@ -11,6 +11,39 @@ export type ConfirmedSchedule = Readonly<{
   allDay?: boolean;
 }>;
 
+export type BriefingScheduleProjection = Readonly<{
+  scheduleId?: string;
+  title?: string;
+  startsAt?: string;
+  status?: string;
+  allDay?: boolean;
+}>;
+
+export function confirmedSchedulesFromBriefing(input?: Readonly<{
+  today?: readonly BriefingScheduleProjection[];
+  upcoming?: readonly BriefingScheduleProjection[];
+}> | null, now = Date.now()) {
+  const rows = [...(input?.today || []), ...(input?.upcoming || [])];
+  const seen = new Set<string>();
+  const schedules: ConfirmedSchedule[] = [];
+  for (const row of rows) {
+    const id = row.scheduleId?.trim() || '';
+    const title = row.title?.trim() || '';
+    const startsAt = row.startsAt?.trim() || '';
+    const startsAtMs = new Date(startsAt).getTime();
+    if (!id || !title || !startsAt || seen.has(id) || !Number.isFinite(startsAtMs) || startsAtMs <= now) continue;
+    seen.add(id);
+    schedules.push({
+      id,
+      title,
+      startsAt,
+      status: row.status === '확정' || row.status === 'confirmed' ? 'confirmed' : (row.status || ''),
+      allDay: row.allDay === true,
+    });
+  }
+  return Object.freeze(schedules);
+}
+
 type ReminderPort = {
   scheduleReminder(input: { scheduleId: string; title: string; scheduleStartsAt: string; offsetMinutes: 0 }): Promise<unknown>;
   cancelAllScheduleReminders(scheduleId: string): Promise<unknown>;
