@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Crypto from 'expo-crypto';
 
@@ -20,6 +20,18 @@ export const PRIMARY_REMINDER_PRESETS = REMINDER_PRESETS.filter((preset) => pres
 /** Installed explicitly by the application owner, never as an import side effect. */
 export function configureScheduleNotificationHandler() {
   Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
+}
+
+export async function openExactAlarmPermissionSettings() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31) {
+    await Linking.openSettings();
+    return;
+  }
+  try {
+    await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+  } catch {
+    await Linking.openSettings();
+  }
 }
 
 export async function requestScheduleNotificationPermission() {
@@ -56,5 +68,5 @@ const service = createScheduleReminderService({
     permission: async (request) => (await (request ? requestScheduleNotificationPermission() : Notifications.getPermissionsAsync())).granted,
   },
 });
-export const { scheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, cancelScheduleReminder,
+export const { scheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, getScheduleReminderStatus, cancelScheduleReminder,
   cancelAllScheduleReminders, synchronizeScheduleReminders, reconcileScheduleReminders } = service;
