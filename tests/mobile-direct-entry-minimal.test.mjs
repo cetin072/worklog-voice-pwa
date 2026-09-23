@@ -42,3 +42,10 @@ test('the existing schedule parser receives picker dates and times in its canoni
   assert.equal(morning.text, '알림테스트');
   assert.equal(isTimedScheduleIntent({ source: '알림테스트 2026년 9월 25일 오전 8시 58분', dueStart: morning.dueStart, explicitType: '회의·통화' }), true);
 });
+
+
+test('direct entry dismisses the keyboard before date/time picking and authenticated screens resize for the keyboard', () => {
+  assert.match(sheet, /Keyboard\.dismiss\(\)/);
+  assert.match(home, /<KeyboardAvoidingView style=\{styles\.flex\} behavior=\{Platform\.OS === 'ios' \? 'padding' : 'height'\}>/);
+  assert.match(home, /keyboardDismissMode="on-drag"/);
+});
