@@ -15,7 +15,7 @@ import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
-import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder } from '@/src/features/schedule/schedule-reminder-post-save';
+import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeBriefingScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder } from '@/src/features/schedule/schedule-reminder-post-save';
 import { markExactAlarmPermissionGuided, openExactAlarmPermissionSettings, shouldGuideExactAlarmPermission } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
@@ -405,7 +405,11 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       });
     };
     recover();
-    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') recover(); });
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      recover();
+      void refreshBriefing();
+    });
     return () => { alive = false; subscription.remove(); };
   }, [androidTouchSmoke, client, session?.access_token]);
   useEffect(() => {
@@ -489,6 +493,11 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         const accessToken = await freshHomeAccessToken(client);
         const next = await loadHomeBriefing(accessToken);
         if (epoch === briefingRefreshEpoch.current) setBriefing(next);
+        if (!androidTouchSmoke) {
+          void synchronizeBriefingScheduleReminders(next.schedules).catch((nextError) => {
+            console.warn('[schedule-reminder] canonical schedule sync pending', messageOf(nextError, 'unknown'));
+          });
+        }
       } catch (nextError) {
         if (epoch === briefingRefreshEpoch.current) setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.'));
       } finally {
