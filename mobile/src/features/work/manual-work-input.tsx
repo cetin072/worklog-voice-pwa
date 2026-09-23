@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { mobileTheme } from '@/src/ui/theme';
@@ -76,7 +76,7 @@ export function ManualWorkInput({ value, busy, onChange, onSave }: Props) {
     <View style={styles.field}>
       <Text style={styles.label}>날짜</Text>
       <View style={styles.row}>
-        <Pressable accessibilityRole="button" accessibilityLabel="날짜 선택" disabled={busy} style={[styles.select, busy ? styles.disabled : null]} onPress={() => { setShowTimePicker(false); setShowDatePicker(true); }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="날짜 선택" disabled={busy} style={[styles.select, busy ? styles.disabled : null]} onPress={() => { Keyboard.dismiss(); setShowTimePicker(false); setShowDatePicker(true); }}>
           <Text style={[styles.selectText, value.dueDate ? null : styles.placeholder]}>{dateLabel(value.dueDate)}</Text>
         </Pressable>
         {value.dueDate ? <Pressable accessibilityRole="button" disabled={busy} style={styles.clear} onPress={() => { setShowDatePicker(false); update({ dueDate: '', dueTime: '' }); }}><Text style={styles.clearText}>지우기</Text></Pressable> : null}
@@ -93,7 +93,7 @@ export function ManualWorkInput({ value, busy, onChange, onSave }: Props) {
     <View style={styles.field}>
       <Text style={styles.label}>시간</Text>
       <View style={styles.row}>
-        <Pressable accessibilityRole="button" accessibilityLabel="시간 선택" disabled={busy || !value.dueDate} style={[styles.select, busy || !value.dueDate ? styles.disabled : null]} onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="시간 선택" disabled={busy || !value.dueDate} style={[styles.select, busy || !value.dueDate ? styles.disabled : null]} onPress={() => { Keyboard.dismiss(); setShowDatePicker(false); setShowTimePicker(true); }}>
           <Text style={[styles.selectText, value.dueTime ? null : styles.placeholder]}>{timeLabel(value.dueTime)}</Text>
         </Pressable>
         {value.dueTime ? <Pressable accessibilityRole="button" disabled={busy} style={styles.clear} onPress={() => { setShowTimePicker(false); update({ dueTime: '' }); }}><Text style={styles.clearText}>지우기</Text></Pressable> : null}
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   field: { gap: 7 },
   label: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.textSecondary },
   input: { minHeight: mobileTheme.size.input, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: mobileTheme.colors.text, backgroundColor: mobileTheme.colors.surface },
-  transcript: { minHeight: 132 },
+  transcript: { minHeight: 104 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   select: { flex: 1, minHeight: mobileTheme.size.input, justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, backgroundColor: mobileTheme.colors.surface },
   selectText: { fontSize: 16, color: mobileTheme.colors.text },
