@@ -50,16 +50,6 @@ export type MobileBriefing = {
   scheduleEnabled?: boolean;
 };
 
-export type NotificationPreferences = {
-  morningEnabled: boolean;
-  afternoonEnabled: boolean;
-  detailEnabled: boolean;
-  morningTime: '08:30';
-  afternoonTime: '16:30';
-  timezone: 'Asia/Seoul';
-  connected: boolean;
-};
-
 export type WorkJournalRecord = {
   pageId?: string;
   title?: string;
@@ -511,35 +501,6 @@ export async function updateWorklogDetails(
   });
   const body = await readJson(response);
   return { ...body, schedule: parseConfirmedSchedule(body.schedule) } as WorklogUpdateResult;
-}
-
-function parseNotificationPreferences(body: Record<string, unknown>): NotificationPreferences {
-  if (typeof body.morningEnabled !== 'boolean' || typeof body.afternoonEnabled !== 'boolean'
-    || typeof body.detailEnabled !== 'boolean' || typeof body.connected !== 'boolean'
-    || body.morningTime !== '08:30' || body.afternoonTime !== '16:30' || body.timezone !== 'Asia/Seoul') {
-    throw new Error('서버 알림 상태를 확인하지 못했습니다. 다시 시도해주세요.');
-  }
-  return body as NotificationPreferences;
-}
-
-export async function loadNotificationPreferences(accessToken: string) {
-  const response = await fetch(`${getApiBaseUrl()}/api/notification-preferences`, {
-    method: 'GET',
-    headers: { accept: 'application/json', authorization: `Bearer ${accessToken}` },
-  });
-  return parseNotificationPreferences(await readJson(response));
-}
-
-export async function updateNotificationPreferences(accessToken: string, patch: Pick<Partial<NotificationPreferences>, 'morningEnabled' | 'afternoonEnabled'>) {
-  if (typeof patch.morningEnabled !== 'boolean' && typeof patch.afternoonEnabled !== 'boolean') {
-    throw new Error('변경할 서버 알림 설정을 선택해주세요.');
-  }
-  const response = await fetch(`${getApiBaseUrl()}/api/notification-preferences`, {
-    method: 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify(patch),
-  });
-  return parseNotificationPreferences(await readJson(response));
 }
 
 export async function postponeWorklog(
