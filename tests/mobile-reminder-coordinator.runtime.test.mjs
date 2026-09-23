@@ -11,7 +11,7 @@ const NOW = Date.parse('2030-01-01T00:00:00Z');
 const SID = '11111111-1111-4111-8111-111111111111';
 
 function harness() {
-  const disk = new Map(); const os = new Map(); let cancelFails = false;
+  const disk = new Map(); const os = new Map(); let cancelFails = false; let scheduleFails = false;
   const storage = {
     async getItem(key) { return disk.get(key) ?? null; },
     async updateItem(key, update) { const next = update(disk.get(key) ?? null); if (next === null) disk.delete(key); else disk.set(key, next); return next; },
@@ -20,6 +20,7 @@ function harness() {
     async list() { return [...os.values()].map((value) => structuredClone(value)); },
     async permission() { return true; },
     async schedule(reminder, scheduleId) {
+      if (scheduleFails) throw new Error('java.lang.SecurityException: SCHEDULE_EXACT_ALARM denied');
       os.set(reminder.identifier, { identifier: reminder.identifier, content: { body: reminder.title, data: { owner: REMINDER_OWNER, target: 'schedule', scheduleId, offsetMinutes: reminder.offsetMinutes, triggerAt: reminder.triggerAt } } });
       return reminder.identifier;
     },
@@ -27,7 +28,7 @@ function harness() {
   };
   const reminders = createScheduleReminderService({ storage, driver, newId: randomUUID, now: () => NOW });
   const coordinator = createScheduleReminderCoordinator({ reminders });
-  return { coordinator, reminders, os, failCancel(value) { cancelFails = value; } };
+  return { coordinator, reminders, os, failCancel(value) { cancelFails = value; }, failSchedule(value) { scheduleFails = value; } };
 }
 
 function active(overrides = {}) {
@@ -103,4 +104,17 @@ test('startup recovery runs durable reminder and server-confirmed cancellation r
   } });
   await coordinator.recover({ async reconcileCanceledScheduleArtifacts() { calls.push('cancellations'); return { remaining: 0 }; } });
   assert.deepEqual(calls, ['reminders', 'cancellations']);
+});
+
+
+test('exact-alarm scheduling failure stays durable and is visible as pending', async () => {
+  const h = harness();
+  h.failSchedule(true);
+  await assert.rejects(h.coordinator.synchronize(active()), /SCHEDULE_EXACT_ALARM/);
+  assert.deepEqual(await h.reminders.getScheduleReminderStatus(), { scheduled: 0, pending: 1, cleanupPending: 0 });
+  h.failSchedule(false);
+  const recovered = await h.coordinator.recover();
+  assert.equal(recovered.reminders.failed, 0);
+  assert.deepEqual(await h.reminders.getScheduleReminderStatus(), { scheduled: 1, pending: 0, cleanupPending: 0 });
+  assert.equal(h.os.size, 1);
 });
