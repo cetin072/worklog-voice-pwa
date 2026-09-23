@@ -5,7 +5,7 @@ import test from 'node:test';
 
 register('./helpers/mobile-ts-loader.mjs', import.meta.url);
 const { createScheduleReminderService, REMINDER_OWNER } = await import(new URL('../mobile/src/features/schedule/schedule-reminder-service.ts', import.meta.url).href);
-const { createScheduleReminderCoordinator } = await import(new URL('../mobile/src/features/schedule/schedule-reminder-coordinator.ts', import.meta.url).href);
+const { confirmedSchedulesFromBriefing, createScheduleReminderCoordinator } = await import(new URL('../mobile/src/features/schedule/schedule-reminder-coordinator.ts', import.meta.url).href);
 
 const NOW = Date.parse('2030-01-01T00:00:00Z');
 const SID = '11111111-1111-4111-8111-111111111111';
@@ -118,3 +118,33 @@ test('exact-alarm scheduling failure stays durable and is visible as pending', a
   assert.deepEqual(await h.reminders.getScheduleReminderStatus(), { scheduled: 1, pending: 0, cleanupPending: 0 });
   assert.equal(h.os.size, 1);
 });
+
+
+test('briefing projection rebuilds only future confirmed canonical schedules and deduplicates ids', () => {
+  const future = '2030-01-01T10:00:00Z';
+  const past = '2029-12-31T23:00:00Z';
+  const rows = confirmedSchedulesFromBriefing({
+    today: [
+      { scheduleId: SID, title: '고객 미팅', startsAt: future, status: '확정', allDay: false },
+      { scheduleId: '33333333-3333-4333-8333-333333333333', title: '지난 일정', startsAt: past, status: '확정', allDay: false },
+    ],
+    upcoming: [
+      { scheduleId: SID, title: '중복', startsAt: future, status: '확정', allDay: false },
+      { scheduleId: '44444444-4444-4444-8444-444444444444', title: '임시 일정', startsAt: '2030-01-02T10:00:00Z', status: '임시', allDay: false },
+    ],
+  }, NOW);
+  assert.deepEqual(rows, [{
+    id: SID,
+    title: '고객 미팅',
+    startsAt: future,
+    status: 'confirmed',
+    allDay: false,
+  }, {
+    id: '44444444-4444-4444-8444-444444444444',
+    title: '임시 일정',
+    startsAt: '2030-01-02T10:00:00Z',
+    status: '임시',
+    allDay: false,
+  }]);
+});
+
