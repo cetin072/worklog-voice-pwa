@@ -1,31 +1,31 @@
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
-import { listScheduleReminders, listTrackedReminderScheduleIds, requestScheduleNotificationPermission } from '@/src/features/schedule/local-notifications';
+import {
+  getScheduleReminderStatus,
+  openExactAlarmPermissionSettings,
+  reconcileScheduleReminders,
+  requestScheduleNotificationPermission,
+} from '@/src/features/schedule/local-notifications';
 import { mobileTheme } from '@/src/ui/theme';
 
 type PermissionState = 'checking' | 'allowed' | 'not-allowed' | 'error';
-
-async function countLocalReminders() {
-  const scheduleIds = await listTrackedReminderScheduleIds();
-  const groups = await Promise.all(scheduleIds.map((scheduleId) => listScheduleReminders(scheduleId)));
-  return groups.reduce((total, reminders) => total + reminders.length, 0);
-}
+type ReminderStatus = { scheduled: number; pending: number; cleanupPending: number };
 
 export function ReminderSettings() {
   const [permission, setPermission] = useState<PermissionState>('checking');
   const [permissionDetail, setPermissionDetail] = useState('알림 권한을 확인하고 있습니다.');
-  const [localCount, setLocalCount] = useState<number | null>(null);
+  const [reminders, setReminders] = useState<ReminderStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
     setPermission('checking');
     setPermissionDetail('알림 권한을 확인하고 있습니다.');
 
-    const [permissionResult, localResult] = await Promise.allSettled([
+    const [permissionResult, reminderResult] = await Promise.allSettled([
       Notifications.getPermissionsAsync(),
-      countLocalReminders(),
+      getScheduleReminderStatus(),
     ]);
 
     if (permissionResult.status === 'fulfilled') {
@@ -33,7 +33,7 @@ export function ReminderSettings() {
       setPermission(result.granted ? 'allowed' : 'not-allowed');
       setPermissionDetail(
         result.granted
-          ? '시간이 있는 일정의 시작 알림을 예약할 수 있습니다.'
+          ? '시간이 있는 일정의 시작 알림을 받을 수 있습니다.'
           : result.canAskAgain
             ? '권한을 허용하면 일정 시작 알림을 받을 수 있습니다.'
             : '휴대폰 설정에서 업무수첩 알림을 허용해주세요.',
@@ -43,7 +43,7 @@ export function ReminderSettings() {
       setPermissionDetail('알림 권한 상태를 확인하지 못했습니다.');
     }
 
-    setLocalCount(localResult.status === 'fulfilled' ? localResult.value : null);
+    setReminders(reminderResult.status === 'fulfilled' ? reminderResult.value : null);
   }
 
   useEffect(() => {
@@ -59,6 +59,21 @@ export function ReminderSettings() {
       setBusy(false);
     }
   }
+
+  async function openExactAlarmAccess() {
+    setBusy(true);
+    try {
+      await openExactAlarmPermissionSettings();
+      await reconcileScheduleReminders().catch(() => undefined);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const scheduled = reminders?.scheduled ?? null;
+  const pending = reminders?.pending ?? 0;
+  const needsExactAlarmAccess = Platform.OS === 'android' && Number(Platform.Version) >= 31 && pending > 0;
 
   return <View style={styles.root}>
     <View style={styles.section}>
@@ -79,8 +94,15 @@ export function ReminderSettings() {
       <Text style={styles.heading}>일정 알림</Text>
       <Text style={styles.detail}>시간이 있는 일정은 시작 시각에 한 번 알려드립니다.</Text>
       <Text style={styles.status}>
-        {localCount === null ? '예약 상태 확인 중' : localCount ? `예약된 일정 알림 ${localCount}개` : '예약된 일정 알림 없음'}
+        {scheduled === null ? '예약 상태 확인 중' : scheduled ? `예약된 일정 알림 ${scheduled}개` : pending ? `예약 대기 중 ${pending}개` : '예약된 일정 알림 없음'}
       </Text>
+      {needsExactAlarmAccess ? <View style={styles.warning}>
+        <Text style={styles.warningTitle}>정확한 일정 알림 권한이 필요합니다.</Text>
+        <Text style={styles.detail}>Android의 ‘알람 및 리마인더’에서 업무수첩을 허용하면 대기 중인 일정 알림을 다시 예약합니다.</Text>
+        <Pressable accessibilityRole="button" disabled={busy} style={styles.action} onPress={() => void openExactAlarmAccess()}>
+          <Text style={styles.actionText}>정확한 일정 알림 허용</Text>
+        </Pressable>
+      </View> : null}
       <Pressable accessibilityRole="button" disabled={busy} style={styles.secondaryAction} onPress={() => void refresh()}>
         <Text style={styles.secondaryActionText}>상태 다시 확인</Text>
       </Pressable>
@@ -100,6 +122,8 @@ const styles = StyleSheet.create({
   status: { fontSize: 12, fontWeight: '800', color: mobileTheme.colors.textSecondary },
   statusOn: { color: mobileTheme.colors.success },
   statusError: { color: mobileTheme.colors.danger },
+  warning: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: mobileTheme.colors.neutralBackground, borderWidth: 1, borderColor: mobileTheme.colors.border },
+  warningTitle: { fontSize: 13, fontWeight: '900', color: mobileTheme.colors.text },
   action: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#111827', paddingHorizontal: 12 },
   actionText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   secondaryAction: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 11, borderWidth: 1, borderColor: mobileTheme.colors.border, paddingHorizontal: 12 },
