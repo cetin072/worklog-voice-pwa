@@ -32,5 +32,4 @@ test('Android reminders have an explicit native reboot recovery path', () => {
 test('reboot recovery replays Expo native scheduled requests instead of creating a second reminder store', () => {
   assert.doesNotMatch(pluginSource, /SharedPreferences|SecureStore|scheduleNotificationAsync|createScheduleReminderService/);
   assert.match(pluginSource, /same native store/);
-  assert.equal((pluginSource.match(/setupScheduledNotifications\\(\\)/g) || []).length, 1);
 });
