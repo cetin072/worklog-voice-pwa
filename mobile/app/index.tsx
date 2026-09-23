@@ -50,8 +50,13 @@ function emptyManualWorkInput(): ManualWorkInputValue {
 function manualScheduleText(dueDate: string, dueTime: string) {
   if (!dueDate) return '';
   const date = dueDate.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1년 $2월 $3일');
-  const time = dueTime ? dueTime.replace(/^(\d{2}):(\d{2})$/, ' $1시 $2분') : '';
-  return ` ${date}${time}`;
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(dueTime);
+  if (!timeMatch) return ` ${date}`;
+  const hour = Number(timeMatch[1]);
+  const minute = timeMatch[2];
+  const meridiem = hour < 12 ? '오전' : '오후';
+  const displayHour = hour % 12 || 12;
+  return ` ${date} ${meridiem} ${displayHour}시 ${minute}분`;
 }
 
 const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' }> = [
