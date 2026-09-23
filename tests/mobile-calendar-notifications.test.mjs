@@ -7,6 +7,8 @@ const appJson = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
 const notificationSource = fs.readFileSync('mobile/src/features/schedule/local-notifications.ts', 'utf8') + fs.readFileSync('mobile/src/features/schedule/schedule-reminder-service.ts', 'utf8');
 const cancellationSource = fs.readFileSync('mobile/src/features/schedule/schedule-cancellation.ts', 'utf8');
 const homeSource = fs.readFileSync('mobile/app/index.tsx', 'utf8');
+const reminderSettingsSource = fs.readFileSync('mobile/src/features/settings/reminder-settings.tsx', 'utf8');
+const mobileApiSource = fs.readFileSync('mobile/src/platform/worklog-api.ts', 'utf8');
 
 test('External Calendar integration is removed from the mobile runtime', () => {
   assert.equal(packageJson.dependencies['expo-calendar'], undefined);
@@ -48,4 +50,12 @@ test('Schedule cancellation cleans only local reminder artifacts', () => {
   assert.match(cancellationSource, /cancelAllScheduleReminders/);
   assert.match(cancellationSource, /listTrackedReminderScheduleIds/);
   assert.match(cancellationSource, /reconcileCanceledScheduleArtifacts/);
+});
+
+
+test('Mobile reminder settings contain only app-local notification controls', () => {
+  assert.doesNotMatch(reminderSettingsSource, /웹\/PWA|서버 Push|오전 업무 알림|오후 미완료 알림/);
+  assert.doesNotMatch(mobileApiSource, /NotificationPreferences|notification-preferences|loadNotificationPreferences|updateNotificationPreferences/);
+  assert.match(reminderSettingsSource, /예약된 일정 알림/);
+  assert.match(reminderSettingsSource, /휴대폰 알림 설정 열기/);
 });
