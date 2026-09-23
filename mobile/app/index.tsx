@@ -947,7 +947,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
-  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
+  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
@@ -1054,7 +1054,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
   />
-</View></View>;
+</View></KeyboardAvoidingView></View>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {
