@@ -38,6 +38,9 @@ test('first timed schedule guides Android exact-alarm special access in context'
 
 test('local reminder infrastructure stays available without external Calendar UI', () => {
   assert.match(localNotificationSource, /scheduleNotificationAsync/);
+  assert.match(localNotificationSource, /IntentLauncher\.ActivityAction\.REQUEST_SCHEDULE_EXACT_ALARM/);
+  assert.match(localNotificationSource, /data: \`package:\$\{packageName\}\`/);
+  assert.match(localNotificationSource, /Constants\.expoConfig\?\.android\?\.package/);
   assert.match(localNotificationSource, /android\.settings\.REQUEST_SCHEDULE_EXACT_ALARM/);
   assert.match(localNotificationSource, /getScheduleReminderStatus/);
   assert.match(localNotificationSource, /cancelScheduledNotificationAsync/);
