@@ -1,6 +1,6 @@
 /**
  * Product tokens shared by the native Home, voice dock, and schedule settings.
- * Values intentionally mirror the current web/PWA visual language instead of
+ * Values intentionally preserve the current 업무수첩 visual language instead of
  * creating a separate mobile palette.
  */
 export const mobileTheme = {
