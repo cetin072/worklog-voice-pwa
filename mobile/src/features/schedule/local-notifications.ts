@@ -7,6 +7,7 @@ import { createScheduleReminderService, REMINDER_OWNER, type ScheduleReminder } 
 export { reminderTriggerAt, type ReminderOffsetMinutes, type ScheduleReminder } from './schedule-reminder-service';
 
 const CHANNEL_ID = 'worklog-schedule-reminders';
+const EXACT_ALARM_GUIDANCE_KEY = 'worklog.mobile.exact-alarm-guidance.v1';
 export const REMINDER_PRESETS = [
   { offsetMinutes: 0, label: '시작 시' },
   { offsetMinutes: 5, label: '5분 전' },
@@ -20,6 +21,16 @@ export const PRIMARY_REMINDER_PRESETS = REMINDER_PRESETS.filter((preset) => pres
 /** Installed explicitly by the application owner, never as an import side effect. */
 export function configureScheduleNotificationHandler() {
   Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
+}
+
+export async function shouldGuideExactAlarmPermission() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31) return false;
+  return (await secureSessionStorage.getItem(EXACT_ALARM_GUIDANCE_KEY)) !== 'shown';
+}
+
+export async function markExactAlarmPermissionGuided() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31) return;
+  await secureSessionStorage.setItem(EXACT_ALARM_GUIDANCE_KEY, 'shown');
 }
 
 export async function openExactAlarmPermissionSettings() {
