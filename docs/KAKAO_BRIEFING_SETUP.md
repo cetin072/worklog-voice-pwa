@@ -26,6 +26,7 @@ Netlify `worklog-voice-pwa` 프로젝트의 환경변수에 아래 값을 추가
 - `KAKAO_CLIENT_SECRET`: Client Secret을 사용하는 경우에만 입력
 - `KAKAO_REDIRECT_URI`: 선택 사항. 기본값은 아래 주소이므로 보통 생략 가능
   - `https://worklog-voice-pwa.netlify.app/api/kakao/callback`
+- `KAKAO_AUTO_SEND_ENABLED`: 예약 카카오 브리핑 운영 스위치. 기본값은 `true`이며, `false`로 두면 카카오 연결과 수동 전송은 유지한 채 예약 자동 전송만 일시 중지됩니다.
 
 키와 토큰은 GitHub 코드에 직접 기록하지 않습니다.
 
