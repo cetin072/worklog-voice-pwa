@@ -12,6 +12,7 @@ import {
 } from './audio-input';
 import { cancelQuickVoiceCapture } from './quick-voice-capture-lifecycle';
 import { reportQuickVoiceDebug } from './quick-voice-debug';
+import { compactQuickVoicePcmSilence } from './quick-voice-silence';
 
 export const QUICK_VOICE_PCM_SAMPLE_RATE = 16_000;
 export const QUICK_VOICE_PCM_CHANNELS = 1;
@@ -146,14 +147,15 @@ export function useQuickVoicePcmCapture() {
     const channels = latestFormat.current.channels || stream.stream.channels;
     assertQuickVoicePcmFormat({ sampleRate, channels });
 
-    const data = concatenatePcmBuffers(chunks.current);
-    if (!data.byteLength) throw new Error('녹음된 PCM 데이터가 없습니다.');
-    const signal = analyzePcm16Signal(data);
-    assertQuickVoiceSignal(signal);
+    const rawData = concatenatePcmBuffers(chunks.current);
+    if (!rawData.byteLength) throw new Error('녹음된 PCM 데이터가 없습니다.');
+    assertQuickVoiceSignal(analyzePcm16Signal(rawData));
 
-    const bytesPerSample = 2;
-    const samplesPerChannel = data.byteLength / bytesPerSample / channels;
-    const durationMs = Math.round(samplesPerChannel / sampleRate * 1000);
+    // This hook is used only by the Whisper fallback. Android live recognition
+    // never records PCM, so its interim/final lifecycle remains untouched.
+    const compacted = compactQuickVoicePcmSilence(rawData, sampleRate);
+    const signal = analyzePcm16Signal(compacted.data);
+    assertQuickVoiceSignal(signal);
 
     const identity = captureIdentity.current;
     if (!identity) throw new Error('Quick Voice PCM capture identity가 없습니다.');
@@ -161,10 +163,10 @@ export function useQuickVoicePcmCapture() {
     return createQuickVoicePcmAudioInput({
       localRef: identity.localRef,
       createdAt: identity.createdAt,
-      data,
+      data: compacted.data,
       sampleRate,
       channels,
-      durationMs,
+      durationMs: compacted.processedDurationMs,
       signal,
     });
   }
