@@ -50,16 +50,6 @@ export type MobileBriefing = {
   scheduleEnabled?: boolean;
 };
 
-export type NotificationPreferences = {
-  morningEnabled: boolean;
-  afternoonEnabled: boolean;
-  detailEnabled: boolean;
-  morningTime: '08:30';
-  afternoonTime: '16:30';
-  timezone: 'Asia/Seoul';
-  connected: boolean;
-};
-
 export type WorkJournalRecord = {
   pageId?: string;
   title?: string;
@@ -218,7 +208,37 @@ export type SavedWorklog = Readonly<{
   splitCount?: number;
   dataCoreWorkRecordIds?: string[];
   scheduleIds?: string[];
+  schedule?: ConfirmedScheduleSnapshot | null;
+  schedules?: ConfirmedScheduleSnapshot[];
 }>;
+
+/** A Schedule returned after its server mutation has committed. */
+export type ConfirmedScheduleSnapshot = Readonly<{
+  id: string;
+  title?: string;
+  startsAt?: string;
+  status: string;
+  allDay?: boolean;
+}>;
+
+function parseConfirmedSchedule(value: unknown): ConfirmedScheduleSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const id = typeof row.id === 'string' ? row.id.trim() : '';
+  const status = typeof row.status === 'string' ? row.status.trim() : '';
+  if (!id || !status) return null;
+  const title = typeof row.title === 'string' ? row.title.trim() : undefined;
+  const startsAt = typeof row.startsAt === 'string' && Number.isFinite(new Date(row.startsAt).getTime()) ? row.startsAt : undefined;
+  return { id, status, ...(title ? { title } : {}), ...(startsAt ? { startsAt } : {}), ...(typeof row.allDay === 'boolean' ? { allDay: row.allDay } : {}) };
+}
+
+function parseSavedWorklog(body: Record<string, unknown>): SavedWorklog {
+  const schedule = parseConfirmedSchedule(body.schedule);
+  const schedules = Array.isArray(body.schedules)
+    ? body.schedules.map(parseConfirmedSchedule).filter((value): value is ConfirmedScheduleSnapshot => value !== null)
+    : [];
+  return { ...body, ...(schedule ? { schedule } : {}), ...(schedules.length ? { schedules } : {}) } as SavedWorklog;
+}
 
 function normalizedRecordedAt(value?: string) {
   if (!value) return new Date().toISOString();
@@ -323,7 +343,7 @@ export async function saveWorklog(
       ...(options.followUp ? { followUp: options.followUp.trim() } : {}),
     }),
   });
-  return readJson(response) as Promise<SavedWorklog>;
+  return parseSavedWorklog(await readJson(response));
 }
 
 /** Reuses the canonical worklog edit endpoint for post-transcription correction. */
@@ -424,6 +444,7 @@ export type WorklogUpdateResult = Readonly<{
   actionKindChanged?: boolean;
   unchanged?: boolean;
   mode?: string;
+  schedule?: ConfirmedScheduleSnapshot | null;
 }>;
 
 export type WorklogReminderResult = Readonly<{
@@ -478,36 +499,8 @@ export async function updateWorklogDetails(
       ...(input.actionKind ? { actionKind: input.actionKind } : {}),
     }),
   });
-  return readJson(response) as Promise<WorklogUpdateResult>;
-}
-
-function parseNotificationPreferences(body: Record<string, unknown>): NotificationPreferences {
-  if (typeof body.morningEnabled !== 'boolean' || typeof body.afternoonEnabled !== 'boolean'
-    || typeof body.detailEnabled !== 'boolean' || typeof body.connected !== 'boolean'
-    || body.morningTime !== '08:30' || body.afternoonTime !== '16:30' || body.timezone !== 'Asia/Seoul') {
-    throw new Error('서버 알림 상태를 확인하지 못했습니다. 다시 시도해주세요.');
-  }
-  return body as NotificationPreferences;
-}
-
-export async function loadNotificationPreferences(accessToken: string) {
-  const response = await fetch(`${getApiBaseUrl()}/api/notification-preferences`, {
-    method: 'GET',
-    headers: { accept: 'application/json', authorization: `Bearer ${accessToken}` },
-  });
-  return parseNotificationPreferences(await readJson(response));
-}
-
-export async function updateNotificationPreferences(accessToken: string, patch: Pick<Partial<NotificationPreferences>, 'morningEnabled' | 'afternoonEnabled'>) {
-  if (typeof patch.morningEnabled !== 'boolean' && typeof patch.afternoonEnabled !== 'boolean') {
-    throw new Error('변경할 서버 알림 설정을 선택해주세요.');
-  }
-  const response = await fetch(`${getApiBaseUrl()}/api/notification-preferences`, {
-    method: 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify(patch),
-  });
-  return parseNotificationPreferences(await readJson(response));
+  const body = await readJson(response);
+  return { ...body, schedule: parseConfirmedSchedule(body.schedule) } as WorklogUpdateResult;
 }
 
 export async function postponeWorklog(

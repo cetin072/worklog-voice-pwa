@@ -20,7 +20,8 @@ test('direct entry only exposes input date time and save', () => {
 test('direct entry date and time are folded into canonical save text without exposing legacy metadata controls', () => {
   assert.match(home, /function manualScheduleText\(dueDate: string, dueTime: string\)/);
   assert.match(home, /\$1년 \$2월 \$3일/);
-  assert.match(home, /\$1시 \$2분/);
+  assert.match(home, /meridiem = hour < 12 \? '오전' : '오후'/);
+  assert.match(home, /displayHour = hour % 12 \|\| 12/);
   assert.match(home, /manualInput\.dueTime/);
   assert.match(home, /saveWorklog\(session\.access_token, saveText/);
   const save = home.slice(home.indexOf('async function persistDraft()'), home.indexOf('async function changeTaskStatus'));
@@ -35,4 +36,16 @@ test('the existing schedule parser receives picker dates and times in its canoni
   const timed = extractScheduleFromText('업무 회의 2026년 9월 25일 14시 30분', '2026-09-23T00:00:00.000Z');
   assert.equal(timed.dueStart, '2026-09-25T14:30:00+09:00');
   assert.equal(isTimedScheduleIntent({ source: '업무 회의 2026년 9월 25일 14시 30분', dueStart: timed.dueStart, explicitType: '회의·통화' }), true);
+
+  const morning = extractScheduleFromText('알림테스트 2026년 9월 25일 오전 8시 58분', '2026-09-23T00:00:00.000Z');
+  assert.equal(morning.dueStart, '2026-09-25T08:58:00+09:00');
+  assert.equal(morning.text, '알림테스트');
+  assert.equal(isTimedScheduleIntent({ source: '알림테스트 2026년 9월 25일 오전 8시 58분', dueStart: morning.dueStart, explicitType: '회의·통화' }), true);
+});
+
+
+test('direct entry dismisses the keyboard before date/time picking and authenticated screens resize for the keyboard', () => {
+  assert.match(sheet, /Keyboard\.dismiss\(\)/);
+  assert.match(home, /<KeyboardAvoidingView style=\{styles\.flex\} behavior=\{Platform\.OS === 'ios' \? 'padding' : 'height'\}>/);
+  assert.match(home, /keyboardDismissMode="on-drag"/);
 });

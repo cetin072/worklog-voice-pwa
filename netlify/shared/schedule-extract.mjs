@@ -169,15 +169,75 @@ function removeSchedulePhrase(source,parts){
   return cleaned;
 }
 
+const RELATIVE_TIME_RE=/(\d{1,3})\s*(분|시간)\s*(?:뒤|후)(?:로)?/g;
+
+function seoulInstant(value){
+  const date=value instanceof Date ? value : new Date(value);
+  if(Number.isNaN(date.getTime())) return null;
+  const parts=new Intl.DateTimeFormat("en-CA",{
+    timeZone:SEOUL_TZ,
+    year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",second:"2-digit",
+    hourCycle:"h23"
+  }).formatToParts(date);
+  const get=type=>parts.find(part=>part.type===type)?.value || "";
+  return {
+    dateKey:`${get("year")}-${get("month")}-${get("day")}`,
+    iso:`${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}+09:00`
+  };
+}
+
+function relativeTime(source,recordedAt){
+  const matches=[...source.matchAll(RELATIVE_TIME_RE)];
+  if(matches.length!==1) return {matched:false,ambiguous:matches.length>1};
+  const match=matches[0];
+  const amount=Number(match[1]);
+  const unit=match[2];
+  if(!Number.isInteger(amount) || amount<1) return {matched:false,ambiguous:true};
+  const max=unit==="시간" ? 72 : 24*60;
+  if(amount>max) return {matched:false,ambiguous:true};
+  const base=new Date(recordedAt);
+  if(Number.isNaN(base.getTime())) return {matched:false,ambiguous:true};
+  const due=new Date(base.getTime()+amount*(unit==="시간" ? 3_600_000 : 60_000));
+  const instant=seoulInstant(due);
+  return instant
+    ? {matched:true,ambiguous:false,raw:match[0],...instant}
+    : {matched:false,ambiguous:true};
+}
+
 export function extractScheduleFromText(value,recordedAt=new Date()){
   const source=normalize(value);
   if(!source) return {text:"",dueStart:"",dateKey:"",hasTime:false,matched:false};
   const base=coreSeoulParts(recordedAt);
   if(!base) return {text:source,dueStart:"",dateKey:"",hasTime:false,matched:false};
 
-  const datePart=coreParseDate(source,base,{policy:"schedule"});
+  const relative=relativeTime(source,recordedAt);
+  const relativeDatePart=coreParseDate(source,base,{policy:"schedule"});
+  const relativeDateSignals=coreDateSignalCount(source,{policy:"schedule"});
+  const relativeClockSignals=coreTimeSignalCount(source);
+  if(relative.ambiguous || (relative.matched && relativeClockSignals>0)){
+    return {text:source,dueStart:"",dateKey:"",hasTime:false,matched:false};
+  }
+  if(relative.matched){
+    const redundantToday=relativeDateSignals===0
+      || (relativeDateSignals===1 && relativeDatePart?.raw==="오늘" && relativeDatePart.key===relative.dateKey);
+    if(!redundantToday){
+      return {text:source,dueStart:"",dateKey:"",hasTime:false,matched:false};
+    }
+    const cleaned=removeSchedulePhrase(source,[relative.raw,relativeDatePart?.raw]);
+    return {
+      text:cleaned || source,
+      dueStart:relative.iso,
+      dateKey:relative.dateKey,
+      hasTime:true,
+      matched:true,
+      relative:true
+    };
+  }
+
+  const datePart=relativeDatePart;
   const timePart=coreParseTime(source);
-  const signals={dates:coreDateSignalCount(source,{policy:"schedule"}),times:coreTimeSignalCount(source)};
+  const signals={dates:relativeDateSignals,times:relativeClockSignals};
   const ambiguous=signals.dates>1 || signals.times>1 || signals.dates>Number(Boolean(datePart)) || signals.times>Number(Boolean(timePart)) || !schedulePartsAreLinked(source,datePart,timePart);
   if(ambiguous){
     return {text:source,dueStart:"",dateKey:"",hasTime:false,matched:false};

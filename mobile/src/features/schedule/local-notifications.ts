@@ -1,4 +1,6 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
+import Constants from 'expo-constants';
+import * as IntentLauncher from 'expo-intent-launcher';
 import * as Notifications from 'expo-notifications';
 import * as Crypto from 'expo-crypto';
 
@@ -7,6 +9,7 @@ import { createScheduleReminderService, REMINDER_OWNER, type ScheduleReminder } 
 export { reminderTriggerAt, type ReminderOffsetMinutes, type ScheduleReminder } from './schedule-reminder-service';
 
 const CHANNEL_ID = 'worklog-schedule-reminders';
+const EXACT_ALARM_GUIDANCE_KEY = 'worklog.mobile.exact-alarm-guidance.v1';
 export const REMINDER_PRESETS = [
   { offsetMinutes: 0, label: '시작 시' },
   { offsetMinutes: 5, label: '5분 전' },
@@ -20,6 +23,39 @@ export const PRIMARY_REMINDER_PRESETS = REMINDER_PRESETS.filter((preset) => pres
 /** Installed explicitly by the application owner, never as an import side effect. */
 export function configureScheduleNotificationHandler() {
   Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
+}
+
+export async function shouldGuideExactAlarmPermission() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31) return false;
+  return (await secureSessionStorage.getItem(EXACT_ALARM_GUIDANCE_KEY)) !== 'shown';
+}
+
+export async function markExactAlarmPermissionGuided() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31) return;
+  await secureSessionStorage.setItem(EXACT_ALARM_GUIDANCE_KEY, 'shown');
+}
+
+export async function openExactAlarmPermissionSettings() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31) {
+    await Linking.openSettings();
+    return;
+  }
+
+  const packageName = Constants.expoConfig?.android?.package?.trim();
+  try {
+    await IntentLauncher.startActivityAsync(
+      IntentLauncher.ActivityAction.REQUEST_SCHEDULE_EXACT_ALARM,
+      packageName ? { data: `package:${packageName}` } : {},
+    );
+    return;
+  } catch {
+    try {
+      await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+      return;
+    } catch {
+      await Linking.openSettings();
+    }
+  }
 }
 
 export async function requestScheduleNotificationPermission() {
@@ -56,5 +92,5 @@ const service = createScheduleReminderService({
     permission: async (request) => (await (request ? requestScheduleNotificationPermission() : Notifications.getPermissionsAsync())).granted,
   },
 });
-export const { scheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, cancelScheduleReminder,
+export const { scheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, getScheduleReminderStatus, cancelScheduleReminder,
   cancelAllScheduleReminders, synchronizeScheduleReminders, reconcileScheduleReminders } = service;

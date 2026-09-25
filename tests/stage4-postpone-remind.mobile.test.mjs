@@ -45,10 +45,10 @@ test('mobile exposes reminder controls only from task detail and retains home-ro
   assert.match(appSource, /previousAttentionAt: task\.nextAttentionAt \|\| null/);
   assert.match(actionSource, /내일로 미루기/);
   assert.match(actionSource, /다음주로 미루기/);
-  assert.match(actionSource, /다시 알림 취소/);
+  assert.match(actionSource, /다시 확인 취소/);
   const taskRow = appSource.slice(appSource.indexOf('function TaskRow'), appSource.indexOf('function NoteRow'));
   assert.match(taskRow, /완료/);
-  assert.doesNotMatch(taskRow, /TaskReminderActions|미루기|다시 알림/);
+  assert.doesNotMatch(taskRow, /TaskReminderActions|미루기|다시 확인/);
 });
 
 

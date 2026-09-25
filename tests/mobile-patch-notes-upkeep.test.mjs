@@ -6,6 +6,8 @@ const notes = fs.readFileSync('mobile/src/features/settings/patch-notes.ts', 'ut
 const agents = fs.readFileSync('AGENTS.md', 'utf8');
 
 test('mobile patch notes include the latest merged Quick Voice and briefing management changes', () => {
+  assert.match(notes, /2026-09-23/);
+  assert.match(notes, /확정 일정 시작 알림/);
   assert.match(notes, /2026-09-22/);
   assert.match(notes, /Android 기본 음성 인식/);
   assert.match(notes, /하단 플로팅/);

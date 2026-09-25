@@ -9,6 +9,20 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-09-23',
+    title: '확정 일정 시작 알림',
+    summary: '서버에 확정된 시간이 있는 일정은 휴대폰에서 시작 시각에 한 번 알려드리도록 보강했습니다.',
+    items: [
+      '확정된 일정만 시작 시각에 맞춰 한 번 알림을 예약합니다.',
+      '직접입력의 오전·오후 시간과 “2분 뒤 알림” 같은 짧은 상대시간 표현을 일정으로 정확히 연결합니다.',
+      '일정을 수정하거나 취소하면 기존 휴대폰 예약을 정리하고 앱을 다시 열 때 복구를 시도합니다.',
+      '모바일에서 사용하지 않는 웹/PWA 서버 Push 설정을 제거하고 실제 앱 알림 상태만 남겼습니다.',
+      'Android에서 정확한 시간 알림 권한이 빠진 경우 예약 대기 상태와 권한 화면을 바로 안내합니다.',
+      '직접 입력에서 키보드가 날짜·시간 선택을 가리지 않도록 입력 흐름을 정리했습니다.',
+      '브리핑 재노출 기능은 휴대폰 알림과 혼동되지 않도록 “다시 확인”으로 표시합니다.',
+    ],
+  },
+  {
     date: '2026-09-22',
     title: 'Quick Voice 안정화·플로팅 UI·업무 삭제',
     summary: '빠르게 말하고 저장하는 흐름을 실기기 기준으로 안정화하고 브리핑 관리를 더 단순하게 만들었습니다.',

@@ -43,5 +43,5 @@ test('Quick Voice mirrors the web dock with a pass-through floating overlay whil
   assert.match(voiceDock, /quickDock: \{ width: QUICK_VOICE_LAYOUT\.dockWidth/);
   assert.match(mobileHome, /quickVoiceFooter/);
   assert.match(mobileHome, /오늘과 다가오는 일정/);
-  assert.match(mobileHome, /업무수첩 내부에 저장합니다/);
+  assert.match(mobileHome, /시간이 있는 일정은 업무수첩에 저장되고 시작 시각에 한 번 알려드립니다/);
 });

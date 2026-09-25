@@ -206,7 +206,7 @@ export default async (req:Request,_context:Context)=>{
         dueHasTime,
         actionKind:requestedActionKind || null
       });
-      return json(200,{ok:true,pageId:result.recordId,title:result.title,dueDate,dueTime,actionKind:result.actionKind || requestedActionKind || "",actionKindChanged:result.actionKindChanged===true,scheduleUpdated:result.scheduleUpdated,mode:"data_core"});
+      return json(200,{ok:true,pageId:result.recordId,title:result.title,dueDate,dueTime,actionKind:result.actionKind || requestedActionKind || "",actionKindChanged:result.actionKindChanged===true,scheduleUpdated:result.scheduleUpdated,schedule:result.schedule || null,mode:"data_core"});
     }catch(error:any){
       return dataCoreErrorResponse(error);
     }

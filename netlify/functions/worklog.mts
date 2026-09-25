@@ -315,6 +315,7 @@ export default async (req:Request, _context:Context) => {
           (fastDataCore.workRecordIds || []).map((workRecordId:string)=>queueRecordNormalization(req,accessToken,workRecordId))
         );
         const scheduleIds=Array.isArray(fastDataCore.scheduleIds) ? fastDataCore.scheduleIds : [];
+        const schedules=Array.isArray(fastDataCore.schedules) ? fastDataCore.schedules : [];
         return json(200,{
           ok:true,
           mode:"data_core",
@@ -326,6 +327,8 @@ export default async (req:Request, _context:Context) => {
           scheduleCreated:scheduleIds.length>0,
           scheduleId:String(fastDataCore.scheduleId || ""),
           scheduleIds,
+          schedule:fastDataCore.schedule || null,
+          schedules,
           normalizationQueued:normalizationResults.every(Boolean),
           notionSync:notionConfigured ? "deferred_multi_action" : "disabled"
         });
@@ -362,7 +365,7 @@ export default async (req:Request, _context:Context) => {
       });
       const result=await primary.execute(record,primaryExisting || {});
       const normalizationQueued=await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
-      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),dueStart:String(schedule.dueStart || ""),cleanTranscript,actionClass:action.kind,actionKind:action.actionKind,actionNeedsReview:action.needsReview,journalDate:action.journalDate,dataCoreWorkRecordId:result.dataCore.workRecordId,dataCoreFastPath:fastPath,normalizationQueued,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
+      return json(200,{ok:true,mode:"data_core",scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),schedule:result.dataCore?.schedule || null,schedules:Array.isArray(result.dataCore?.schedules) ? result.dataCore.schedules : [],dueStart:String(result.dataCore?.schedule?.startsAt || schedule.dueStart || ""),cleanTranscript,actionClass:action.kind,actionKind:action.actionKind,actionNeedsReview:action.needsReview,journalDate:action.journalDate,dataCoreWorkRecordId:result.dataCore.workRecordId,dataCoreFastPath:fastPath,normalizationQueued,notionSync:result.notionSync,notionPageId:result.notion?.pageId || "",notionUrl:result.notion?.url || "",notionErrorCode:result.notionErrorCode});
     }catch(err:any){
       if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog primary error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));
@@ -387,7 +390,7 @@ export default async (req:Request, _context:Context) => {
       const prior=dualExisting || (existing?.pageId ? {notion:{pageId:existing.pageId,url:existing.url || ""}} : {});
       if(prior.dataCore && prior.notion){
         const normalizationQueued=await queueRecordNormalization(req,accessToken,prior.dataCore.workRecordId);
-        return json(200,{ok:true,pageId:prior.notion.pageId,url:prior.notion.url,mode,scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(prior.dataCore?.scheduleId),scheduleId:String(prior.dataCore?.scheduleId || ""),dueStart:String(schedule.dueStart || ""),cleanTranscript,deduped:true,dataCoreWorkRecordId:prior.dataCore.workRecordId || "",normalizationQueued});
+        return json(200,{ok:true,pageId:prior.notion.pageId,url:prior.notion.url,mode,scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(prior.dataCore?.scheduleId),scheduleId:String(prior.dataCore?.scheduleId || ""),schedule:prior.dataCore?.schedule || null,schedules:Array.isArray(prior.dataCore?.schedules) ? prior.dataCore.schedules : [],dueStart:String(prior.dataCore?.schedule?.startsAt || schedule.dueStart || ""),cleanTranscript,deduped:true,dataCoreWorkRecordId:prior.dataCore.workRecordId || "",normalizationQueued});
       }
 
       const notion=createNotionWorklogAdapter({token,dataSourceId,notionVersion:NOTION_VERSION});
@@ -405,7 +408,7 @@ export default async (req:Request, _context:Context) => {
         return json(503,{ok:false,error:"한 저장소에만 저장되었습니다. 원문은 유지되며 같은 내용을 다시 저장하면 완료되지 않은 저장소만 재시도합니다.",retryable:true,notionSaved:Boolean(result.notion),dataCoreSaved:Boolean(result.dataCore)});
       }
       const normalizationQueued=await queueRecordNormalization(req,accessToken,result.dataCore.workRecordId);
-      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),dueStart:String(schedule.dueStart || ""),cleanTranscript,actionClass:action.kind,actionKind:action.actionKind,actionNeedsReview:action.needsReview,journalDate:action.journalDate,dataCoreWorkRecordId:result.dataCore.workRecordId,normalizationQueued});
+      return json(200,{ok:true,pageId:result.notion.pageId,url:result.notion.url,mode,scheduleDetected:Boolean(schedule.matched),scheduleCreated:Boolean(result.dataCore?.scheduleId),scheduleId:String(result.dataCore?.scheduleId || ""),schedule:result.dataCore?.schedule || null,schedules:Array.isArray(result.dataCore?.schedules) ? result.dataCore.schedules : [],dueStart:String(result.dataCore?.schedule?.startsAt || schedule.dueStart || ""),cleanTranscript,actionClass:action.kind,actionKind:action.actionKind,actionNeedsReview:action.needsReview,journalDate:action.journalDate,dataCoreWorkRecordId:result.dataCore.workRecordId,normalizationQueued});
     }catch(err:any){
       if(err?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || err?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 저장해주세요."});
       console.error("Worklog dual-write error",String(err?.code || "unknown"),String(err?.message || "unknown").slice(0,160));

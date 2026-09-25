@@ -210,6 +210,14 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
       const state = await read();
       return [...new Set([...Object.keys(state.reminders), ...Object.values(state.intents).map((i) => i.scheduleId), ...Object.keys(state.legacyCleanup)])];
     }),
+    getScheduleReminderStatus: () => serial(async () => {
+      const state = await read();
+      const scheduled = Object.values(state.reminders).reduce((total, entries) => total + Object.keys(entries).length, 0);
+      const pending = Object.values(state.intents).filter((intent) => intent.desired !== null).length;
+      const cleanupPending = Object.values(state.intents).filter((intent) => intent.desired === null).length
+        + Object.values(state.legacyCleanup).reduce((total, ids) => total + ids.length, 0);
+      return { scheduled, pending, cleanupPending };
+    }),
     cancelScheduleReminder: (sid: string, minutes: number) => serial(() => cancel(sid, minutes)),
     cancelAllScheduleReminders: (sid: string) => serial(async () => {
       let count = 0; let failed = 0;

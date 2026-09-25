@@ -65,6 +65,18 @@ function singleRow(result){
   return rows[0] || {};
 }
 
+function scheduleSnapshot(row){
+  const id=String(row?.schedule_id || "").trim();
+  if(!id) return null;
+  const title=String(row?.schedule_title || "").trim();
+  const startsAt=row?.schedule_starts_at ? String(row.schedule_starts_at) : "";
+  const status=String(row?.schedule_status || "").trim();
+  if(!title || !startsAt || !status || !Number.isFinite(new Date(startsAt).getTime())){
+    throw editError("WORKLOG_DATA_CORE_EDIT_SCHEDULE_SNAPSHOT_INVALID","확정된 일정 정보를 확인하지 못했습니다.");
+  }
+  return Object.freeze({id,title,startsAt,status,allDay:row?.schedule_all_day===true});
+}
+
 export function createWorklogDataCoreEditor({client}={}){
   if(!client || typeof client.rpc!=="function") throw editError("WORKLOG_DATA_CORE_EDIT_CLIENT_REQUIRED","Data Core RPC client가 필요합니다.");
 
@@ -112,6 +124,27 @@ export function createWorklogDataCoreEditor({client}={}){
         throw editError("WORKLOG_DATA_CORE_EDIT_ACTION_KIND_INVALID","업무 종류를 확인해주세요.");
       }
       try{
+        try{
+          const row=singleRow(await client.rpc("update_my_work_record_details_v3",{
+            p_record_id:id,
+            p_title:nextTitle,
+            p_due_at:dueAt===null ? null : String(dueAt),
+            p_due_has_time:Boolean(dueAt!==null && dueHasTime),
+            p_action_kind:nextActionKind
+          }));
+          return Object.freeze({
+            recordId:id,
+            title:String(row.title_value || nextTitle),
+            dueAt:row.due_at_value ? String(row.due_at_value) : null,
+            dueHasTime:row.due_has_time===true,
+            actionKind:row.action_kind_value==="task" || row.action_kind_value==="note" ? String(row.action_kind_value) : nextActionKind,
+            actionKindChanged:row.action_kind_changed===true,
+            scheduleUpdated:row.schedule_updated===true,
+            schedule:scheduleSnapshot(row)
+          });
+        }catch(error){
+          if(!rpcUnavailable(error,"update_my_work_record_details_v3")) throw error;
+        }
         if(nextActionKind!==null){
           try{
             const row=singleRow(await client.rpc("update_my_work_record_details_v2",{

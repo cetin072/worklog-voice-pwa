@@ -109,3 +109,24 @@ test("recognizes common 시작 and 부터 time expressions without making single
   assert.equal(ten.dueStart,"2026-09-13T10:00:00+09:00");
   assert.equal(ten.text,"시작 계약서 검토");
 });
+
+
+test("recognizes short relative minute reminders from the recording time",()=>{
+  const result=extractScheduleFromText("2분 뒤 알림 테스트",RECORDED_AT);
+  assert.equal(result.matched,true);
+  assert.equal(result.dueStart,"2026-09-12T17:47:00+09:00");
+  assert.equal(result.text,"알림 테스트");
+  assert.equal(result.hasTime,true);
+});
+
+test("allows redundant 오늘 with a short relative reminder on the same Seoul date",()=>{
+  const result=extractScheduleFromText("알림 테스트 2분 뒤로 오늘",RECORDED_AT);
+  assert.equal(result.matched,true);
+  assert.equal(result.dueStart,"2026-09-12T17:47:00+09:00");
+  assert.equal(result.text,"알림 테스트");
+});
+
+test("rejects conflicting absolute clock and relative time in one phrase",()=>{
+  const result=extractScheduleFromText("오늘 오후 6시 2분 뒤 알림",RECORDED_AT);
+  assert.equal(result.matched,false);
+});

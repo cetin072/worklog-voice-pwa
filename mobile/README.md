@@ -12,7 +12,7 @@ Android 우선 Expo/React Native 모바일 클라이언트다.
 - 기존 Supabase Google Provider를 재사용하는 `Google로 시작`
 - 마지막 로그인 이메일 기억, OS 비밀번호 관리자/자동완성 힌트
 - 비밀번호 기본 마스킹 + 보기/숨기기
-- 최신 PWA와 같은 홈 브리핑 구조(지난 것·오늘 할 일·다가오는 업무·기한 없는 업무)와 오늘/다가오는 일정 표시
+- 모바일 홈 브리핑 구조(지난 것·오늘 할 일·다가오는 업무·기한 없는 업무)와 오늘/다가오는 일정 표시
 - `/api/briefing-fast`를 통한 Data Core 브리핑 읽기와 loading/empty/error/retry
 - `/api/worklog`를 통한 직접 입력 업무 저장
 - 브리핑 내 업무 검색, 상세 보기, 기존 Data Core 상태 변경(완료·진행중·대기·확인필요)
@@ -29,7 +29,7 @@ Push, Share Intent, Widget, 실제 오디오 업로드/STT는 후속 Issue에서
 - 일정 데이터는 Data Core의 내부 `schedules`에 유지하며 Home과 업무일지에서 계속 표시한다.
 - 외부 Google/휴대폰 Calendar 연동은 보이스 안정화를 위해 현재 모바일 런타임에서 제거했다.
 - Calendar native dependency, 권한, event mapping, startup Calendar recovery는 사용하지 않는다.
-- Local Notification과 웹/PWA 서버 Push 설정은 Calendar와 독립적으로 유지한다.
+- 시간 있는 내부 Schedule의 Local Notification을 모바일 알림 기준으로 사용한다.
 - 보이스 안정화 이후 외부 Calendar 연동은 별도 기획으로 다시 설계한다.
 
 ## 실행

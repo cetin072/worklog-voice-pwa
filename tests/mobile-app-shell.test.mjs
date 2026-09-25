@@ -57,7 +57,7 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
 
 test('Internal schedule summaries stay on Home while external Calendar controls stay removed', () => {
   assert.match(homeSource, /오늘과 다가오는 일정/);
-  assert.match(homeSource, /업무수첩 내부에 저장합니다/);
+  assert.match(homeSource, /시간이 있는 일정은 업무수첩에 저장되고 시작 시각에 한 번 알려드립니다/);
   assert.match(homeSource, /알림 설정/);
   assert.doesNotMatch(homeSource, /scheduleSettings|CalendarConnection|showDeviceActions|showDeviceStatus|Google\/휴대폰 Calendar/);
   assert.doesNotMatch(homeSource, /type PrimaryTab/);

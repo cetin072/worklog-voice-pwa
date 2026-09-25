@@ -57,7 +57,7 @@ test("fast save carries Action Engine metadata without changing RPC parameter co
   };
   await createWorklogDataCoreAdapter({client}).persistFast(actionRecord());
   assert.equal(calls.length,1);
-  assert.equal(calls[0].name,"save_my_worklog_with_schedule");
+  assert.equal(calls[0].name,"save_my_worklog_with_schedule_v2");
   assert.equal(calls[0].body.p_metadata.actionEngine.actionKind,"task");
   assert.equal(calls[0].body.p_metadata.actionEngine.journalDate,"2026-09-25");
   assert.equal(calls[0].body.p_metadata.actionEngine.reason,"deadline_action");
