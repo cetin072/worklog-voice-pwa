@@ -11,6 +11,9 @@ export type QuickVoicePcmSignal = Readonly<{
   peak: number;
   rms: number;
   nonZeroRatio: number;
+  originalDurationMs?: number;
+  processedDurationMs?: number;
+  removedSilenceMs?: number;
 }>;
 
 export type PreparedPcmFileAudioInput = {
@@ -154,6 +157,9 @@ export function createQuickVoicePcmAudioInput(input: {
       peak: Math.max(0, Math.min(1, Number(input.signal.peak) || 0)),
       rms: Math.max(0, Math.min(1, Number(input.signal.rms) || 0)),
       nonZeroRatio: Math.max(0, Math.min(1, Number(input.signal.nonZeroRatio) || 0)),
+      ...(Number.isFinite(input.signal.originalDurationMs) ? { originalDurationMs: Math.max(0, Math.round(Number(input.signal.originalDurationMs))) } : {}),
+      ...(Number.isFinite(input.signal.processedDurationMs) ? { processedDurationMs: Math.max(0, Math.round(Number(input.signal.processedDurationMs))) } : {}),
+      ...(Number.isFinite(input.signal.removedSilenceMs) ? { removedSilenceMs: Math.max(0, Math.round(Number(input.signal.removedSilenceMs))) } : {}),
     }),
   });
 }

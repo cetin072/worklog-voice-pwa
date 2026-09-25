@@ -11,7 +11,7 @@ import {
   type QuickVoicePcmAudioInput,
 } from './audio-input';
 import { cancelQuickVoiceCapture } from './quick-voice-capture-lifecycle';
-import { reportQuickVoiceDebug } from './quick-voice-debug';
+import { reportQuickVoiceDebug, reportQuickVoicePcmCompaction } from './quick-voice-debug';
 import { compactQuickVoicePcmSilence } from './quick-voice-silence';
 
 export const QUICK_VOICE_PCM_SAMPLE_RATE = 16_000;
@@ -156,6 +156,7 @@ export function useQuickVoicePcmCapture() {
     const compacted = compactQuickVoicePcmSilence(rawData, sampleRate);
     const signal = analyzePcm16Signal(compacted.data);
     assertQuickVoiceSignal(signal);
+    reportQuickVoicePcmCompaction(compacted);
 
     const identity = captureIdentity.current;
     if (!identity) throw new Error('Quick Voice PCM capture identity가 없습니다.');
@@ -167,7 +168,12 @@ export function useQuickVoicePcmCapture() {
       sampleRate,
       channels,
       durationMs: compacted.processedDurationMs,
-      signal,
+      signal: {
+        ...signal,
+        originalDurationMs: compacted.originalDurationMs,
+        processedDurationMs: compacted.processedDurationMs,
+        removedSilenceMs: compacted.removedSilenceMs,
+      },
     });
   }
 

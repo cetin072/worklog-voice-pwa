@@ -4,9 +4,11 @@ export const QUICK_VOICE_MAX_INTERNAL_SILENCE_MS = 320;
 export const QUICK_VOICE_MIN_ACTIVE_SPEECH_MS = 240;
 
 const MIN_RMS_THRESHOLD = 0.003;
-const MAX_RMS_THRESHOLD = 0.018;
+// Quiet Korean speech in a recording that also contains a loud phrase must
+// remain speech. Do not let a recording-wide loud peak raise this threshold.
+const MAX_QUIET_SPEECH_RMS_THRESHOLD = 0.006;
 const MIN_PEAK_THRESHOLD = 0.02;
-const MAX_PEAK_THRESHOLD = 0.08;
+const MAX_QUIET_SPEECH_PEAK_THRESHOLD = 0.024;
 
 export type QuickVoiceSilenceCompaction = Readonly<{
   data: ArrayBuffer;
@@ -65,10 +67,8 @@ export function compactQuickVoicePcmSilence(data: ArrayBuffer, sampleRate: numbe
   }
 
   const noiseFloor = percentile(frames.map((frame) => frame.rms), 0.2);
-  const maxRms = frames.reduce((maximum, frame) => Math.max(maximum, frame.rms), 0);
-  const maxPeak = frames.reduce((maximum, frame) => Math.max(maximum, frame.peak), 0);
-  const rmsThreshold = clamp(Math.min(noiseFloor * 2.5 + 0.001, Math.max(MIN_RMS_THRESHOLD, maxRms * 0.65)), MIN_RMS_THRESHOLD, MAX_RMS_THRESHOLD);
-  const peakThreshold = clamp(Math.min(rmsThreshold * 4, Math.max(MIN_PEAK_THRESHOLD, maxPeak * 0.65)), MIN_PEAK_THRESHOLD, MAX_PEAK_THRESHOLD);
+  const rmsThreshold = clamp(noiseFloor * 2.5 + 0.001, MIN_RMS_THRESHOLD, MAX_QUIET_SPEECH_RMS_THRESHOLD);
+  const peakThreshold = clamp(rmsThreshold * 4, MIN_PEAK_THRESHOLD, MAX_QUIET_SPEECH_PEAK_THRESHOLD);
   const active = frames.map((frame) => frame.rms >= rmsThreshold || frame.peak >= peakThreshold);
   const activeSpeechMs = active.filter(Boolean).length * QUICK_VOICE_SILENCE_FRAME_MS;
   if (activeSpeechMs < QUICK_VOICE_MIN_ACTIVE_SPEECH_MS) {

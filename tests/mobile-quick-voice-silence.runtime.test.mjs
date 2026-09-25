@@ -56,3 +56,35 @@ test('Whisper fallback retains quiet continuous speech', () => {
   assert.equal(result.processedDurationMs, 1000);
   assert.equal(result.removedSilenceMs, 0);
 });
+
+test('Whisper fallback preserves quiet to loud continuous speech', () => {
+  const data = pcm([...repeated(50, 0.012), ...repeated(50, 0.08)]);
+  const result = silence.compactQuickVoicePcmSilence(data, SAMPLE_RATE);
+  assert.equal(result.originalDurationMs, 2000);
+  assert.equal(result.processedDurationMs, 2000);
+  assert.equal(result.removedSilenceMs, 0);
+});
+
+test('Whisper fallback preserves loud to quiet continuous speech', () => {
+  const data = pcm([...repeated(50, 0.08), ...repeated(50, 0.012)]);
+  const result = silence.compactQuickVoicePcmSilence(data, SAMPLE_RATE);
+  assert.equal(result.originalDurationMs, 2000);
+  assert.equal(result.processedDurationMs, 2000);
+  assert.equal(result.removedSilenceMs, 0);
+});
+
+test('Whisper fallback preserves quiet speech, a short pause, then loud speech', () => {
+  const data = pcm([...repeated(50, 0.012), ...repeated(10, 0), ...repeated(50, 0.08)]);
+  const result = silence.compactQuickVoicePcmSilence(data, SAMPLE_RATE);
+  assert.equal(result.originalDurationMs, 2200);
+  assert.equal(result.processedDurationMs, 2200);
+  assert.equal(result.removedSilenceMs, 0);
+});
+
+test('Whisper fallback preserves loud speech, a short pause, then quiet speech', () => {
+  const data = pcm([...repeated(50, 0.08), ...repeated(10, 0), ...repeated(50, 0.012)]);
+  const result = silence.compactQuickVoicePcmSilence(data, SAMPLE_RATE);
+  assert.equal(result.originalDurationMs, 2200);
+  assert.equal(result.processedDurationMs, 2200);
+  assert.equal(result.removedSilenceMs, 0);
+});
