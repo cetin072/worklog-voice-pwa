@@ -63,6 +63,11 @@ function kakaoConfig(){
   };
 }
 
+function automaticKakaoSendEnabled(){
+  const value=(Netlify.env.get("KAKAO_AUTO_SEND_ENABLED") || "true").trim().toLowerCase();
+  return !["0","false","off","no","disabled"].includes(value);
+}
+
 function formBody(values:Record<string,string>){
   const body=new URLSearchParams();
   Object.entries(values).forEach(([key,value])=>{ if(value) body.set(key,value); });
@@ -206,7 +211,7 @@ export async function getKakaoStatus(production:boolean){
     production:true,
     configured:Boolean(config.restApiKey),
     linked:Boolean(token?.refreshToken),
-    autoSend:Boolean(token?.refreshToken && token?.autoSend),
+    autoSend:Boolean(token?.refreshToken && token?.autoSend && automaticKakaoSendEnabled()),
     redirectUri:config.redirectUri,
     lastRuns:{morning,afternoon,evening}
   };
@@ -279,6 +284,10 @@ export async function sendCurrentBriefing(options:SendOptions={}){
     if(!token?.refreshToken){
       if(slot) await recordResult(slot,"skipped","not-linked");
       return {sent:false,reason:"not-linked"};
+    }
+    if(options.automatic && !automaticKakaoSendEnabled()){
+      if(slot) await recordResult(slot,"skipped","auto-paused");
+      return {sent:false,reason:"auto-paused"};
     }
     if(options.automatic && !token.autoSend){
       if(slot) await recordResult(slot,"skipped","auto-disabled");
