@@ -22,6 +22,7 @@ test('mobile foundation pins Expo 57 and Expo Router entry', async () => {
 test('mobile foundation keeps secrets out of the checked-in env example', async () => {
   const env = await text('mobile/.env.example');
   assert.match(env, /EXPO_PUBLIC_API_BASE_URL=/);
+  assert.match(env, /EXPO_PUBLIC_FORCE_WHISPER_FALLBACK_QA=/);
   assert.doesNotMatch(env, /SERVICE_ROLE|NOTION_TOKEN|APP_ACCESS_KEY|PRIVATE_KEY/i);
 });
 
