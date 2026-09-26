@@ -94,6 +94,14 @@ Native mobile Google 로그인을 사용하려면 **Additional Redirect URLs에 
 1. `Google로 시작`
 2. 이메일/비밀번호 로그인 또는 무료 가입
 
+### 모바일 이메일 회원가입 확인
+
+모바일 이메일/비밀번호 회원가입도 Supabase 기본 Site URL에 맡기지 않는다. 가입 요청의 `emailRedirectTo`는 기존 네이티브 콜백인 `worklog://google-auth`를 재사용한다.
+
+- 업무수첩이 설치된 휴대폰에서 확인 메일을 열면 인증 완료 후 앱으로 복귀한다.
+- 다른 기기에서 확인 메일을 열더라도 이메일 확인 자체는 완료될 수 있으므로, 이후 휴대폰 앱에서 가입한 이메일/비밀번호로 로그인한다.
+- 로그인/회원가입 UI는 동일 크기의 두 실행 버튼을 나란히 두지 않고 현재 모드를 명확히 표시한다.
+
 ### Web
 
 Google 로그인은 Supabase `/auth/v1/authorize?provider=google` 흐름을 사용한다.
