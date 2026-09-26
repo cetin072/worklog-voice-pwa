@@ -54,3 +54,24 @@ test('keystore file formats remain excluded from source control', () => {
   assert.match(mobileGitignore, /^\*\.jks$/m);
   assert.match(mobileGitignore, /^\*\.keystore$/m);
 });
+
+test('Play privacy and account-deletion web resources are public static pages', () => {
+  const privacy = readFileSync(new URL('../public/privacy.html', import.meta.url), 'utf8');
+  const deletion = readFileSync(new URL('../public/account-deletion.html', import.meta.url), 'utf8');
+
+  assert.match(privacy, /<title>업무수첩 개인정보처리방침<\/title>/);
+  assert.match(privacy, /시행일: 2026년 9월 26일/);
+  assert.match(privacy, /Supabase/);
+  assert.match(privacy, /Netlify/);
+  assert.match(privacy, /Android의 음성 인식/);
+  assert.match(privacy, /whisper\.rn 기반 로컬 전사/);
+  assert.match(privacy, /회의 녹음 원본/);
+  assert.match(privacy, /account-deletion\.html/);
+  assert.match(privacy, /data-netlify="true"/);
+
+  assert.match(deletion, /<title>업무수첩 계정 및 데이터 삭제 요청<\/title>/);
+  assert.match(deletion, /계정 및 관련 데이터 삭제를 요청/);
+  assert.match(deletion, /data-netlify="true"/);
+  assert.match(deletion, /worklog-account-deletion/);
+  assert.match(deletion, /privacy\.html/);
+});
