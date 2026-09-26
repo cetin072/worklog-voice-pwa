@@ -14,7 +14,7 @@ const rootLayoutSource = fs.readFileSync('mobile/app/_layout.tsx', 'utf8');
 test('Mobile app owns a stable worklog deep-link scheme', () => {
   assert.equal(appJson.expo.scheme, 'worklog');
   assert.ok(appJson.expo.plugins.includes('expo-web-browser'));
-  assert.match(googleAuthSource, /worklog:\/\/google-auth/);
+  assert.match(googleAuthSource, /MOBILE_AUTH_CALLBACK_URL = 'worklog:\/\/google-auth'/);
 });
 
 test('Google sign-in reuses Supabase OAuth and returns through the app scheme', () => {
@@ -30,10 +30,11 @@ test('Google sign-in reuses Supabase OAuth and returns through the app scheme', 
   assert.match(googleAuthSource, /client\.auth\.exchangeCodeForSession/);
 });
 
-test('Google callback has an Expo Router route and returns to the app shell after auth completes', () => {
+test('Shared mobile auth callback has an Expo Router route and truthful provider-neutral copy', () => {
   assert.match(googleAuthRouteSource, /GoogleAuthCallbackScreen/);
   assert.match(googleAuthRouteSource, /usePlatform/);
-  assert.match(googleAuthRouteSource, /Google 로그인 완료 중/);
+  assert.match(googleAuthRouteSource, /계정 인증 완료 중/);
+  assert.doesNotMatch(googleAuthRouteSource, /Google 로그인 완료 중/);
   assert.match(googleAuthRouteSource, /router\.replace\('\/'\)/);
 });
 
@@ -50,6 +51,32 @@ test('Platform provider handles initial and foreground Google auth callbacks', (
   assert.match(providerSource, /Google 로그인을 취소했습니다/);
 });
 
+
+
+test('Email signup confirmation explicitly returns through the existing mobile auth callback', () => {
+  assert.match(providerSource, /options:\s*\{\s*emailRedirectTo:\s*MOBILE_AUTH_CALLBACK_URL\s*\}/);
+  assert.match(providerSource, /MOBILE_AUTH_CALLBACK_URL/);
+  assert.match(googleAuthSource, /GOOGLE_AUTH_REDIRECT_URL = MOBILE_AUTH_CALLBACK_URL/);
+});
+
+test('Login and signup modes are visually distinct and do not use two equal action buttons', () => {
+  assert.match(homeSource, /function AuthModeSelector/);
+  assert.match(homeSource, /무료 회원가입/);
+  assert.match(homeSource, /새 계정 만들기/);
+  assert.match(homeSource, /무료 회원가입으로 전환/);
+  assert.match(homeSource, /로그인으로 돌아가기/);
+  assert.match(homeSource, /styles\.signUpCard/);
+  assert.match(homeSource, /styles\.authModeSelector/);
+  assert.match(homeSource, /styles\.authModeSwitch/);
+  assert.doesNotMatch(homeSource, /variant:\s*'google' \| 'primary' \| 'secondary'/);
+  assert.doesNotMatch(homeSource, /styles\.authSecondaryAction/);
+});
+
+test('Signup guidance explains the mobile confirmation return path', () => {
+  assert.match(homeSource, /업무수첩이 설치된 휴대폰에서 인증 버튼을 누르면 앱으로 돌아옵니다/);
+  assert.match(homeSource, /다른 기기에서 인증했다면 앱으로 돌아와 로그인/);
+});
+
 test('Android touch smoke restores its QA session through PlatformProvider instead of bypassing Home auth state', () => {
   assert.match(providerSource, /seedAndroidTouchSmokeSession/);
   assert.match(providerSource, /await nextClient\.auth\.getSession\(\)/);
@@ -62,7 +89,8 @@ test('Android touch smoke restores its QA session through PlatformProvider inste
 });
 
 test('Login UI exposes Google first plus password visibility and autofill hints', () => {
-  assert.match(homeSource, /Google로 시작/);
+  assert.match(homeSource, /Google로 로그인/);
+  assert.match(homeSource, /Google로 무료 시작/);
   assert.match(homeSource, /secureTextEntry=\{!showPassword\}/);
   assert.match(homeSource, /보기/);
   assert.match(homeSource, /숨기기/);

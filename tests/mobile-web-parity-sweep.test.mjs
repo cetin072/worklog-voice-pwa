@@ -9,10 +9,16 @@ const mobileTheme = fs.readFileSync('mobile/src/ui/theme.ts', 'utf8');
 const voiceDock = fs.readFileSync('mobile/src/features/voice/voice-recorder-card.tsx', 'utf8');
 
 test('full parity sweep carries the web welcome, account creation, and login hierarchy into native', () => {
-  for (const copy of ['나의 개인 업무공간', '업무를 놓치지 않는', '말하거나 직접 입력', '오늘·다가오는 일정 확인', 'Google로 시작', '무료로 시작']) {
+  for (const copy of ['나의 개인 업무공간', '업무를 놓치지 않는', '말하거나 직접 입력', '오늘·다가오는 일정 확인']) {
     assert.match(webIndex, new RegExp(copy));
     assert.match(mobileHome, new RegExp(copy));
   }
+  assert.match(webIndex, /Google로 시작/);
+  assert.match(mobileHome, /Google로 로그인/);
+  assert.match(mobileHome, /Google로 무료 시작/);
+  assert.match(webIndex, /무료로 시작/);
+  assert.match(mobileHome, /무료 회원가입/);
+  assert.match(mobileHome, /새 계정 만들기/);
   assert.match(mobileHome, /authMode === 'signUp'/);
   assert.match(mobileHome, /autoComplete=\{authMode === 'signUp' \? 'new-password'/);
   assert.match(mobileProvider, /client\.auth\.signUp/);

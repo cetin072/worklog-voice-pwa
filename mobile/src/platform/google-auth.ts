@@ -5,7 +5,8 @@ import * as WebBrowser from 'expo-web-browser';
 
 import type { PlatformSupabaseClient } from './supabase';
 
-export const GOOGLE_AUTH_REDIRECT_URL = 'worklog://google-auth';
+export const MOBILE_AUTH_CALLBACK_URL = 'worklog://google-auth';
+export const GOOGLE_AUTH_REDIRECT_URL = MOBILE_AUTH_CALLBACK_URL;
 
 WebBrowser.maybeCompleteAuthSession();
 

@@ -14,9 +14,9 @@ export default function GoogleAuthCallbackScreen() {
   return (
     <SafeAreaView style={styles.page}>
       <ActivityIndicator size="large" />
-      <Text style={styles.title}>Google 로그인 완료 중</Text>
+      <Text style={styles.title}>계정 인증 완료 중</Text>
       <Text style={styles.body}>
-        인증 결과를 확인한 뒤 업무수첩으로 돌아갑니다.
+        인증 결과를 확인한 뒤 업무수첩을 계속 시작합니다.
       </Text>
       {phase === 'error' && error ? <Text style={styles.error}>{error}</Text> : null}
     </SafeAreaView>

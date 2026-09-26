@@ -10,6 +10,7 @@ import {
   beginGoogleOAuth,
   completeGoogleOAuthFromUrl,
   isGoogleAuthCallbackUrl,
+  MOBILE_AUTH_CALLBACK_URL,
 } from '@/src/platform/google-auth';
 import {
   createPlatformSupabaseClient,
@@ -224,7 +225,11 @@ export function PlatformProvider({ children }: PropsWithChildren) {
       signUp: async (email, password) => {
         if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');
         setAuthError('');
-        const { data, error: signUpError } = await client.auth.signUp({ email, password });
+        const { data, error: signUpError } = await client.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: MOBILE_AUTH_CALLBACK_URL },
+        });
         if (signUpError) throw signUpError;
         setRememberedEmail(email);
         void saveRememberedLoginEmail(email).catch(() => undefined);

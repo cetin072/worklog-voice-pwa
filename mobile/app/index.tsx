@@ -279,10 +279,21 @@ function ScheduleRows({ schedules, empty }: { schedules?: BriefingSchedule[]; em
   return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}</View>);
 }
 
-function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary' | 'secondary'; disabled?: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" disabled={disabled} style={[styles.authAction, variant === 'google' ? styles.authGoogleAction : variant === 'primary' ? styles.authPrimaryAction : styles.authSecondaryAction, disabled ? styles.authActionDisabled : null]} onPress={onPress}>
+function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary'; disabled?: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" disabled={disabled} style={[styles.authAction, variant === 'google' ? styles.authGoogleAction : styles.authPrimaryAction, disabled ? styles.authActionDisabled : null]} onPress={onPress}>
     <Text style={[styles.authActionText, variant === 'primary' ? styles.authPrimaryActionText : null]}>{title}</Text>
   </Pressable>;
+}
+
+function AuthModeSelector({ mode, onChange }: { mode: AuthMode; onChange: (mode: AuthMode) => void }) {
+  return <View style={styles.authModeSelector}>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === 'signIn' }} style={[styles.authModeChoice, mode === 'signIn' ? styles.authModeChoiceActive : null]} onPress={() => onChange('signIn')}>
+      <Text style={[styles.authModeChoiceText, mode === 'signIn' ? styles.authModeChoiceTextActive : null]}>로그인</Text>
+    </Pressable>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === 'signUp' }} style={[styles.authModeChoice, mode === 'signUp' ? styles.authModeChoiceActive : null]} onPress={() => onChange('signUp')}>
+      <Text style={[styles.authModeChoiceText, mode === 'signUp' ? styles.authModeChoiceTextActive : null]}>무료 회원가입</Text>
+    </Pressable>
+  </View>;
 }
 
 function SettingsMenuItem({ eyebrow, title, description, onPress, destructive = false }: { eyebrow: string; title: string; description: string; onPress: () => void; destructive?: boolean }) {
@@ -506,6 +517,15 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     });
   }
 
+  function switchAuthMode(nextMode: AuthMode) {
+    if (nextMode === authMode || busy) return;
+    setAuthMode(nextMode);
+    setPassword('');
+    setShowPassword(false);
+    clearMessage();
+    clearAuthError();
+  }
+
   async function runEmailSignIn() {
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password || busy) return;
@@ -519,7 +539,9 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         return;
       }
       const outcome = await signUp(normalizedEmail, password);
-      if (outcome === 'confirmationRequired') showMessage('가입 확인 이메일을 보냈습니다. 이메일을 확인한 뒤 로그인해 주세요.', 'success');
+      if (outcome === 'confirmationRequired') {
+        showMessage('가입 확인 이메일을 보냈습니다. 업무수첩이 설치된 휴대폰에서 인증 버튼을 누르면 앱으로 돌아옵니다. 다른 기기에서 인증했다면 앱으로 돌아와 로그인해 주세요.', 'success');
+      }
     });
   }
 
@@ -966,7 +988,28 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   if (!session) return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><ScrollView contentContainerStyle={[styles.loginScroll, { paddingBottom: 20 + insets.bottom }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
     <View style={styles.loginHero}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.title}>🎙 업무수첩</Text><Text style={styles.body}>말하면 기록되고, 일정까지 한눈에</Text></View>
     <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>업무를 놓치지 않는{`\n`}개인 업무수첩</Text><Text style={styles.body}>복잡한 설정 없이 계정만 만들면 바로 시작할 수 있습니다.</Text><View style={styles.welcomeBenefits}><Text style={styles.welcomeBenefit}>🎙 말하거나 직접 입력</Text><Text style={styles.welcomeBenefit}>📅 오늘·다가오는 일정 확인</Text><Text style={styles.welcomeBenefit}>✓ 저장 후 브리핑에서 바로 확인</Text></View></View>
-    <View style={styles.card}><Text style={styles.sectionTitle}>{authMode === 'signIn' ? '내 업무공간' : '무료로 시작하기'}</Text><Text style={styles.body}>Google 계정으로 가장 빠르게 시작할 수 있습니다.</Text><AuthAction title="Google로 시작" variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} /><View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View><TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} /><View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View><View style={styles.authActions}><AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '무료로 시작'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} /><AuthAction title={authMode === 'signIn' ? '무료로 시작' : '로그인'} variant="secondary" disabled={busy} onPress={() => { setAuthMode((value) => value === 'signIn' ? 'signUp' : 'signIn'); clearMessage(); clearAuthError(); }} /></View><Text style={styles.authHint}>{authMode === 'signIn' ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.' : '가입하면 개인 업무공간이 자동으로 만들어집니다. 이메일 확인이 필요할 수 있습니다.'}</Text>{message || authError ? <Text style={authError || messageTone === 'error' ? styles.errorText : messageTone === 'success' ? styles.successText : styles.infoText}>{authError || message}</Text> : null}</View></ScrollView></KeyboardAvoidingView></View>;
+    <View style={[styles.card, authMode === 'signUp' ? styles.signUpCard : null]}>
+      <AuthModeSelector mode={authMode} onChange={switchAuthMode} />
+      <View style={styles.authModeIntro}>
+        <Text style={styles.authModeEyebrow}>{authMode === 'signIn' ? '기존 사용자' : '처음 사용자'}</Text>
+        <Text style={styles.sectionTitle}>{authMode === 'signIn' ? '업무수첩 로그인' : '새 계정 만들기'}</Text>
+        <Text style={styles.body}>{authMode === 'signIn'
+          ? '이미 만든 계정으로 내 업무공간에 들어갑니다.'
+          : '새 계정을 만든 뒤 이메일 인증을 완료하면 업무수첩을 시작할 수 있습니다.'}</Text>
+      </View>
+      <AuthAction title={authMode === 'signIn' ? 'Google로 로그인' : 'Google로 무료 시작'} variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} />
+      <View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View>
+      <TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} />
+      <View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '새 비밀번호 8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View>
+      <AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '계정 만들기'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} />
+      <Pressable accessibilityRole="button" style={styles.authModeSwitch} disabled={busy} onPress={() => switchAuthMode(authMode === 'signIn' ? 'signUp' : 'signIn')}>
+        <Text style={styles.authModeSwitchText}>{authMode === 'signIn' ? '처음이신가요?  무료 회원가입으로 전환 →' : '이미 계정이 있나요?  로그인으로 돌아가기 →'}</Text>
+      </Pressable>
+      <Text style={styles.authHint}>{authMode === 'signIn'
+        ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.'
+        : '가입 확인 메일은 업무수첩이 설치된 휴대폰에서 여는 것을 권장합니다. 인증이 끝나면 앱으로 돌아오며, 다른 기기에서 인증한 경우에는 이 앱으로 돌아와 로그인하면 됩니다.'}</Text>
+      {message || authError ? <Text style={authError || messageTone === 'error' ? styles.errorText : messageTone === 'success' ? styles.successText : styles.infoText}>{authError || message}</Text> : null}
+    </View></ScrollView></KeyboardAvoidingView></View>;
 
   const briefingInfo = briefing ? briefingMetadata(briefing, briefingNow) : null;
   const journalTarget = journal?.targetDate || journalDate;
@@ -1213,14 +1256,22 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#e1e4e8' },
   dividerText: { fontSize: 12, fontWeight: '700', color: '#8a9099' },
-  authActions: { flexDirection: 'row', gap: 8 },
-  authAction: { flex: 1, minHeight: mobileTheme.size.touchTarget, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: mobileTheme.radius.control, borderWidth: 1 },
+  signUpCard: { borderWidth: 2, borderColor: '#9cc3ff', backgroundColor: '#f8fbff' },
+  authModeSelector: { flexDirection: 'row', gap: 8, padding: 4, borderRadius: 14, backgroundColor: '#eef1f5' },
+  authModeChoice: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, borderRadius: 11 },
+  authModeChoiceActive: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#9bb9e8' },
+  authModeChoiceText: { color: '#667085', fontSize: 14, fontWeight: '800' },
+  authModeChoiceTextActive: { color: '#1d4f91' },
+  authModeIntro: { gap: 5, paddingVertical: 2 },
+  authModeEyebrow: { color: '#5273a6', fontSize: 12, fontWeight: '900', letterSpacing: 0.7 },
+  authAction: { width: '100%', minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: mobileTheme.radius.control, borderWidth: 1 },
   authGoogleAction: { borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
-  authPrimaryAction: { borderColor: mobileTheme.colors.primary, backgroundColor: mobileTheme.colors.primary },
-  authSecondaryAction: { borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  authPrimaryAction: { minHeight: 56, borderColor: mobileTheme.colors.primary, backgroundColor: mobileTheme.colors.primary },
   authActionDisabled: { opacity: 0.5 },
-  authActionText: { color: mobileTheme.colors.text, fontSize: 14, fontWeight: '800' },
-  authPrimaryActionText: { color: mobileTheme.colors.primaryText },
+  authActionText: { color: mobileTheme.colors.text, fontSize: 15, fontWeight: '800' },
+  authPrimaryActionText: { color: mobileTheme.colors.primaryText, fontSize: 16 },
+  authModeSwitch: { alignSelf: 'center', minHeight: 40, justifyContent: 'center', paddingHorizontal: 8 },
+  authModeSwitchText: { color: mobileTheme.colors.link, fontSize: 14, fontWeight: '800', textAlign: 'center', textDecorationLine: 'underline' },
   authHint: { fontSize: 12, color: '#737985', lineHeight: 18 },
   settingsPanel: { gap: mobileTheme.spacing.section, paddingBottom: mobileTheme.spacing.page },
   settingsGroup: { gap: 8 },
