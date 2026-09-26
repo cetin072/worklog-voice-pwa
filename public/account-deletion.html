@@ -34,8 +34,8 @@
 
   <h2>요청 방법</h2>
   <p>아래 양식을 제출하거나 <a href="mailto:cetin072072@gmail.com">cetin072072@gmail.com</a>으로 요청할 수 있습니다. 계정 소유 확인을 위해 추가 확인을 요청할 수 있으며, 삭제 요청을 처리하기 전 비밀번호를 요구하지 않습니다.</p>
-  <form name="worklog-account-deletion" method="POST" data-netlify="true" action="/account-deletion.html?submitted=1">
-    <input type="hidden" name="form-name" value="worklog-account-deletion">
+  <form name="worklog-account-deletion" method="POST" data-netlify="true" data-netlify-honeypot="bot-field" action="/account-deletion.html?submitted=1">
+    <input type="hidden" name="form-name" value="worklog-account-deletion"><p hidden><label>자동입력 방지 <input name="bot-field"></label></p>
     <label for="accountEmail">업무수첩 계정 이메일</label>
     <input id="accountEmail" name="account_email" type="email" required autocomplete="email">
     <label for="replyEmail">회신 받을 이메일 <span class="muted">(계정 이메일과 다를 경우)</span></label>
