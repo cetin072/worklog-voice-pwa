@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="업무수첩 계정 및 데이터 삭제 요청">
+  <title>업무수첩 계정 및 데이터 삭제 요청</title>
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;color:#17191d;background:#f6f7f9}
+    body{margin:0}.wrap{max-width:720px;margin:0 auto;padding:40px 22px 64px}
+    article{background:#fff;border:1px solid #e2e5ea;border-radius:18px;padding:30px}
+    h1{font-size:28px;margin:0 0 8px}h2{font-size:19px;margin:28px 0 10px}p,li{font-size:15px;line-height:1.75;color:#333b46}.muted{color:#6b7280}
+    .notice{padding:14px 16px;background:#f2f6ff;border-radius:12px}
+    label{display:block;font-weight:700;margin:13px 0 6px}input,textarea{box-sizing:border-box;width:100%;padding:11px;border:1px solid #cfd5dd;border-radius:9px;font:inherit}
+    .check{display:flex;gap:9px;align-items:flex-start;margin-top:14px}.check input{width:auto;margin-top:5px}
+    button{margin-top:15px;padding:11px 16px;border:0;border-radius:9px;background:#b42318;color:#fff;font-weight:700;cursor:pointer}
+    a{color:#175cd3}footer{margin-top:26px;color:#6b7280;font-size:13px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+<article>
+  <h1>업무수첩 계정 및 데이터 삭제 요청</h1>
+  <p class="muted">Google Play 앱: <strong>업무수첩</strong></p>
+  <p class="notice">앱을 삭제했거나 앱에 로그인할 수 없는 경우에도 이 페이지에서 계정 및 관련 데이터 삭제를 요청할 수 있습니다.</p>
+
+  <h2>삭제 대상</h2>
+  <ul>
+    <li>업무수첩 인증 계정과 사용자 식별정보</li>
+    <li>업무수첩이 직접 관리하는 사용자 업무·일정·브리핑 관련 데이터</li>
+    <li>서비스가 직접 관리하는 계정 연결 정보</li>
+  </ul>
+  <p>기기에만 저장된 회의 녹음 파일과 로컬 캐시는 서버에서 원격 삭제할 수 없으므로 앱에서 삭제하거나 앱을 제거해 정리할 수 있습니다. 법령, 보안 또는 분쟁 대응을 위해 보관이 필요한 최소 정보가 있는 경우 해당 범위만 필요한 기간 동안 보관될 수 있습니다.</p>
+
+  <h2>요청 방법</h2>
+  <p>아래 양식을 제출하면 계정 소유 확인을 위해 추가 확인을 요청할 수 있습니다. 삭제 요청을 처리하기 전 비밀번호를 요구하지 않습니다.</p>
+  <form name="worklog-account-deletion" method="POST" data-netlify="true" action="/account-deletion.html?submitted=1">
+    <input type="hidden" name="form-name" value="worklog-account-deletion">
+    <label for="accountEmail">업무수첩 계정 이메일</label>
+    <input id="accountEmail" name="account_email" type="email" required autocomplete="email">
+    <label for="replyEmail">회신 받을 이메일 <span class="muted">(계정 이메일과 다를 경우)</span></label>
+    <input id="replyEmail" name="reply_email" type="email" autocomplete="email">
+    <label for="note">추가 메모 <span class="muted">(선택)</span></label>
+    <textarea id="note" name="note" rows="5"></textarea>
+    <label class="check"><input name="confirm_delete" type="checkbox" value="yes" required><span>업무수첩 계정 및 서비스가 직접 관리하는 관련 데이터의 삭제를 요청합니다.</span></label>
+    <button type="submit">계정 및 데이터 삭제 요청</button>
+  </form>
+
+  <h2>개인정보처리방침</h2>
+  <p><a href="/privacy.html">업무수첩 개인정보처리방침 보기</a></p>
+
+  <footer>업무수첩 · Account & Data Deletion</footer>
+</article>
+</div>
+</body>
+</html>
