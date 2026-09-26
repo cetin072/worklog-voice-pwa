@@ -140,3 +140,26 @@ standalone ARM64 release APK는 작은 UI 수정마다 만들지 않는다.
 에서만 생성한다.
 
 개발용 Metro loop와 production 배포는 분리하며, production OTA/Play Store/production credential 변경은 별도 승인 없이는 수행하지 않는다.
+
+## Google Play AAB
+
+Google Play 배포는 기존 standalone/Firebase QA APK와 분리한다.
+
+- Play package: `com.cetin072.worklog`
+- versionName은 `expo.version`, Android versionCode는 `expo.android.versionCode`에서 관리한다.
+- Play에 새 AAB를 올릴 때마다 versionCode를 반드시 이전 업로드보다 증가시킨다.
+- `android/`는 Expo prebuild로 생성하므로 release signing은 `./plugins/with-worklog-play-signing.js`에서 생성된 Gradle 설정으로 주입한다.
+- Play signing은 `WORKLOG_PLAY_SIGNING=1`인 빌드에서만 활성화한다. 기존 QA APK 빌드에는 영향을 주지 않는다.
+- 실제 keystore와 비밀번호는 GitHub 저장소에 커밋하지 않는다.
+
+Play용 수동 GitHub Actions workflow는 `.github/workflows/play-android-aab.yml`이다. 이 workflow는 production API만 사용하고 `bundleRelease`로 signed AAB를 만든다.
+
+최초 실행 전에 repository Actions secrets에 다음 값을 등록한다.
+
+- `PLAY_UPLOAD_KEYSTORE_BASE64`: upload keystore 파일 전체를 Base64로 인코딩한 값
+- `PLAY_UPLOAD_STORE_PASSWORD`: keystore 비밀번호
+- `PLAY_UPLOAD_KEY_ALIAS`: upload key alias
+- `PLAY_UPLOAD_KEY_PASSWORD`: upload private key 비밀번호
+
+Upload Key는 Google Play의 App Signing Key와 분리해서 유지한다. 최초 Play Console 등록/업로드가 끝난 뒤에도 같은 Upload Key 체인을 후속 버전에서 계속 사용한다.
+

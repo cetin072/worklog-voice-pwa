@@ -1,0 +1,142 @@
+name: Android Play AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Git ref to build for Google Play'
+        required: true
+        default: 'main'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  play-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install locked mobile dependencies
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+
+      - name: Check Expo dependency compatibility
+        working-directory: mobile
+        run: EXPO_OFFLINE=1 npx expo install --check
+
+      - name: Typecheck mobile app
+        working-directory: mobile
+        run: npm run typecheck
+
+      - name: Run mobile regression tests
+        run: node --test tests/mobile-*.test.mjs
+
+      - name: Validate Play app identity and version
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { expo } = require('./app.json');
+          if (expo.android?.package !== 'com.cetin072.worklog') {
+            throw new Error(`Unexpected Android package: ${expo.android?.package || 'missing'}`);
+          }
+          if (!Number.isInteger(expo.android?.versionCode) || expo.android.versionCode < 1) {
+            throw new Error('expo.android.versionCode must be a positive integer');
+          }
+          if (!expo.version) throw new Error('expo.version is required');
+          console.log(`Play identity OK: ${expo.android.package} ${expo.version} (versionCode ${expo.android.versionCode})`);
+          NODE
+
+      - name: Reject QA-only runtime flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${EXPO_PUBLIC_ANDROID_TOUCH_SMOKE:-}" == "1" ]]; then
+            echo "EXPO_PUBLIC_ANDROID_TOUCH_SMOKE must not be enabled for Play builds"
+            exit 1
+          fi
+          if [[ "${EXPO_PUBLIC_FORCE_WHISPER_FALLBACK_QA:-}" == "1" ]]; then
+            echo "EXPO_PUBLIC_FORCE_WHISPER_FALLBACK_QA must not be enabled for Play builds"
+            exit 1
+          fi
+
+      - name: Materialize upload keystore
+        shell: bash
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$PLAY_UPLOAD_KEYSTORE_BASE64" || { echo "Missing PLAY_UPLOAD_KEYSTORE_BASE64"; exit 1; }
+          test -n "$PLAY_UPLOAD_STORE_PASSWORD" || { echo "Missing PLAY_UPLOAD_STORE_PASSWORD"; exit 1; }
+          test -n "$PLAY_UPLOAD_KEY_ALIAS" || { echo "Missing PLAY_UPLOAD_KEY_ALIAS"; exit 1; }
+          test -n "$PLAY_UPLOAD_KEY_PASSWORD" || { echo "Missing PLAY_UPLOAD_KEY_PASSWORD"; exit 1; }
+          printf '%s' "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/worklog-upload.jks"
+          chmod 600 "$RUNNER_TEMP/worklog-upload.jks"
+          keytool -list             -keystore "$RUNNER_TEMP/worklog-upload.jks"             -storepass "$PLAY_UPLOAD_STORE_PASSWORD"             -alias "$PLAY_UPLOAD_KEY_ALIAS" >/dev/null
+
+      - name: Generate Android project
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build signed Play App Bundle
+        working-directory: mobile/android
+        env:
+          NODE_ENV: production
+          EXPO_PUBLIC_API_BASE_URL: https://worklog-voice-pwa.netlify.app
+          WORKLOG_PLAY_SIGNING: '1'
+          WORKLOG_PLAY_KEYSTORE_PATH: ${{ runner.temp }}/worklog-upload.jks
+          WORKLOG_PLAY_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          WORKLOG_PLAY_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          WORKLOG_PLAY_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Verify signed AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="mobile/android/app/build/outputs/bundle/release/app-release.aab"
+          test -f "$AAB"
+          jarsigner -verify -verbose -certs "$AAB" | tee "$RUNNER_TEMP/jarsigner-verify.txt"
+          grep -qi "jar verified" "$RUNNER_TEMP/jarsigner-verify.txt"
+
+      - name: Package Play artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(node -p "require('./mobile/app.json').expo.version")"
+          VERSION_CODE="$(node -p "require('./mobile/app.json').expo.android.versionCode")"
+          mkdir -p play-artifact
+          TARGET="play-artifact/worklog-${VERSION_NAME}-vc${VERSION_CODE}.aab"
+          cp mobile/android/app/build/outputs/bundle/release/app-release.aab "$TARGET"
+          sha256sum "$TARGET" > "${TARGET}.sha256"
+
+      - name: Upload signed Play AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-play-aab
+          path: play-artifact/
+          if-no-files-found: error
+          retention-days: 14

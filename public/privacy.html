@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="업무수첩 개인정보처리방침">
+  <title>업무수첩 개인정보처리방침</title>
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;color:#17191d;background:#f6f7f9}
+    body{margin:0}.wrap{max-width:820px;margin:0 auto;padding:40px 22px 64px}
+    article{background:#fff;border:1px solid #e2e5ea;border-radius:18px;padding:30px;box-shadow:0 8px 28px rgba(0,0,0,.04)}
+    h1{font-size:30px;margin:0 0 8px}h2{font-size:20px;margin:30px 0 10px}h3{font-size:16px;margin:20px 0 8px}
+    p,li{font-size:15px;line-height:1.75;color:#333b46}.muted{color:#6b7280}.notice{padding:14px 16px;background:#f2f6ff;border-radius:12px}
+    table{width:100%;border-collapse:collapse;margin:12px 0}th,td{text-align:left;vertical-align:top;border:1px solid #e2e5ea;padding:11px;font-size:14px;line-height:1.55}
+    th{background:#f7f8fa}.links{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}.links a{display:inline-block;padding:10px 14px;border-radius:10px;background:#edf3ff;color:#175cd3;text-decoration:none;font-weight:700}
+    label{display:block;font-weight:700;margin:12px 0 6px}input,textarea{box-sizing:border-box;width:100%;padding:11px;border:1px solid #cfd5dd;border-radius:9px;font:inherit}
+    button{margin-top:12px;padding:11px 16px;border:0;border-radius:9px;background:#175cd3;color:#fff;font-weight:700;cursor:pointer}
+    footer{margin-top:26px;color:#6b7280;font-size:13px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+<article>
+  <h1>업무수첩 개인정보처리방침</h1>
+  <p class="muted">시행일: 2026년 9월 26일 · 대상 서비스: Google Play의 <strong>업무수첩</strong> 앱 및 관련 웹 서비스</p>
+  <p class="notice">업무수첩은 업무 기록, 일정, 음성 입력과 알림 기능을 제공하기 위해 필요한 범위에서 사용자 정보를 처리합니다. 원본 회의 녹음 파일은 기본적으로 기기에 저장되며 업무수첩 서버로 자동 업로드하지 않습니다.</p>
+
+  <h2>1. 처리하는 정보와 이용 목적</h2>
+  <table>
+    <thead><tr><th>구분</th><th>처리할 수 있는 정보</th><th>목적</th></tr></thead>
+    <tbody>
+      <tr><td>계정·인증</td><td>이메일 주소, Supabase 사용자 식별자, 인증 세션 정보. Google 로그인을 선택한 경우 Google 계정 인증 결과</td><td>회원가입, 로그인, 사용자별 업무공간 분리 및 보안</td></tr>
+      <tr><td>사용자 작성 업무정보</td><td>업무 원문/전사문, 제목, 상태, 일정 날짜·시간, 사용자가 입력한 기관·담당자·후속조치 등</td><td>업무 저장, 검색, 브리핑, 일정 생성·수정 및 동기화</td></tr>
+      <tr><td>음성 기능</td><td>사용자가 마이크 권한을 허용한 뒤 말한 음성, 음성에서 생성된 전사문</td><td>빠른 음성 업무 기록과 회의 전사</td></tr>
+      <tr><td>기기 내 정보</td><td>마지막 로그인 이메일, 세션 정보, 로컬 회의 녹음 파일, STT 모델 파일, 알림 예약 정보</td><td>로그인 유지, 로컬 녹음 관리, 기기 내 STT, 일정 알림 제공</td></tr>
+      <tr><td>운영 정보</td><td>요청 식별자, 요청·저장 시각, 오류·진단 정보 및 호스팅 인프라가 처리할 수 있는 접속 로그</td><td>중복 저장 방지, 장애 분석, 보안 및 서비스 운영</td></tr>
+      <tr><td>문의·삭제 요청</td><td>사용자가 문의 또는 계정삭제 요청 양식에 입력한 이메일 주소와 메시지</td><td>문의 답변, 본인 확인 및 계정·데이터 삭제 처리</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. 음성 데이터 처리 방식</h2>
+  <ul>
+    <li><strong>빠른 음성 기록</strong>은 우선 Android의 음성 인식 기능을 사용합니다. 한국어 온디바이스 인식이 지원·설치된 기기에서는 온디바이스 인식을 요청하며, 그렇지 않은 경우 기기에 설정된 음성 인식 서비스가 처리할 수 있습니다. 이 경우 해당 음성 인식 제공자의 정책이 함께 적용될 수 있습니다.</li>
+    <li>기본 음성 인식이 어려운 경우 <strong>whisper.rn 기반 로컬 전사</strong>를 사용할 수 있습니다. 전사 모델은 최초 사용 시 HTTPS로 다운로드되며, 다운로드 제공자는 사용자 음성 자체를 전사 목적으로 받지 않습니다.</li>
+    <li><strong>회의 녹음 원본</strong>은 앱의 기기 저장공간에 보관하며 업무수첩 서버로 자동 업로드하지 않습니다. 사용자가 전사 결과를 업무로 저장하면 해당 <strong>전사 텍스트</strong>와 업무 정보는 서버로 전송될 수 있습니다.</li>
+  </ul>
+
+  <h2>3. 외부 서비스 및 처리 위탁·전송</h2>
+  <p>업무수첩 기능 제공을 위해 다음 서비스가 데이터를 처리할 수 있습니다.</p>
+  <table>
+    <thead><tr><th>서비스</th><th>역할 / 처리 범위</th></tr></thead>
+    <tbody>
+      <tr><td>Supabase</td><td>사용자 인증, 사용자 식별, 업무·일정 데이터 저장 및 사용자별 접근제어</td></tr>
+      <tr><td>Netlify</td><td>웹사이트와 API 호스팅, 요청 처리, 운영·보안 로그</td></tr>
+      <tr><td>Google</td><td>사용자가 선택한 Google 로그인, Android 기기의 Google 음성 인식 서비스를 사용하는 경우 음성 인식 처리</td></tr>
+      <tr><td>Hugging Face</td><td>whisper 로컬 전사 모델 파일 다운로드. 업무수첩은 해당 다운로드 요청에 사용자 업무 전사문을 포함하지 않습니다.</td></tr>
+      <tr><td>Notion</td><td>사용자 또는 운영 설정에서 별도 Notion 연동을 활성화한 경우에 한해 업무 기록 동기화</td></tr>
+    </tbody>
+  </table>
+  <p>각 외부 서비스는 자체 개인정보 보호 및 보안 정책에 따라 데이터를 처리할 수 있습니다.</p>
+
+  <h2>4. 보관 기간 및 삭제</h2>
+  <ul>
+    <li>계정 및 서버에 저장된 업무·일정 데이터는 사용자가 삭제하거나 계정 삭제를 요청할 때까지 서비스 제공을 위해 보관할 수 있습니다.</li>
+    <li>사용자가 업무 항목을 삭제하면 서비스의 해당 사용자 업무공간에서 삭제 또는 취소 처리됩니다.</li>
+    <li>기기에만 저장된 회의 녹음 파일은 사용자가 앱 안에서 삭제할 수 있으며, 앱 제거 시 운영체제의 앱 데이터 처리 방식에 따라 함께 삭제될 수 있습니다.</li>
+    <li>계정 삭제 요청이 확인되면 서비스가 직접 관리하는 계정과 연결된 사용자 데이터를 삭제합니다. 보안, 분쟁 대응 또는 법령상 보존이 필요한 최소 정보가 있는 경우 해당 목적과 기간에 한하여 별도로 보관할 수 있습니다.</li>
+    <li>인프라 로그 및 문의 기록은 보안·장애 대응에 필요한 기간 또는 관련 서비스 제공자의 정책에 따라 제한적으로 보관될 수 있습니다.</li>
+  </ul>
+  <div class="links">
+    <a href="/account-deletion.html">계정 및 데이터 삭제 요청</a>
+  </div>
+
+  <h2>5. 권한 사용</h2>
+  <ul>
+    <li><strong>마이크</strong>: 사용자가 시작한 음성 기록·회의 녹음 및 전사를 위해 사용합니다.</li>
+    <li><strong>알림</strong>: 사용자가 저장한 시간 있는 일정의 기기 알림을 제공하기 위해 사용합니다.</li>
+    <li><strong>정확한 알람 / 재부팅 수신</strong>: Android에서 일정 시각 알림을 예약하고 기기 재부팅 후 예약 알림을 복구하기 위해 사용합니다.</li>
+  </ul>
+
+  <h2>6. 보안</h2>
+  <p>통신은 HTTPS를 사용하며, 로그인 세션은 기기의 보안 저장소를 사용합니다. 서버측 업무 데이터는 인증된 사용자와 사용자별 접근제어 정책을 통해 분리합니다. Google 비밀번호 원문이나 Supabase service-role 비밀키를 앱에 저장하지 않습니다.</p>
+
+  <h2>7. 사용자 권리</h2>
+  <p>사용자는 자신의 업무 정보를 조회·수정·삭제할 수 있고, 계정 및 관련 데이터 삭제를 요청할 수 있습니다. 앱을 설치하지 않은 상태에서도 아래 웹 페이지에서 삭제 요청을 제출할 수 있습니다.</p>
+  <div class="links">
+    <a href="/account-deletion.html">계정 삭제 요청 페이지</a>
+  </div>
+
+  <h2>8. 개인정보 문의</h2>
+  <p>업무수첩의 개인정보 처리에 관한 질문이나 요청은 <a href="mailto:cetin072072@gmail.com">cetin072072@gmail.com</a> 또는 아래 문의 양식을 이용할 수 있습니다.</p>
+  <form name="worklog-privacy-inquiry" method="POST" data-netlify="true" data-netlify-honeypot="bot-field" action="/privacy.html?submitted=1">
+    <input type="hidden" name="form-name" value="worklog-privacy-inquiry"><p hidden><label>자동입력 방지 <input name="bot-field"></label></p>
+    <label for="contactEmail">회신 받을 이메일</label>
+    <input id="contactEmail" name="email" type="email" required autocomplete="email">
+    <label for="contactMessage">문의 내용</label>
+    <textarea id="contactMessage" name="message" rows="6" required></textarea>
+    <button type="submit">문의 제출</button>
+  </form>
+
+  <h2>9. 방침 변경</h2>
+  <p>기능, 외부 서비스 또는 법적 요구사항이 변경되는 경우 이 방침을 갱신할 수 있습니다. 중요한 변경이 있는 경우 앱 또는 웹페이지를 통해 알립니다.</p>
+
+  <footer>업무수첩 · Privacy Policy</footer>
+</article>
+</div>
+</body>
+</html>

@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.cetin072.worklog",
+      "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM",
@@ -43,6 +44,7 @@
       "expo-web-browser",
       "expo-notifications",
       "./plugins/with-worklog-boot-reminder-recovery.js",
+      "./plugins/with-worklog-play-signing.js",
       "@react-native-community/datetimepicker"
     ],
     "experiments": {
