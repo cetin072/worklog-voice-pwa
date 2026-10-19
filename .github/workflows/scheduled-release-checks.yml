@@ -1,0 +1,23 @@
+name: Scheduled release regression
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/scheduled-netlify-release.mjs'
+      - 'tests/scheduled-netlify-release.test.mjs'
+      - 'scripts/release-policy.json'
+      - 'netlify.toml'
+      - '.github/workflows/production-release.yml'
+      - '.github/workflows/scheduled-release-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test tests/scheduled-netlify-release.test.mjs

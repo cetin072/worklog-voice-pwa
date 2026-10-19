@@ -1,0 +1,49 @@
+name: Batched Production Release
+run-name: "Production release | ${{ github.event_name == 'schedule' && 'live' || 'read-only dry-run' }}"
+
+on:
+  schedule:
+    # Daily wake-up; fixed 48-hour slots are computed across month/year boundaries.
+    - cron: '20 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: worklog-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && vars.NETLIFY_PRODUCTION_RELEASE_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify fixed-slot release regressions
+        run: node --test tests/scheduled-netlify-release.test.mjs
+      - name: Check approved main and request one Git build only when due
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NETLIFY_PRODUCTION_BUILD_HOOK: ${{ github.event_name == 'schedule' && secrets.NETLIFY_PRODUCTION_BUILD_HOOK || '' }}
+          RELEASE_RESULT_PATH: ${{ runner.temp }}/production-release-result.json
+        run: node scripts/scheduled-netlify-release.mjs check scripts/release-policy.json
+      - name: Retain check result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-release-result
+          path: ${{ runner.temp }}/production-release-result.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Record failure
+        if: failure()
+        run: echo 'Release check failed. See this run. Previous published Production remains authoritative; retry at next fixed slot.' >> "$GITHUB_STEP_SUMMARY"
