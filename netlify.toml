@@ -1,5 +1,6 @@
 [build]
-  command = "npm test"
+  command = "node scripts/scheduled-netlify-release.mjs guard scripts/release-policy.json && npm test"
+  ignore = "node ./scripts/scheduled-netlify-release.mjs ignore"
   publish = "public"
   functions = "netlify/functions"
 

@@ -1,0 +1,14 @@
+{
+  "repository": "cetin072/worklog-voice-pwa",
+  "site_id": "1ab24b2c-a3e7-479f-8c1b-bbd0a567a25d",
+  "workflow": "production-release.yml",
+  "deploy_inputs": [
+    "^(public|netlify)/",
+    "^(package(-lock)?\\.json|netlify\\.toml|\\.npmrc|\\.nvmrc|\\.node-version)$",
+    "^scripts/scheduled-netlify-release\\.mjs$"
+  ],
+  "deploy_excludes": [],
+  "schedule_anchor_utc": "2026-10-19T08:20:00.000Z",
+  "schedule_interval_hours": 48,
+  "schedule_window_hours": 24
+}
