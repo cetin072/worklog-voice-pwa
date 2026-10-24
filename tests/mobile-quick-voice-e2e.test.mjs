@@ -82,7 +82,7 @@ test('Quick Voice retains actual schedule creation truth while success returns t
   assert.match(card, /scheduleCreated/);
   assert.match(card, /setQuickSave\(saved\.saveResult\)/);
   assert.match(card, /업무 저장 완료/);
-  assert.match(card, /일정 반영/);
+  assert.match(card, /reminderMessage/);
   assert.match(card, /setTimeout\(\(\) => \{/);
   assert.doesNotMatch(card, /quickSave\?\.scheduleDetected \? <Text style=\{styles\.scheduleSuccess\}/);
 });

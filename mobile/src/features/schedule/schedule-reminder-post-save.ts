@@ -1,5 +1,7 @@
 import { cancelAllScheduleReminders, reconcileScheduleReminders, synchronizeScheduleReminders, scheduleReminder, listTrackedReminderScheduleIds } from '@/src/features/schedule/local-notifications';
 import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
+import { confirmWorklogReminder } from './worklog-reminder-adapter';
+import { confirmedSeoulInstant } from './reminder-feedback';
 import {
   confirmedSchedulesFromBriefing,
   createScheduleReminderCoordinator,
@@ -59,4 +61,37 @@ export async function recoverSavedScheduleReminders(client: PlatformSupabaseClie
   const canonical = await reconcileSnapshot(client, [], isCurrent);
   const cancellations = await reconcileCanceledScheduleArtifacts(client, isCurrent);
   return { ...canonical, cancellations };
+}
+
+/** Manual confirmation shares full offset reconciliation with automatic saves. */
+export async function reserveConfirmedReminder(schedule: ConfirmedSchedule, offsetMinutes: 0 | 30 | 1440, isCurrent: ReminderSyncGuard) {
+  assertReminderSyncCurrent(isCurrent);
+  if (schedule.status !== 'confirmed') throw new Error('REMINDER_INACTIVE');
+  const instant = Date.parse(schedule.startsAt || '');
+  if (schedule.allDay || !Number.isFinite(instant) || instant - offsetMinutes * 60000 <= Date.now()) throw new Error('TIME_INVALID');
+  const result = await coordinator.synchronize(schedule, isCurrent);
+  if (result.action !== 'scheduled') throw new Error('INVALID_REMINDER_RESPONSE');
+  if (offsetMinutes !== 0) await scheduleReminder({ scheduleId: schedule.id, title: schedule.title!, scheduleStartsAt: schedule.startsAt!, offsetMinutes }, isCurrent);
+  return result;
+}
+
+/** Post-edit: an unlinked work record gains a separate, owner-verified Schedule.
+ * The original record kind/text/due fields are never changed by this bridge.
+ * Server success is required before any device reservation. */
+export async function synchronizeEditedWorklogReminder(
+  client: PlatformSupabaseClient,
+  input: Readonly<{ recordId: string; schedule?: ConfirmedSchedule | null; dueDate: string; dueTime: string }>,
+  responseIsCurrent: ReminderSyncGuard,
+): Promise<'linked' | 'created' | 'no-time'> {
+  assertReminderSyncCurrent(responseIsCurrent);
+  if (input.schedule) {
+    await synchronizeUpdatedScheduleReminder(input.schedule, responseIsCurrent);
+    return 'linked';
+  }
+  if (!input.dueDate.trim() || !input.dueTime.trim()) return 'no-time';
+  const startsAt = confirmedSeoulInstant(input.dueDate.trim(), input.dueTime.trim());
+  const confirmed = await confirmWorklogReminder(client, input.recordId, startsAt, responseIsCurrent);
+  assertReminderSyncCurrent(responseIsCurrent);
+  await reserveConfirmedReminder(confirmed, 0, responseIsCurrent);
+  return 'created';
 }

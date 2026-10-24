@@ -29,8 +29,9 @@ permissions:
 
 jobs:
   physical-touch:
-    # The workflow path filter already limits PR runs to meaningful Android/mobile changes.
-    # Keep the job itself unconditional so every matching PR gets the real physical-device gate.
+    # QA side-by-side PRs already run the free Android emulator in Mobile App CI.
+    # Physical Firebase Test Lab remains opt-in (workflow_dispatch) for this QA flow.
+    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.head_ref, 'qa/android-side-by-side-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

@@ -1,3 +1,6 @@
+import { WorklogReminderSheet } from '@/src/features/schedule/worklog-reminder-sheet';
+import type { ReminderTarget } from '@/src/features/schedule/worklog-reminder-adapter';
+import { reminderFailureMessage, savedReminderMessage } from '@/src/features/schedule/reminder-feedback';
 import { reminderSessionEpoch, reminderSyncEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
@@ -16,7 +19,7 @@ import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
-import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeBriefingScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder } from '@/src/features/schedule/schedule-reminder-post-save';
+import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeBriefingScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder, synchronizeEditedWorklogReminder } from '@/src/features/schedule/schedule-reminder-post-save';
 import { markExactAlarmPermissionGuided, openExactAlarmPermissionSettings, shouldGuideExactAlarmPermission } from '@/src/features/schedule/local-notifications';
 import { MOBILE_PATCH_NOTES } from '@/src/features/settings/patch-notes';
 import { ReminderSettings } from '@/src/features/settings/reminder-settings';
@@ -176,13 +179,22 @@ function focusReason(task: BriefingTask, today: string) {
   return '확인이 필요한 업무';
 }
 
-function FocusTaskRow({ task, today, onOpen, onDelete, onComplete, completing = false }: { task: BriefingTask; today: string; onOpen: () => void; onDelete: () => void; onComplete: () => void; completing?: boolean }) {
+function ReminderShortcut({ title, onPress, disabled = false }: { title: string; onPress: () => void; disabled?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${title} 알림 추가 또는 확인`} disabled={disabled} style={[styles.reminderShortcut, disabled ? styles.inlineCompleteBusy : null]} onPress={onPress}>
+    <Text style={styles.reminderShortcutText}>🔔 알림 추가·확인</Text>
+  </Pressable>;
+}
+
+function FocusTaskRow({ task, today, onOpen, onReminder, onDelete, onComplete, completing = false }: { task: BriefingTask; today: string; onOpen: () => void; onReminder: () => void; onDelete: () => void; onComplete: () => void; completing?: boolean }) {
   return <View style={styles.focusTaskRow}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} style={styles.taskMain} onPress={onOpen}>
+    <View style={styles.taskMain}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} onPress={onOpen}>
       <Text style={styles.taskTitle}>{task.title || '제목 없는 업무'}</Text>
       <View style={styles.focusMetaLine}><Text style={styles.focusReason}>{focusReason(task, today)}</Text>{task.status ? <Text style={styles.focusStatus}>{task.status}</Text> : null}</View>
       {task.institution ? <Text style={styles.taskBadge}>{task.institution}</Text> : null}
-    </Pressable>
+      </Pressable>
+      {task.pageId ? <ReminderShortcut title={task.title || '업무'} onPress={onReminder} disabled={completing} /> : null}
+    </View>
     {task.pageId ? <View style={styles.focusTaskActions}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 삭제`} disabled={completing} style={[styles.inlineDelete, completing ? styles.inlineCompleteBusy : null]} onPress={onDelete}><Text style={styles.inlineDeleteText}>삭제</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 완료 처리`} disabled={completing} style={[styles.inlineComplete, completing ? styles.inlineCompleteBusy : null]} onPress={onComplete}><Text style={styles.inlineCompleteText}>{completing ? '처리 중' : '완료'}</Text></Pressable>
@@ -190,14 +202,17 @@ function FocusTaskRow({ task, today, onOpen, onDelete, onComplete, completing = 
   </View>;
 }
 
-function TaskRow({ bucket, task, onOpen, onEdit, onDelete, onComplete, completing = false }: { bucket: BriefingBucket; task: BriefingTask; onOpen: () => void; onEdit?: () => void; onDelete?: () => void; onComplete?: () => void; completing?: boolean }) {
+function TaskRow({ bucket, task, onOpen, onReminder, onEdit, onDelete, onComplete, completing = false }: { bucket: BriefingBucket; task: BriefingTask; onOpen: () => void; onReminder: () => void; onEdit?: () => void; onDelete?: () => void; onComplete?: () => void; completing?: boolean }) {
   return <View style={styles.taskRow}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} style={styles.taskMain} onPress={onOpen}>
+    <View style={styles.taskMain}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '제목 없는 업무'} 상세 보기`} onPress={onOpen}>
       <Text style={styles.taskTitle}>{task.title || '제목 없는 업무'}</Text>
       <Text style={styles.taskMeta}>{taskNote(bucket, task)}{task.status ? ` · ${task.status}` : ''}</Text>
       {task.institution ? <Text style={styles.taskBadge}>{task.institution}</Text> : null}
       {task.followUp ? <Text style={styles.followUp}>↳ {task.followUp}</Text> : null}
-    </Pressable>
+      </Pressable>
+      {task.pageId ? <ReminderShortcut title={task.title || '업무'} onPress={onReminder} disabled={completing} /> : null}
+    </View>
     {task.pageId ? <View style={styles.taskActions}>
       <View style={styles.taskMinorActions}>
         {onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 수정`} disabled={completing} style={styles.inlineEdit} onPress={onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
@@ -215,12 +230,13 @@ function formatNoteJournalDate(value?: string) {
   return `${new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(date)} 기록`;
 }
 
-function NoteRow({ note, onEdit, onDelete, onAcknowledge, acknowledging = false }: { note: BriefingNote; onEdit?: () => void; onDelete?: () => void; onAcknowledge: () => void; acknowledging?: boolean }) {
+function NoteRow({ note, onEdit, onDelete, onAcknowledge, onReminder, acknowledging = false }: { note: BriefingNote; onReminder(): void; onEdit?: () => void; onDelete?: () => void; onAcknowledge: () => void; acknowledging?: boolean }) {
   return <View style={styles.taskRow}>
     <View style={styles.taskMain}>
       <Text style={styles.taskTitle}>{note.title || '제목 없는 메모'}</Text>
       {formatNoteJournalDate(note.journalDate) ? <Text style={styles.taskMeta}>{formatNoteJournalDate(note.journalDate)}</Text> : null}
       {note.institution ? <Text style={styles.taskBadge}>{note.institution}</Text> : null}
+      {note.pageId ? <ReminderShortcut title={note.title || '메모'} onPress={onReminder} disabled={acknowledging} /> : null}
     </View>
     {note.pageId ? <View style={styles.taskActions}>
       <View style={styles.taskMinorActions}>
@@ -275,9 +291,9 @@ function JournalScheduleRows({ schedules, empty }: { schedules?: BriefingSchedul
   </View>);
 }
 
-function ScheduleRows({ schedules, empty }: { schedules?: BriefingSchedule[]; empty: string }) {
+function ScheduleRows({ schedules, empty, onReminder }: { schedules?: BriefingSchedule[]; empty: string; onReminder(schedule: BriefingSchedule): void }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
-  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}</View>);
+  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{schedule.scheduleId ? <ReminderShortcut title={schedule.title || '일정'} onPress={() => onReminder(schedule)} /> : null}</View>);
 }
 
 function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary'; disabled?: boolean; onPress: () => void }) {
@@ -364,6 +380,9 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     if (next !== 'home' && quickVoiceNavigation.current) { warnPendingVoice(); return; }
     applyScreen(next);
   }
+  const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
+  const [savedReminder, setSavedReminder] = useState<{ target: ReminderTarget; message: string } | null>(null);
+  useEffect(() => { setReminderTarget(null); setSavedReminder(null); }, [session?.user.id]);
   const [selectedTask, setSelectedTask] = useState<{ bucket: BriefingBucket; task: BriefingTask } | null>(null);
   const [notificationScheduleId, setNotificationScheduleId] = useState<string | null>(null);
   const [scheduleFocusReason, setScheduleFocusReason] = useState<'notification' | 'created' | null>(null);
@@ -572,13 +591,11 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         dueStart: saved.dueStart?.trim() || '',
       };
       let reminderWarning = '';
-      try { await synchronizeSavedScheduleReminders(saved, reminderGuard); }
-      catch (nextError) {
-        const exactAlarmNeeded = Platform.OS === 'android' && exactAlarmAccessError(nextError);
-        reminderWarning = exactAlarmNeeded
-          ? '일정은 저장됐습니다. 정확한 일정 알림 설정을 확인해주세요.'
-          : messageOf(nextError, '휴대폰 일정 알림을 예약하지 못했습니다. 앱을 다시 열면 복구를 시도합니다.');
-      }
+      let reminderMessage = '';
+      try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); }
+      catch (nextError) { reminderWarning = reminderFailureMessage(nextError); }
+      if (!reminderGuard()) return;
+      setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning || reminderMessage });
       await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId));
       setManualInput(emptyManualWorkInput());
       setLastDirectSave(feedback);
@@ -940,8 +957,26 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       });
       const visibleTitle = result.title?.trim() || nextTitle;
       let reminderWarning = '';
-      try { await synchronizeUpdatedScheduleReminder(result.schedule, reminderGuard); }
-      catch (nextError) { reminderWarning = messageOf(nextError, '휴대폰 일정 알림을 바꾸지 못했습니다. 앱을 다시 열면 복구를 시도합니다.'); }
+      let reminderResult: 'linked' | 'created' | 'no-time' = 'no-time';
+      try {
+        reminderResult = await synchronizeEditedWorklogReminder(client, {
+          recordId,
+          schedule: result.schedule,
+          dueDate: editDate,
+          dueTime: editTime,
+        }, reminderGuard);
+      } catch (nextError) {
+        reminderWarning = reminderFailureMessage(nextError);
+      }
+      if (!reminderGuard()) return;
+      const reminderFeedback = reminderWarning
+        ? `기록은 수정됐지만 알림은 미확인 · ${reminderWarning}`
+        : reminderResult === 'created' ? '새 일정 알림을 이 휴대폰에 예약했습니다.'
+        : reminderResult === 'linked' ? '연결된 일정의 알림을 확인했습니다.'
+        : '알림 없음 · 미래 날짜와 시작 시간을 지정하면 자동 등록됩니다.';
+      if (editDate && editTime && result.mode === 'data_core') {
+        setSavedReminder({ target: { recordId, scheduleId: result.schedule?.id, title: visibleTitle }, message: reminderFeedback });
+      }
       if (result.actionKindChanged) removeVisibleRecordForConversion(recordId);
       else updateVisibleTaskTitle(recordId, visibleTitle);
       setEditBusy(false);
@@ -955,7 +990,9 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
           : result.scheduleUpdated
             ? `✓ 업무와 연결된 일정도 수정했습니다.${reminderWarning ? ` ${reminderWarning}` : ''}`
             : '✓ 업무를 수정했습니다.');
-      setEditStatusTone(result.unchanged && !result.actionKindChanged ? 'neutral' : 'success');
+      setEditStatusTone(reminderWarning ? 'error' : result.unchanged && !result.actionKindChanged ? 'neutral' : 'success');
+      // The editor closes quickly: keep device notification status visible on the home screen.
+      showMessage(`업무 수정 저장 · ${reminderFeedback}`, reminderWarning ? 'info' : 'success');
       await new Promise((resolve) => setTimeout(resolve, 420));
       setEditTaskId(null);
       setEditStatus('');
@@ -1037,6 +1074,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
   return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
+    {savedReminder ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
@@ -1050,7 +1088,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         {briefingInfo ? <View accessibilityLiveRegion="polite"><Text style={styles.helpText}>{briefingInfo.meta}</Text>{briefingInfo.warnings.map((warning) => <Text key={warning} style={styles.errorText}>{warning}</Text>)}</View> : null}
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
-        {briefing ? focusTasks.length ? visibleFocusTasks.map((task, index) => <FocusTaskRow key={task.pageId || `focus-${index}`} task={task} today={briefing.today || seoulTodayKey()} onOpen={() => { setSelectedTask({ bucket: focusBucket(task, briefing.today || seoulTodayKey()), task }); setScreen('task'); }} onDelete={() => task.pageId ? confirmDeleteRecord(task.pageId, task.title || '업무', 'task') : undefined} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />) : <Text style={styles.emptyText}>지금 확인할 업무가 없습니다.</Text> : null}
+        {briefing ? focusTasks.length ? visibleFocusTasks.map((task, index) => <FocusTaskRow key={task.pageId || `focus-${index}`} task={task} today={briefing.today || seoulTodayKey()} onOpen={() => { setSelectedTask({ bucket: focusBucket(task, briefing.today || seoulTodayKey()), task }); setScreen('task'); }} onReminder={() => setReminderTarget({ recordId: task.pageId, title: task.title || '업무' })} onDelete={() => task.pageId ? confirmDeleteRecord(task.pageId, task.title || '업무', 'task') : undefined} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />) : <Text style={styles.emptyText}>지금 확인할 업무가 없습니다.</Text> : null}
         {briefing && extraFocusTasks ? <Pressable accessibilityRole="button" accessibilityLabel={focusExpanded ? '지금 확인할 것 접기' : `지금 확인할 것 ${extraFocusTasks}개 더 보기`} style={styles.moreButton} onPress={() => setFocusExpanded((value) => !value)}><Text style={styles.moreButtonText}>{focusExpanded ? '접기' : `${extraFocusTasks}개 더 보기`}</Text></Pressable> : null}
       </View>
 
@@ -1062,7 +1100,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         return <View key={bucket.key} style={[styles.briefingSection, sectionToneStyles[bucket.tone]]}>
           <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>{bucket.key === 'overdue' ? '🔴' : bucket.key === 'today' ? '🟠' : bucket.key === 'upcoming' ? '🔵' : '⚪'} {bucket.label}</Text><Text style={styles.sectionCount}>{tasks.length}</Text></View>
           {tasks.length ? visibleTasks.map((task, index) => <View key={task.pageId || `${bucket.key}-${index}`}>
-            <TaskRow bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onEdit={() => void openTaskEditor(task)} onDelete={() => task.pageId ? confirmDeleteRecord(task.pageId, task.title || '업무', 'task') : undefined} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />
+            <TaskRow bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onReminder={() => setReminderTarget({ recordId: task.pageId, title: task.title || '업무' })} onEdit={() => void openTaskEditor(task)} onDelete={() => task.pageId ? confirmDeleteRecord(task.pageId, task.title || '업무', 'task') : undefined} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />
           </View>) : <Text style={styles.emptyText}>해당 업무가 없습니다.</Text>}
           {extra ? <Pressable accessibilityRole="button" accessibilityLabel={expanded ? `${bucket.label} 접기` : `${bucket.label} ${extra}개 더 보기`} style={styles.moreButton} onPress={() => setExpandedBuckets((value) => ({ ...value, [bucket.key]: !expanded }))}><Text style={styles.moreButtonText}>{expanded ? '접기' : `${extra}개 더 보기`}</Text></Pressable> : null}
         </View>;
@@ -1074,7 +1112,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
 
       {notes.length ? <View style={[styles.briefingSection, styles.sectionNeutral]}>
         <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>📝 메모 · 참고</Text><Text style={styles.sectionCount}>{notes.length}</Text></View>
-        {visibleNotes.map((note, index) => <NoteRow key={note.pageId || `note-${index}`} note={note} onEdit={() => void openNoteEditor(note)} onDelete={() => note.pageId ? confirmDeleteRecord(note.pageId, note.title || '메모', 'note') : undefined} onAcknowledge={() => void acknowledgeNote(note)} acknowledging={noteBusyId === note.pageId} />)}
+        {visibleNotes.map((note, index) => <NoteRow key={note.pageId || `note-${index}`} note={note} onReminder={() => setReminderTarget({ recordId: note.pageId, title: note.title || '메모' })} onEdit={() => void openNoteEditor(note)} onDelete={() => note.pageId ? confirmDeleteRecord(note.pageId, note.title || '메모', 'note') : undefined} onAcknowledge={() => void acknowledgeNote(note)} acknowledging={noteBusyId === note.pageId} />)}
         {extraNotes ? <Pressable accessibilityRole="button" accessibilityLabel={notesExpanded ? '메모 · 참고 접기' : `메모 · 참고 ${extraNotes}개 더 보기`} style={styles.moreButton} onPress={() => setNotesExpanded((value) => !value)}><Text style={styles.moreButtonText}>{notesExpanded ? '접기' : `${extraNotes}개 더 보기`}</Text></Pressable> : null}
       </View> : null}
 
@@ -1082,10 +1120,10 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
 
       {briefing?.scheduleEnabled ? <View style={styles.card}>
         <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>📅 일정</Text><Text style={styles.sectionTitle}>오늘과 다가오는 일정</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setScreen('input')}><Text style={styles.linkText}>+ 새 일정</Text></Pressable></View></View>
-        <Text style={styles.helpText}>시간이 있는 일정은 업무수첩에 저장되고 시작 시각에 한 번 알려드립니다.</Text>
-        {notificationScheduleId ? <View style={styles.notificationFocus}><Text style={styles.detailTitle}>{scheduleFocusReason === 'created' ? '✅ 방금 생성된 일정' : '🔔 알림에서 연 일정'}</Text><ScheduleRows schedules={allSchedules.filter((schedule) => schedule.scheduleId === notificationScheduleId)} empty="연결된 일정을 찾지 못했습니다." /></View> : null}
-        <View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘</Text><ScheduleRows schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." /></View>
-        <View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내</Text><ScheduleRows schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." /></View>
+        <Text style={styles.helpText}>시간이 있는 일정은 업무수첩에 저장되고 시작 시각에 한 번 알려드립니다. 기존 업무도 제목 아래 🔔 알림 추가·확인에서 등록할 수 있습니다.</Text>
+        {notificationScheduleId ? <View style={styles.notificationFocus}><Text style={styles.detailTitle}>{scheduleFocusReason === 'created' ? '✅ 방금 생성된 일정' : '🔔 알림에서 연 일정'}</Text><ScheduleRows onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={allSchedules.filter((schedule) => schedule.scheduleId === notificationScheduleId)} empty="연결된 일정을 찾지 못했습니다." /></View> : null}
+        <View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘</Text><ScheduleRows onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={briefing.schedules?.today} empty="오늘 확정 일정이 없습니다." /></View>
+        <View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내</Text><ScheduleRows onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={briefing.schedules?.upcoming} empty="다가오는 일정이 없습니다." /></View>
       </View> : null}
 
       <View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무를 바로 저장</Text></Pressable></View>
@@ -1112,7 +1150,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
 
     {screen === 'recordSearch' ? <View style={styles.card}><PanelHead eyebrow="업무" title="과거 기록 전체 검색" onClose={() => setScreen('home')} />{client ? <WorkRecordSearch client={client} accessToken={session.access_token} /> : <Text style={styles.errorText}>검색 세션을 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
 
-    {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
+    {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><Button title="알림 설정" onPress={() => setReminderTarget({ recordId: selectedTask.task.pageId, title: selectedTask.task.title || '업무' })} /><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
     {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
@@ -1121,8 +1159,9 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); try { await synchronizeSavedScheduleReminders(saved, reminderGuard); } catch (nextError) { console.warn('[schedule-reminder] save sync pending', messageOf(nextError, 'unknown')); if (Platform.OS === 'android' && exactAlarmAccessError(nextError)) showMessage('일정은 저장됐습니다. 정확한 일정 알림 설정을 확인해주세요.', 'info'); } await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId)); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); let reminderMessage: string; try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); } catch (nextError) { reminderMessage = reminderFailureMessage(nextError); } if (reminderGuard()) setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage }); if (reminderGuard() && saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
+    {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
   <WorkRecordEditSheet
     visible={Boolean(editTaskId)}
     title={editTitle}
@@ -1241,6 +1280,8 @@ const styles = StyleSheet.create({
   taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 },
   taskBadge: { alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', color: '#374151', backgroundColor: '#e5e7eb', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   followUp: { fontSize: 13, color: '#4b515c', lineHeight: 18 },
+  reminderShortcut: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 11, marginTop: 8, borderRadius: 10, borderWidth: 1, borderColor: '#93b5e6', backgroundColor: '#eaf3ff' },
+  reminderShortcutText: { color: '#20599a', fontSize: 12, fontWeight: '900' },
   inlineEdit: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db' },
   inlineEditText: { fontSize: 18 },
   inlineDelete: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff7f7', borderWidth: 1, borderColor: '#fecaca' },
