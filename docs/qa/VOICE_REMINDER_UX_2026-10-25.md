@@ -17,24 +17,18 @@
 - 날짜·시간 확인은 기본값 없이 한국 시간(Asia/Seoul)을 명시. 확인 취소는 쓰기 없음.
   중복 클릭 gate 및 기존 durable service 재사용. 서버 실패 시 native 생성으로 우회하지 않음.
 
-## 서버 확인 계약 — 운영 적용 없음
+## 서버 확인 계약과 소스 연계
 
-`supabase/drafts/worklog_reminder_confirmation.sql`은 검토용 SQL이며 자동 migration 대상이 아니다.
-새 `confirm_my_worklog_reminder`는 owner personal record를 잠근 뒤 한 개의 연결 알림을 만든다.
-동일 시각 retry는 동일 schedule, 다른 시각은 충돌, 완료/취소 record와 과거 시각은 거절한다.
-`reminderWorkRecordId`를 사용해 기존 `workRecordId`의 기한·종류 변경 의미와 분리한다.
-`cancel_my_work_record`도 같은 row lock을 먼저 잡고 두 종류 연결을 모두 취소한다.
-원본 기록의 종류, 내용, due_at은 변경하지 않는다. 명시적 알림 시각은 기록 기한과 독립적이다.
+서버 분리 PR은 #463이며 QA 앱 변경은 #462에 유지한다.
+정식 SQL 소스는 `supabase/migrations/20261024171450_worklog_reminder_confirmation.sql`이다.
+기존 migration 버전에 승인된 함수 코드만 동기화한다. 이미 이력이 있는 대상에 재적용하지 않는다.
+개별 환경의 적용 여부·복구 자료는 이 문서로 추정하지 않고 승인된 내부 확인 절차를 따른다.
 
-**서버 준비 전:** 이미 존재하는 확정 일정의 기기 예약/프리셋은 기존 경로를 사용한다.
-일정 없는 기록의 신규 확인은 PGRST202 등에서 서버 준비 필요 안내로 멈춘다.
-자동 판정 개선도 서버 함수 코드가 배포되어야 서버에 반영된다. APK만 업데이트한다고 완료되지 않는다.
-main 병합/Production 배포/실제 DB 적용은 이번 승인 범위에서 실행하지 않았다.
-
-Supabase skill의 CLI migration 생성 규칙을 따르기 위해 임의 migration 파일명은 사용하지 않았다.
-CLI 미설치. pinned `npx supabase@2.81.3 --help`는 기본 cache 경로 ENOENT,
-/tmp cache로 수정 후 package postinstall exit 1로 종료. 추가 반복 없이 SQL draft로 보존.
-후속 승인된 환경에서 CLI로 migration 생성 및 schema 관리/운영 배포 검토가 필요하다.
+확인 RPC는 소유 기록을 잠그고 원본 종류·내용·기한을 보존하며 알림 일정을 연결한다.
+삭제 RPC는 같은 잠금을 취한 뒤 기존 및 신규 연결 알림을 함께 취소한다.
+신규 확인 RPC가 없는 환경에서는 앱이 서버 준비 필요를 안내한다.
+서버 판정과 앱 배포는 별도이며 APK만 갱신한다고 모든 기능이 활성화되지는 않는다.
+롤백은 기존 데이터와 확장된 취소 처리를 보존한다. 서버 PR의 보존형 롤백 문서를 참조한다.
 
 ## 검증 증거와 한계
 
@@ -58,7 +52,7 @@ CLI 미설치. pinned `npx supabase@2.81.3 --help`는 기본 cache 경로 ENOENT
 이전 `gh workflow run mobile-foundation.yml`은 GitHub workflow GET
 `/repos/cetin072/worklog-voice-pwa/actions/workflows/mobile-foundation.yml`에서 Forbidden.
 POST dispatch에 도달하지 않았고 이번에도 재시도/다른 인증·API로 우회하지 않았다.
-PR API 조회/작성도 접근 복구 전 보류. branch push는 PR 생성과 구분한다.
+PR 작성은 정상 GitHub 도구로 완료했다(#462, #463). 기존 workflow GET 거절은 재시도하지 않는다.
 로컬 Android SDK/adb 없음. APK/AAB·signer·artifact SHA256·최종 native manifest·실기기 PASS 없음.
 
 기존 Mobile App workflow에서 이 작업 branch, build_android=true, icon_variant=existing,

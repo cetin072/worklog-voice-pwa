@@ -1,4 +1,4 @@
--- Review-only migration; do not apply to production as part of this task.
+-- Scoped reminder functions; no user-row mutation during migration.
 -- Explicit reminders preserve original work-record kind/deadline. Record row is
 -- the common serialization lock for confirmation and cancellation.
 create or replace function public.confirm_my_worklog_reminder(p_record_id uuid, p_starts_at timestamptz)
