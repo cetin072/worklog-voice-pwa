@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Linking, Modal, ScrollView, Text, TextInput, View } from 'react-native';
+import { Button, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { mobileTheme } from '@/src/ui/theme';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import type { ConfirmedSchedule } from './schedule-reminder-coordinator';
 import { findWorklogReminder, confirmWorklogReminder, type ReminderTarget } from './worklog-reminder-adapter';
@@ -7,6 +9,26 @@ import { confirmedSeoulInstant, reminderFailureMessage } from './reminder-feedba
 import { reserveConfirmedReminder } from './schedule-reminder-post-save';
 import { reminderSessionEpoch, reminderSyncEpoch } from './schedule-reminder-snapshot';
 import { listScheduleReminders, openExactAlarmPermissionSettings } from './local-notifications';
+
+function pickerValue(date: string, time: string) {
+  const matchDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const matchTime = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
+  const now = new Date();
+  if (!matchDate) return now;
+  return new Date(
+    Number(matchDate[1]), Number(matchDate[2]) - 1, Number(matchDate[3]),
+    matchTime ? Number(matchTime[1]) : now.getHours(),
+    matchTime ? Number(matchTime[2]) : now.getMinutes(),
+  );
+}
+
+function calendarDate(value: Date) {
+  return [value.getFullYear(), String(value.getMonth() + 1).padStart(2, '0'), String(value.getDate()).padStart(2, '0')].join('-');
+}
+
+function calendarTime(value: Date) {
+  return [String(value.getHours()).padStart(2, '0'), String(value.getMinutes()).padStart(2, '0')].join(':');
+}
 
 /** Explicit confirmation never edits a record's kind, deadline or original text. */
 export function WorklogReminderSheet({ client, target, onClose }: { client: PlatformSupabaseClient; target: ReminderTarget; onClose(): void }) {
@@ -16,6 +38,7 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const [message, setMessage] = useState('일정과 알림을 확인하는 중…');
   const gate = useRef(false);
   const alive = useRef(true);
@@ -61,17 +84,44 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
       <Text style={{ fontSize: 24, fontWeight: '700' }}>알림 설정</Text>
       <Text>{target.title}</Text>
       {schedule ? <Text>일정 시각: {schedule.startsAt ? new Date(schedule.startsAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '미정'} (한국 시간)</Text> : ready ? <View style={{ gap: 12 }}>
-        <Text>한국 시간(Asia/Seoul) · 날짜와 시간을 직접 확인해주세요.</Text>
-        <TextInput accessibilityLabel="알림 날짜" placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} editable={!busy} style={{ borderWidth: 1, padding: 12 }} />
-        <TextInput accessibilityLabel="알림 시간" placeholder="HH:mm (24시간)" value={time} onChangeText={setTime} editable={!busy} style={{ borderWidth: 1, padding: 12 }} />
+        <Text>이 기록에는 확정된 일정 시각이 없습니다. 아래에서 날짜와 시간을 터치해 선택하세요. 한국 시간(Asia/Seoul) 기준입니다.</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="알림 날짜 선택" disabled={busy} style={[styles.pickerTrigger, busy ? styles.disabled : null]} onPress={() => setPickerMode('date')}>
+          <Text style={[styles.pickerText, date ? null : styles.placeholder]}>{date || '날짜 선택'}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="알림 시간 선택" disabled={busy || !date} style={[styles.pickerTrigger, busy || !date ? styles.disabled : null]} onPress={() => setPickerMode('time')}>
+          <Text style={[styles.pickerText, time ? null : styles.placeholder]}>{time || '시간 선택'}</Text>
+        </Pressable>
+        {pickerMode ? <View>
+          <DateTimePicker
+            value={pickerValue(date, time)}
+            mode={pickerMode}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            locale="ko-KR"
+            is24Hour
+            onChange={(_, selected) => {
+              if (Platform.OS === 'android') setPickerMode(null);
+              if (!selected) return;
+              if (pickerMode === 'date') setDate(calendarDate(selected));
+              else setTime(calendarTime(selected));
+            }}
+          />
+          {Platform.OS === 'ios' ? <Button title="선택 완료" onPress={() => setPickerMode(null)} /> : null}
+        </View> : null}
       </View> : null}
       <Text accessibilityLiveRegion="polite">{message}</Text>
       {!ready ? <Button title="일정 다시 조회" onPress={() => setReload((value) => value + 1)} /> : null}
       <Text>확정 일정은 시작 시 자동 알림을 사용합니다. 30분 전·1일 전은 추가 예약입니다. 지난 시각은 예약하지 않습니다.</Text>
-      {([0, 30, 1440] as const).map((offset) => <Button key={offset} disabled={busy || !ready} title={`${offset === 0 ? '시작 시' : offset === 30 ? '30분 전' : '1일 전'} 알림 확인 / 예약`} onPress={() => void reserve(offset)} />)}
+      {([0, 30, 1440] as const).map((offset) => <Button key={offset} disabled={busy || !ready || (!schedule && (!date || !time))} title={`${offset === 0 ? '시작 시' : offset === 30 ? '30분 전' : '1일 전'} 알림 확인 / 예약`} onPress={() => void reserve(offset)} />)}
       <Button title="휴대폰 알림 권한 설정" onPress={() => void Linking.openSettings().catch(() => setMessage('휴대폰 설정에서 업무수첩 QA 알림 권한을 확인해주세요.'))} />
       <Button title="정확한 알람 권한 설정" onPress={() => void openExactAlarmPermissionSettings().catch(() => setMessage('휴대폰 설정에서 정확한 알람 권한을 확인해주세요.'))} />
       <Button title="닫기 / 확인 취소" disabled={busy} onPress={onClose} />
     </ScrollView>
   </Modal>;
 }
+
+const styles = StyleSheet.create({
+  pickerTrigger: { minHeight: 50, justifyContent: 'center', paddingHorizontal: 14, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, backgroundColor: mobileTheme.colors.surface },
+  pickerText: { fontSize: 16, color: mobileTheme.colors.text },
+  placeholder: { color: mobileTheme.colors.textMuted },
+  disabled: { opacity: 0.5 },
+});

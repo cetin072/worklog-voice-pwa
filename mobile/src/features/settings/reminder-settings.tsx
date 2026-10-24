@@ -96,6 +96,7 @@ export function ReminderSettings() {
       <Text style={styles.status}>
         {scheduled === null ? '예약 상태 확인 중' : scheduled ? `예약된 일정 알림 ${scheduled}개` : pending ? `예약 대기 중 ${pending}개` : '예약된 일정 알림 없음'}
       </Text>
+      {scheduled === 0 && pending === 0 ? <Text style={styles.detail}>날짜와 시작 시각이 확정된 미래 일정이 저장되면 자동으로 시작 알림을 예약합니다. 기록만 저장하거나 시간이 빠진 경우에는 알림이 생성되지 않습니다.</Text> : null}
       {needsExactAlarmAccess ? <View style={styles.warning}>
         <Text style={styles.warningTitle}>정확한 일정 알림 권한이 필요합니다.</Text>
         <Text style={styles.detail}>Android의 ‘알람 및 리마인더’에서 업무수첩을 허용하면 대기 중인 일정 알림을 다시 예약합니다.</Text>
