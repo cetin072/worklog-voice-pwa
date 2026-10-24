@@ -40,6 +40,12 @@ on:
         required: false
         default: true
         type: boolean
+      icon_variant:
+        description: 'Icon selection (base/qa requires the approved local PNG; no package separation)'
+        required: false
+        default: existing
+        type: choice
+        options: [existing, base, qa]
       force_whisper_fallback_qa:
         description: 'QA-only: bypass SpeechRecognizer while retaining real Whisper/save flow'
         required: false
@@ -173,6 +179,8 @@ jobs:
           retention-days: 7
 
   android-standalone:
+    env:
+      WORKLOG_ICON_VARIANT: ${{ inputs.icon_variant || 'existing' }}
     needs:
       - changes
       - typecheck
