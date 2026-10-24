@@ -100,7 +100,7 @@ test('interrupted replacement converges through existing reminder reconciliation
 test('startup recovery runs durable reminder and server-confirmed cancellation recovery together', async () => {
   const calls = [];
   const coordinator = createScheduleReminderCoordinator({ reminders: {
-    async scheduleReminder() {}, async cancelAllScheduleReminders() {}, async reconcileScheduleReminders() { calls.push('reminders'); return { failed: 0 }; },
+    async synchronizeScheduleReminders() { return { failed: 0 }; }, async scheduleReminder() {}, async cancelAllScheduleReminders() {}, async reconcileScheduleReminders() { calls.push('reminders'); return { failed: 0 }; },
   } });
   await coordinator.recover({ async reconcileCanceledScheduleArtifacts() { calls.push('cancellations'); return { remaining: 0 }; } });
   assert.deepEqual(calls, ['reminders', 'cancellations']);
@@ -148,3 +148,31 @@ test('briefing projection rebuilds only future confirmed canonical schedules and
   }]);
 });
 
+
+
+test('server time edit replaces existing 30-minute and one-day offsets without old OS identifiers', async () => {
+  const h = harness();
+  const original = active({ startsAt: '2030-01-03T10:00:00Z' });
+  await h.coordinator.synchronize(original);
+  for (const offsetMinutes of [30, 1440]) await h.reminders.scheduleReminder({ scheduleId: SID, title: original.title, scheduleStartsAt: original.startsAt, offsetMinutes });
+  const oldIds = [...h.os.keys()];
+  await h.coordinator.synchronize(active({ startsAt: '2030-01-03T11:00:00Z' }));
+  assert.equal(h.os.size, 3);
+  for (const id of oldIds) assert.equal(h.os.has(id), false);
+  const rows = await h.reminders.listScheduleReminders(SID);
+  assert.deepEqual(rows.map(r => r.triggerAt), ['2030-01-03T11:00:00.000Z', '2030-01-03T10:30:00.000Z', '2030-01-02T11:00:00.000Z']);
+  await h.coordinator.synchronize(active({ startsAt: '2030-01-03T11:00:00Z' }));
+  assert.equal(h.os.size, 3);
+});
+
+test('a failed schedule does not prevent another server schedule from updating', async () => {
+  const calls = [];
+  const second = '22222222-2222-4222-8222-222222222222';
+  const coordinator = createScheduleReminderCoordinator({ reminders: {
+    async synchronizeScheduleReminders() { return { failed: 0 }; },
+    async scheduleReminder({ scheduleId }) { calls.push(scheduleId); if (scheduleId === SID) throw new Error('OS failure'); },
+    async cancelAllScheduleReminders() {}, async reconcileScheduleReminders() {},
+  } });
+  await assert.rejects(coordinator.synchronizeMany([active(), active({ id: second })]), AggregateError);
+  assert.deepEqual(calls, [SID, second]);
+});

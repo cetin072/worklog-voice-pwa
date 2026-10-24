@@ -46,6 +46,7 @@ export function confirmedSchedulesFromBriefing(input?: Readonly<{
 
 type ReminderPort = {
   scheduleReminder(input: { scheduleId: string; title: string; scheduleStartsAt: string; offsetMinutes: 0 }): Promise<unknown>;
+  synchronizeScheduleReminders(input: { scheduleId: string; title: string; scheduleStartsAt: string }): Promise<{ failed: number }>;
   cancelAllScheduleReminders(scheduleId: string): Promise<unknown>;
   reconcileScheduleReminders(): Promise<unknown>;
 };
@@ -79,7 +80,10 @@ export function createScheduleReminderCoordinator(deps: { reminders: ReminderPor
       return { action: 'cancelled' as const, scheduleId };
     }
 
+    // Move every existing offset through the same durable cancellation/replacement path.
+    const result = await deps.reminders.synchronizeScheduleReminders({ scheduleId, title, scheduleStartsAt: startsAt });
     await deps.reminders.scheduleReminder({ scheduleId, title, scheduleStartsAt: startsAt, offsetMinutes: 0 });
+    if (result.failed) throw new Error(`일정 알림 ${result.failed}개 동기화가 보류되었습니다.`);
     return { action: 'scheduled' as const, scheduleId };
   }
 
@@ -92,7 +96,12 @@ export function createScheduleReminderCoordinator(deps: { reminders: ReminderPor
 
   async function synchronizeMany(schedules: readonly (ConfirmedSchedule | null | undefined)[]) {
     const results = [];
-    for (const schedule of schedules) results.push(await synchronize(schedule));
+    const errors: unknown[] = [];
+    for (const schedule of schedules) {
+      try { results.push(await synchronize(schedule)); }
+      catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw new AggregateError(errors, `일정 ${errors.length}개 알림 동기화가 보류되었습니다.`);
     return results;
   }
 

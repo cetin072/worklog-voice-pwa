@@ -24,7 +24,7 @@ for (const [name, file, before, after, variable, testFile, expectedTests] of cas
   const target = join(dirname(sourcePath), `.mutation-${randomUUID()}.ts`);
   try {
     writeFileSync(target, original.replace(before, after));
-    const child = spawnSync(process.execPath, ['--test', join(root, 'tests', testFile)], {
+    const child = spawnSync(process.execPath, ['--test', '--test-reporter=tap', join(root, 'tests', testFile)], {
       cwd: root, env: { ...process.env, [variable]: pathToFileURL(target).href }, encoding: 'utf8', timeout: 30_000,
     });
     const log = `${child.stdout || ''}${child.stderr || ''}`;

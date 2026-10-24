@@ -1,4 +1,4 @@
-import { cancelAllScheduleReminders, reconcileScheduleReminders, scheduleReminder } from '@/src/features/schedule/local-notifications';
+import { cancelAllScheduleReminders, reconcileScheduleReminders, synchronizeScheduleReminders, scheduleReminder } from '@/src/features/schedule/local-notifications';
 import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
 import {
   confirmedSchedulesFromBriefing,
@@ -9,7 +9,7 @@ import {
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 
 const coordinator = createScheduleReminderCoordinator({
-  reminders: { scheduleReminder, cancelAllScheduleReminders, reconcileScheduleReminders },
+  reminders: { synchronizeScheduleReminders, scheduleReminder, cancelAllScheduleReminders, reconcileScheduleReminders },
 });
 
 type SavedScheduleResult = Readonly<{

@@ -506,9 +506,10 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       try {
         const accessToken = await freshHomeAccessToken(client);
         const next = await loadHomeBriefing(accessToken);
-        if (epoch === briefingRefreshEpoch.current) setBriefing(next);
+        if (epoch !== briefingRefreshEpoch.current) return;
+        setBriefing(next);
         if (!androidTouchSmoke) {
-          void synchronizeBriefingScheduleReminders(next.schedules).catch((nextError) => {
+          await synchronizeBriefingScheduleReminders(next.schedules).catch((nextError) => {
             console.warn('[schedule-reminder] canonical schedule sync pending', messageOf(nextError, 'unknown'));
           });
         }
