@@ -91,3 +91,28 @@ main 병합, Production 배포, Play 제출, 운영 DB 변경, 실제 삭제 시
 - APK/AAB/최종 manifest/설치 hash는 아직 없음. 정상 Hermes export와 plugin manifest만 검증됨.
 - 두 아이콘의 디자인 승인은 확정되어 추가 디자인 확인은 필요 없다. 파일 전송이 해결되기 전
   존재하지 않는 asset을 config에 연결하지 않는다. 현재 코드 빌드에는 새 base/QA 아이콘이 포함되지 않는다.
+
+### 전송 실패 분류 및 bounded retry 종료
+
+- GitHub: `gh workflow run`의 workflow 조회 GET 단계에서 `Forbidden` 출력.
+  조회가 실패했고 dispatch POST는 실행되지 않았다. API 차단의 원인이 네트워크 정책인지
+  저장소/토큰 권한인지는 반환 출력만으로 확정하지 못했다. 추가 API 재시도/우회 없음.
+- Library: `library_prepare_materialize`는 두 항목 모두 성공(`isError:false`, unavailable_items=[]).
+  QA 재준비에서도 version 0 및 signed transfer를 정상 반환했고 경고가 없었다.
+  이 단계의 파일 접근 권한 거절은 관측되지 않았다.
+- 실패 지점은 **공식 `library_file_transfer.py materialize`의 실제 byte download 단계**다.
+  반환은 exit code 1, stderr `library file transfer failed: download failed`뿐이다.
+  HTTP 상태/하위 예외가 노출되지 않아 권한 거절이나 일시 장애 중 어느 것인지 단정할 수 없다.
+  자동 승인 리뷰의 거절 메시지도 없었다.
+- Base: 공식 helper 기본 실행 1회 + 승격 실행 1회, 합계 2회 실패.
+  이미 bounded retry를 수행했으므로 다시 준비/다운로드하지 않았다.
+- QA: 최초 공식 실행 1회 실패 후, 사용자의 추가 지시에 따라 consumer-local 목적지
+  `/workspace/worklog-voice-pwa/mobile/assets`를 명시한 fresh `prepare_materialize`와 공식 helper로
+  **1회 재시도**했다. 다시 같은 exit code/stderr로 실패했다. 이후 재시도 중단.
+- 최종 파일 존재 검사: base/QA PNG 모두 exists=false. 부분 파일 적용, hash 검증, 픽셀 검수 없음.
+  source/config는 그대로이며 설치 빌드에 새 아이콘이 들어간 상태가 아니다.
+- 해결에는 새 디자인 승인보다 **전송/연결 경로 복구**가 필요하다.
+  아이콘은 두 PNG를 이 실행 환경이 읽을 수 있는 정식 첨부로 전달하거나 Library 전송 경로를 복구해야 한다.
+  CI는 저장소 접근 및 환경의 GitHub API 연결을 확인하거나, 권한 있는 사용자가 GitHub UI에서
+  기존 Mobile App workflow를 통합 브랜치로 수동 실행하여 결과 artifact를 제공할 수 있다.
+  키/토큰을 대화나 저장소에 제공할 필요는 없다. 빌드 후 설치는 인증서 일치 검증 전까지 보류한다.
