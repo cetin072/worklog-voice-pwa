@@ -1,3 +1,4 @@
+import { assertReminderSyncCurrent, type ReminderSyncGuard } from './schedule-reminder-snapshot';
 /** Durable notification state machine. One owner per device-state namespace/JS runtime.
  * OS side effects are journalled BEFORE execution; SecureStore and the OS are not
  * a transaction. Recovery converges an interrupted operation, never infers success.
@@ -84,6 +85,21 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
   const now = deps.now || Date.now;
   // Serializes the WHOLE OS + read/modify/write operation, not only the final write.
   let tail: Promise<unknown> = Promise.resolve();
+  let operationIsCurrent: ReminderSyncGuard = () => true;
+  let nativeIssued = false;
+  async function guarded<T>(isCurrent: ReminderSyncGuard, run: () => Promise<T>): Promise<T> {
+    const original = await read();
+    assertReminderSyncCurrent(isCurrent);
+    operationIsCurrent = isCurrent;
+    nativeIssued = false;
+    try { return await run(); }
+    catch (error) {
+      // No native operation was issued: discard the stale intent as well, so a
+      // later recovery cannot execute a mutation that never passed its guard.
+      if (!isCurrent() && !nativeIssued) await deps.storage.updateItem(REMINDER_STATE_KEY, () => JSON.stringify(original));
+      throw error;
+    } finally { operationIsCurrent = () => true; nativeIssued = false; }
+  }
   function serial<T>(run: () => Promise<T>): Promise<T> {
     const task = tail.then(run); tail = task.catch(() => undefined); return task;
   }
@@ -112,6 +128,7 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
   async function change(update: (state: State) => void) {
     await read();
     await deps.storage.updateItem(REMINDER_STATE_KEY, (raw) => {
+      assertReminderSyncCurrent(operationIsCurrent);
       if (raw === null) throw new ReminderStateError('STATE_DISAPPEARED');
       const state = parseState(raw); update(state); return JSON.stringify(state);
     });
@@ -130,6 +147,8 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     const found = requests.find((r) => r.identifier === identifier);
     if (!found) return;
     if (found.content.data?.target !== 'schedule' || found.content.data.scheduleId !== sid) throw new ReminderStateError('OWNERSHIP_MISMATCH');
+    assertReminderSyncCurrent(operationIsCurrent);
+    nativeIssued = true;
     await deps.driver.cancel(identifier);
     if ((await deps.driver.list()).some((r) => r.identifier === identifier)) throw new Error('알림 취소를 확인하지 못했습니다. 다시 시도해주세요.');
   }
@@ -150,6 +169,8 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
       if (found && !matches(found, scheduleId, next)) throw new ReminderStateError('RESERVATION_MISMATCH');
       if (!found) {
         // Requested ID is durable BEFORE scheduling; lost native acknowledgements are recoverable.
+        assertReminderSyncCurrent(operationIsCurrent);
+        nativeIssued = true;
         const actualId = await deps.driver.schedule(next, scheduleId);
         if (actualId !== next.identifier) throw new ReminderStateError('UNEXPECTED_NATIVE_ID');
         requests = await deps.driver.list();
@@ -204,7 +225,7 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     return Object.values(state.reminders[sid] || {}).sort((a, b) => a.offsetMinutes - b.offsetMinutes);
   }
   return Object.freeze({
-    scheduleReminder: (input: ReminderInput) => serial(() => schedule(input, true)),
+    scheduleReminder: (input: ReminderInput, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, () => schedule(input, true))),
     listScheduleReminders: (sid: string) => serial(() => list(sid)),
     listTrackedReminderScheduleIds: () => serial(async () => {
       const state = await read();
@@ -219,9 +240,10 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
       return { scheduled, pending, cleanupPending };
     }),
     cancelScheduleReminder: (sid: string, minutes: number) => serial(() => cancel(sid, minutes)),
-    cancelAllScheduleReminders: (sid: string) => serial(async () => {
+    cancelAllScheduleReminders: (sid: string, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, async () => {
+      assertReminderSyncCurrent(isCurrent);
       let count = 0; let failed = 0;
-      for (const minutes of REMINDER_OFFSETS) { try { if (await cancel(sid, minutes)) count += 1; } catch { failed += 1; } }
+      for (const minutes of REMINDER_OFFSETS) { assertReminderSyncCurrent(isCurrent); try { if (await cancel(sid, minutes)) count += 1; } catch { failed += 1; } }
       // A server-confirmed cancellation must also clean migrated rollback remnants.
       const state = await read();
       for (const identifier of state.legacyCleanup[sid] || []) {
@@ -230,13 +252,15 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
       }
       if (failed) throw new Error(`알림 ${failed}개를 취소하지 못했습니다. 정리 내역을 보존했으며 다시 시도해야 합니다.`);
       return count;
-    }),
-    synchronizeScheduleReminders: (input: Omit<ReminderInput, 'offsetMinutes'>) => serial(async () => {
+    })),
+    synchronizeScheduleReminders: (input: Omit<ReminderInput, 'offsetMinutes'>, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, async () => {
+      assertReminderSyncCurrent(isCurrent);
       const state = await read();
       const keys = new Set([...Object.values(state.reminders[input.scheduleId] || {}).map((r) => r.offsetMinutes),
         ...Object.values(state.intents).filter((i) => i.scheduleId === input.scheduleId).map((i) => i.offsetMinutes)]);
       let updated = 0; let removed = 0; let failed = 0;
       for (const minutes of keys) {
+        assertReminderSyncCurrent(isCurrent);
         try {
           const pending = (await read()).intents[slot(input.scheduleId, minutes)];
           if (pending?.desired === null) { await settle(slot(input.scheduleId, minutes)); removed += 1; continue; }
@@ -244,8 +268,9 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
           else { await schedule({ ...input, offsetMinutes: minutes as ReminderOffsetMinutes }, false); updated += 1; }
         } catch { failed += 1; }
       }
+      assertReminderSyncCurrent(isCurrent);
       return { updated, removed, failed };
-    }),
+    })),
     reconcileScheduleReminders: () => serial(async () => {
       let state = await read(); // Validate all metadata BEFORE any OS cleanup.
       let restored = 0; let removed = 0; let cleanedPending = 0; let failed = 0; let untracked = 0;

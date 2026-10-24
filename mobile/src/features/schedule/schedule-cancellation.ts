@@ -1,3 +1,4 @@
+import { assertReminderSyncCurrent, readOwnedReminderSnapshots, reminderSessionEpoch, reminderSyncEpoch } from './schedule-reminder-snapshot';
 import { cancelAllScheduleReminders, listTrackedReminderScheduleIds } from './local-notifications';
 import { secureSessionStorage } from '@/src/platform/secure-storage';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
@@ -68,8 +69,8 @@ async function cancelScheduleDirectly(client: PlatformSupabaseClient, scheduleId
   throw new Error('취소할 일정을 찾지 못했거나 취소할 수 없는 상태입니다.');
 }
 
-async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
-  await cancelAllScheduleReminders(scheduleId);
+async function cleanupDeviceScheduleArtifacts(scheduleId: string, isCurrent = () => true) {
+  await cancelAllScheduleReminders(scheduleId, isCurrent);
 }
 
 /**
@@ -80,6 +81,7 @@ async function cleanupDeviceScheduleArtifacts(scheduleId: string) {
 export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseClient, scheduleId: string, startsAt?: string) {
   if (!UUID_PATTERN.test(scheduleId)) throw new Error('취소할 일정 정보를 확인하지 못했습니다.');
 
+  const responseIsCurrent = reminderSessionEpoch.capture();
   let alreadyCancelled = false;
   const { data, error } = await client.rpc('cancel_my_schedule', { p_schedule_id: scheduleId });
   if (error) {
@@ -88,9 +90,12 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
     alreadyCancelled = confirmed.alreadyCancelled;
   } else {
     const rows = Array.isArray(data) ? data : data ? [data] : [];
-    alreadyCancelled = rows[0]?.schedule_status === 'cancelled' && rows[0]?.already_cancelled === true;
+    if (rows.length !== 1 || rows[0]?.schedule_id !== scheduleId || rows[0]?.schedule_status !== 'cancelled') throw new Error('INVALID_CANCELLATION_CONFIRMATION');
+    alreadyCancelled = rows[0]?.already_cancelled === true;
   }
 
+  assertReminderSyncCurrent(responseIsCurrent);
+  const isCurrent = reminderSyncEpoch.begin();
   // Persist the recovery marker before entering the retryable OS cleanup boundary.
   // Corrupt/unwritable cancellation state must fail closed rather than being
   // mistaken for a successful cancellation with pending cleanup.
@@ -98,7 +103,7 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
 
   let cleanupPending = false;
   try {
-    await cleanupDeviceScheduleArtifacts(scheduleId);
+    await cleanupDeviceScheduleArtifacts(scheduleId, isCurrent);
     await updatePendingScheduleIds((ids) => ids.filter((value) => value !== scheduleId));
   } catch (cleanupError) {
     cleanupPending = true;
@@ -120,34 +125,25 @@ export async function cancelScheduleWithDeviceCleanup(client: PlatformSupabaseCl
  * Conversely, a stale marker never authorizes cleanup by itself: only a
  * server-confirmed `cancelled` schedule is eligible for deletion.
  */
-export async function reconcileCanceledScheduleArtifacts(client: PlatformSupabaseClient) {
+export async function reconcileCanceledScheduleArtifacts(client: PlatformSupabaseClient, isCurrent = reminderSyncEpoch.begin()) {
   const pending = await pendingScheduleIds();
   const reminderScheduleIds = await listTrackedReminderScheduleIds();
   const candidateIds = [...new Set([...pending, ...reminderScheduleIds])];
   if (!candidateIds.length) return { cleaned: 0, remaining: 0 };
 
-  const { data, error } = await client
-    .from('schedules')
-    .select('id, status, starts_at')
-    .in('id', candidateIds)
-    .eq('status', 'cancelled');
-  if (error) throw new Error(error.message || '취소된 일정 상태를 확인하지 못했습니다.');
-
-  const cancelledSchedules = new Map(
-    (data || []).flatMap((schedule) => (
-      typeof schedule.id === 'string' && schedule.status === 'cancelled'
-        ? [[schedule.id, typeof schedule.starts_at === 'string' ? schedule.starts_at : undefined] as const]
-        : []
-    )),
-  );
+  const snapshot = await readOwnedReminderSnapshots(client, candidateIds, isCurrent);
+  const cancelledSchedules = new Map(snapshot.rows
+    .filter((row) => row.status === 'cancelled')
+    .map((row) => [row.id, row.startsAt] as const));
   const cancelledIds = new Set(cancelledSchedules.keys());
   const remaining = pending.filter((scheduleId) => !cancelledIds.has(scheduleId));
   let cleaned = 0;
   const cleanedIds = new Set<string>();
   for (const scheduleId of candidateIds) {
+    assertReminderSyncCurrent(isCurrent);
     if (!cancelledIds.has(scheduleId)) continue;
     try {
-      await cleanupDeviceScheduleArtifacts(scheduleId);
+      await cancelAllScheduleReminders(scheduleId, isCurrent);
       cleaned += 1; cleanedIds.add(scheduleId);
     } catch {
       remaining.push(scheduleId);

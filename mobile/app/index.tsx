@@ -1,3 +1,4 @@
+import { reminderSessionEpoch, reminderSyncEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -405,26 +406,30 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
   useEffect(() => {
+    reminderSessionEpoch.invalidate();
+    reminderSyncEpoch.invalidate();
     briefingRefreshEpoch.current += 1;
     briefingRefreshQueue.current.reset();
     if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); return; }
-    void refreshBriefing();
+    if (androidTouchSmoke) void refreshBriefing();
   }, [session?.access_token]);
   useEffect(() => {
     if (!session || !client || androidTouchSmoke) return;
     let alive = true;
-    const recover = () => {
-      void recoverSavedScheduleReminders(client).catch((nextError) => {
-        if (alive) console.warn('[schedule-reminder] recovery pending', messageOf(nextError, 'unknown'));
-      });
+    const recover = async () => {
+      try { await recoverSavedScheduleReminders(client); }
+      catch (nextError) { if (alive) console.warn('[schedule-reminder] recovery pending', messageOf(nextError, 'unknown')); }
+      if (alive) await refreshBriefing();
     };
+    const { data: authChanges } = client.auth.onAuthStateChange((event) => {
+      if (event !== 'INITIAL_SESSION') { reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); }
+    });
     recover();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
-      recover();
-      void refreshBriefing();
+      void recover();
     });
-    return () => { alive = false; subscription.remove(); };
+    return () => { alive = false; reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); authChanges.subscription.unsubscribe(); subscription.remove(); };
   }, [androidTouchSmoke, client, session?.access_token]);
   useEffect(() => {
     if (!session || screen !== 'journal') return;
@@ -509,7 +514,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         if (epoch !== briefingRefreshEpoch.current) return;
         setBriefing(next);
         if (!androidTouchSmoke) {
-          await synchronizeBriefingScheduleReminders(next.schedules).catch((nextError) => {
+          await synchronizeBriefingScheduleReminders(client, next.schedules).catch((nextError) => {
             console.warn('[schedule-reminder] canonical schedule sync pending', messageOf(nextError, 'unknown'));
           });
         }
@@ -554,6 +559,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     const original = manualInput.transcript.trim();
     const saveText = `${original}${manualScheduleText(manualInput.dueDate, manualInput.dueTime)}`.trim();
     await run(async () => {
+      const reminderGuard = reminderSessionEpoch.capture();
       const saved = await saveWorklog(session.access_token, saveText, {
         dueDate: manualInput.dueDate,
         ...(manualInput.dueTime ? { type: '회의·통화' } : {}),
@@ -566,7 +572,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         dueStart: saved.dueStart?.trim() || '',
       };
       let reminderWarning = '';
-      try { await synchronizeSavedScheduleReminders(saved); }
+      try { await synchronizeSavedScheduleReminders(saved, reminderGuard); }
       catch (nextError) {
         const exactAlarmNeeded = Platform.OS === 'android' && exactAlarmAccessError(nextError);
         reminderWarning = exactAlarmNeeded
@@ -631,11 +637,12 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     clearMessage();
     let cleanupWarning = '';
     try {
+      const reminderGuard = reminderSessionEpoch.capture();
       const result = await deleteWorklog(client, recordId);
       removeVisibleRecordForConversion(recordId);
       setSelectedTask((current) => current?.task.pageId === recordId ? null : current);
       try {
-        await cancelSavedScheduleReminders(result.cancelledScheduleIds || []);
+        await cancelSavedScheduleReminders(result.cancelledScheduleIds || [], reminderGuard);
       } catch (nextError) {
         cleanupWarning = messageOf(nextError, '취소된 일정의 휴대폰 알림 일부를 정리하지 못했습니다.');
       }
@@ -921,6 +928,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     setEditStatusTone('neutral');
     try {
       const accessToken = await getFreshAccessToken(client);
+      const reminderGuard = reminderSessionEpoch.capture();
       const result = await updateWorklogDetails(accessToken, {
         pageId: recordId,
         title: nextTitle,
@@ -932,7 +940,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       });
       const visibleTitle = result.title?.trim() || nextTitle;
       let reminderWarning = '';
-      try { await synchronizeUpdatedScheduleReminder(result.schedule); }
+      try { await synchronizeUpdatedScheduleReminder(result.schedule, reminderGuard); }
       catch (nextError) { reminderWarning = messageOf(nextError, '휴대폰 일정 알림을 바꾸지 못했습니다. 앱을 다시 열면 복구를 시도합니다.'); }
       if (result.actionKindChanged) removeVisibleRecordForConversion(recordId);
       else updateVisibleTaskTitle(recordId, visibleTitle);
@@ -1113,7 +1121,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); try { await synchronizeSavedScheduleReminders(saved); } catch (nextError) { console.warn('[schedule-reminder] save sync pending', messageOf(nextError, 'unknown')); if (Platform.OS === 'android' && exactAlarmAccessError(nextError)) showMessage('일정은 저장됐습니다. 정확한 일정 알림 설정을 확인해주세요.', 'info'); } await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId)); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); try { await synchronizeSavedScheduleReminders(saved, reminderGuard); } catch (nextError) { console.warn('[schedule-reminder] save sync pending', messageOf(nextError, 'unknown')); if (Platform.OS === 'android' && exactAlarmAccessError(nextError)) showMessage('일정은 저장됐습니다. 정확한 일정 알림 설정을 확인해주세요.', 'info'); } await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId)); if (saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
   <WorkRecordEditSheet
     visible={Boolean(editTaskId)}

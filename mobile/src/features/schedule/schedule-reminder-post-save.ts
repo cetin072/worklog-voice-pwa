@@ -1,4 +1,4 @@
-import { cancelAllScheduleReminders, reconcileScheduleReminders, synchronizeScheduleReminders, scheduleReminder } from '@/src/features/schedule/local-notifications';
+import { cancelAllScheduleReminders, reconcileScheduleReminders, synchronizeScheduleReminders, scheduleReminder, listTrackedReminderScheduleIds } from '@/src/features/schedule/local-notifications';
 import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
 import {
   confirmedSchedulesFromBriefing,
@@ -6,6 +6,7 @@ import {
   type BriefingScheduleProjection,
   type ConfirmedSchedule,
 } from '@/src/features/schedule/schedule-reminder-coordinator';
+import { assertReminderSyncCurrent, type ReminderSyncGuard, reminderSyncEpoch, readOwnedReminderSnapshots, createReminderSnapshotReconciler } from './schedule-reminder-snapshot';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 
 const coordinator = createScheduleReminderCoordinator({
@@ -18,29 +19,44 @@ type SavedScheduleResult = Readonly<{
 }>;
 
 /** The only post-save boundary shared by Direct Entry and Quick Voice. */
-export function synchronizeSavedScheduleReminders(result: SavedScheduleResult) {
+export function synchronizeSavedScheduleReminders(result: SavedScheduleResult, responseIsCurrent: ReminderSyncGuard) {
+  assertReminderSyncCurrent(responseIsCurrent);
+  const isCurrent = reminderSyncEpoch.begin();
   const schedules = result.schedules?.length ? result.schedules : [result.schedule];
-  return coordinator.synchronizeMany(schedules);
+  return coordinator.synchronizeMany(schedules, isCurrent);
 }
 
-export function synchronizeUpdatedScheduleReminder(schedule: ConfirmedSchedule | null | undefined) {
-  return coordinator.synchronize(schedule);
+export function synchronizeUpdatedScheduleReminder(schedule: ConfirmedSchedule | null | undefined, responseIsCurrent: ReminderSyncGuard) {
+  assertReminderSyncCurrent(responseIsCurrent);
+  const isCurrent = reminderSyncEpoch.begin();
+  return coordinator.synchronize(schedule, isCurrent);
 }
 
-/** Rebuilds device reservations only from the current server briefing projection. */
-export function synchronizeBriefingScheduleReminders(input?: Readonly<{
+const reconcileSnapshot = createReminderSnapshotReconciler({
+  read: readOwnedReminderSnapshots,
+  trackedIds: listTrackedReminderScheduleIds,
+  synchronize: coordinator.synchronize,
+});
+
+/** Briefing supplies discovery IDs only; canonical rows authorize every mutation. */
+export function synchronizeBriefingScheduleReminders(client: PlatformSupabaseClient, input?: Readonly<{
   today?: readonly BriefingScheduleProjection[];
   upcoming?: readonly BriefingScheduleProjection[];
 }> | null) {
-  return coordinator.synchronizeMany(confirmedSchedulesFromBriefing(input));
+  return reconcileSnapshot(client, confirmedSchedulesFromBriefing(input).map((row) => row.id), reminderSyncEpoch.begin());
 }
 
-export function cancelSavedScheduleReminders(scheduleIds: readonly string[]) {
-  return coordinator.cancelConfirmed(scheduleIds);
+export function cancelSavedScheduleReminders(scheduleIds: readonly string[], responseIsCurrent: ReminderSyncGuard) {
+  assertReminderSyncCurrent(responseIsCurrent);
+  const isCurrent = reminderSyncEpoch.begin();
+  return coordinator.cancelConfirmed(scheduleIds, isCurrent);
 }
 
-export function recoverSavedScheduleReminders(client: PlatformSupabaseClient) {
-  return coordinator.recover({
-    reconcileCanceledScheduleArtifacts: () => reconcileCanceledScheduleArtifacts(client),
-  });
+export async function recoverSavedScheduleReminders(client: PlatformSupabaseClient) {
+  // Canonical application repairs missing reservations through the same durable
+  // service, without a broad native sweep of unverified/other-account IDs.
+  const isCurrent = reminderSyncEpoch.begin();
+  const canonical = await reconcileSnapshot(client, [], isCurrent);
+  const cancellations = await reconcileCanceledScheduleArtifacts(client, isCurrent);
+  return { ...canonical, cancellations };
 }

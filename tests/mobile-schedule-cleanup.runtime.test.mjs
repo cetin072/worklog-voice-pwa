@@ -12,7 +12,7 @@ const fake = await import(fixture);
 const cancellation = await import('../mobile/src/features/schedule/schedule-cancellation.ts');
 const key = 'worklog.mobile.pending-schedule-cleanup.v1';
 const ids = Array.from({ length: 12 }, randomUUID);
-const goodClient = { rpc: async () => ({ data: [{ schedule_status: 'cancelled', already_cancelled: false }], error: null }) };
+const goodClient = { rpc: async (_name, args) => ({ data: [{ schedule_id: args.p_schedule_id, schedule_status: 'cancelled', already_cancelled: false }], error: null }) };
 
 test('parallel server-confirmed cancellations cannot overwrite other pending cleanup ids', async () => {
   const w = fake.reset({ failReminders: true });

@@ -1,5 +1,7 @@
 # Android 안정화 검수 — 2026-10-24
 
+> 후속 최신 결과: [추가 검수 보고서](ANDROID_STABILIZATION_FOLLOWUP_2026-10-24.md). 아래는 최초 체크포인트 기록이다.
+
 상태: **PARTIAL — 자동검사 통과, 설치용 native artifact / 독립검수 / 실기기 수락 대기**.
 대상은 `cetin072/worklog-voice-pwa`만. main 병합, Production 배포, Play 제출,
 운영 DB 변경, 실제 계정삭제, 비밀키 생성/출력은 수행하지 않았다.
