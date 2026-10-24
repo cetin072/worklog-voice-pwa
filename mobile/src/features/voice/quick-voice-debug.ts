@@ -3,6 +3,7 @@ export type QuickVoiceDebugStage =
   | 'model_resolve'
   | 'init_whisper'
   | 'capture'
+  | 'pcm_compaction'
   | 'transcribe_data'
   | 'result_normalization';
 
@@ -16,4 +17,16 @@ export function reportQuickVoiceDebug(stage: QuickVoiceDebugStage, outcome: 'sta
   };
   if (outcome === 'failed') console.warn('[quick-voice]', payload);
   else console.info('[quick-voice]', payload);
+}
+
+/** Human QA/logcat evidence for the exact PCM duration sent to Whisper. */
+export function reportQuickVoicePcmCompaction(input: { originalDurationMs: number; processedDurationMs: number; removedSilenceMs: number }) {
+  console.info('[quick-voice]', {
+    feature: 'quick_voice',
+    stage: 'pcm_compaction',
+    outcome: 'succeeded',
+    originalDurationMs: input.originalDurationMs,
+    processedDurationMs: input.processedDurationMs,
+    removedSilenceMs: input.removedSilenceMs,
+  });
 }

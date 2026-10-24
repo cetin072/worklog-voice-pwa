@@ -40,6 +40,16 @@ on:
         required: false
         default: true
         type: boolean
+      force_whisper_fallback_qa:
+        description: 'QA-only: bypass SpeechRecognizer while retaining real Whisper/save flow'
+        required: false
+        default: false
+        type: boolean
+      qa_api_base_url:
+        description: 'Optional QA API base URL for a dispatched standalone APK'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: mobile-app-${{ github.ref }}
@@ -195,13 +205,13 @@ jobs:
         env:
           NODE_ENV: production
           # PR Human QA must exercise the same PR backend contract, not production main.
-          # Main/dispatch builds continue to use the production API.
-          EXPO_PUBLIC_API_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--worklog-voice-pwa.netlify.app', github.event.pull_request.number) || 'https://worklog-voice-pwa.netlify.app' }}
+          EXPO_PUBLIC_API_BASE_URL: ${{ inputs.qa_api_base_url || (github.event_name == 'pull_request' && format('https://deploy-preview-{0}--worklog-voice-pwa.netlify.app', github.event.pull_request.number)) || 'https://worklog-voice-pwa.netlify.app' }}
+          EXPO_PUBLIC_FORCE_WHISPER_FALLBACK_QA: ${{ inputs.force_whisper_fallback_qa && '1' || '' }}
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: worklog-mobile-auth-ux-arm64-apk
+          name: ${{ inputs.force_whisper_fallback_qa && 'worklog-mobile-whisper-fallback-qa-arm64-apk' || 'worklog-mobile-auth-ux-arm64-apk' }}
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7

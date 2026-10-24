@@ -49,6 +49,11 @@ function formatDuration(durationMs: number) {
 function messageOf(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback; }
 function formatBytes(bytes: number) { return `${(Math.max(0, bytes) / (1024 * 1024)).toFixed(1)}MB`; }
 function formatMs(ms: number | null) { return ms === null ? '-' : `${(Math.max(0, ms) / 1000).toFixed(2)}초`; }
+function formatQuickVoicePcmDuration(audio: QuickVoicePcmAudioInput) {
+  const original = audio.signal.originalDurationMs ?? audio.durationMs;
+  const removed = audio.signal.removedSilenceMs ?? 0;
+  return `PCM ${formatDuration(original)} → Whisper ${formatDuration(audio.durationMs)}${removed > 0 ? ` · 무음 정리 ${formatDuration(removed)}` : ''}`;
+}
 function formatSavedDue(value?: string) {
   if (!value) return '';
   const date = new Date(value);
@@ -543,7 +548,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
         : guidance ? <Text numberOfLines={1} ellipsizeMode="tail" style={styles.quickGuidance}>{guidance}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>입력 신호 · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
+      {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>{formatQuickVoicePcmDuration(quickAudio)} · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
       {quickPhase === 'transcript_error' && !quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성 인식 경로를 다시 시작할 수 없습니다.</Text><Button title="Whisper로 다시 녹음" onPress={() => void retryWhisperFallback()} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
       {quickPhase === 'transcript_error' ? <Button title="녹음 버리기" onPress={discardQuickVoice} /> : null}
       {quickPhase === 'save_error' && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 브리핑 카드의 ✏️에서 바로 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
