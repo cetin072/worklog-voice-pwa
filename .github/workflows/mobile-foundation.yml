@@ -41,7 +41,7 @@ on:
         default: true
         type: boolean
       icon_variant:
-        description: 'Icon selection (base/qa requires the approved local PNG; no package separation)'
+        description: 'Launcher icon (existing recommended; base/qa require approved PNGs)'
         required: false
         default: existing
         type: choice
@@ -64,6 +64,11 @@ concurrency:
 permissions:
   contents: read
   issues: write
+
+# Dedicated QA branch builds install beside the production app, without extra UI inputs.
+# Other branches and the scheduled/main flows retain the existing Android identity.
+env:
+  EXPO_PUBLIC_WORKLOG_APP_VARIANT: ${{ startsWith(github.ref, 'refs/heads/qa/android-side-by-side-') && 'qa' || 'production' }}
 
 jobs:
   changes:
@@ -225,6 +230,7 @@ jobs:
           evidence=mobile/android/app/build/outputs/apk/release/qa-evidence
           mkdir -p "$evidence"
           git rev-parse HEAD > "$evidence/SOURCE_SHA.txt"
+          printf '%s\n' "${EXPO_PUBLIC_WORKLOG_APP_VARIANT:-production}" > "$evidence/APP_VARIANT.txt"
           sha256sum "$apk" > "$evidence/APK_SHA256SUMS"
           analyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
           "$analyzer" manifest print "$apk" > "$evidence/AndroidManifest.xml"
@@ -237,7 +243,10 @@ jobs:
           const fs = require('fs');
           const dir = 'mobile/android/app/build/outputs/apk/release/qa-evidence';
           const manifest = fs.readFileSync(`${dir}/AndroidManifest.xml`, 'utf8');
-          if (fs.readFileSync(`${dir}/application-id.txt`, 'utf8').trim() !== 'com.cetin072.worklog') throw Error('Unexpected package');
+          const expectedPackage = process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT === 'qa'
+            ? 'com.cetin072.worklog.qa'
+            : 'com.cetin072.worklog';
+          if (fs.readFileSync(`${dir}/application-id.txt`, 'utf8').trim() !== expectedPackage) throw Error('Unexpected package');
           if (manifest.includes('FOREGROUND_SERVICE_MEDIA_PLAYBACK') || /foregroundServiceType="[^"]*mediaPlayback/.test(manifest)) throw Error('Unexpected mediaPlayback FGS');
           for (const required of ['FOREGROUND_SERVICE_MICROPHONE', 'RECEIVE_BOOT_COMPLETED', 'SCHEDULE_EXACT_ALARM', 'POST_NOTIFICATIONS', 'ReminderBootReceiver']) {
             if (!manifest.includes(required)) throw Error(`Missing ${required}`);
@@ -247,7 +256,7 @@ jobs:
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.force_whisper_fallback_qa && 'worklog-mobile-whisper-fallback-qa-arm64-apk' || 'worklog-mobile-auth-ux-arm64-apk' }}
+          name: ${{ env.EXPO_PUBLIC_WORKLOG_APP_VARIANT == 'qa' && 'worklog-mobile-side-by-side-qa-arm64-apk' || (inputs.force_whisper_fallback_qa && 'worklog-mobile-whisper-fallback-qa-arm64-apk' || 'worklog-mobile-auth-ux-arm64-apk') }}
           path: |
             mobile/android/app/build/outputs/apk/release/app-release.apk
             mobile/android/app/build/outputs/apk/release/qa-evidence/

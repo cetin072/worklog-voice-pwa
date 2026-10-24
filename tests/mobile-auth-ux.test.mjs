@@ -14,7 +14,8 @@ const rootLayoutSource = fs.readFileSync('mobile/app/_layout.tsx', 'utf8');
 test('Mobile app owns a stable worklog deep-link scheme', () => {
   assert.equal(appJson.expo.scheme, 'worklog');
   assert.ok(appJson.expo.plugins.includes('expo-web-browser'));
-  assert.match(googleAuthSource, /MOBILE_AUTH_CALLBACK_URL = 'worklog:\/\/google-auth'/);
+  assert.match(googleAuthSource, /'worklog:\/\/google-auth'/);
+  assert.match(googleAuthSource, /'worklog-qa:\/\/google-auth'/);
 });
 
 test('Google sign-in reuses Supabase OAuth and returns through the app scheme', () => {

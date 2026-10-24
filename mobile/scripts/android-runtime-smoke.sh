@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ANDROID_DIR="$ROOT/mobile/android"
 APK="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
 PACKAGE="com.cetin072.worklog"
+if [[ "${EXPO_PUBLIC_WORKLOG_APP_VARIANT:-production}" == "qa" ]]; then
+  PACKAGE="com.cetin072.worklog.qa"
+fi
 ACTIVITY="$PACKAGE/.MainActivity"
 
 cd "$ANDROID_DIR"

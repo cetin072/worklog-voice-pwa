@@ -43,6 +43,16 @@ npm start
 
 Android 네이티브 권한/foreground service까지 포함한 녹음 검수와 Google OAuth deep link 검수는 Expo Go가 아니라 standalone/development build에서 수행한다.
 
+## Android 독립 QA 앱 (본앱 병행 설치)
+
+- `qa/android-side-by-side-*` 브랜치에서 `Mobile App` workflow를 수동 실행하면 `EXPO_PUBLIC_WORKLOG_APP_VARIANT=qa`가 적용되어 `업무수첩 QA` / `com.cetin072.worklog.qa` / `worklog-qa`로 빌드된다.
+- 기존 `main` 및 일반 브랜치는 `production` 모드로 기존 `업무수첩` / `com.cetin072.worklog` / `worklog`가 유지된다.
+- `WORKLOG_ICON_VARIANT=existing`을 유지하며 승인 QA 아이콘 적용은 별도 작업이다. 현재 QA 앱은 앱 이름으로 구분한다.
+- QA Android 앱은 기존 앱을 삭제하거나 덮어쓰지 않고 함께 설치할 수 있다. 로그인 세션과 앱 로컬 파일도 서로 분리된다.
+- **Supabase Auth의 Additional Redirect URLs에 `worklog-qa://google-auth`를 별도 허용해야 Google 로그인/이메일 확인 복귀가 정상 동작한다.** 이 설정은 인증 운영자 승인 전에는 변경하지 않는다.
+- **별도 QA 백엔드/DB는 없다.** 기본 API는 운영 서버이므로 실계정 기록 변경·삭제를 테스트하지 않는다. 필요하면 `qa_api_base_url`에 승인된 테스트 서버 URL을 지정한다.
+- `Mobile App`의 `android-standalone` APK만 일반 수동 설치용이다. `android-physical-qa-apk`는 터치 스모크용으로 프로덕션 데이터 테스트에 사용하지 않는다.
+
 ## 인증 경계
 
 - Supabase URL과 publishable key는 기존 `/api/supabase-auth-config`에서 읽는다.

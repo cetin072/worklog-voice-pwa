@@ -1,11 +1,25 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-// Build-only selection. It never changes package, auth, scheme or backend.
-// "existing" preserves the currently configured icons until approved bytes arrive.
+// Android QA has its own install identity and deep-link scheme, not its own backend.
+// Production/default keeps the original config object and package unchanged.
 module.exports = ({ config }) => {
+  const appVariant = process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT || 'production';
+  if (appVariant !== 'production' && appVariant !== 'qa') {
+    throw new Error('EXPO_PUBLIC_WORKLOG_APP_VARIANT must be production or qa');
+  }
+  const selectedConfig = appVariant === 'qa'
+    ? {
+        ...config,
+        name: '업무수첩 QA',
+        scheme: 'worklog-qa',
+        android: { ...config.android, package: 'com.cetin072.worklog.qa' },
+      }
+    : config;
+
+  // "existing" preserves configured icons until approved bytes arrive.
   const variant = process.env.WORKLOG_ICON_VARIANT || 'existing';
-  if (variant === 'existing') return config;
+  if (variant === 'existing') return selectedConfig;
   const assets = {
     base: './assets/worklog-launcher-1024.png',
     qa: './assets/worklog-qa-launcher-1024.png',
@@ -17,14 +31,14 @@ module.exports = ({ config }) => {
   }
   // Both approved originals are opaque. Do not claim they are transparent
   // foreground layers or reuse an unrelated adaptive layer for the QA build.
-  if (config.android?.adaptiveIcon) {
+  if (selectedConfig.android?.adaptiveIcon) {
     throw new Error('Validate the selected opaque icon against the existing adaptive layers before building');
   }
   return {
-    ...config,
+    ...selectedConfig,
     icon,
-    android: { ...config.android, icon },
-    ios: { ...config.ios, icon },
-    web: { ...config.web, favicon: icon },
+    android: { ...selectedConfig.android, icon },
+    ios: { ...selectedConfig.ios, icon },
+    web: { ...selectedConfig.web, favicon: icon },
   };
 };
