@@ -60,3 +60,15 @@ export async function recoverSavedScheduleReminders(client: PlatformSupabaseClie
   const cancellations = await reconcileCanceledScheduleArtifacts(client, isCurrent);
   return { ...canonical, cancellations };
 }
+
+/** Manual confirmation shares full offset reconciliation with automatic saves. */
+export async function reserveConfirmedReminder(schedule: ConfirmedSchedule, offsetMinutes: 0 | 30 | 1440, isCurrent: ReminderSyncGuard) {
+  assertReminderSyncCurrent(isCurrent);
+  if (schedule.status !== 'confirmed') throw new Error('REMINDER_INACTIVE');
+  const instant = Date.parse(schedule.startsAt || '');
+  if (schedule.allDay || !Number.isFinite(instant) || instant - offsetMinutes * 60000 <= Date.now()) throw new Error('TIME_INVALID');
+  const result = await coordinator.synchronize(schedule, isCurrent);
+  if (result.action !== 'scheduled') throw new Error('INVALID_REMINDER_RESPONSE');
+  if (offsetMinutes !== 0) await scheduleReminder({ scheduleId: schedule.id, title: schedule.title!, scheduleStartsAt: schedule.startsAt!, offsetMinutes }, isCurrent);
+  return result;
+}

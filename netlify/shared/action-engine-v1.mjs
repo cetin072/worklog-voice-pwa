@@ -8,6 +8,8 @@ import { extractScheduleFromText } from "./schedule-extract.mjs";
 const EVENT_SIGNAL_RE=/(미팅|약속|면담|상담|방문|만나|통화|전화(?!번호)|인터뷰|행사|교육|세미나|촬영|식사|점심|저녁|출발|도착|회의(?!\s*(?:자료|록|안건|준비|내용)))/;
 const REMINDER_SIGNAL_RE=/(알림|리마인더|리마인드|알려\s*줘|알려줘|깨워)/;
 const RELATIVE_TIME_SIGNAL_RE=/\d{1,3}\s*(?:분|시간)\s*(?:뒤|후)(?:로)?/;
+const MOVEMENT_RE=/(?:[가-힣A-Za-z0-9]+(?:으로|로|에)\s*(?:가(?:기|는|야|자|요|겠습니다)|이동)|[가-힣A-Za-z0-9]*(?:IC|ic|역|공항|터미널|회사|병원)\s*가(?:기|는|야|자|요|겠습니다))/;
+const NEGATED_EVENT_RE=/(?:가지|이동하지|알리지|알려주지)\s*마|안\s*(?:가|알려)|알림\s*(?:취소|필요\s*없)/;
 const STRONG_EVENT_VERB_RE=/(약속|면담|상담|방문|만나|통화|전화(?!번호)|출발|도착)/;
 const DEADLINE_RE=/까지[\s\S]{0,40}(?:제출|보내|전달|완료|처리|보고|정리|준비|확인|작성|수정|회신)|(?:마감|제출기한|완료기한)/;
 const STRONG_TASK_RE=/(?:해야\s*(?:해|돼|함|한다|겠|할)|할\s*것|하기|보내기|전달하기|제출하기|확인하기|전화하기|연락하기|정리하기|준비하기|검토하기|처리하기|보고하기|작성하기|수정하기|회신하기|예약하기|신청하기|문의하기|챙기기|받기)|(?:보내|전달|제출|확인|전화|연락|정리|준비|검토|처리|보고|작성|수정|회신|예약|신청|문의|챙기)(?:야|해|하자|할게|할 것|부터|$)/;
@@ -40,13 +42,17 @@ function hasExplicitTime(value){
 export function isTimedScheduleIntent({source="",dueStart="",recordType="",explicitType=""}={}){
   const text=normalize(source);
   if(!text || !hasExplicitTime(dueStart)) return false;
+  if(NEGATED_EVENT_RE.test(text)) return false;
   const deadline=DEADLINE_RE.test(text);
   const strongEvent=STRONG_EVENT_VERB_RE.test(text);
-  const eventSignal=EVENT_SIGNAL_RE.test(text);
+  const eventSignal=EVENT_SIGNAL_RE.test(text.replace(/(?:아침|점심|저녁)\s*\d{1,2}\s*시/g, ''));
   const meetingType=recordType==="meeting_call" || normalize(explicitType)==="회의·통화";
-  const explicitReminder=REMINDER_SIGNAL_RE.test(text) && RELATIVE_TIME_SIGNAL_RE.test(text);
+  const explicitReminder=REMINDER_SIGNAL_RE.test(text);
   if(deadline && !strongEvent) return false;
-  if(!eventSignal && !meetingType && !explicitReminder) return false;
+  const explicitDate=extractJournalDateFromText(text);
+  const unambiguousTime=RELATIVE_TIME_SIGNAL_RE.test(text) || (explicitDate.matched && !explicitDate.ambiguous && /(?:오전|오후|아침|저녁|밤|정오|자정|\b(?:1[3-9]|2[0-3])시|\b(?:[01]?\d|2[0-3]):[0-5]\d)/.test(text));
+  const expandedIntent=unambiguousTime && (explicitReminder || MOVEMENT_RE.test(text)) && !REPORTING_NOTE_RE.test(text) && !IDEA_NOTE_RE.test(text) && !NEGATED_EVENT_RE.test(text) && !explicitTypeKind(explicitType);
+  if(!eventSignal && !meetingType && !expandedIntent) return false;
   return true;
 }
 

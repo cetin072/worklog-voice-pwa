@@ -16,7 +16,7 @@ import { QUICK_VOICE_LAYOUT } from '@/src/features/voice/quick-voice-layout';
 
 type QuickVoicePhase = 'idle' | 'preparing' | 'recording' | 'captured' | 'transcribing' | 'saving' | 'refreshing' | 'saved' | 'transcript_error' | 'save_error' | 'refresh_error';
 const SAVED_FEEDBACK_MS = 900;
-type QuickVoiceSaveResult = Readonly<{ recordId?: string; scheduleDetected?: boolean; scheduleCreated?: boolean; scheduleId?: string; dueStart?: string }>;
+type QuickVoiceSaveResult = Readonly<{ reminderMessage?: string; recordId?: string; scheduleDetected?: boolean; scheduleCreated?: boolean; scheduleId?: string; dueStart?: string }>;
 type QuickVoiceProps = Readonly<{
   ensureProvider(onProgress?: (progress: { bytesWritten: number; totalBytes: number | null }) => void): Promise<MobileTranscriptionProvider>;
   speechRecognition?: QuickVoiceRecognitionPort;
@@ -494,7 +494,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
           : quickPhase === 'refreshing'
             ? '브리핑에 반영하는 중…'
             : quickPhase === 'saved'
-              ? quickSave?.scheduleCreated ? '✓ 저장 완료 · 일정 반영' : '✓ 저장 완료'
+              ? quickSave?.reminderMessage || '✓ 기록 저장 완료 · 알림은 별도 확인'
               : quickStatus(quickPhase);
     const guidance = isRecording
       ? '말씀하세요. 끝나면 빨간 버튼을 누르세요.'

@@ -47,3 +47,14 @@ test('failed or unresolved canonical lookup does not run native expiry cleanup',
     assert.equal(fake.calls.some(c => Array.isArray(c) && ['cancel', 'move', 'schedule'].includes(c[0])), false);
   }
 });
+
+for (const offset of [0,30,1440]) test(`manual preset ${offset} reconciles all offsets and start before selected reservation`,async()=>{
+ fake.reset(); await post.reserveConfirmedReminder(schedule,offset,()=>true);
+ assert.deepEqual(fake.calls,[['move',SID],['schedule',SID,0],...(offset ? [['schedule',SID,offset]] : [])]);
+});
+test('past or cancelled manual selection never mutates device state',async()=>{
+ fake.reset();
+ await assert.rejects(post.reserveConfirmedReminder({...schedule,startsAt:'2000-01-01T00:00:00Z'},30,()=>true),/TIME/);
+ await assert.rejects(post.reserveConfirmedReminder({...schedule,status:'cancelled'},0,()=>true),/INACTIVE/);
+ assert.deepEqual(fake.calls,[]);
+});

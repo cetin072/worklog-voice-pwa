@@ -20,7 +20,7 @@ test('Visible feature gate keeps Quick Voice fail-closed with a lightweight save
   assert.match(voice, /Peak/);
   assert.match(voice, /RMS/);
   assert.match(voice, /업무 저장 완료/);
-  assert.match(voice, /일정 반영/);
+  assert.match(voice, /reminderMessage/);
 });
 
 test('Visible feature gate keeps meeting recording inspectable after capture', () => {
