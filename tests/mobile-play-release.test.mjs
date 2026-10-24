@@ -11,8 +11,16 @@ test('Play identity pins the existing package and an explicit positive versionCo
   assert.equal(appConfig.name, '업무수첩');
   assert.equal(appConfig.android.package, 'com.cetin072.worklog');
   assert.equal(appConfig.version, '0.1.0');
-  assert.equal(appConfig.android.versionCode, 1);
+  assert.equal(appConfig.android.versionCode, 2);
   assert.ok(appConfig.plugins.includes('./plugins/with-worklog-play-signing.js'));
+});
+
+
+test('Expo Audio keeps background recording but disables unused background playback for Play', () => {
+  const expoAudio = appConfig.plugins.find((entry) => Array.isArray(entry) && entry[0] === 'expo-audio');
+  assert.ok(expoAudio);
+  assert.equal(expoAudio[1].enableBackgroundRecording, true);
+  assert.equal(expoAudio[1].enableBackgroundPlayback, false);
 });
 
 test('Play signing is opt-in and reads all credential material from environment variables', () => {
