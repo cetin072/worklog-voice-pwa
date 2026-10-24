@@ -79,3 +79,15 @@ API Forbidden 경로를 다른 인증/URL/trigger 변경으로 우회하지 않�
 - 별도 QA 패키지/계정/DB/backend 분리 승인 없음, 구현하지 않았다.
 
 main 병합, Production 배포, Play 제출, 운영 DB 변경, 실제 삭제 시험은 계속 제외한다.
+
+### 실제 실행 결과
+
+- 코드 체크포인트: `112f9533d464199fd573fb160831c89c704ecdac` (원격 통합 브랜치 push 확인).
+- 기존 Mobile App workflow dispatch 시도:
+  `gh workflow run mobile-foundation.yml --repo cetin072/worklog-voice-pwa --ref qa/android-stabilization-20261024 -f build_android=true`.
+- 결과: workflow 조회 GET `/repos/cetin072/worklog-voice-pwa/actions/workflows/mobile-foundation.yml`에서 `Forbidden`.
+  **dispatch POST에 도달하지 않음 / 빌드 시작되지 않음**. 다른 endpoint/인증/trigger로 우회하거나 재시도하지 않았다.
+- PR 상태 조회·갱신도 API 차단으로 불가. Git branch push는 성공했지만 PR 갱신으로 표시하지 않는다.
+- APK/AAB/최종 manifest/설치 hash는 아직 없음. 정상 Hermes export와 plugin manifest만 검증됨.
+- 두 아이콘의 디자인 승인은 확정되어 추가 디자인 확인은 필요 없다. 파일 전송이 해결되기 전
+  존재하지 않는 asset을 config에 연결하지 않는다. 현재 코드 빌드에는 새 base/QA 아이콘이 포함되지 않는다.
