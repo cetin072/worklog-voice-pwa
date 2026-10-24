@@ -1,21 +1,26 @@
 # Voice reminder server change — review only
 
 This PR targets main and contains only the reminder intent classifier, its tests,
-the two-function SQL draft, an isolated SQL test, and this rollout/rollback plan.
+the two-function SQL migration, an isolated SQL test, and this rollout/rollback plan.
 It does not include the QA package, native permissions, voice runtime, icons, or
 mobile UI changes from PR #462. That QA PR remains separate and unchanged.
 
 ## Readiness
 
 - Code and isolated tests can be reviewed independently of deployment.
-- SQL remains in `supabase/drafts`: it is NOT a deployable migration.
+- Canonical source: `supabase/migrations/20261024171450_worklog_reminder_confirmation.sql`.
+  This synchronizes an existing migration version; it does not generate a new
+  migration ID or authorize reapplying an already-recorded migration.
+- The file contains only the approved schema DDL. Environment-specific preflight
+  guards and private operational evidence are intentionally excluded. Schema-code
+  equality is distinct from byte equality of an execution envelope.
 - AGENTS.md requires a branch/PR for RPC changes but does not mandate a CLI.
-  The applicable Supabase skill requires generating the migration with
-  `supabase migration new`; the pinned official CLI installation currently fails
-  with a DNS resolution error. No executable migration filename is invented.
-- Formal migration generation/validation and backup/recovery prerequisites remain
-  gates. This document contains no private operational catalog or backup details.
-- No production SQL, main merge, deployment, or Play submission is part of this PR.
+  This is reconciliation of an existing version, not a newly invented filename.
+- Check migration history before any future application. Do not repair, replay,
+  or renumber history automatically. Deployment and recovery authorization remain
+  separate from source synchronization.
+- This PR changes source only. Merging requires the exact-head required checks and
+  review gate; it does not authorize a database replay, forced deploy, or Play submission.
 
 ## SQL scope
 
@@ -32,19 +37,18 @@ No table/column, RLS policy, key, account, or general role expansion is proposed
 The new function's EXECUTE grant is restricted to authenticated users; existing
 function permissions are retained. Authorization still occurs inside the RPC.
 
-## Forward sequence — only after prerequisites pass
+## Forward sequence — only for a future authorized release
 
-1. Generate a formal migration with the supported CLI and place the reviewed SQL
-   into it. Recheck the exact target function definitions/ACLs and migration state.
-2. Confirm recoverable backup evidence and a usable restoration procedure.
-   Function definitions alone are not a data backup. Do not restore production
-   merely to test this gate, and do not substitute another project's evidence.
+1. Compare the canonical source with approved migration history and the target
+   definitions/ACLs. If this version is already recorded, do not apply it again.
+2. Follow the specifically authorized recovery prerequisites for the target change.
+   Keep rollback definitions in the approved private evidence location. Do not
+   substitute another project's evidence or restore production to test a gate.
 3. Rehearse against the current relevant schema/dependencies without production
    rows. Verify existing-function replacement, ownership, retries, conflicting
    times, cancellation races, privilege behavior and rollback preservation.
 4. Report the exact main-target PR scope before any merge. Do not retarget or merge
-   the whole QA branch as a substitute. Apply only the approved two-function
-   migration after final readback checks; verify definitions/ACLs and history.
+   the whole QA branch as a substitute. Apply a not-yet-applied approved migration only after final checks; verify definitions/ACLs and history.
 5. Release the server classifier through the existing 48-hour main-based
    Production gate. No manual forced deployment, hook replay, or gate changes.
 6. Use the separately reviewed QA app and verify record/schedule/device reservation
@@ -92,7 +96,7 @@ a validated forward fix and rechecked privileges, not an unconditional grant rep
 
 The SQL test uses a network-isolated disposable container, stub auth identities and
 repository schema fixture. The existing cancellation function is installed first,
-then replaced while checking its EXECUTE ACL remains unchanged. The container uses
+then replaced by the canonical migration while checking its EXECUTE ACL remains unchanged. The container uses
 `--pull=never` and requires the pinned image to be available beforehand. It tests preservation after RPC execution is revoked,
 continued record cancellation, and both confirm/cancel lock orders. It is not proof
 of a production backup, full Supabase restore, native APK, or physical phone success.

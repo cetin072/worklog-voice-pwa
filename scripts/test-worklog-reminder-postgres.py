@@ -52,7 +52,7 @@ try:
     sql((ROOT/'supabase/migrations/20260922103000_work_record_soft_delete_v1.sql').read_text())
     acl_query = "select proacl::text from pg_proc where oid='public.cancel_my_work_record(uuid)'::regprocedure;"
     before_acl = sql(acl_query)
-    sql((ROOT/'supabase/drafts/worklog_reminder_confirmation.sql').read_text())
+    sql((ROOT/'supabase/migrations/20261024171450_worklog_reminder_confirmation.sql').read_text())
     assert sql(acl_query) == before_acl, 'existing cancellation EXECUTE ACL changed'
     sql(f"insert into auth.users values('{UID}'),('{OTHER}'); insert into workspaces(id,name,owner_user_id,created_by_user_id) values('{WID}','test','{UID}','{UID}'); insert into work_records(id,workspace_id,created_by_user_id,title,action_kind,journal_date) values('{RID}','{WID}','{UID}','진주IC','note','2026-10-24');")
     sql(owner(confirm(), OTHER), 'WORK_RECORD_NOT_FOUND_OR_FORBIDDEN')
