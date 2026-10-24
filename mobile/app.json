@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.cetin072.worklog",
-      "versionCode": 1,
+      "versionCode": 2,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM",
@@ -28,7 +28,8 @@
         {
           "microphonePermission": "업무수첩이 회의·업무 음성을 녹음하도록 마이크 사용을 허용해주세요.",
           "recordAudioAndroid": true,
-          "enableBackgroundRecording": true
+          "enableBackgroundRecording": true,
+          "enableBackgroundPlayback": false
         }
       ],
       [
