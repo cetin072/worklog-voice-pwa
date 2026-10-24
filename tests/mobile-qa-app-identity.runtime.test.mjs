@@ -61,3 +61,12 @@ test('dedicated QA workflow sets identity for native and JS, checks APK package,
   assert.match(smoke, /EXPO_PUBLIC_WORKLOG_APP_VARIANT:-production/);
   assert.match(smoke, /PACKAGE="com\.cetin072\.worklog\.qa"/);
 });
+
+test('QA PR automatic builds keep the separate install identity, real backend, and no paid Firebase gate', () => {
+  assert.match(workflow, /startsWith\(github\.head_ref, 'qa\/android-side-by-side-'\)/);
+  assert.match(workflow, /!startsWith\(github\.head_ref, 'qa\/android-side-by-side-'\)/);
+  assert.match(workflow, /EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '0'/);
+  assert.match(workflow, /EXPO_PUBLIC_API_BASE_URL:/);
+  const physicalGate = fs.readFileSync('.github/workflows/firebase-test-lab.yml', 'utf8');
+  assert.match(physicalGate, /if:.*github\.event_name == 'workflow_dispatch'.*!startsWith\(github\.head_ref, 'qa\/android-side-by-side-'\)/);
+});

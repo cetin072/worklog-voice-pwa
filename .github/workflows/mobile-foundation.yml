@@ -65,10 +65,11 @@ permissions:
   contents: read
   issues: write
 
-# Dedicated QA branch builds install beside the production app, without extra UI inputs.
-# Other branches and the scheduled/main flows retain the existing Android identity.
+# QA pull-request builds use github.head_ref (github.ref is refs/pull/N/merge),
+# while manual QA runs use github.ref. Both must install beside the production app.
+# Ordinary branches/main retain the existing production package and scheme.
 env:
-  EXPO_PUBLIC_WORKLOG_APP_VARIANT: ${{ startsWith(github.ref, 'refs/heads/qa/android-side-by-side-') && 'qa' || 'production' }}
+  EXPO_PUBLIC_WORKLOG_APP_VARIANT: ${{ (startsWith(github.ref, 'refs/heads/qa/android-side-by-side-') || startsWith(github.head_ref, 'qa/android-side-by-side-')) && 'qa' || 'production' }}
 
 jobs:
   changes:
@@ -217,8 +218,9 @@ jobs:
         working-directory: mobile/android
         env:
           NODE_ENV: production
-          # PR Human QA must exercise the same PR backend contract, not production main.
-          EXPO_PUBLIC_API_BASE_URL: ${{ inputs.qa_api_base_url || (github.event_name == 'pull_request' && format('https://deploy-preview-{0}--worklog-voice-pwa.netlify.app', github.event.pull_request.number)) || 'https://worklog-voice-pwa.netlify.app' }}
+          # QA PRs use the existing production API until an approved isolated QA backend exists.
+          # Other PRs keep their deploy-preview backend; manual overrides remain explicit.
+          EXPO_PUBLIC_API_BASE_URL: ${{ inputs.qa_api_base_url || (github.event_name == 'pull_request' && !startsWith(github.head_ref, 'qa/android-side-by-side-') && format('https://deploy-preview-{0}--worklog-voice-pwa.netlify.app', github.event.pull_request.number)) || 'https://worklog-voice-pwa.netlify.app' }}
           EXPO_PUBLIC_FORCE_WHISPER_FALLBACK_QA: ${{ inputs.force_whisper_fallback_qa && '1' || '' }}
           EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '0'
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
