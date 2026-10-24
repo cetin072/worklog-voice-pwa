@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import test from 'node:test';
 const fixture = new URL('./helpers/reminder-post-save-native-fake.mjs', import.meta.url).href;
-register('./helpers/mobile-ts-loader.mjs', import.meta.url, { data: { mocks: { './local-notifications': fixture, '@/src/features/schedule/local-notifications': fixture, '@/src/platform/secure-storage': fixture } } });
+register('./helpers/mobile-ts-loader.mjs', import.meta.url, { data: { mocks: { './local-notifications': fixture, '@/src/features/schedule/local-notifications': fixture, '@/src/platform/secure-storage': fixture, './worklog-reminder-adapter': fixture } } });
 const fake = await import(fixture);
 const post = await import('../mobile/src/features/schedule/schedule-reminder-post-save.ts');
 const { reminderSessionEpoch } = await import('../mobile/src/features/schedule/schedule-reminder-snapshot.ts');
@@ -57,4 +57,40 @@ test('past or cancelled manual selection never mutates device state',async()=>{
  await assert.rejects(post.reserveConfirmedReminder({...schedule,startsAt:'2000-01-01T00:00:00Z'},30,()=>true),/TIME/);
  await assert.rejects(post.reserveConfirmedReminder({...schedule,status:'cancelled'},0,()=>true),/INACTIVE/);
  assert.deepEqual(fake.calls,[]);
+});
+
+const recordId = '33333333-3333-4333-8333-333333333333';
+test('editing an unlinked record with an explicit future date/time confirms the owned schedule and reserves one start alert', async () => {
+  fake.reset();
+  const result = await post.synchronizeEditedWorklogReminder({},
+    { recordId, schedule: null, dueDate: '2099-01-01', dueTime: '09:00' }, () => true);
+  assert.equal(result, 'created');
+  assert.deepEqual(fake.calls, [
+    ['confirm', recordId, '2099-01-01T09:00:00+09:00'],
+    ['move', SID], ['schedule', SID, 0],
+  ]);
+});
+test('editing a linked record uses the existing schedule and never invokes new confirmation', async () => {
+  fake.reset();
+  const result = await post.synchronizeEditedWorklogReminder({},
+    { recordId, schedule, dueDate: '2099-01-01', dueTime: '09:00' }, () => true);
+  assert.equal(result, 'linked');
+  assert.deepEqual(fake.calls, [['move', SID], ['schedule', SID, 0]]);
+});
+test('date-only, stale, and past edits must not create reminders', async () => {
+  fake.reset();
+  assert.equal(await post.synchronizeEditedWorklogReminder({},
+    { recordId, schedule: null, dueDate: '2099-01-01', dueTime: '' }, () => true), 'no-time');
+  await assert.rejects(post.synchronizeEditedWorklogReminder({},
+    { recordId, schedule: null, dueDate: '2000-01-01', dueTime: '09:00' }, () => true), /TIME_INVALID/);
+  await assert.rejects(post.synchronizeEditedWorklogReminder({},
+    { recordId, schedule: null, dueDate: '2099-01-01', dueTime: '09:00' }, () => false), /STALE/);
+  assert.deepEqual(fake.calls, []);
+});
+test('server confirmation failure prevents native alarm creation without discarding edited record', async () => {
+  fake.reset();
+  fake.setConfirmationError(new Error('PGRST202: RPC unavailable'));
+  await assert.rejects(post.synchronizeEditedWorklogReminder({},
+    { recordId, schedule: null, dueDate: '2099-01-01', dueTime: '09:00' }, () => true), /PGRST202/);
+  assert.deepEqual(fake.calls, [['confirm', recordId, '2099-01-01T09:00:00+09:00']]);
 });

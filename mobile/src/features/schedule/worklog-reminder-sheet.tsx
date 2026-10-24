@@ -9,6 +9,8 @@ import { confirmedSeoulInstant, reminderFailureMessage } from './reminder-feedba
 import { reserveConfirmedReminder } from './schedule-reminder-post-save';
 import { reminderSessionEpoch, reminderSyncEpoch } from './schedule-reminder-snapshot';
 import { listScheduleReminders, openExactAlarmPermissionSettings } from './local-notifications';
+import { readWorklogDetails } from '@/src/platform/worklog-api';
+import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 
 function pickerValue(date: string, time: string) {
   const matchDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
@@ -50,10 +52,22 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
     const current = () => active && alive.current && guard.current();
     void findWorklogReminder(client, target, current).then(async (found) => {
       const reminders = found ? await listScheduleReminders(found.id) : [];
+      // Existing due fields are a hint for the picker, not evidence of a reserved OS alarm.
+      let existingDue: { dueDate: string; dueTime: string } | null = null;
+      if (!found && target.recordId) {
+        try {
+          const token = await getFreshAccessToken(client);
+          existingDue = await readWorklogDetails(token, target.recordId);
+        } catch { /* Legacy or offline record: keep manual picker usable. */ }
+      }
       if (!current()) return;
+      if (existingDue?.dueDate) setDate(existingDue.dueDate);
+      if (existingDue?.dueTime) setTime(existingDue.dueTime);
       setSchedule(found); setReady(true);
       // Stored mappings are not proof of a current OS reservation: the action below verifies it.
-      setMessage(found ? `저장된 알림 ${reminders.length}개 · 아래 버튼으로 이 기기 예약을 확인하거나 추가하세요.` : '알림을 만들려면 날짜와 시간을 확인해주세요. 기록의 종류와 기한은 바뀌지 않습니다.');
+      setMessage(found ? `기기 등록 기록 ${reminders.length}개 · 시작 시 알림을 확인하고 필요하면 추가하세요.` : existingDue?.dueDate && existingDue?.dueTime
+        ? '기존 기록의 날짜와 시간을 불러왔습니다. 시작 시 알림 등록을 누르면 이 기기에 예약합니다.'
+        : '알림을 만들려면 날짜와 시간을 선택해주세요. 기록의 종류와 기한은 바뀌지 않습니다.');
     }).catch((error) => { if (current()) setMessage(reminderFailureMessage(error)); });
     return () => { active = false; alive.current = false; };
   }, [client, target, reload]);

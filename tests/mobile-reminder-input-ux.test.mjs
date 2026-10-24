@@ -25,3 +25,20 @@ test('voice and direct entry retain automatic post-save start alarm synchronizat
   assert.match(home, /synchronizeSavedScheduleReminders\(saved, reminderGuard\)/);
   assert.match(coordinator, /offsetMinutes: 0/);
 });
+
+test('visible reminder actions are available directly on every home record type', () => {
+  assert.match(home, /function ReminderShortcut/);
+  assert.match(home, /function FocusTaskRow\(\{ task, today, onOpen, onReminder/);
+  assert.match(home, /function TaskRow\(\{ bucket, task, onOpen, onReminder/);
+  assert.match(home, /function NoteRow\(\{ note, onEdit, onDelete, onAcknowledge, onReminder/);
+  assert.match(home, /function ScheduleRows\(\{ schedules, empty, onReminder/);
+  assert.match(home, /onReminder=\{\(\) => setReminderTarget\(\{ recordId: task\.pageId/);
+  assert.match(home, /🔔 알림 추가·확인/);
+});
+test('editing a record tries a guarded automatic reminder but keeps save and notification outcomes separate', () => {
+  assert.match(home, /synchronizeEditedWorklogReminder\(client, \{/);
+  assert.match(home, /기록은 수정됐지만 알림은 미확인/);
+  assert.match(home, /새 일정 알림을 이 휴대폰에 예약했습니다/);
+  assert.match(sheet, /readWorklogDetails\(token, target\.recordId\)/);
+  assert.match(sheet, /기존 기록의 날짜와 시간을 불러왔습니다/);
+});
