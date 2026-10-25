@@ -21,10 +21,11 @@ test('Source contract: notification adapter delegates to journalled production s
 test('Home recovers durable device state and rebuilds reminders from canonical briefing schedules', () => {
   assert.doesNotMatch(home, /ScheduleDeviceActions|collectDeviceSyncResult|synchronizeScheduleToPreferredCalendar/);
   assert.match(home, /recoverSavedScheduleReminders/);
-  assert.match(home, /synchronizeBriefingScheduleReminders\(next\.schedules\)/);
-  assert.match(home, /if \(state !== 'active'\) return;[\s\S]*recover\(\);[\s\S]*void refreshBriefing\(\)/);
+  assert.match(home, /synchronizeBriefingScheduleReminders\(client, next\.schedules\)/);
+  assert.match(home, /await recoverSavedScheduleReminders\(client\)/);
+  assert.match(home, /if \(alive\) await refreshBriefing\(\)/);
   assert.match(postSave, /confirmedSchedulesFromBriefing/);
-  assert.match(postSave, /coordinator\.recover/);
+  assert.match(postSave, /reconcileSnapshot/);
   assert.match(home, /screen === 'reminderSettings'/);
   assert.match(home, /Notifications\.getLastNotificationResponseAsync/);
 });

@@ -45,3 +45,12 @@ test('server cancellation remains successful when native cleanup fails and leave
   assert.equal(result.alreadyCancelled, false);
   assert.equal(result.cleanupPending, true);
 });
+
+
+for (const data of [null, [], [{ schedule_id: scheduleId, schedule_status: 'confirmed' }], [{ schedule_id: 'other', schedule_status: 'cancelled' }]]) {
+  test(`invalid cancellation confirmation never cleans local reminders: ${JSON.stringify(data)}`, async () => {
+    const world = fake.reset();
+    await assert.rejects(cancellation.cancelScheduleWithDeviceCleanup({ rpc: async () => ({ data, error: null }) }, scheduleId), /INVALID_CANCELLATION_CONFIRMATION/);
+    assert.deepEqual(world.calls, []);
+  });
+}

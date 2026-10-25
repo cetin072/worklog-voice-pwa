@@ -1,3 +1,4 @@
+import { assertReminderSyncCurrent, type ReminderSyncGuard } from './schedule-reminder-snapshot';
 /**
  * The only mobile bridge from a server-confirmed Schedule to device reminders.
  * Inputs never call Expo Notifications directly; they hand the canonical
@@ -45,8 +46,9 @@ export function confirmedSchedulesFromBriefing(input?: Readonly<{
 }
 
 type ReminderPort = {
-  scheduleReminder(input: { scheduleId: string; title: string; scheduleStartsAt: string; offsetMinutes: 0 }): Promise<unknown>;
-  cancelAllScheduleReminders(scheduleId: string): Promise<unknown>;
+  scheduleReminder(input: { scheduleId: string; title: string; scheduleStartsAt: string; offsetMinutes: 0 }, isCurrent?: ReminderSyncGuard): Promise<unknown>;
+  synchronizeScheduleReminders(input: { scheduleId: string; title: string; scheduleStartsAt: string }, isCurrent?: ReminderSyncGuard): Promise<{ failed: number }>;
+  cancelAllScheduleReminders(scheduleId: string, isCurrent?: ReminderSyncGuard): Promise<unknown>;
   reconcileScheduleReminders(): Promise<unknown>;
 };
 
@@ -68,31 +70,40 @@ function exactFutureInstant(value: unknown) {
 
 /** Factory keeps the policy executable without importing Expo in runtime tests. */
 export function createScheduleReminderCoordinator(deps: { reminders: ReminderPort }) {
-  async function synchronize(schedule: ConfirmedSchedule | null | undefined) {
+  async function synchronize(schedule: ConfirmedSchedule | null | undefined, isCurrent: ReminderSyncGuard = () => true) {
+    assertReminderSyncCurrent(isCurrent);
     const scheduleId = identifier(schedule?.id);
     if (!scheduleId) return { action: 'ignored' as const };
 
     const startsAt = exactFutureInstant(schedule?.startsAt);
     const title = typeof schedule?.title === 'string' ? schedule.title.trim() : '';
     if (schedule?.status !== ACTIVE_STATUS || schedule?.allDay === true || !startsAt || !title) {
-      await deps.reminders.cancelAllScheduleReminders(scheduleId);
+      await deps.reminders.cancelAllScheduleReminders(scheduleId, isCurrent);
       return { action: 'cancelled' as const, scheduleId };
     }
 
-    await deps.reminders.scheduleReminder({ scheduleId, title, scheduleStartsAt: startsAt, offsetMinutes: 0 });
+    // Move every existing offset through the same durable cancellation/replacement path.
+    const result = await deps.reminders.synchronizeScheduleReminders({ scheduleId, title, scheduleStartsAt: startsAt }, isCurrent);
+    await deps.reminders.scheduleReminder({ scheduleId, title, scheduleStartsAt: startsAt, offsetMinutes: 0 }, isCurrent);
+    if (result.failed) throw new Error(`일정 알림 ${result.failed}개 동기화가 보류되었습니다.`);
     return { action: 'scheduled' as const, scheduleId };
   }
 
-  async function cancelConfirmed(scheduleIds: readonly string[]) {
+  async function cancelConfirmed(scheduleIds: readonly string[], isCurrent: ReminderSyncGuard = () => true) {
     for (const value of scheduleIds) {
       const scheduleId = identifier(value);
-      if (scheduleId) await deps.reminders.cancelAllScheduleReminders(scheduleId);
+      if (scheduleId) await deps.reminders.cancelAllScheduleReminders(scheduleId, isCurrent);
     }
   }
 
-  async function synchronizeMany(schedules: readonly (ConfirmedSchedule | null | undefined)[]) {
+  async function synchronizeMany(schedules: readonly (ConfirmedSchedule | null | undefined)[], isCurrent: ReminderSyncGuard = () => true) {
     const results = [];
-    for (const schedule of schedules) results.push(await synchronize(schedule));
+    const errors: unknown[] = [];
+    for (const schedule of schedules) {
+      try { results.push(await synchronize(schedule, isCurrent)); }
+      catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw new AggregateError(errors, `일정 ${errors.length}개 알림 동기화가 보류되었습니다.`);
     return results;
   }
 

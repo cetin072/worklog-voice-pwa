@@ -82,7 +82,7 @@ test('Quick Voice retains actual schedule creation truth while success returns t
   assert.match(card, /scheduleCreated/);
   assert.match(card, /setQuickSave\(saved\.saveResult\)/);
   assert.match(card, /업무 저장 완료/);
-  assert.match(card, /일정 반영/);
+  assert.match(card, /reminderMessage/);
   assert.match(card, /setTimeout\(\(\) => \{/);
   assert.doesNotMatch(card, /quickSave\?\.scheduleDetected \? <Text style=\{styles\.scheduleSuccess\}/);
 });
@@ -122,6 +122,24 @@ test('Quick Voice starts Android recognition before Whisper preparation, keeping
   assert.match(flow, /\['idle', 'preparing', 'saved', 'refresh_error'\]/);
   assert.match(card, /preparing: '녹음 준비 중'/);
   assert.match(card, /quickPhase === 'transcribing' && modelDownload/);
+});
+
+test('QA-only Whisper fallback build bypasses only SpeechRecognizer and retains real provider and save paths', () => {
+  assert.match(home, /EXPO_PUBLIC_FORCE_WHISPER_FALLBACK_QA/);
+  assert.match(home, /speechRecognition: androidTouchSmoke \|\| FORCE_WHISPER_FALLBACK_QA_MODE \? undefined : QUICK_VOICE_SPEECH_RECOGNITION/);
+  assert.match(home, /ensureProvider: androidTouchSmoke \? async \(\) => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider/);
+  assert.match(home, /saveWorklog: androidTouchSmoke \? async \(\) => \(\{\}\) : async \(transcript, options\)/);
+});
+
+test('Whisper fallback exposes original to processed PCM duration in the UI and debug evidence', () => {
+  assert.match(card, /formatQuickVoicePcmDuration/);
+  assert.match(card, /PCM \$\{formatDuration\(original\)\} → Whisper \$\{formatDuration\(audio\.durationMs\)\}/);
+  const pcm = fs.readFileSync('mobile/src/features/voice/quick-voice-pcm.ts', 'utf8');
+  const debug = fs.readFileSync('mobile/src/features/voice/quick-voice-debug.ts', 'utf8');
+  assert.match(pcm, /reportQuickVoicePcmCompaction\(compacted\)/);
+  assert.match(debug, /originalDurationMs/);
+  assert.match(debug, /processedDurationMs/);
+  assert.match(debug, /removedSilenceMs/);
 });
 
 test('Quick Voice fallback can leave the guarded voice flow only after explicitly clearing it', () => {
