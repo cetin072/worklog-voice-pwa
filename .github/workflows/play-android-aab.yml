@@ -66,7 +66,7 @@ jobs:
         run: npm run typecheck
 
       - name: Run mobile regression tests
-        run: node --test tests/mobile-*.test.mjs
+        run: node --test tests/mobile-*.test.mjs tests/play-build-gates.runtime.test.mjs
 
       - name: Validate Play app identity and version
         working-directory: mobile
@@ -143,6 +143,8 @@ jobs:
           grep -qi "jar verified" "$RUNNER_TEMP/jarsigner-verify.txt"
 
       - name: Inspect final release manifest and upload certificate
+        env:
+          RELEASE_CODE: ${{ inputs.release_version_code }}
         shell: bash
         run: |
           set -euo pipefail
