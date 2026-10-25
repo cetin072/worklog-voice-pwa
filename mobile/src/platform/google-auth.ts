@@ -5,7 +5,9 @@ import * as WebBrowser from 'expo-web-browser';
 
 import type { PlatformSupabaseClient } from './supabase';
 
-export const MOBILE_AUTH_CALLBACK_URL = 'worklog://google-auth';
+export const MOBILE_AUTH_CALLBACK_URL = process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT === 'qa'
+  ? 'worklog-qa://google-auth'
+  : 'worklog://google-auth';
 export const GOOGLE_AUTH_REDIRECT_URL = MOBILE_AUTH_CALLBACK_URL;
 
 WebBrowser.maybeCompleteAuthSession();
@@ -14,7 +16,7 @@ let callbackInFlight: { url: string; completion: Promise<boolean> } | null = nul
 
 function parseGoogleAuthCallback(url: string) {
   const parsed = new URL(url);
-  if (parsed.protocol !== 'worklog:' || parsed.hostname !== 'google-auth') return null;
+  if (parsed.protocol !== new URL(MOBILE_AUTH_CALLBACK_URL).protocol || parsed.hostname !== 'google-auth') return null;
 
   const query = parsed.searchParams;
   const fragment = new URLSearchParams(parsed.hash.replace(/^#/, ''));

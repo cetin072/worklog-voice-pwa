@@ -24,24 +24,18 @@ test('Mobile cancellation records recoverable reminder cleanup only after the se
   assert.match(mobileCancellation, /client\.rpc\('cancel_my_schedule'/);
   const rpc = mobileCancellation.indexOf("client.rpc('cancel_my_schedule'");
   const pending = mobileCancellation.indexOf('updatePendingScheduleIds((ids) => [...ids, scheduleId]);');
-  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId);');
+  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId, isCurrent);');
   assert.ok(rpc >= 0);
   assert.ok(pending > rpc, 'pending cleanup must be saved after a successful server RPC');
   assert.ok(cleanup > pending, 'device cleanup must start only after the confirmed pending marker exists');
-  assert.match(mobileCancellation, /cancelAllScheduleReminders\(scheduleId\)/);
+  assert.match(mobileCancellation, /cancelAllScheduleReminders\(scheduleId, isCurrent\)/);
   assert.match(mobileCancellation, /reconcileCanceledScheduleArtifacts/);
   assert.match(mobileCancellation, /cleanupPending/);
 });
 
-test('Startup cancellation recovery verifies Data Core cancellation before reminder cleanup', () => {
+test('Startup cancellation recovery uses the validated exact-ID owner snapshot before cleanup', () => {
   assert.match(mobileCancellation, /listTrackedReminderScheduleIds/);
-  assert.match(mobileCancellation, /\.from\('schedules'\)/);
-  assert.match(mobileCancellation, /\.eq\('status', 'cancelled'\)/);
-  assert.match(mobileCancellation, /a stale marker never authorizes cleanup by itself/);
-  const candidates = mobileCancellation.indexOf('const candidateIds =');
-  const serverState = mobileCancellation.indexOf(".from('schedules')", candidates);
-  const cleanup = mobileCancellation.indexOf('await cleanupDeviceScheduleArtifacts(scheduleId);', serverState);
-  assert.ok(candidates >= 0, 'pending and reminder mappings must both be reconciliation candidates');
-  assert.ok(serverState > candidates, 'server state must be read after local candidates are collected');
-  assert.ok(cleanup > serverState, 'reminder cleanup must follow a server cancelled-state check');
+  assert.match(mobileCancellation, /readOwnedReminderSnapshots\(client, candidateIds, isCurrent\)/);
+  assert.match(mobileCancellation, /row.status === 'cancelled'/);
+  assert.match(mobileCancellation, /cancelAllScheduleReminders\(scheduleId, isCurrent\)/);
 });

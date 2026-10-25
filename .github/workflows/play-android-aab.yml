@@ -9,6 +9,15 @@ on:
         default: 'main'
         type: string
 
+      highest_uploaded_version_code:
+        description: 'Highest code across ALL Play tracks and drafts, verified in Console'
+        required: true
+        type: number
+      release_version_code:
+        description: 'Approved new code greater than the verified highest uploaded code'
+        required: true
+        type: number
+
 permissions:
   contents: read
 
@@ -16,11 +25,22 @@ jobs:
   play-aab:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      EXPO_PUBLIC_WORKLOG_APP_VARIANT: production
+      EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '0'
+      EXPO_PUBLIC_FORCE_WHISPER_FALLBACK_QA: '0'
+      WORKLOG_ICON_VARIANT: existing
     steps:
       - name: Check out exact source
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_ref }}
+
+      - name: Apply Console-verified version for this build only
+        env:
+          HIGHEST_CODE: ${{ inputs.highest_uploaded_version_code }}
+          RELEASE_CODE: ${{ inputs.release_version_code }}
+        run: node scripts/prepare-play-version.mjs
 
       - uses: actions/setup-node@v4
         with:
@@ -46,7 +66,7 @@ jobs:
         run: npm run typecheck
 
       - name: Run mobile regression tests
-        run: node --test tests/mobile-*.test.mjs
+        run: node --test tests/mobile-*.test.mjs tests/play-build-gates.runtime.test.mjs
 
       - name: Validate Play app identity and version
         working-directory: mobile
@@ -121,6 +141,25 @@ jobs:
           test -f "$AAB"
           jarsigner -verify -verbose -certs "$AAB" | tee "$RUNNER_TEMP/jarsigner-verify.txt"
           grep -qi "jar verified" "$RUNNER_TEMP/jarsigner-verify.txt"
+
+      - name: Inspect final release manifest and upload certificate
+        env:
+          RELEASE_CODE: ${{ inputs.release_version_code }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          aab=mobile/android/app/build/outputs/bundle/release/app-release.aab
+          manifest=mobile/android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml
+          mkdir -p play-artifact
+          test -s "$manifest"
+          node scripts/verify-play-manifest.mjs "$manifest"
+          keytool -printcert -jarfile "$aab" > play-artifact/upload-certificate.txt
+          ! grep -Eiq 'CN=Android Debug' play-artifact/upload-certificate.txt
+          unzip -l "$aab" > play-artifact/aab-entries.txt
+          grep -q 'base/lib/arm64-v8a/' play-artifact/aab-entries.txt
+          cp "$manifest" play-artifact/AndroidManifest.xml
+          git rev-parse HEAD > play-artifact/SOURCE_SHA.txt
+          cp mobile/app.json play-artifact/build-app-config.json
 
       - name: Package Play artifact
         shell: bash
