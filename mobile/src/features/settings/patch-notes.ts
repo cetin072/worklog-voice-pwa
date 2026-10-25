@@ -9,6 +9,18 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-10-25',
+    title: '녹음·알림 확인 흐름 개선',
+    summary: '실기기에서 확인한 음성 기록과 일정 알림 개선을 정식 앱 기준에 반영했습니다.',
+    items: [
+      '업무·메모·일정에서 알림 추가·확인 화면으로 바로 이동할 수 있습니다.',
+      '기록 저장과 휴대폰 알림 예약 결과를 구분해서 안내합니다.',
+      '일정 수정·취소 및 앱 재실행 때 알림 예약을 다시 맞춥니다.',
+      '대체 음성 인식에서 긴 무음을 정리하면서 작은 말소리는 보존하도록 보강했습니다.',
+      '설정에 개인정보처리방침과 계정·데이터 삭제 요청 안내를 추가했습니다.',
+    ],
+  },
+  {
     date: '2026-09-23',
     title: '확정 일정 시작 알림',
     summary: '서버에 확정된 시간이 있는 일정은 휴대폰에서 시작 시각에 한 번 알려드리도록 보강했습니다.',
