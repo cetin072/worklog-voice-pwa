@@ -148,7 +148,10 @@ test('invalidation during permission cannot create a reservation or a replayable
 
 test('installed Supabase client emits exact-count ID/creator scope without date or status filters', async () => {
   const { createRequire } = await import('node:module');
-  const { createClient } = createRequire(new URL('../mobile/package.json', import.meta.url))('@supabase/supabase-js');
+  const requireMobile = createRequire(new URL('../mobile/package.json', import.meta.url));
+  const requireRoot = createRequire(new URL('../package.json', import.meta.url));
+  assert.equal(requireRoot('./package.json').devDependencies['@supabase/supabase-js'], requireMobile('./package.json').dependencies['@supabase/supabase-js']);
+  const { createClient } = requireMobile('@supabase/supabase-js');
   const client = createClient('https://example.supabase.co', 'non-secret-test-placeholder', {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { fetch: async (url, init) => {
