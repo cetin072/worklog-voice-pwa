@@ -4,12 +4,12 @@ const require = createRequire(new URL('../../mobile/package.json', import.meta.u
 const ts = require('typescript');
 const source = readFileSync(new URL('../../mobile/app/index.tsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('home.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['taskNote', 'formatSchedule', 'ReminderShortcut', 'DeleteOverflow', 'TaskRow', 'NoteRow', 'formatNoteJournalDate', 'ScheduleRows'];
+const names = ['taskNote', 'formatSchedule', 'ReminderShortcut', 'TaskRow', 'NoteRow', 'formatNoteJournalDate', 'ScheduleRows'];
 const declarations = ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.includes(node.name.text)).map(node => node.getText(ast)).join('\n');
 const start = source.indexOf("{screen === 'home' ? <>") + "{screen === 'home' ? ".length;
 const end = source.indexOf("\n    {screen === 'journal'", start);
 const home = source.slice(start, end).trim().replace(/ : null\}$/, '');
-const compiled = ts.transpileModule(`${declarations}\nfunction renderHome() { return (${home}); }\nreturn { renderHome, DeleteOverflow, TaskRow };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
+const compiled = ts.transpileModule(`${declarations}\nfunction renderHome() { return (${home}); }\nreturn { renderHome, TaskRow };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
 export function homeHarness(context) {
  const states = []; let cursor = 0; let back; let cleanup;
  const node = (type, props, ...children) => ({ type, props: { ...props, children } });
@@ -35,7 +35,7 @@ export function homeHarness(context) {
   if (typeof value.type === 'function') return expand(value.type(value.props));
   return { ...value, props: { ...value.props, children: expand(value.props.children) } };
  }
- return { context: base, render() { cursor = 0; return expand(api.renderHome()); }, overflow(props) { cursor = 0; return expand(api.DeleteOverflow(props)); }, back() { return back?.(); } };
+ return { context: base, render() { cursor = 0; return expand(api.renderHome()); }, back() { return back?.(); } };
 }
 export function nodes(tree) { return Array.isArray(tree) ? tree.flatMap(nodes) : tree && typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : []; }
 export function words(tree) { return Array.isArray(tree) ? tree.map(words).join(' ') : tree && typeof tree === 'object' ? words(tree.props?.children) : String(tree ?? ''); }
