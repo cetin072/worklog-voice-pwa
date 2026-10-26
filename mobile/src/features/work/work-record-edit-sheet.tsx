@@ -123,7 +123,7 @@ export function WorkRecordEditSheet({
           </Pressable>
         </View>
 
-        {loading ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.status}>현재 업무 정보를 불러오는 중입니다.</Text></View> : null}
+        {loading ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.status}>저장 전 최신 제목·날짜를 확인하고 있어요.</Text></View> : null}
 
         <Text style={styles.label}>업무명</Text>
         <TextInput
