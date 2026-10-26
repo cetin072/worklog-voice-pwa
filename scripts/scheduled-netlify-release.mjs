@@ -123,7 +123,7 @@ export async function runCycle({ config, env, api, snapshot, head, files, prefli
   const published = publishedDeploy(await snapshot(), config.site_id);
   const sha = await head();
   const plan = { ...decide(config, published, sha, await files(published.commit_ref, sha), now(), { manual }),
-    next_check_utc: schedule.next_check_utc };
+    next_check_utc: config.schedule_enabled === false ? null : schedule.next_check_utc };
   if (plan.status !== 'READY') return plan;
   const ready = await preflight(published.commit_ref, sha);
   if (ready.status !== 'READY') return { ...plan, ...ready };

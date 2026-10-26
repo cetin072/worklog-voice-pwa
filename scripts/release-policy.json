@@ -10,5 +10,6 @@
   "deploy_excludes": [],
   "schedule_anchor_utc": "2026-10-19T08:20:00.000Z",
   "schedule_interval_hours": 48,
-  "schedule_window_hours": 24
+  "schedule_window_hours": 24,
+  "schedule_enabled": false
 }

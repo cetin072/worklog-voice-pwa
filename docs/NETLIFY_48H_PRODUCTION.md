@@ -25,3 +25,5 @@
 - Hook POST는 1회만 한다. 응답 유실 시 재전송하지 않고 공개 SHA를 관찰한다. 실패하면 이전 공개본이 유지된다.
 
 이번 작업에서 Production 시험 배포를 하지 않는다. 로컬 fixture 검증은 실제 게시 성공 증거가 아니다.
+
+`release-policy.json`의 `schedule_enabled=false`는 운영자 배포 현황에 정기 제외를 알리는 표시값이다. 즉시 배포 결과의 다음 정기 시각도 null로 표시한다. 실제 정기 실행 제거는 workflow의 `on.schedule` 제거로 수행한다.

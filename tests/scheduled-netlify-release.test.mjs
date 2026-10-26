@@ -155,6 +155,7 @@ test('ignore command stops Production only; CLI dry-run does not mutate reposito
 });
 
 test('web Production has no recurring trigger while read-only manual inspection remains', () => {
+  assert.equal(config.schedule_enabled, false);
   const workflow = readFileSync(new URL('../.github/workflows/production-release.yml', import.meta.url), 'utf8');
   assert.doesNotMatch(workflow, /^  schedule:|cron:/m);
   assert.match(workflow, /^  workflow_dispatch:/m);
