@@ -198,7 +198,7 @@ jobs:
           NODE_ENV: production
           # PR Human QA must exercise the same PR backend contract, not production main.
           # Main/dispatch builds continue to use the production API.
-          # QA-only integration: #467 serves the identical backend; stacked #468/#469 previews are unavailable.
+          # QA-only integration: identical backend on the verified predecessor preview.
           EXPO_PUBLIC_API_BASE_URL: https://deploy-preview-467--worklog-voice-pwa.netlify.app
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
       - name: Ensure non-Play APK cannot impersonate Play app
@@ -333,3 +333,12 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: bash mobile/scripts/android-runtime-smoke.sh
+
+      - name: Upload synthetic native home screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-home-native-screenshots
+          path: artifacts/home-native/
+          if-no-files-found: error
+          retention-days: 7
