@@ -1,11 +1,17 @@
 name: Batched Production Release
-run-name: "Production release | ${{ github.event_name == 'schedule' && 'live' || 'read-only dry-run' }}"
+run-name: "Production release | ${{ (github.event_name == 'schedule' || inputs.action == 'deploy-now') && 'live' || 'read-only dry-run' }}"
 
 on:
-  schedule:
-    # Daily wake-up; fixed 48-hour slots are computed across month/year boundaries.
-    - cron: '20 8 * * *'
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'deploy-now = 즉시 배포 (최신 main), dry-run = 읽기 전용 확인'
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - deploy-now
 
 permissions:
   contents: read
@@ -23,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.action == 'deploy-now' && 'main' || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -30,10 +37,11 @@ jobs:
           node-version: 24
       - name: Verify fixed-slot release regressions
         run: node --test tests/scheduled-netlify-release.test.mjs
-      - name: Check approved main and request one Git build only when due
+      - name: Check main and request one scheduled or explicitly requested Git build
         env:
+          RELEASE_ACTION: ${{ inputs.action }}
           GH_TOKEN: ${{ github.token }}
-          NETLIFY_PRODUCTION_BUILD_HOOK: ${{ github.event_name == 'schedule' && secrets.NETLIFY_PRODUCTION_BUILD_HOOK || '' }}
+          NETLIFY_PRODUCTION_BUILD_HOOK: ${{ (github.event_name == 'schedule' || (inputs.action == 'deploy-now' && github.ref == 'refs/heads/main')) && secrets.NETLIFY_PRODUCTION_BUILD_HOOK || '' }}
           RELEASE_RESULT_PATH: ${{ runner.temp }}/production-release-result.json
         run: node scripts/scheduled-netlify-release.mjs check scripts/release-policy.json
       - name: Retain check result
@@ -46,4 +54,4 @@ jobs:
           retention-days: 14
       - name: Record failure
         if: failure()
-        run: echo 'Release check failed. See this run. Previous published Production remains authoritative; retry at next fixed slot.' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'Release check failed. See this run. Previous published Production remains authoritative; use a new explicit manual run.' >> "$GITHUB_STEP_SUMMARY"
