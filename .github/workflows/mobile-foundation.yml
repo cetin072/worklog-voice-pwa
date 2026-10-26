@@ -168,6 +168,8 @@ jobs:
       - typecheck
     if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_WORKLOG_APP_VARIANT: qa
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -196,8 +198,11 @@ jobs:
           NODE_ENV: production
           # PR Human QA must exercise the same PR backend contract, not production main.
           # Main/dispatch builds continue to use the production API.
-          EXPO_PUBLIC_API_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--worklog-voice-pwa.netlify.app', github.event.pull_request.number) || 'https://worklog-voice-pwa.netlify.app' }}
+          # QA-only integration: identical backend on the verified predecessor preview.
+          EXPO_PUBLIC_API_BASE_URL: https://deploy-preview-467--worklog-voice-pwa.netlify.app
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+      - name: Ensure non-Play APK cannot impersonate Play app
+        run: bash mobile/scripts/verify-qa-apk.sh mobile/android/app/build/outputs/apk/release/app-release.apk
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
@@ -230,6 +235,8 @@ jobs:
       - typecheck
     if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_WORKLOG_APP_VARIANT: qa
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -258,6 +265,8 @@ jobs:
           NODE_ENV: production
           EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '1'
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+      - name: Ensure non-Play APK cannot impersonate Play app
+        run: bash mobile/scripts/verify-qa-apk.sh mobile/android/app/build/outputs/apk/release/app-release.apk
       - name: Package physical-device QA bundle
         shell: bash
         run: |
@@ -279,6 +288,8 @@ jobs:
       - typecheck
     if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_WORKLOG_APP_VARIANT: qa
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -307,6 +318,8 @@ jobs:
           NODE_ENV: production
           EXPO_PUBLIC_ANDROID_TOUCH_SMOKE: '1'
         run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon
+      - name: Ensure non-Play APK cannot impersonate Play app
+        run: bash mobile/scripts/verify-qa-apk.sh mobile/android/app/build/outputs/apk/release/app-release.apk
       - name: Enable KVM group permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -320,3 +333,12 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: bash mobile/scripts/android-runtime-smoke.sh
+
+      - name: Upload synthetic native home screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-home-native-screenshots
+          path: artifacts/home-native/
+          if-no-files-found: error
+          retention-days: 7

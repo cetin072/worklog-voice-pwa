@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ANDROID_DIR="$ROOT/mobile/android"
 APK="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
 PACKAGE="com.cetin072.worklog"
+if [[ "${EXPO_PUBLIC_WORKLOG_APP_VARIANT:-production}" == "qa" ]]; then
+  PACKAGE="com.cetin072.worklog.qa"
+fi
 ACTIVITY="$PACKAGE/.MainActivity"
 
 cd "$ANDROID_DIR"
@@ -23,6 +26,11 @@ adb shell pm grant "$PACKAGE" android.permission.RECORD_AUDIO || true
 adb shell am force-stop "$PACKAGE" || true
 adb logcat -c || true
 APP_START_MS="$(date +%s%3N)"
+# Record the real startup transition without imposing a display delay.
+STARTUP_CAPTURE_DIR="$ROOT/artifacts/home-native"
+mkdir -p "$STARTUP_CAPTURE_DIR"
+adb shell screenrecord --time-limit 10 /sdcard/worklog-startup.mp4 >/dev/null 2>&1 &
+STARTUP_CAPTURE_PID=$!
 adb shell am start -W -n "$ACTIVITY"
 
 adb shell pidof "$PACKAGE"
@@ -221,3 +229,75 @@ if ! grep -q '업무일지' /tmp/worklog-header-retry.xml || ! grep -q '닫기' 
 fi
 
 echo "Android production HomeScreenApp E2E PASS: navigation, Quick Voice recording, cancel, and post-cancel navigation."
+
+# Synthetic authenticated home only. These emulator captures are not live-account evidence.
+CAPTURE_DIR="$ROOT/artifacts/home-native"
+mkdir -p "$CAPTURE_DIR"
+for profile in '320 800 1.0' '390 844 1.0' '390 844 1.5' '1280 900 1.0'; do
+  read -r width height scale <<<"$profile"
+  adb shell wm density 160
+  adb shell wm size "${width}x${height}"
+  adb shell settings put system font_scale "$scale"
+  adb shell am force-stop "$PACKAGE"
+  adb shell am start -W -n "$ACTIVITY" >/dev/null
+  ready=0
+  for attempt in $(seq 1 20); do
+    dump_window /sdcard/home-capture.xml "$CAPTURE_DIR/empty-${width}-${scale}.xml"
+    if grep -q '음성 기록 시작' "$CAPTURE_DIR/empty-${width}-${scale}.xml"; then ready=1; break; fi
+    sleep 1
+  done
+  if [[ "$ready" != '1' ]]; then echo "Home capture failed: $profile"; exit 1; fi
+  adb exec-out screencap -p > "$CAPTURE_DIR/empty-${width}-${scale}.png"
+  test -s "$CAPTURE_DIR/empty-${width}-${scale}.png"
+done
+adb shell wm size reset
+adb shell wm density reset
+adb shell settings put system font_scale 1.0
+printf 'Synthetic empty home; widths in dp at density 160. 1280 is Android wide-screen, not a desktop web browser. No real account or notification delivery verified.\n' > "$CAPTURE_DIR/README.txt"
+
+# Capture the existing signed-out UI after a synthetic-session sign-out.
+# No real credentials or user records exist in this emulator fixture.
+wait "$STARTUP_CAPTURE_PID" || true
+adb pull /sdcard/worklog-startup.mp4 "$CAPTURE_DIR/startup-transition.mp4" >/dev/null
+adb shell wm density 160
+adb shell wm size 390x844
+adb shell am force-stop "$PACKAGE"
+adb shell am start -W -n "$ACTIVITY" >/dev/null
+for attempt in $(seq 1 20); do
+  dump_window /sdcard/login-capture.xml /tmp/login-capture.xml
+  if grep -q '설정 열기' /tmp/login-capture.xml; then break; fi
+  sleep 1
+done
+SETTINGS_COORDS="$(find_node_center /tmp/login-capture.xml '설정 열기')"
+read -r X Y <<<"$SETTINGS_COORDS"
+adb shell input tap "$X" "$Y"
+for attempt in $(seq 1 10); do
+  dump_window /sdcard/login-capture.xml /tmp/login-capture.xml
+  if grep -q '로그아웃' /tmp/login-capture.xml; then break; fi
+  adb shell input swipe 200 700 200 250 300
+  sleep 1
+done
+LOGOUT_COORDS="$(find_node_center /tmp/login-capture.xml '로그아웃')"
+read -r X Y <<<"$LOGOUT_COORDS"
+adb shell input tap "$X" "$Y"
+sleep 1
+dump_window /sdcard/logout-confirm.xml /tmp/logout-confirm.xml
+CONFIRM_COORDS="$(python3 - <<'COORDS'
+import re,xml.etree.ElementTree as E
+for n in E.parse('/tmp/logout-confirm.xml').getroot().iter('node'):
+ if n.get('resource-id') == 'android:id/button1' and n.get('text') == '로그아웃':
+  x1,y1,x2,y2=map(int,re.findall(r'\d+',n.get('bounds')));print((x1+x2)//2,(y1+y2)//2);break
+else: raise SystemExit('Logout confirmation button missing')
+COORDS
+)"
+read -r X Y <<<"$CONFIRM_COORDS"
+adb shell input tap "$X" "$Y"
+for attempt in $(seq 1 20); do
+  dump_window /sdcard/welcome.xml "$CAPTURE_DIR/welcome-390.xml"
+  if grep -q 'Google로 시작' "$CAPTURE_DIR/welcome-390.xml"; then break; fi
+  sleep 1
+done
+grep -q 'Google로 시작' "$CAPTURE_DIR/welcome-390.xml"
+adb exec-out screencap -p > "$CAPTURE_DIR/welcome-390.png"
+adb shell wm size reset
+adb shell wm density reset
