@@ -24,12 +24,11 @@ for (const kind of ['empty','populated','overdue','schedules','mixed']) test(`cu
  h.context.setUpcomingExpanded(v => !v);
  if (kind === 'mixed' || kind === 'schedules') assert.match(words(h.render()), /합성 다음 일정/);
 });
-test('overflow closes on back/cancel and only explicit delete forwards to the existing confirmation', () => {
- const h = homeHarness(fixture('empty')); let count = 0;
- const props = { title: '합성 업무', disabled: false, onDelete() { count++; } };
- const press = label => nodes(h.overflow(props)).find(n => n.type === 'Pressable' && words(n).trim() === label).props.onPress();
- assert.doesNotMatch(words(h.overflow(props)), /삭제/);
- press('•••'); assert.match(words(h.overflow(props)), /삭제/); h.back(); assert.doesNotMatch(words(h.overflow(props)), /삭제/);
- press('•••'); press('닫기'); assert.equal(count, 0);
- press('•••'); press('삭제'); assert.equal(count, 1); assert.doesNotMatch(words(h.overflow(props)), /삭제/);
+test('direct delete remains a single action that forwards to the existing confirmation', () => {
+ const h = homeHarness(fixture('populated')); let confirmations = 0;
+ h.context.confirmDeleteRecord = () => confirmations++;
+ const tree = h.render();
+ const remove = nodes(tree).find(n => n.type === 'Pressable' && n.props?.accessibilityLabel?.endsWith(' 삭제'));
+ assert.ok(remove); assert.doesNotMatch(words(tree), /•••|닫기/);
+ assert.equal(confirmations, 0); remove.props.onPress(); assert.equal(confirmations, 1);
 });
