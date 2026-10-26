@@ -49,7 +49,7 @@ test('closing an edit sheet invalidates a late detail response before another re
  function walk(n) { if (ts.isFunctionDeclaration(n) && names.includes(n.name?.text)) found.push(n.getText(ast)); ts.forEachChild(n, walk); }
  walk(ast); assert.equal(found.length, 2);
  const code = found.join('\n'); let release; let titles = [];
- const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 },
+ const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 }, editDetailsCache: { current: new Map() },
    getFreshAccessToken: async () => 'synthetic', readWorklogDetails: () => new Promise(resolve => { release = resolve; }), messageOf: (_e, fallback) => fallback };
  for (const name of new Set(code.match(/setEdit[A-Za-z]+/g))) scope[name] = () => {};
  scope.setEditTitle = title => titles.push(title);
@@ -57,4 +57,18 @@ test('closing an edit sheet invalidates a late detail response before another re
  const pending = api.loadTaskEditorDetails('synthetic-record'); await new Promise(resolve => setImmediate(resolve));
  api.closeTaskEditor(); release({title:'late private record', dueDate:'2030-01-01'}); await pending;
  assert.deepEqual(titles, ['']);
+});
+
+test('opening the same record reuses loaded edit details until the home snapshot changes', async () => {
+ let declaration;
+ function walk(n) { if (ts.isFunctionDeclaration(n) && n.name?.text === 'loadTaskEditorDetails') declaration = n.getText(ast); ts.forEachChild(n, walk); }
+ walk(ast); let reads = 0; let tokens = 0; let dates = [];
+ const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 }, editDetailsCache: { current: new Map() },
+   getFreshAccessToken: async () => { tokens++; return 'synthetic'; }, readWorklogDetails: async () => { reads++; return { title:'Synthetic',dueDate:'',dueTime:'',actionKind:'task' }; }, messageOf: (_e,fallback) => fallback };
+ for (const name of new Set(declaration.match(/setEdit[A-Za-z]+/g))) scope[name] = () => {};
+ scope.setEditDate = date => dates.push(date);
+ const open = compile(`${declaration}\nreturn loadTaskEditorDetails;`, scope);
+ await open('synthetic-id', 'old title', '2030-01-01'); await open('synthetic-id');
+ assert.equal(reads,1); assert.equal(tokens,1); assert.deepEqual(dates,['','']);
+ scope.editDetailsCache.current = new Map(); await open('synthetic-id'); assert.equal(reads,2);
 });
