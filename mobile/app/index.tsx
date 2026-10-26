@@ -1,3 +1,6 @@
+import { notificationResponseHandler } from '@/src/features/startup/notification-response-gate';
+import { StartupScreen } from '@/src/features/startup/startup-screen';
+import { initialBriefingState } from '@/src/features/startup/briefing-startup';
 import { WorklogReminderSheet } from '@/src/features/schedule/worklog-reminder-sheet';
 import type { ReminderTarget } from '@/src/features/schedule/worklog-reminder-adapter';
 import { reminderFailureMessage, savedReminderMessage } from '@/src/features/schedule/reminder-feedback';
@@ -5,7 +8,7 @@ import { reminderSessionEpoch, reminderSyncEpoch } from '@/src/features/schedule
 import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -297,7 +300,8 @@ function ScheduleRows({ schedules, empty, onReminder }: { schedules?: BriefingSc
 }
 
 function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary'; disabled?: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" disabled={disabled} style={[styles.authAction, variant === 'google' ? styles.authGoogleAction : styles.authPrimaryAction, disabled ? styles.authActionDisabled : null]} onPress={onPress}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} style={[styles.authAction, variant === 'google' ? styles.authGoogleAction : styles.authPrimaryAction, disabled ? styles.authActionDisabled : null]} onPress={onPress}>
+    {variant === 'google' ? <Image accessible={false} source={require('../assets/google-g.png')} style={{ width: 20, height: 20 }} /> : null}
     <Text style={[styles.authActionText, variant === 'primary' ? styles.authPrimaryActionText : null]}>{title}</Text>
   </Pressable>;
 }
@@ -345,7 +349,8 @@ function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onO
 }
 
 export default function HomeScreen() {
-  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} />;
+  const { session } = usePlatform();
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} key={session?.user.id || 'signed-out'} />;
 }
 
 function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
@@ -431,6 +436,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     briefingRefreshQueue.current.reset();
     if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); return; }
     if (androidTouchSmoke) void refreshBriefing();
+    return () => { briefingRefreshEpoch.current += 1; briefingRefreshQueue.current.reset(); };
   }, [session?.access_token]);
   useEffect(() => {
     if (!session || !client || androidTouchSmoke) return;
@@ -474,6 +480,8 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     return () => subscription.remove();
   }, [screen]);
   useEffect(() => {
+    if (!session || !client) return;
+    let alive = true;
     const openSchedule = (data: unknown) => {
       const payload = data as { target?: unknown; scheduleId?: unknown };
       if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return false;
@@ -484,16 +492,15 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       return true;
     };
 
-    const handleNotificationResponse = async (response: Notifications.NotificationResponse | null) => {
-      if (!response) return;
-      openSchedule(response.notification.request.content.data);
-      // Expo retains this response across a cold start unless the app consumes it.
-      await Notifications.clearLastNotificationResponseAsync();
-    };
+    const handleNotificationResponse = notificationResponseHandler<Notifications.NotificationResponse>(
+      () => alive,
+      (response) => openSchedule(response.notification.request.content.data),
+      () => Notifications.clearLastNotificationResponseAsync(),
+    );
 
     void Notifications.getLastNotificationResponseAsync().then(handleNotificationResponse).catch(() => undefined);
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => { void handleNotificationResponse(response); });
-    return () => subscription.remove();
+    return () => { alive = false; subscription.remove(); };
   }, [client, session?.access_token]);
 
   function showMessage(text: string, tone: 'success' | 'error' | 'info' = 'info') {
@@ -1031,12 +1038,12 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     setEditStatusTone('neutral');
   }
 
-  if (phase === 'loading') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><ActivityIndicator size="large" /><Text style={styles.statusText}>업무수첩을 연결하고 있습니다.</Text></View>;
+  if (phase === 'loading') return <StartupScreen onRetry={reload} />;
   if (phase === 'error') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><Text style={styles.title}>연결을 확인해주세요</Text><Text style={styles.errorText}>{error}</Text><Button title="다시 시도" onPress={reload} /></View>;
 
   if (!session) return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><ScrollView contentContainerStyle={[styles.loginScroll, { paddingBottom: 20 + insets.bottom }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
     <View style={styles.loginHero}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.title}>🎙 업무수첩</Text><Text style={styles.body}>말하면 기록되고, 일정까지 한눈에</Text></View>
-    <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>업무를 놓치지 않는{`\n`}개인 업무수첩</Text><Text style={styles.body}>복잡한 설정 없이 계정만 만들면 바로 시작할 수 있습니다.</Text><View style={styles.welcomeBenefits}><Text style={styles.welcomeBenefit}>🎙 말하거나 직접 입력</Text><Text style={styles.welcomeBenefit}>📅 오늘·다가오는 일정 확인</Text><Text style={styles.welcomeBenefit}>✓ 저장 후 브리핑에서 바로 확인</Text></View></View>
+    <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>업무를 놓치지 않는{`\n`}개인 업무수첩</Text><View style={styles.welcomeBenefits}><Text style={styles.welcomeBenefit}>🎙 말하거나 직접 입력</Text><Text style={styles.welcomeBenefit}>📅 오늘·다가오는 일정 확인</Text><Text style={styles.welcomeBenefit}>✓ 저장 후 브리핑에서 바로 확인</Text></View></View>
     <View style={[styles.card, authMode === 'signUp' ? styles.signUpCard : null]}>
       <AuthModeSelector mode={authMode} onChange={switchAuthMode} />
       <View style={styles.authModeIntro}>
@@ -1046,7 +1053,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
           ? '이미 만든 계정으로 내 업무공간에 들어갑니다.'
           : '새 계정을 만든 뒤 이메일 인증을 완료하면 업무수첩을 시작할 수 있습니다.'}</Text>
       </View>
-      <AuthAction title={authMode === 'signIn' ? 'Google로 로그인' : 'Google로 무료 시작'} variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} />
+      <AuthAction title={authMode === 'signIn' ? 'Google로 로그인' : 'Google로 회원가입'} variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} />
       <View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View>
       <TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} />
       <View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '새 비밀번호 8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View>
@@ -1059,6 +1066,8 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         : '가입 확인 메일은 업무수첩이 설치된 휴대폰에서 여는 것을 권장합니다. 인증이 끝나면 앱으로 돌아오며, 다른 기기에서 인증한 경우에는 이 앱으로 돌아와 로그인하면 됩니다.'}</Text>
       {message || authError ? <Text style={authError || messageTone === 'error' ? styles.errorText : messageTone === 'success' ? styles.successText : styles.infoText}>{authError || message}</Text> : null}
     </View></ScrollView></KeyboardAvoidingView></View>;
+
+  if (initialBriefingState(Boolean(briefing), briefingError) !== 'ready') return <StartupScreen error={briefingError} onRetry={() => { setBriefingError(''); reload(); }} onSignOut={() => void run(signOut)} />;
 
   const briefingInfo = briefing ? briefingMetadata(briefing, briefingNow) : null;
   const journalTarget = journal?.targetDate || journalDate;
@@ -1205,10 +1214,10 @@ const styles = StyleSheet.create({
   headerButton: { width: mobileTheme.size.touchTarget, height: mobileTheme.size.touchTarget, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 14, backgroundColor: mobileTheme.colors.surface },
   headerButtonIcon: { fontSize: 21 },
   loginHero: { gap: mobileTheme.spacing.compact, padding: mobileTheme.spacing.compact },
-  welcomeCard: { gap: 12, padding: mobileTheme.spacing.card, borderRadius: mobileTheme.radius.card, backgroundColor: mobileTheme.colors.neutralBackground, borderWidth: 1, borderColor: mobileTheme.colors.neutralBorder },
-  welcomeTitle: { fontSize: 23, fontWeight: '800', color: mobileTheme.colors.text, lineHeight: 31 },
+  welcomeCard: { gap: 8, padding: 18, borderRadius: mobileTheme.radius.card, backgroundColor: '#172b4d' },
+  welcomeTitle: { fontSize: 21, fontWeight: '800', color: '#ffffff', lineHeight: 28 },
   welcomeBenefits: { gap: 7, paddingTop: 2 },
-  welcomeBenefit: { color: mobileTheme.colors.textSecondary, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  welcomeBenefit: { color: '#e0e8f5', fontSize: 14, fontWeight: '700', lineHeight: 20 },
   card: { backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.card, padding: mobileTheme.spacing.card, gap: 14 },
   panel: { gap: 12 },
   eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: '#5f6570' },
@@ -1317,8 +1326,8 @@ const styles = StyleSheet.create({
   authModeChoiceTextActive: { color: '#1d4f91' },
   authModeIntro: { gap: 5, paddingVertical: 2 },
   authModeEyebrow: { color: '#5273a6', fontSize: 12, fontWeight: '900', letterSpacing: 0.7 },
-  authAction: { width: '100%', minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: mobileTheme.radius.control, borderWidth: 1 },
-  authGoogleAction: { borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  authAction: { width: '100%', minHeight: 52, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: mobileTheme.radius.control, borderWidth: 1 },
+  authGoogleAction: { borderColor: '#747775', backgroundColor: '#ffffff' },
   authPrimaryAction: { minHeight: 56, borderColor: mobileTheme.colors.primary, backgroundColor: mobileTheme.colors.primary },
   authActionDisabled: { opacity: 0.5 },
   authActionText: { color: mobileTheme.colors.text, fontSize: 15, fontWeight: '800' },

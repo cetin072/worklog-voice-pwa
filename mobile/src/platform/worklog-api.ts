@@ -1,3 +1,4 @@
+import { withRequestDeadline } from './request-deadline';
 import { getApiBaseUrl } from './config';
 import type { PlatformSupabaseClient } from './supabase';
 
@@ -263,7 +264,9 @@ export function parseMobileBriefing(body: Record<string, unknown>): MobileBriefi
 }
 
 export async function loadBriefing(accessToken: string) {
+  return withRequestDeadline(async (signal) => {
   const response = await fetch(`${getApiBaseUrl()}/api/briefing-fast`, {
+    signal,
     method: 'GET',
     headers: {
       accept: 'application/json',
@@ -271,6 +274,7 @@ export async function loadBriefing(accessToken: string) {
     },
   });
   return parseMobileBriefing(await readJson(response));
+  });
 }
 
 export function parseWorkJournalDay(body: Record<string, unknown>): WorkJournalDay {
