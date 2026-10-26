@@ -16,3 +16,16 @@ export function reminderLabel(scheduleId: string, evidence: ReminderEvidence | n
   const offsets = evidence.stored.map(item => item.offsetMinutes === 0 ? '시작 시' : item.offsetMinutes === 1440 ? '1일 전' : `${item.offsetMinutes}분 전`);
   return `이 기기 예약: ${offsets.join(' · ')}`;
 }
+
+/** A visible status needs words as well as color; unknown is never presented as unset. */
+export function reminderPresentation(label: string) {
+  if (label.startsWith('이 기기 예약:')) return { title: '알림 예약됨', background: '#ecfdf5', color: '#047857', border: '#6ee7b7' };
+  if (label.includes('알림 없음')) return { title: '알림 미설정', background: '#f1f5f9', color: '#475569', border: '#cbd5e1' };
+  if (label.includes('권한 차단') || label.includes('권한 미허용')) return { title: '알림 권한 필요', background: '#fff1f2', color: '#be123c', border: '#fda4af' };
+  return { title: '알림 확인 필요', background: '#fffbeb', color: '#92400e', border: '#fcd34d' };
+}
+export function reminderOffsetReserved(scheduleId: string, evidence: ReminderEvidence | null, offset: number, startsAt?: string, now = Date.now()) {
+  if (!evidence) return false;
+  const stored = evidence.stored.filter(item => item.offsetMinutes === offset);
+  return stored.length > 0 && reminderLabel(scheduleId, { ...evidence, stored }, now, startsAt).startsWith('이 기기 예약:');
+}
