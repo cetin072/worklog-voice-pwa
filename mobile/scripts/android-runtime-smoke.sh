@@ -224,3 +224,28 @@ if ! grep -q '업무일지' /tmp/worklog-header-retry.xml || ! grep -q '닫기' 
 fi
 
 echo "Android production HomeScreenApp E2E PASS: navigation, Quick Voice recording, cancel, and post-cancel navigation."
+
+# Synthetic authenticated home only. These emulator captures are not live-account evidence.
+CAPTURE_DIR="$ROOT/artifacts/home-native"
+mkdir -p "$CAPTURE_DIR"
+for profile in '320 800 1.0' '390 844 1.0' '390 844 1.5' '1280 900 1.0'; do
+  read -r width height scale <<<"$profile"
+  adb shell wm density 160
+  adb shell wm size "${width}x${height}"
+  adb shell settings put system font_scale "$scale"
+  adb shell am force-stop "$PACKAGE"
+  adb shell am start -W -n "$ACTIVITY" >/dev/null
+  ready=0
+  for attempt in $(seq 1 20); do
+    dump_window /sdcard/home-capture.xml "$CAPTURE_DIR/empty-${width}-${scale}.xml"
+    if grep -q '음성 기록 시작' "$CAPTURE_DIR/empty-${width}-${scale}.xml"; then ready=1; break; fi
+    sleep 1
+  done
+  if [[ "$ready" != '1' ]]; then echo "Home capture failed: $profile"; exit 1; fi
+  adb exec-out screencap -p > "$CAPTURE_DIR/empty-${width}-${scale}.png"
+  test -s "$CAPTURE_DIR/empty-${width}-${scale}.png"
+done
+adb shell wm size reset
+adb shell wm density reset
+adb shell settings put system font_scale 1.0
+printf 'Synthetic empty home; widths in dp at density 160. 1280 is Android wide-screen, not a desktop web browser. No real account or notification delivery verified.\n' > "$CAPTURE_DIR/README.txt"
