@@ -226,6 +226,10 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
   }
   return Object.freeze({
     scheduleReminder: (input: ReminderInput, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, () => schedule(input, true))),
+    hasPendingScheduleReminder: (sid: string) => serial(async () => {
+      const state = await read();
+      return Object.values(state.intents).some(intent => intent.scheduleId === sid) || Boolean(state.legacyCleanup[sid]?.length);
+    }),
     listScheduleReminders: (sid: string) => serial(() => list(sid)),
     listTrackedReminderScheduleIds: () => serial(async () => {
       const state = await read();

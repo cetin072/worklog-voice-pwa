@@ -8,9 +8,9 @@ const briefingReader = fs.readFileSync('netlify/shared/worklog-data-core-briefin
 const journalMigration = fs.readFileSync('supabase/migrations/20260919120000_stage3_auto_work_journal.sql', 'utf8');
 const deleteMigration = fs.readFileSync('supabase/migrations/20260922103000_work_record_soft_delete_v1.sql', 'utf8');
 
-test('mobile briefing exposes confirmed delete beside tasks and notes without using completion', () => {
-  assert.match(home, /accessibilityLabel=\{\`\$\{task\.title \|\| '업무'\} 삭제\`\}/);
-  assert.match(home, /accessibilityLabel=\{\`\$\{note\.title \|\| '메모'\} 삭제\`\}/);
+test('mobile briefing exposes confirmed delete in overflow for tasks and notes without using completion', () => {
+  assert.match(home, /DeleteOverflow title=\{task.title/);
+  assert.match(home, /DeleteOverflow title=\{note.title/);
   assert.match(home, /style: 'destructive'/);
   assert.match(home, /완료 기록이나 업무일지에는 남기지 않습니다/);
   assert.match(home, /deleteWorklog\(client, recordId\)/);

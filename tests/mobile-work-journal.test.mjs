@@ -18,7 +18,7 @@ test("mobile exposes a typed automatic work journal loader",()=>{
 
 test("home header exposes a direct 업무일지 entry without replacing existing search/settings",()=>{
   assert.match(home,/accessibilityLabel="업무일지 열기"/);
-  assert.match(home,/>📒</);
+  assert.match(home,/>📒 업무일지</);
   assert.match(home,/accessibilityLabel="과거 업무 검색"/);
   assert.match(home,/accessibilityLabel="설정 열기"/);
   assert.match(home,/type AppScreen = 'home' \| 'journal'/);
