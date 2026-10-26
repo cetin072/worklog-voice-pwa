@@ -25,7 +25,7 @@ test('mobile briefing accepts the optional focus list and keeps an older respons
 
 test('home summary keeps attention work in the single actionable list', () => {
   assert.match(appSource, /homeOverview\(briefing!/);
-  assert.match(appSource, /overview.summary/);
+  assert.match(appSource, /summaryGrid/);
   assert.doesNotMatch(appSource, /<FocusTaskRow/);
   assert.match(appSource, /completeTaskInline\(task\)/);
   assert.match(appSource, /다시 확인할 업무/);
