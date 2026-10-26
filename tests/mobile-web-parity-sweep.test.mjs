@@ -15,7 +15,7 @@ test('full parity sweep carries the web welcome, account creation, and login hie
   }
   assert.match(webIndex, /Google로 시작/);
   assert.match(mobileHome, /Google로 로그인/);
-  assert.match(mobileHome, /Google로 무료 시작/);
+  assert.match(mobileHome, /Google로 회원가입/);
   assert.match(webIndex, /무료로 시작/);
   assert.match(mobileHome, /무료 회원가입/);
   assert.match(mobileHome, /새 계정 만들기/);
