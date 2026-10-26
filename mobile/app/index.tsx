@@ -392,6 +392,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const editReadEpoch = useRef(0);
+  const editDetailsCache = useRef(new Map<string, Awaited<ReturnType<typeof readWorklogDetails>>>());
   const [editReady, setEditReady] = useState(false);
   const [editStatus, setEditStatus] = useState('');
   const [editStatusTone, setEditStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
@@ -507,6 +508,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     const epoch = briefingRefreshEpoch.current;
     await briefingRefreshQueue.current.run(async () => {
       if (epoch !== briefingRefreshEpoch.current) return;
+      editDetailsCache.current = new Map();
       setBriefingBusy(true);
       setBriefingError('');
       try {
@@ -775,16 +777,18 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   async function loadTaskEditorDetails(pageId: string, fallbackTitle = '', fallbackDate = '') {
     if (!session || !client || editBusy || editLoading) return;
     const epoch = ++editReadEpoch.current;
-    setEditLoading(true);
+    const cache = editDetailsCache.current;
+    const cached = cache.get(pageId);
+    setEditLoading(!cached);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
     try {
-      const accessToken = await getFreshAccessToken(client);
-      const details = await readWorklogDetails(accessToken, pageId);
+      const details = cached || await readWorklogDetails(await getFreshAccessToken(client), pageId);
       if (epoch !== editReadEpoch.current) return;
+      if (cache === editDetailsCache.current) cache.set(pageId, details);
       setEditTitle(details.title || fallbackTitle);
-      setEditDate(details.dueDate || fallbackDate);
+      setEditDate(details.dueDate);
       setEditTime(details.dueTime || '');
       setEditActionKind(details.actionKind);
       setEditOriginalActionKind(details.actionKind);
@@ -942,6 +946,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
           ? { actionKind: editActionKind }
           : {}),
       });
+      editDetailsCache.current.delete(recordId);
       const visibleTitle = result.title?.trim() || nextTitle;
       let reminderWarning = '';
       let reminderResult: 'linked' | 'created' | 'no-time' = 'no-time';
@@ -1078,11 +1083,12 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
         {briefingInfo ? <View accessibilityLiveRegion="polite">{briefingInfo.warnings.map((warning) => <Text key={warning} style={styles.errorText}>{warning}</Text>)}</View> : null}
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
+        <Text style={styles.summaryDate}>{briefing?.today?.replaceAll('-', '.')}</Text>
         <View style={styles.summaryGrid}>{[
-          { label: '오늘 할 일', count: structure.today.length, background: '#eff6ff', color: '#1d4ed8' },
-          { label: '기한 지남', count: structure.overdue.length, background: '#fff1f2', color: '#be123c' },
-          { label: '오늘 일정', count: briefing?.schedules?.today?.length || 0, background: '#ecfdf5', color: '#047857' },
-        ].map(item => <View key={item.label} style={[styles.summaryTile, { backgroundColor: item.background }]}><Text style={[styles.summaryNumber, { color: item.color }]}>{item.count}<Text style={styles.summaryUnit}>건</Text></Text><Text style={[styles.summaryLabel, { color: item.color }]}>{item.label}</Text></View>)}</View>
+          { label: '오늘 할 일', count: structure.today.length, background: '#172b4d', color: '#ffffff', border: '#172b4d' },
+          { label: '기한 지남', count: structure.overdue.length, background: structure.overdue.length ? '#fff1f2' : '#f8fafc', color: structure.overdue.length ? '#be123c' : '#64748b', border: structure.overdue.length ? '#fecdd3' : '#e2e8f0' },
+          { label: '오늘 일정', count: briefing?.schedules?.today?.length || 0, background: '#ffffff', color: '#334155', border: '#cbd5e1' },
+        ].map(item => <View key={item.label} style={[styles.summaryTile, { backgroundColor: item.background, borderColor: item.border }]}><Text style={[styles.summaryNumber, { color: item.color }]}>{item.count}<Text style={styles.summaryUnit}>건</Text></Text><Text style={[styles.summaryLabel, { color: item.color }]}>{item.label}</Text></View>)}</View>
         <Text style={styles.helpText}>다가오는 업무 {structure.upcoming.length}건 · 기한 없는 업무 {structure.undated.length}건</Text>
         {overview.empty ? <Text style={styles.helpText}>현재 표시할 업무·일정이 없습니다. 처음이라면 직접 입력이나 아래 마이크로 시작하세요. 이전 기록은 업무일지에서 확인하세요.</Text> : null}
 
@@ -1191,9 +1197,10 @@ function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string
 }
 
 const styles = StyleSheet.create({
+  summaryDate: { color: '#64748b', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  summaryTile: { flexGrow: 1, flexBasis: 80, borderRadius: 16, padding: 12, gap: 6 },
-  summaryNumber: { fontSize: 30, fontWeight: '800' },
+  summaryTile: { flexGrow: 1, flexBasis: 80, borderRadius: 16, borderWidth: 1, padding: 12, gap: 10 },
+  summaryNumber: { fontSize: 34, fontWeight: '800' },
   summaryUnit: { fontSize: 14, fontWeight: '600' },
   summaryLabel: { fontSize: 14, fontWeight: '700' },
   reminderHelp: { backgroundColor: '#f1f5f9', borderRadius: 12, padding: 12, gap: 6 },
