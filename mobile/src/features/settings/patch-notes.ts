@@ -9,6 +9,19 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-10-27',
+    title: '홈 브리핑·알림 상태·시작 화면 개선',
+    summary: '오늘 할 일을 더 선명하게 보여주고 수정 화면과 앱 시작의 불필요한 대기를 줄였습니다.',
+    items: [
+      '오늘 할 일·기한 지난 업무·오늘 일정을 숫자와 강조 순서로 구분합니다.',
+      '일정 알림의 예약됨·미설정·권한 필요·확인 필요를 구분하고 시간별 예약 상태를 표시합니다.',
+      '업무와 메모의 삭제 버튼을 바로 표시하며 삭제 전 확인은 유지합니다.',
+      '같은 기록의 수정 정보를 재사용하고 새로고침·저장 후에는 갱신합니다.',
+      '인증과 첫 업무 준비 중 브랜드 화면을 표시하고 느린 연결에는 재시도를 제공합니다.',
+      '첫 업무 조회가 알림 복구를 기다리지 않도록 개선했습니다.',
+    ],
+  },
+  {
     date: '2026-10-25',
     title: '녹음·알림 확인 흐름 개선',
     summary: '실기기에서 확인한 음성 기록과 일정 알림 개선을 정식 앱 기준에 반영했습니다.',
