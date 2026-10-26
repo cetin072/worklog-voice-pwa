@@ -22,3 +22,5 @@ TypeScript, 전체 Node 회귀, current-source startup 컴포넌트 hook harness
 JS/TS+번들 이미지 변경만 있으므로 새 네이티브 의존성/runtime 재구성은 필요하지 않다. 기존 development build+Metro의 Fast Refresh는 개발 검수 경로다. 구성된 OTA 업데이트 경로(expo-updates/update URL/runtimeVersion)는 저장소에서 확인되지 않았다. 설치된 정식 standalone 앱은 Metro로 갱신되지 않으며 변경 전달에는 승인된 새 APK/AAB가 필요하다. 이 작업에서는 새 배포를 실행하지 않는다. standalone APK/AAB 배포·Play 제출·main병합은 이 PR 범위에 포함하지 않는다. 병합 단계에 사용자 체감 패치노트 갱신 여부 확인(미병합 내용을 미리 기록하지 않는 저장소 규칙).
 
 후속 CI환경 보완: root-only npm ci에서도 actual TSX hook 회귀를 실행하도록 모바일과 동일한 TypeScript6.0.3을 root devDependency로 고정. JSX element runtime은 native control과 함께 fixture 객체로 대체하며 source 컴파일과 hook/재시도 assertions는 유지한다. mobile/node_modules없이 전체937PASS 확인.
+
+Mobile CI는 mobile-only npm ci이므로 컴파일러 모듈은 mobile/package.json에서 시작해 상위 root까지 탐색한다. root-only 및 별도 임시 mobile-only 트리에서 동일 컴포넌트 회귀2개 모두 PASS 검증.
