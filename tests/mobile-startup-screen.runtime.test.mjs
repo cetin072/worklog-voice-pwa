@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-const requireMobile=createRequire(new URL('../mobile/package.json',import.meta.url));
-const ts=requireMobile('typescript');
+const requireRoot=createRequire(new URL('../package.json',import.meta.url));
+const ts=requireRoot('typescript');
 const source=readFileSync(new URL('../mobile/src/features/startup/startup-screen.tsx',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 function harness(){
  let states=[],effects=[],cursor=0,ec=0,timers=new Set();
  const react={useState(initial){const i=cursor++;if(!(i in states))states[i]=initial;return [states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];},useEffect(effect,deps){const i=ec++;const old=effects[i];if(!old||deps.some((v,j)=>v!==old.deps[j])){old?.cleanup?.();effects[i]={deps,cleanup:effect()};}}};
  const module={exports:{}};
- new Function('require','exports','setTimeout','clearTimeout',compiled)(name=>name==='react'?react:name==='react-native'?{View:'View',Text:'Text',Button:'Button',ActivityIndicator:'Spinner',StyleSheet:{create:x=>x}}:requireMobile(name),module.exports,fn=>{timers.add(fn);return fn;},fn=>timers.delete(fn));
+ new Function('require','exports','setTimeout','clearTimeout',compiled)(name=>name==='react'?react:name==='react-native'?{View:'View',Text:'Text',Button:'Button',ActivityIndicator:'Spinner',StyleSheet:{create:x=>x}}:name==='react/jsx-runtime'?{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'}:requireRoot(name),module.exports,fn=>{timers.add(fn);return fn;},fn=>timers.delete(fn));
  return {render(props={}){cursor=0;ec=0;return module.exports.StartupScreen(props);},expire(){for(const fn of [...timers]){timers.delete(fn);fn();}},get pending(){return timers.size;}};
 }
 function flatten(node){return !node||typeof node!=='object'?[]:[node,...[node.props?.children].flat(Infinity).flatMap(flatten)];}

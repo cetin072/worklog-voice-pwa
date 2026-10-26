@@ -17,6 +17,8 @@ TypeScript, 전체 Node 회귀, current-source startup 컴포넌트 hook harness
 
 ## 남은 화면 수용
 
-기존 development build+Metro에서320/360/390폭, 큰 글자/키보드의 Google 버튼 가독성·스크롤, 로그인/회원가입 전환 확인. 복원지연/빈일정/부분결과/오프라인/재시도, 메모리데이터 유지, 계정전환 데이터분리, 알림 coldstart/복귀 focus 확인. 실제기기 PASS로 보고하지 않음. 로컬 Chromium은 sandbox crashpad socket 차단/렌더 미완료로 화면 캡처를 확보하지 못했다. Google G PNG 자체는 픽셀 확인했으며 전체 Android 레이아웃 확인과 구분한다.
+기존 development build+Metro에서320/360/390폭, 큰 글자/키보드의 Google 버튼 가독성·스크롤, 로그인/회원가입 전환 확인. 복원지연/빈일정/부분결과/오프라인/재시도, 메모리데이터 유지, 계정전환 데이터분리, 알림 coldstart/복귀 focus 확인. 실제기기 PASS로 보고하지 않음. 후속검수: 현재 TSX를 읽은 로컬 DOM adapter fixture에서 로그인/인증복원/준비/오류/빈결과/부분결과/데이터표시7시나리오 server render 완료. 이는 Android native layout 검증이 아니다. Chromium 화면 캡처는 file://fixture 탐색이 ERR_BLOCKED_BY_ADMINISTRATOR로 거절돼 중단했으며 다른 경로로 우회하지 않았다. Google G PNG 자체는 픽셀 확인했으며 전체 Android 레이아웃 확인과 구분한다.
 
-JS/TS+번들 이미지 변경만 있으므로 native runtime 재생성은 필요하지 않다. 기존 dev build Fast Refresh 우선. standalone APK/AAB 배포·Play 제출·main병합은 이 PR 범위에 포함하지 않는다. 병합 단계에 사용자 체감 패치노트 갱신 여부 확인(미병합 내용을 미리 기록하지 않는 저장소 규칙).
+JS/TS+번들 이미지 변경만 있으므로 새 네이티브 의존성/runtime 재구성은 필요하지 않다. 기존 development build+Metro의 Fast Refresh는 개발 검수 경로다. 구성된 OTA 업데이트 경로(expo-updates/update URL/runtimeVersion)는 저장소에서 확인되지 않았다. 설치된 정식 standalone 앱은 Metro로 갱신되지 않으며 변경 전달에는 승인된 새 APK/AAB가 필요하다. 이 작업에서는 새 배포를 실행하지 않는다. standalone APK/AAB 배포·Play 제출·main병합은 이 PR 범위에 포함하지 않는다. 병합 단계에 사용자 체감 패치노트 갱신 여부 확인(미병합 내용을 미리 기록하지 않는 저장소 규칙).
+
+후속 CI환경 보완: root-only npm ci에서도 actual TSX hook 회귀를 실행하도록 모바일과 동일한 TypeScript6.0.3을 root devDependency로 고정. JSX element runtime은 native control과 함께 fixture 객체로 대체하며 source 컴파일과 hook/재시도 assertions는 유지한다. mobile/node_modules없이 전체937PASS 확인.
