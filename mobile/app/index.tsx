@@ -303,7 +303,7 @@ const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider
   async transcribe() { return { text: 'android touch smoke' }; },
 });
 const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
-  today: '2026-09-20', counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
+  today: seoulTodayKey(), generatedAt: new Date().toISOString(), completeness: 'complete', mode: 'data_core', scheduleEnabled: true, counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
   structure: { overdue: [], today: [], upcoming: [], undated: [] }, resurface: [], notes: [], schedules: { today: [], upcoming: [], total: 0 },
 };
 
