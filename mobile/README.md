@@ -141,6 +141,14 @@ standalone ARM64 release APK는 작은 UI 수정마다 만들지 않는다.
 
 개발용 Metro loop와 production 배포는 분리하며, production OTA/Play Store/production credential 변경은 별도 승인 없이는 수행하지 않는다.
 
+## Android 앱 설치 ID — QA/Play 충돌 방지
+
+- 일반 GitHub Actions의 standalone/physical/smoke APK는 `com.cetin072.worklog.qa` / `worklog-qa` 전용이다. Play 공식 앱 `com.cetin072.worklog`를 업데이트하지 않는다.
+- 실제 CI APK Manifest를 검사하여 QA 패키지가 아니면 산출물 업로드 전에 실패한다.
+- Play 서명 AAB는 별도의 수동 Workflow에서 `EXPO_PUBLIC_WORKLOG_APP_VARIANT=production` + 기존 업로드 키로만 생성한다.
+- 이미 개발/디버그 서명으로 설치된 기존 정식 패키지는 Play 서명 APK로 덮어쓸 수 없다. 앱 내부 로컬 데이터 백업 후 기존 정식 앱만 제거하여 Play 서명본을 한 번 설치한다. QA 앱은 유지한다.
+- 새 키 생성·교체 없이 기존 Play 앱 서명 체인을 유지해야 이후 Play 테스트/정식 업데이트가 가능하다.
+
 ## Google Play AAB
 
 Google Play 배포는 기존 standalone/Firebase QA APK와 분리한다.
