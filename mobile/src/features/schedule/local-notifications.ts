@@ -92,5 +92,14 @@ const service = createScheduleReminderService({
     permission: async (request) => (await (request ? requestScheduleNotificationPermission() : Notifications.getPermissionsAsync())).granted,
   },
 });
-export const { scheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, getScheduleReminderStatus, cancelScheduleReminder,
+export const { scheduleReminder, hasPendingScheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, getScheduleReminderStatus, cancelScheduleReminder,
   cancelAllScheduleReminders, synchronizeScheduleReminders, reconcileScheduleReminders } = service;
+
+/** Read-only native evidence for the home screen. No permission prompt or registration. */
+export async function readScheduleReminderEvidence(scheduleId: string) {
+  if (Platform.OS === 'web') return null;
+  const [permission, stored, scheduled, pending] = await Promise.all([
+    Notifications.getPermissionsAsync(), listScheduleReminders(scheduleId), Notifications.getAllScheduledNotificationsAsync(), hasPendingScheduleReminder(scheduleId),
+  ]);
+  return { permission: permission.granted ? 'granted' as const : permission.status === 'denied' ? 'denied' as const : 'undetermined' as const, stored, scheduled, pending };
+}

@@ -25,11 +25,11 @@ test('External Calendar integration is removed from the mobile runtime', () => {
 });
 
 test('Internal schedules stay visible and creatable without external Calendar', () => {
-  assert.match(homeSource, /오늘과 다가오는 일정/);
-  assert.match(homeSource, /\+ 새 일정/);
+  assert.match(homeSource, /오늘 일정/);
+  assert.match(homeSource, /업무 · 메모 · 일정/);
   assert.match(homeSource, /ScheduleRows/);
   assert.match(homeSource, /scheduleCreated/);
-  assert.match(homeSource, /시간이 있는 일정은 업무수첩에 저장되고 시작 시각에 한 번 알려드립니다/);
+  assert.match(homeSource, /알림은 이 휴대폰 기준입니다/);
 });
 
 test('Local notifications remain available without Calendar startup recovery', () => {

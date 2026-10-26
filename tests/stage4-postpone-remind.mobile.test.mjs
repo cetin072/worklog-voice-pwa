@@ -48,7 +48,7 @@ test('mobile exposes reminder controls only from task detail and retains home-ro
   assert.match(actionSource, /다시 확인 취소/);
   const taskRow = appSource.slice(appSource.indexOf('function TaskRow'), appSource.indexOf('function NoteRow'));
   assert.match(taskRow, /완료/);
-  assert.doesNotMatch(taskRow, /TaskReminderActions|미루기|다시 확인/);
+  assert.doesNotMatch(taskRow, /TaskReminderActions|onPostpone|onAttention/);
 });
 
 
