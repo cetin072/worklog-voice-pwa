@@ -84,7 +84,9 @@ function validateVapid(publicKey, privateKey, subject) {
 function generateServerPrivateKey() {
   const ecdh = createECDH("prime256v1");
   ecdh.generateKeys();
-  return ecdh.getPrivateKey();
+  // OpenSSL may omit leading zero octets in the unsigned scalar. P-256 wire input is 32 bytes.
+  const raw = ecdh.getPrivateKey();
+  return Buffer.concat([Buffer.alloc(32 - raw.length), raw]);
 }
 
 export function deriveWebPushKeys({ clientPublic, authSecret, serverPrivate, salt }) {

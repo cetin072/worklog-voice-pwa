@@ -1,3 +1,4 @@
+import { CalendarExportPreview } from '@/src/features/calendar/calendar-export-preview';
 import { homeOverview } from '@/src/features/home/home-overview';
 import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
 import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
@@ -265,7 +266,7 @@ function JournalScheduleRows({ schedules, empty }: { schedules?: BriefingSchedul
 
 function ScheduleRows({ schedules, empty, onReminder }: { schedules?: BriefingSchedule[]; empty: string; onReminder(schedule: BriefingSchedule): void }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
-  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{schedule.scheduleId ? <ScheduleReminderLabel schedule={schedule} onPress={() => onReminder(schedule)} /> : null}</View>);
+  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{schedule.scheduleId ? <><ScheduleReminderLabel schedule={schedule} onPress={() => onReminder(schedule)} />{schedule.status === 'confirmed' ? <CalendarExportPreview title={schedule.title || '일정'} startsAt={schedule.startsAt} allDay={schedule.allDay} dateKey={schedule.dateKey} /> : null}</> : null}</View>);
 }
 
 function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary'; disabled?: boolean; onPress: () => void }) {

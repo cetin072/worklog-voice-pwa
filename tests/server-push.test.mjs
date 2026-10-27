@@ -153,3 +153,18 @@ test("server Push APIs keep VAPID private key server-side and scope subscription
   assert.match(testFn, /user_id:`eq\.\$\{workspace\.userId\}`/);
   assert.match(closedFn, /user_id:`eq\.\$\{workspace\.userId\}`/);
 });
+
+test('ephemeral P-256 scalar is padded when OpenSSL omits leading zero octets', () => {
+  const source = fs.readFileSync('netlify/shared/web-push.mjs', 'utf8');
+  const body = source.match(/function generateServerPrivateKey\(\) \{([\s\S]*?)\n\}/)[1];
+  for (const size of [1, 31, 32]) {
+    const rawKey = Buffer.alloc(size, 1); // synthetic scalar, never an installed key
+    const generate = new Function('createECDH', 'Buffer', body);
+    const actual = generate(() => ({ generateKeys() {}, getPrivateKey: () => rawKey }), Buffer);
+    assert.equal(actual.length, 32);
+    assert.deepEqual(actual.subarray(32 - size), rawKey);
+    assert.deepEqual(actual.subarray(0, 32 - size), Buffer.alloc(32 - size));
+    const keys = deriveWebPushKeys({ clientPublic: raw(RFC.clientPublic), authSecret: raw(RFC.auth), serverPrivate: actual, salt: raw(RFC.salt) });
+    assert.equal(keys.cek.length, 16);
+  }
+});
