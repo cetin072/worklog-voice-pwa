@@ -19,7 +19,7 @@ test('Stage 2 uses one keyboard-safe bottom edit sheet from both briefing and se
 
 test('Stage 2 prevents late detail reads from overwriting active typing', () => {
   assert.match(sheet, /const inputBlocked = loading \|\| saving/);
-  assert.match(sheet, /editable=\{ready && !inputBlocked\}/);
+  assert.match(sheet, /editable=\{!saving && \(ready \|\| allowTitleWhileLoading\)\}/);
   assert.match(sheet, /maxLength=\{160\}/);
   assert.match(sheet, /selectTextOnFocus/);
   assert.match(home, /setEditReady\(false\)/);

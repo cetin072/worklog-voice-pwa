@@ -49,7 +49,7 @@ test('closing an edit sheet invalidates a late detail response before another re
  function walk(n) { if (ts.isFunctionDeclaration(n) && names.includes(n.name?.text)) found.push(n.getText(ast)); ts.forEachChild(n, walk); }
  walk(ast); assert.equal(found.length, 2);
  const code = found.join('\n'); let release; let titles = [];
- const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 }, editDetailsCache: { current: new Map() },
+ const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 }, editDirty: { current: {} }, editDetailsCache: { current: new Map() },
    getFreshAccessToken: async () => 'synthetic', readWorklogDetails: () => new Promise(resolve => { release = resolve; }), messageOf: (_e, fallback) => fallback };
  for (const name of new Set(code.match(/setEdit[A-Za-z]+/g))) scope[name] = () => {};
  scope.setEditTitle = title => titles.push(title);
@@ -59,16 +59,36 @@ test('closing an edit sheet invalidates a late detail response before another re
  assert.deepEqual(titles, ['']);
 });
 
-test('opening the same record reuses loaded edit details until the home snapshot changes', async () => {
+test('opening the same record seeds immediately and checks details in the background', async () => {
  let declaration;
  function walk(n) { if (ts.isFunctionDeclaration(n) && n.name?.text === 'loadTaskEditorDetails') declaration = n.getText(ast); ts.forEachChild(n, walk); }
  walk(ast); let reads = 0; let tokens = 0; let dates = [];
- const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 }, editDetailsCache: { current: new Map() },
+ const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 }, editDirty: { current: {} }, editDetailsCache: { current: new Map() },
    getFreshAccessToken: async () => { tokens++; return 'synthetic'; }, readWorklogDetails: async () => { reads++; return { title:'Synthetic',dueDate:'',dueTime:'',actionKind:'task' }; }, messageOf: (_e,fallback) => fallback };
  for (const name of new Set(declaration.match(/setEdit[A-Za-z]+/g))) scope[name] = () => {};
  scope.setEditDate = date => dates.push(date);
  const open = compile(`${declaration}\nreturn loadTaskEditorDetails;`, scope);
  await open('synthetic-id', 'old title', '2030-01-01'); await open('synthetic-id');
- assert.equal(reads,1); assert.equal(tokens,1); assert.deepEqual(dates,['','']);
- scope.editDetailsCache.current = new Map(); await open('synthetic-id'); assert.equal(reads,2);
+ assert.equal(reads,2); assert.equal(tokens,2); assert.deepEqual(dates,['','','']);
+ scope.editDetailsCache.current = new Map(); await open('synthetic-id'); assert.equal(reads,3);
+});
+
+test('complete edit seed is usable before fetch; late responses preserve dirty fields and newer selections', async () => {
+ let declaration;
+ function walk(n) { if (ts.isFunctionDeclaration(n) && n.name?.text === 'loadTaskEditorDetails') declaration=n.getText(ast); ts.forEachChild(n,walk); } walk(ast);
+ const pending=[]; const state={};
+ const scope={session:{},client:{},editBusy:false,editLoading:false,editReadEpoch:{current:0},editDirty:{current:{}},editDetailsCache:{current:new Map()},getFreshAccessToken:async()=> 'synthetic', readWorklogDetails:()=>new Promise((resolve,reject)=>pending.push({resolve,reject})),messageOf:()=> 'offline'};
+ for(const name of new Set(declaration.match(/setEdit[A-Za-z]+/g)))scope[name]=value=>{state[name]=value;};
+ const open=compile(`${declaration}\nreturn loadTaskEditorDetails;`,scope);
+ const a=open('a','Visible','2030-01-01','09:30');
+ assert.equal(state.setEditReady,true);assert.equal(state.setEditLoading,false);assert.equal(state.setEditTime,'09:30');
+ await new Promise(resolve=>setImmediate(resolve));
+ scope.editDirty.current={title:true,date:true,time:true};state.setEditTitle='My draft';state.setEditDate='2031-01-01';
+ pending[0].resolve({title:'Server',dueDate:'2032-01-01',dueTime:'11:00'});await a;
+ assert.equal(state.setEditTitle,'My draft');assert.equal(state.setEditDate,'2031-01-01');assert.equal(state.setEditTime,'09:30');
+ scope.editDirty.current={};
+ const b=open('b','B','2030-02-01');await new Promise(resolve=>setImmediate(resolve));assert.equal(state.setEditLoading,true);
+ const c=open('c','C','2030-03-01','10:00');await new Promise(resolve=>setImmediate(resolve));
+ pending[1].resolve({title:'Late B',dueDate:'',dueTime:''});await b;assert.equal(state.setEditTitle,'C');
+ pending[2].reject(new Error('offline'));await c;assert.equal(state.setEditTitle,'C');assert.equal(state.setEditReady,true);assert.equal(state.setEditStatus,'offline');
 });

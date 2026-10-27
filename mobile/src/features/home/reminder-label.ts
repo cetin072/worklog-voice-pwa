@@ -21,7 +21,7 @@ export function reminderLabel(scheduleId: string, evidence: ReminderEvidence | n
 export function reminderPresentation(label: string) {
   if (label.startsWith('이 기기 예약:')) return { title: '알림 예약됨', background: '#ecfdf5', color: '#047857', border: '#6ee7b7' };
   if (label.includes('알림 없음')) return { title: '알림 미설정', background: '#f1f5f9', color: '#475569', border: '#cbd5e1' };
-  if (label.includes('권한 차단') || label.includes('권한 미허용')) return { title: '알림 권한 필요', background: '#fff1f2', color: '#be123c', border: '#fda4af' };
+  if (label.includes('권한 차단') || label.includes('권한 미허용')) return { title: '알림 권한 필요', background: '#fffbeb', color: '#92400e', border: '#fcd34d' };
   return { title: '알림 확인 필요', background: '#fffbeb', color: '#92400e', border: '#fcd34d' };
 }
 export function reminderOffsetReserved(scheduleId: string, evidence: ReminderEvidence | null, offset: number, startsAt?: string, now = Date.now()) {

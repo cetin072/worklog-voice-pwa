@@ -29,6 +29,7 @@ function normalizedTask(task){
     status:clean(task?.status),
     project:clean(task?.project),
     dueKey:dateKey(task?.dueKey),
+    ...(typeof task?.dueTime === "string" && /^(?:|(?:[01]\d|2[0-3]):[0-5]\d)$/.test(task.dueTime) ? { dueTime: task.dueTime } : {}),
     followUp:clean(task?.followUp),
     editedAt:clean(task?.editedAt)
   };

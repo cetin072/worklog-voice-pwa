@@ -155,3 +155,12 @@ test('past-due interrupted reservation is cancelled, never re-fired immediately'
   await restarted.service.reconcileScheduleReminders(); assert.equal(restarted.os.size, 0);
   assert.deepEqual(await restarted.service.listScheduleReminders('schedule-A'), []);
 });
+
+test('batch evidence snapshot retains multiple presets and missing schedule without native mutations', async () => {
+ const h=harness();
+ await h.service.scheduleReminder(input('A',START,0));await h.service.scheduleReminder(input('A',START,30));await h.service.scheduleReminder(input('B',LATER,0));
+ const before=h.calls.length;
+ const snapshot=await h.service.readReminderSnapshot(['A','B','C']);
+ assert.deepEqual(snapshot.A.stored.map(x=>x.offsetMinutes),[0,30]);assert.equal(snapshot.B.stored.length,1);
+ assert.deepEqual(snapshot.C,{stored:[],pending:false});assert.equal(h.calls.length,before);
+});

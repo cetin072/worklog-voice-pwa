@@ -17,6 +17,7 @@ export function homeHarness(context) {
   useState(initial) { const i = cursor++; if (!(i in states)) states[i] = initial; return [states[i], value => { states[i] = typeof value === 'function' ? value(states[i]) : value; }]; },
   useEffect(fn) { cleanup?.(); cleanup = fn(); }, BackHandler: { addEventListener(_name, fn) { back = fn; return { remove() { back = null; } }; } },
   styles: new Proxy({}, { get: (_o, key) => key }), sectionToneStyles: {},
+  CompactReminderLabel: props => node('Pressable', { onPress: props.onPress, accessibilityLabel: `${props.title} 알림 확인 필요` }, '알림 확인 필요'),
   ScheduleReminderLabel: props => node('Text', {}, '알림 확인 필요'), MeetingRecordingBanner: () => null,
   lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
   briefingNow: 0, reminderTarget: null, upcomingExpanded: false, expandedBuckets: {}, taskBusyId: null, noteBusyId: null, notes: [], visibleNotes: [], extraNotes: 0,

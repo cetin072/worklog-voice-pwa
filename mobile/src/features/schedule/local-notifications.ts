@@ -103,3 +103,14 @@ export async function readScheduleReminderEvidence(scheduleId: string) {
   ]);
   return { permission: permission.granted ? 'granted' as const : permission.status === 'denied' ? 'denied' as const : 'undetermined' as const, stored, scheduled, pending };
 }
+
+/** One native/secure-storage snapshot per visible list, never one request per row. */
+export async function readScheduleReminderEvidenceBatch(ids: string[]) {
+  if (Platform.OS === 'web') return null;
+  const [permission, local, scheduled] = await Promise.all([
+    Notifications.getPermissionsAsync(), service.readReminderSnapshot(ids), Notifications.getAllScheduledNotificationsAsync(),
+  ]);
+  return Object.fromEntries(ids.map(id => [id, { ...local[id], scheduled,
+    permission: permission.granted ? 'granted' as const : permission.status === 'denied' ? 'denied' as const : 'undetermined' as const,
+  }]));
+}
