@@ -319,4 +319,18 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: bash mobile/scripts/android-runtime-smoke.sh
+          script: |
+            bash mobile/scripts/android-runtime-smoke.sh
+            bash mobile/scripts/android-launcher-capture.sh production "$RUNNER_TEMP/launcher-evidence"
+            cd mobile && WORKLOG_ICON_VARIANT=qa CI=1 npx expo prebuild --platform android --no-install && cd ..
+            cd mobile/android && NODE_ENV=production EXPO_PUBLIC_ANDROID_TOUCH_SMOKE=1 ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon && cd ../..
+            adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
+            bash mobile/scripts/android-launcher-capture.sh qa "$RUNNER_TEMP/launcher-evidence"
+      - name: Upload synthetic emulator launcher evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-launcher-evidence
+          path: ${{ runner.temp }}/launcher-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
