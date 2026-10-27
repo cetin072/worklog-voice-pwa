@@ -302,8 +302,10 @@ const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider
   async transcribe() { return { text: 'android touch smoke' }; },
 });
 const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
-  today: seoulTodayKey(), generatedAt: new Date().toISOString(), completeness: 'complete', mode: 'data_core', scheduleEnabled: true, counts: { overdue: 0, today: 0, upcoming: 0, undated: 0, total: 0 },
-  structure: { overdue: [], today: [], upcoming: [], undated: [] }, resurface: [], notes: [], schedules: { today: [], upcoming: [], total: 0 },
+  today: seoulTodayKey(), generatedAt: new Date().toISOString(), completeness: 'complete', mode: 'data_core', scheduleEnabled: true, counts: { overdue: 0, today: 1, upcoming: 0, undated: 0, total: 1 },
+  // Synthetic build only: exercise the real compact schedule/task layout without user data.
+  structure: { overdue: [], today: [{ pageId: '11111111-1111-4111-8111-111111111111', title: '검수용 업무: 일정과 알림 상태 확인', dueKey: seoulTodayKey(), dueTime: '10:00', status: '진행중' }], upcoming: [], undated: [] }, resurface: [], notes: [],
+  schedules: { today: [{ scheduleId: '22222222-2222-4222-8222-222222222222', title: '검수용 일정: 긴 제목 줄바꿈과 알림 버튼 확인', startsAt: `${seoulTodayKey()}T10:00:00+09:00`, status: 'confirmed' }], upcoming: [], total: 1 },
 };
 
 function HomeHeader({ onOpenJournal, onOpenRecordSearch, onOpenSettings }: { onOpenJournal: () => void; onOpenRecordSearch: () => void; onOpenSettings: () => void }) {
