@@ -35,6 +35,8 @@ function toBriefingTask(row = {}) {
     status: TASK_STATUS_MAP[text(row.status, 80)] || "",
     project: text(row?.metadata?.project, 80),
     dueKey: seoulDateKey(row.due_at),
+    ...(typeof row.due_has_time === "boolean" ? { dueTime: row.due_has_time && seoulDateKey(row.due_at)
+      ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(row.due_at)) : "" } : {}),
     nextAttentionAt: text(row.next_attention_at, 64),
     actionKind: text(row.action_kind, 20),
     followUp: text(row.follow_up, 240),

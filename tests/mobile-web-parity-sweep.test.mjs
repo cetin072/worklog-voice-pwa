@@ -15,7 +15,7 @@ test('full parity sweep carries the web welcome, account creation, and login hie
   }
   assert.match(webIndex, /Google로 시작/);
   assert.match(mobileHome, /Google로 로그인/);
-  assert.match(mobileHome, /Google로 무료 시작/);
+  assert.match(mobileHome, /Google로 회원가입/);
   assert.match(webIndex, /무료로 시작/);
   assert.match(mobileHome, /무료 회원가입/);
   assert.match(mobileHome, /새 계정 만들기/);
@@ -48,6 +48,6 @@ test('Quick Voice mirrors the web dock with a pass-through floating overlay whil
   assert.match(mobileHome, /pointerEvents="box-none"/);
   assert.match(voiceDock, /quickDock: \{ width: QUICK_VOICE_LAYOUT\.dockWidth/);
   assert.match(mobileHome, /quickVoiceFooter/);
-  assert.match(mobileHome, /오늘과 다가오는 일정/);
-  assert.match(mobileHome, /시간이 있는 일정은 업무수첩에 저장되고 시작 시각에 한 번 알려드립니다/);
+  assert.match(mobileHome, /오늘 일정/);
+  assert.match(mobileHome, /이 기기 기준 · 알림 표시 도움말/);
 });

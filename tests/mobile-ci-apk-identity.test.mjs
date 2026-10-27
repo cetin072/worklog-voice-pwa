@@ -22,8 +22,15 @@ function configFor(variant) {
 }
 
 test('Play production identity stays unchanged, including deep link and version', () => {
-  assert.deepEqual(configFor('production'), base);
-  assert.deepEqual(configFor(null), base);
+  for (const variant of ['production', null]) {
+    const config = configFor(variant);
+    const { icon, adaptiveIcon, ...android } = config.android;
+    assert.deepEqual(android, base.android);
+    assert.equal(config.scheme, base.scheme);
+    assert.equal(config.version, base.version);
+    assert.deepEqual(config.plugins, base.plugins);
+    assert.match(icon, /worklog-launcher-1024/);
+  }
   assert.equal(base.android.package, 'com.cetin072.worklog');
   assert.equal(base.scheme, 'worklog');
 });
@@ -33,6 +40,8 @@ test('CI QA identity is isolated from Play and cannot downgrade QA code 2', () =
   assert.equal(qa.android.package, 'com.cetin072.worklog.qa');
   assert.equal(qa.scheme, 'worklog-qa');
   assert.equal(qa.name, '업무수첩 QA');
+  assert.match(qa.icon, /worklog-qa-launcher-1024/);
+  assert.match(qa.android.adaptiveIcon.foregroundImage, /worklog-qa-launcher-adaptive/);
   assert.ok(qa.android.versionCode >= 2);
   assert.equal(base.android.package, 'com.cetin072.worklog');
   assert.equal(base.version, qa.version);

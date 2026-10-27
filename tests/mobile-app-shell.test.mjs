@@ -9,7 +9,7 @@ const meetingProviderSource = fs.readFileSync('mobile/src/features/voice/meeting
 const rootLayoutSource = fs.readFileSync('mobile/app/_layout.tsx', 'utf8');
 
 test('Mobile App Shell preserves the PWA briefing information structure through the existing Data Core endpoint', () => {
-  for (const label of ['지난 것', '오늘 할 일', '다가오는 업무', '기한 없는 업무']) {
+  for (const label of ['기한 지남', '오늘', '다가오는 업무', '기한 없는 업무']) {
     assert.match(homeSource, new RegExp(label));
   }
   assert.match(homeSource, /loadBriefing/);
@@ -44,8 +44,8 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
   assert.doesNotMatch(homeSource, /screen === 'calendar'/);
   assert.match(homeSource, /accessibilityLabel="과거 업무 검색"/);
   assert.match(homeSource, /accessibilityLabel="설정 열기"/);
-  assert.match(homeSource, /오늘과 다가오는 일정/);
-  assert.match(homeSource, /\+ 새 일정/);
+  assert.match(homeSource, /오늘 일정/);
+  assert.match(homeSource, /업무 · 메모 · 일정/);
   assert.match(homeSource, /briefingBuckets\.map/);
   assert.match(homeSource, /tasks\.slice\(0, 3\)/);
   assert.match(homeSource, /개 더 보기/);
@@ -56,8 +56,8 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
 
 
 test('Internal schedule summaries stay on Home while external Calendar controls stay removed', () => {
-  assert.match(homeSource, /오늘과 다가오는 일정/);
-  assert.match(homeSource, /시간이 있는 일정은 업무수첩에 저장되고 시작 시각에 한 번 알려드립니다/);
+  assert.match(homeSource, /오늘 일정/);
+  assert.match(homeSource, /이 기기 기준 · 알림 표시 도움말/);
   assert.match(homeSource, /알림 설정/);
   assert.doesNotMatch(homeSource, /scheduleSettings|CalendarConnection|showDeviceActions|showDeviceStatus|Google\/휴대폰 Calendar/);
   assert.doesNotMatch(homeSource, /type PrimaryTab/);

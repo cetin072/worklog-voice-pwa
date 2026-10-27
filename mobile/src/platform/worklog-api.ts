@@ -1,3 +1,4 @@
+import { withRequestDeadline } from './request-deadline';
 import { getApiBaseUrl } from './config';
 import type { PlatformSupabaseClient } from './supabase';
 
@@ -7,6 +8,7 @@ export type BriefingTask = {
   institution?: string;
   status?: string;
   dueKey?: string;
+  dueTime?: string;
   nextAttentionAt?: string;
   actionKind?: string;
   daysOverdue?: number;
@@ -263,7 +265,9 @@ export function parseMobileBriefing(body: Record<string, unknown>): MobileBriefi
 }
 
 export async function loadBriefing(accessToken: string) {
+  return withRequestDeadline(async (signal) => {
   const response = await fetch(`${getApiBaseUrl()}/api/briefing-fast`, {
+    signal,
     method: 'GET',
     headers: {
       accept: 'application/json',
@@ -271,6 +275,7 @@ export async function loadBriefing(accessToken: string) {
     },
   });
   return parseMobileBriefing(await readJson(response));
+  });
 }
 
 export function parseWorkJournalDay(body: Record<string, unknown>): WorkJournalDay {
@@ -459,14 +464,16 @@ export type WorklogReminderResult = Readonly<{
 }>;
 
 export async function readWorklogDetails(accessToken: string, pageId: string): Promise<WorklogEditDetails> {
-  const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ action: 'read', pageId }),
+  return withRequestDeadline(async (signal) => {
+    const response = await fetch(`${getApiBaseUrl()}/api/worklog-edit`, {
+      signal,
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ action: 'read', pageId }),
   });
   const body = await readJson(response);
   return {
@@ -477,6 +484,7 @@ export async function readWorklogDetails(accessToken: string, pageId: string): P
     actionConversionAllowed: body.actionConversionAllowed === true,
     mode: typeof body.mode === 'string' ? body.mode : undefined,
   };
+  });
 }
 
 export async function updateWorklogDetails(

@@ -1,3 +1,4 @@
+import { withRequestDeadline } from './request-deadline';
 export const DEFAULT_API_BASE_URL = 'https://worklog-voice-pwa.netlify.app';
 
 export type PublicPlatformConfig = {
@@ -22,8 +23,10 @@ export function getApiBaseUrl() {
 }
 
 export async function loadPublicPlatformConfig(fetchImpl: typeof fetch = fetch): Promise<PublicPlatformConfig> {
-  const response = await fetchImpl(`${getApiBaseUrl()}/api/supabase-auth-config`, {
-    headers: { accept: 'application/json' },
+  return withRequestDeadline(async (signal) => {
+    const response = await fetchImpl(`${getApiBaseUrl()}/api/supabase-auth-config`, {
+      signal,
+      headers: { accept: 'application/json' },
   });
 
   if (!response.ok) {
@@ -41,4 +44,5 @@ export async function loadPublicPlatformConfig(fetchImpl: typeof fetch = fetch):
     publishableKey: body.publishableKey,
     dataCorePrimaryEnabled: Boolean(body.dataCorePrimaryEnabled),
   };
+  });
 }

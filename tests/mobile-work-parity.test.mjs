@@ -54,9 +54,9 @@ test('Inline work edit surfaces schedule reconciliation and refreshes Home for d
 
 test('Work edit sheet blocks stale typing during detail load and exposes retry in-place', () => {
   assert.match(homeSource, /setEditReady\(false\)/);
-  assert.match(homeSource, /setEditLoading\(true\)/);
+  assert.match(homeSource, /setEditLoading\(!completeSeed\)/);
   assert.match(homeSource, /retryTaskEditor/);
-  assert.match(editSheetSource, /editable=\{ready && !inputBlocked\}/);
+  assert.match(editSheetSource, /editable=\{!saving && \(ready \|\| allowTitleWhileLoading\)\}/);
   assert.match(editSheetSource, /!ready && !loading && onRetry/);
   assert.match(editSheetSource, /다시 불러오기/);
 });

@@ -153,3 +153,55 @@ test('ignore command stops Production only; CLI dry-run does not mutate reposito
   const source = readFileSync(file, 'utf8');
   assert.doesNotMatch(source, /git\(['"](?:push|commit|merge|reset|checkout)['"]/);
 });
+
+test('web Production has no recurring trigger while read-only manual inspection remains', () => {
+  assert.equal(config.schedule_enabled, false);
+  const workflow = readFileSync(new URL('../.github/workflows/production-release.yml', import.meta.url), 'utf8');
+  assert.doesNotMatch(workflow, /^  schedule:|cron:/m);
+  assert.match(workflow, /^  workflow_dispatch:/m);
+  assert.match(workflow, /inputs.action == 'deploy-now' && github.ref == 'refs\/heads\/main'/);
+});
+
+// Explicit manual intent reuses the same concurrency group and one-shot hook.
+test('manual deploy-now uses latest main off-slot with no publication cooldown', async () => {
+  const at = new Date('2026-10-20T08:20:00Z');
+  const manualRun = { ...run, event: 'workflow_dispatch', created_at: at.toISOString() };
+  let posts = 0;
+  const result = await cycle({ env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch', RELEASE_ACTION: 'deploy-now' },
+    now: () => at, api: async () => manualRun,
+    snapshot: async () => ({ ...snapshot, published_deploy: { ...published, published_at: new Date(+at - 1000).toISOString() } }),
+    post: async body => {
+      posts++; assert.equal(body.version, 3); assert.equal(body.mode, 'MANUAL_MAIN'); assert.equal(body.source_main_sha, b);
+      assert.equal(validateHook(config, { ...hookEnv, INCOMING_HOOK_BODY: JSON.stringify(body) }, at).version, 3);
+      return { status: 'PUBLISHED' };
+    } });
+  assert.equal(result.status, 'PUBLISHED'); assert.equal(posts, 1);
+  const manualEnv = { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch', RELEASE_ACTION: 'deploy-now' };
+  assert.equal((await cycle({ env: manualEnv, api: async () => manualRun, files: async () => [], post: forbidden })).status, 'NO_CHANGES');
+  assert.equal((await cycle({ env: manualEnv, api: async () => ({ ...manualRun, run_attempt: 2 }), post: forbidden })).status, 'RUN_ALREADY_CHECKED');
+  await assert.rejects(cycle({ env: { ...manualEnv, GITHUB_REF: 'refs/heads/draft' }, post: forbidden }), /MAIN_MANUAL_REQUIRED/);
+  assert.equal((await cycle({ env: manualEnv, api: async () => manualRun, refresh: async () => a, post: forbidden })).status, 'MAIN_MOVED');
+});
+test('manual build validates intent and freshness but needs no fixed slot', async () => {
+  const at = new Date('2026-10-20T08:20:00Z');
+  const body = { ...payload, version: 3, mode: 'MANUAL_MAIN', run_created_at: at.toISOString(), issued_at: at.toISOString() };
+  const manualEnv = { ...hookEnv, INCOMING_HOOK_BODY: JSON.stringify(body) };
+  assert.equal((await guard({ ...config, marker_path: null }, manualEnv, { now: at,
+    fetcher: async () => ({ ok: true, json: async () => ({ ...snapshot, published_deploy: { ...published, published_at: new Date(+at - 1000).toISOString() } }) }) })).status, 'MANUAL_PRODUCTION_ALLOWED');
+  for (const patch of [{ mode: 'anything' }, { run_created_at: 'invalid' }, { issued_at: '2026-10-19T08:20:00Z' }]) {
+    assert.throws(() => validateHook(config, { ...manualEnv, INCOMING_HOOK_BODY: JSON.stringify({ ...body, ...patch }) }, at));
+  }
+});
+
+test('queued duplicate manual clicks publish once and manual history never consumes a scheduled slot', async () => {
+  let live = snapshot, posts = 0;
+  const manualRun = { ...run, event: 'workflow_dispatch' };
+  const options = { env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch', RELEASE_ACTION: 'deploy-now' },
+    api: async () => manualRun, snapshot: async () => live,
+    files: async (base, head) => base === head ? [] : [changed],
+    post: async () => { posts++; live = { ...snapshot, published_deploy: { ...published, id: 'manual-new', commit_ref: b, published_at: due.toISOString() } }; return { status: 'PUBLISHED' }; } };
+  assert.equal((await cycle(options)).status, 'PUBLISHED');
+  assert.equal((await cycle(options)).status, 'NO_CHANGES');
+  assert.equal(posts, 1);
+  assert.equal(evaluateSchedule(config, run, [{ ...manualRun, id: 99 }], due).status, 'DUE');
+});

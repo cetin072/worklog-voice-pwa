@@ -8,7 +8,8 @@ import { findWorklogReminder, confirmWorklogReminder, type ReminderTarget } from
 import { confirmedSeoulInstant, reminderFailureMessage } from './reminder-feedback';
 import { reserveConfirmedReminder } from './schedule-reminder-post-save';
 import { reminderSessionEpoch, reminderSyncEpoch } from './schedule-reminder-snapshot';
-import { listScheduleReminders, openExactAlarmPermissionSettings } from './local-notifications';
+import { readScheduleReminderEvidence, openExactAlarmPermissionSettings } from './local-notifications';
+import { reminderLabel, reminderPresentation, reminderOffsetReserved, type ReminderEvidence } from '../home/reminder-label';
 import { readWorklogDetails } from '@/src/platform/worklog-api';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 
@@ -34,6 +35,7 @@ function calendarTime(value: Date) {
 
 /** Explicit confirmation never edits a record's kind, deadline or original text. */
 export function WorklogReminderSheet({ client, target, onClose }: { client: PlatformSupabaseClient; target: ReminderTarget; onClose(): void }) {
+  const [evidence, setEvidence] = useState<ReminderEvidence | null>(null);
   const [schedule, setSchedule] = useState<ConfirmedSchedule | null>(null);
   const [reload, setReload] = useState(0);
   const [ready, setReady] = useState(false);
@@ -51,7 +53,7 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
     guard.current = reminderSessionEpoch.capture();
     const current = () => active && alive.current && guard.current();
     void findWorklogReminder(client, target, current).then(async (found) => {
-      const reminders = found ? await listScheduleReminders(found.id) : [];
+      const nextEvidence = found ? await readScheduleReminderEvidence(found.id) : null;
       // Existing due fields are a hint for the picker, not evidence of a reserved OS alarm.
       let existingDue: { dueDate: string; dueTime: string } | null = null;
       if (!found && target.recordId) {
@@ -63,9 +65,9 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
       if (!current()) return;
       if (existingDue?.dueDate) setDate(existingDue.dueDate);
       if (existingDue?.dueTime) setTime(existingDue.dueTime);
-      setSchedule(found); setReady(true);
+      setSchedule(found); setEvidence(nextEvidence); setReady(true);
       // Stored mappings are not proof of a current OS reservation: the action below verifies it.
-      setMessage(found ? `기기 등록 기록 ${reminders.length}개 · 시작 시 알림을 확인하고 필요하면 추가하세요.` : existingDue?.dueDate && existingDue?.dueTime
+      setMessage(found ? '알림 예약 상태를 확인했습니다. 아래에서 시간을 선택해 설정할 수 있습니다.' : existingDue?.dueDate && existingDue?.dueTime
         ? '기존 기록의 날짜와 시간을 불러왔습니다. 시작 시 알림 등록을 누르면 이 기기에 예약합니다.'
         : '알림을 만들려면 날짜와 시간을 선택해주세요. 기록의 종류와 기한은 바뀌지 않습니다.');
     }).catch((error) => { if (current()) setMessage(reminderFailureMessage(error)); });
@@ -74,7 +76,7 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
 
   async function reserve(offsetMinutes: 0 | 30 | 1440) {
     if (gate.current || !ready) return;
-    gate.current = true; setBusy(true);
+    gate.current = true; setBusy(true); setEvidence(null);
     const epoch = reminderSyncEpoch.begin();
     const current = () => alive.current && guard.current() && epoch();
     try {
@@ -89,10 +91,14 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
       if (current()) setSchedule(canonical);
       if (Date.parse(canonical.startsAt) - offsetMinutes * 60000 <= Date.now()) throw new Error('TIME_INVALID');
       await reserveConfirmedReminder(canonical, offsetMinutes, current);
+      const nextEvidence = await readScheduleReminderEvidence(canonical.id);
+      if (current()) setEvidence(nextEvidence);
       if (current()) setMessage(`일정 저장 · 이 기기 ${offsetMinutes === 0 ? '시작 시' : offsetMinutes === 30 ? '30분 전' : '1일 전'} 알림 예약 확인 완료`);
     } catch (error) { if (alive.current && guard.current()) setMessage(reminderFailureMessage(error)); }
     finally { gate.current = false; if (alive.current) setBusy(false); }
   }
+  const label = schedule ? reminderLabel(schedule.id, evidence, Date.now(), schedule.startsAt) : ready ? '이 기기 알림 없음 · 설정' : '알림 확인 필요';
+  const status = reminderPresentation(label);
   return <Modal visible animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}>
     <ScrollView contentContainerStyle={{ padding: 24, gap: 16, paddingTop: 60 }}>
       <Text style={{ fontSize: 24, fontWeight: '700' }}>알림 설정</Text>
@@ -122,18 +128,27 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
           {Platform.OS === 'ios' ? <Button title="선택 완료" onPress={() => setPickerMode(null)} /> : null}
         </View> : null}
       </View> : null}
-      <Text accessibilityLiveRegion="polite">{message}</Text>
+      <View style={{ padding: 16, borderRadius: 14, gap: 8, backgroundColor: status.background, borderWidth: 1, borderColor: status.border }}><Text style={{ fontSize: 19, fontWeight: '800', color: status.color }}>{status.title}</Text><Text style={{ fontSize: 15, color: status.color }}>{label}</Text></View>
+      <Text accessibilityLiveRegion="polite" style={{ fontSize: 15, color: '#334155', lineHeight: 23 }}>{message}</Text>
       {!ready ? <Button title="일정 다시 조회" onPress={() => setReload((value) => value + 1)} /> : null}
-      <Text>확정 일정은 시작 시 자동 알림을 사용합니다. 30분 전·1일 전은 추가 예약입니다. 지난 시각은 예약하지 않습니다.</Text>
-      {([0, 30, 1440] as const).map((offset) => <Button key={offset} disabled={busy || !ready || (!schedule && (!date || !time))} title={`${offset === 0 ? '시작 시' : offset === 30 ? '30분 전' : '1일 전'} 알림 확인 / 예약`} onPress={() => void reserve(offset)} />)}
-      <Button title="휴대폰 알림 권한 설정" onPress={() => void Linking.openSettings().catch(() => setMessage('휴대폰 설정에서 업무수첩 QA 알림 권한을 확인해주세요.'))} />
-      <Button title="정확한 알람 권한 설정" onPress={() => void openExactAlarmPermissionSettings().catch(() => setMessage('휴대폰 설정에서 정확한 알람 권한을 확인해주세요.'))} />
-      <Button title="닫기 / 확인 취소" disabled={busy} onPress={onClose} />
+      <Text style={{ color: '#475569', fontSize: 14, lineHeight: 22 }}>시작 시·30분 전·1일 전 중 필요한 알림을 선택하세요. 지난 시각은 예약하지 않습니다.</Text>
+      {([0, 30, 1440] as const).map((offset) => {
+        const reserved = Boolean(schedule && reminderOffsetReserved(schedule.id, evidence, offset, schedule.startsAt));
+        const title = offset === 0 ? '시작 시' : offset === 30 ? '30분 전' : '1일 전';
+        const disabled = busy || !ready || (!schedule && (!date || !time));
+        return <Pressable key={offset} accessibilityRole="button" accessibilityLabel={`${title} 알림 ${reserved ? '예약됨, 다시 확인' : '설정'}`} disabled={disabled} onPress={() => void reserve(offset)} style={[styles.alarmChoice, reserved ? styles.alarmReserved : null, disabled ? styles.disabled : null]}><Text style={styles.alarmTitle}>{title}</Text><Text style={{ color: reserved ? '#047857' : '#1d4ed8', fontWeight: '700' }}>{reserved ? '✓ 예약됨 · 다시 확인' : '알림 설정 ›'}</Text></Pressable>;
+      })}
+      <Button color="#475569" title="휴대폰 알림 권한 설정" onPress={() => void Linking.openSettings().catch(() => setMessage('휴대폰 설정에서 업무수첩 QA 알림 권한을 확인해주세요.'))} />
+      <Button color="#475569" title="정확한 알람 권한 설정" onPress={() => void openExactAlarmPermissionSettings().catch(() => setMessage('휴대폰 설정에서 정확한 알람 권한을 확인해주세요.'))} />
+      <Pressable accessibilityRole="button" disabled={busy} onPress={onClose} style={styles.alarmChoice}><Text style={styles.alarmTitle}>닫기</Text></Pressable>
     </ScrollView>
   </Modal>;
 }
 
 const styles = StyleSheet.create({
+  alarmChoice: { minHeight: 64, padding: 16, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 14, backgroundColor: '#f8fafc', gap: 6 },
+  alarmReserved: { backgroundColor: '#ecfdf5', borderColor: '#6ee7b7' },
+  alarmTitle: { color: '#0f172a', fontSize: 17, fontWeight: '700' },
   pickerTrigger: { minHeight: 50, justifyContent: 'center', paddingHorizontal: 14, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, backgroundColor: mobileTheme.colors.surface },
   pickerText: { fontSize: 16, color: mobileTheme.colors.text },
   placeholder: { color: mobileTheme.colors.textMuted },

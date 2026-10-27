@@ -23,17 +23,10 @@ test('mobile briefing accepts the optional focus list and keeps an older respons
   assert.throws(() => parseMobileBriefing({ ...baseBriefing, resurface: {} }), /브리핑 응답/);
 });
 
-test('home focus layer shows real work rather than counts, maps human reasons, and retains primary completion', () => {
-  assert.match(appSource, /const focusTasks = briefing\?\.resurface \|\| \[\]/);
-  assert.match(appSource, /const visibleFocusTasks = focusExpanded \? focusTasks : focusTasks\.slice\(0, 3\)/);
-  assert.match(appSource, /const extraFocusTasks = Math\.max\(0, focusTasks\.length - 3\)/);
-  assert.match(appSource, /다시 확인할 시간/);
-  assert.match(appSource, /오늘까지/);
-  assert.match(appSource, /\$\{days\}일 지남/);
-  assert.match(appSource, /<FocusTaskRow/);
+test('home summary keeps attention work in the single actionable list', () => {
+  assert.match(appSource, /homeOverview\(briefing!/);
+  assert.match(appSource, /summaryGrid/);
+  assert.doesNotMatch(appSource, /<FocusTaskRow/);
   assert.match(appSource, /completeTaskInline\(task\)/);
-  assert.match(appSource, /\$\{extraFocusTasks\}개 더 보기/);
-  assert.match(appSource, /지금 확인할 업무가 없습니다\./);
-  assert.doesNotMatch(appSource, /countGrid|countToneStyles/);
+  assert.match(appSource, /다시 확인할 업무/);
 });
-
