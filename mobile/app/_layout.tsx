@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AppUpdatePrompt } from '@/src/features/startup/app-update-prompt';
 import { configureScheduleNotificationHandler } from '@/src/features/schedule/local-notifications';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,6 +16,7 @@ export default function RootLayout() {
         <PlatformProvider>
           <MeetingRecordingProvider>
             <Stack screenOptions={{ headerShown: false }} />
+            <AppUpdatePrompt />
           </MeetingRecordingProvider>
         </PlatformProvider>
       </SafeAreaProvider>
