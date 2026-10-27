@@ -22,7 +22,7 @@ export function HomeReminderStatus({ client, briefing, scope, children }: {
     const current = () => alive && session() && sync();
     if (!client || !briefing) return;
     async function read() {
-      const records = [...Object.values(briefing!.structure || {}).flat(), ...(briefing!.notes || [])]
+      const records = [...Object.values(briefing!.structure || {}).flat(), ...(briefing!.resurface || []), ...(briefing!.notes || [])]
         .map(row => row.pageId).filter((id): id is string => Boolean(id));
       // Failure of linkage must not suppress independently verifiable schedule rows.
       const links = await findWorklogReminderLinks(client!, records, current).catch(() => ({} as Record<string, string[]>));

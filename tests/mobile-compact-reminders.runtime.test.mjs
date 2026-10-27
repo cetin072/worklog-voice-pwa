@@ -60,12 +60,13 @@ test('home snapshot shares one device read and drops late responses after accoun
  const React={createElement:(type,props,...children)=>({type,props,children})};
  const {HomeReminderStatus}=compile('mobile/src/features/home/home-reminder-status.tsx',{
   React,react:{createContext:()=>({Provider:'Provider'}),useState:()=>[state,value=>{state=value;}],useEffect:fn=>{effect=fn;}},
-  '../schedule/worklog-reminder-adapter':{findWorklogReminderLinks:async()=>({[rid]:[sid]})},
+  '../schedule/worklog-reminder-adapter':{findWorklogReminderLinks:async(_client,ids)=>{assert.ok(ids.includes(rid));return {[rid]:[sid]};}},
   '../schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},reminderSyncEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[{id:sid,title:'Synthetic',status:'confirmed',startsAt:'2099-01-01T00:00:00Z',allDay:false}]})},
   '../schedule/local-notifications':{readScheduleReminderEvidenceBatch:async ids=>{nativeReads++;assert.deepEqual(ids,[sid]);return new Promise(resolve=>{resolveNative=resolve;});}},
   './reminder-label':{reminderLabel},
  });
- const briefing={structure:{today:[{pageId:rid}]},schedules:{today:[{scheduleId:sid,title:'Synthetic',startsAt:'2099-01-01T00:00:00Z'}]}};
+ // A resurfaced-only task is visible through homeOverview even without a dated bucket.
+ const briefing={structure:{today:[]},resurface:[{pageId:rid}],schedules:{today:[{scheduleId:sid,title:'Synthetic',startsAt:'2099-01-01T00:00:00Z'}]}};
  const props={client:{},briefing,scope:'account-a:home:1',children:null};
  HomeReminderStatus(props);cleanup=effect();await new Promise(resolve=>setImmediate(resolve));
  resolveNative({[sid]:{permission:'granted',stored:[],scheduled:[]}});await new Promise(resolve=>setImmediate(resolve));

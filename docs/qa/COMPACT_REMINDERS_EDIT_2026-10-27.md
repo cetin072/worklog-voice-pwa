@@ -27,3 +27,12 @@
 4. 기존 로그인·권한이 제공된 Work 환경에서만 실행한다. 서명/권한 변경, main/Production/Play 제출, 웹 정기 배포는 제외한다.
 
 현재 환경 제한: 과거 로컬 브라우저 접근 ERR_BLOCKED_BY_ADMINISTRATOR 및 artifact proxy 403은 재시도/우회하지 않았다. 새 Library 두 파일은 지원 helper에서 download failed로 읽을 수 있는 bytes를 얻지 못했다. 이 실행자는 원본 픽셀을 검사하지 못했다. 개인 첨부/실제 업무 문구는 저장소에 넣지 않는다. 이 문서는 시각/실기기 PASS 선언이 아니다.
+
+## 후속 코드 검수 — 2026-10-27
+
+- `homeOverview`가 날짜 버킷 외의 `resurface` 업무도 표시하지만 알림 조회에서는 빠지는 누락을 수정했다. 연결 조회에 `resurface`를 포함하며 원본 업무·일정 데이터는 변경하지 않는다.
+- production provider 런타임 검사에 날짜 버킷에는 없고 `resurface`에만 있는 업무를 사용해, 연결 ID가 조회되고 일정과 동일한 상태가 표시되는지 검증했다.
+- 수정 후 전체 960/960 테스트, mobile TypeScript, Android Hermes export, 변이 2종 검출, diff whitespace 검사를 통과했다.
+- 앱 복귀 갱신은 홈의 기존 AppState → briefingNow/recovery 경로로 유지됨을 코드에서 확인했다. 실제 권한 변경/복귀 동작 검수는 별도다.
+- 이 실행 환경에는 adb/Android emulator와 연결 기기가 없다. 320/390px·큰 글씨 실제 렌더링, 알림 도착, 계정 전환 실사용 검수와 화면 증거는 미완료다. mock 런타임 검사를 시각·실기기 PASS로 간주하지 않는다.
+- 기존 HEAD의 Mobile typecheck job은 success, APK/runtime/Physical job은 조회 시 in_progress였다. 기존 결과를 후속 수정 HEAD의 통과로 승계하지 않는다. main 병합·Play 제출은 하지 않는다.
