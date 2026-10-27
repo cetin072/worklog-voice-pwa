@@ -38,3 +38,33 @@ export async function confirmWorklogReminder(client: PlatformSupabaseClient, rec
   if (snapshot.rows.length !== 1) throw new Error('INCOMPLETE_REMINDER_SNAPSHOT');
   return snapshot.rows[0];
 }
+
+/** Resolve stable record links in bounded batches. Ambiguous/missing links remain unknown. */
+export async function findWorklogReminderLinks(client: PlatformSupabaseClient, recordIds: string[], guard: ReminderSyncGuard) {
+  const ids = [...new Set(recordIds)].filter(id => UUID.test(id));
+  assertReminderSyncCurrent(guard);
+  const before = await client.auth.getUser();
+  const owner = before.data.user?.id;
+  if (before.error || !owner) throw new Error('REMINDER_OWNER_UNVERIFIED');
+  const links: Record<string, string[]> = {};
+  for (let start = 0; start < ids.length; start += 50) {
+    const batch = ids.slice(start, start + 50);
+    const values = batch.join(',');
+    const { data, error, count } = await client.from('schedules')
+      .select('id,created_by_user_id,metadata', { count: 'exact' }).eq('created_by_user_id', owner)
+      .or(`metadata->>workRecordId.in.(${values}),metadata->>reminderWorkRecordId.in.(${values})`);
+    assertReminderSyncCurrent(guard);
+    if (error) throw error;
+    if (!data || count !== data.length) throw new Error('INCOMPLETE_REMINDER_SNAPSHOT');
+    for (const row of data) {
+      if (row.created_by_user_id !== owner || !UUID.test(row.id)) throw new Error('REMINDER_OWNER_UNVERIFIED');
+      for (const recordId of new Set([row.metadata?.workRecordId, row.metadata?.reminderWorkRecordId])) {
+        if (typeof recordId === 'string' && batch.includes(recordId)) (links[recordId] ||= []).push(row.id);
+      }
+    }
+  }
+  const after = await client.auth.getUser();
+  assertReminderSyncCurrent(guard);
+  if (after.error || after.data.user?.id !== owner) throw new Error('REMINDER_OWNER_CHANGED');
+  return links;
+}

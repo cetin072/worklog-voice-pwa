@@ -8,6 +8,7 @@ export type BriefingTask = {
   institution?: string;
   status?: string;
   dueKey?: string;
+  dueTime?: string;
   nextAttentionAt?: string;
   actionKind?: string;
   daysOverdue?: number;

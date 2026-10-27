@@ -13,6 +13,7 @@ type WorkRecordEditSheetProps = Readonly<{
   loading: boolean;
   saving: boolean;
   ready: boolean;
+  allowTitleWhileLoading?: boolean;
   actionKind?: 'task' | 'note';
   actionConversionAllowed?: boolean;
   statusText?: string;
@@ -61,6 +62,7 @@ export function WorkRecordEditSheet({
   loading,
   saving,
   ready,
+  allowTitleWhileLoading = false,
   actionKind,
   actionConversionAllowed = false,
   statusText = '',
@@ -75,18 +77,20 @@ export function WorkRecordEditSheet({
 }: WorkRecordEditSheetProps) {
   const insets = useSafeAreaInsets();
   const titleInput = useRef<TextInput>(null);
+  const titleFocused = useRef(false);
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const inputBlocked = loading || saving;
 
   useEffect(() => {
     if (!visible) {
+      titleFocused.current = false;
       setPickerMode(null);
       return;
     }
-    if (!ready || inputBlocked) return;
-    const timer = setTimeout(() => titleInput.current?.focus(), 80);
+    if (titleFocused.current || saving || (!ready && !allowTitleWhileLoading)) return;
+    const timer = setTimeout(() => { titleFocused.current = true; titleInput.current?.focus(); }, 80);
     return () => clearTimeout(timer);
-  }, [visible, ready, inputBlocked]);
+  }, [visible, saving, ready, allowTitleWhileLoading]);
 
   function close() {
     if (saving) return;
@@ -123,18 +127,18 @@ export function WorkRecordEditSheet({
           </Pressable>
         </View>
 
-        {loading ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.status}>저장 전 최신 제목·날짜를 확인하고 있어요.</Text></View> : null}
+        {loading ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.status}>{allowTitleWhileLoading ? '목록에 없는 시간·종류 정보를 불러오는 중입니다. 제목은 바로 수정할 수 있어요.' : '시간·종류 정보를 불러오는 중입니다.'}</Text></View> : null}
 
         <Text style={styles.label}>업무명</Text>
         <TextInput
           ref={titleInput}
           accessibilityLabel="수정할 업무명"
           autoCorrect
-          editable={ready && !inputBlocked}
+          editable={!saving && (ready || allowTitleWhileLoading)}
           maxLength={160}
           placeholder="업무명"
           selectTextOnFocus
-          style={[styles.input, !ready || inputBlocked ? styles.disabled : null]}
+          style={[styles.input, saving || (!ready && !allowTitleWhileLoading) ? styles.disabled : null]}
           value={title}
           onChangeText={onTitle}
         />

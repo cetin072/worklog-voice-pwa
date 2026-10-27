@@ -46,7 +46,7 @@ test('Visible feature gate keeps direct input and schedule creation truth explic
 
 test('Visible feature gate keeps internal schedules visible without external Calendar state', () => {
   assert.match(home, /오늘 일정/);
-  assert.match(home, /알림은 이 휴대폰 기준입니다/);
+  assert.match(home, /이 기기 기준 · 알림 표시 도움말/);
   assert.doesNotMatch(home, /CalendarConnection|scheduleSettings|Google\/휴대폰 Calendar/);
 });
 

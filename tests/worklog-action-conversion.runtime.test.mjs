@@ -161,7 +161,7 @@ test("Home Note row keeps 확인했어요 primary while adding lower-priority ed
   assert.match(home,/async function openNoteEditor/);
   assert.match(home,/onEdit=\{\(\) => void openNoteEditor\(note\)\}/);
   assert.match(home,/actionKind=\{editActionKind\}/);
-  assert.match(home,/onActionKind=\{setEditActionKind\}/);
+  assert.match(home,/onActionKind=\{\(value\) => \{ editDirty.current.kind = true; setEditActionKind\(value\); \}\}/);
   assert.match(home,/result\.actionKindChanged[\s\S]*메모 · 참고로 변경했습니다/);
   assert.match(home,/result\.actionKindChanged[\s\S]*할 일로 변경했습니다/);
 });

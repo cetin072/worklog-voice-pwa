@@ -1,5 +1,6 @@
 import { homeOverview } from '@/src/features/home/home-overview';
-import { ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
+import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
+import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
 import { notificationResponseHandler } from '@/src/features/startup/notification-response-gate';
 import { StartupScreen } from '@/src/features/startup/startup-screen';
 import { initialBriefingState } from '@/src/features/startup/briefing-startup';
@@ -167,10 +168,8 @@ function taskNote(bucket: BriefingBucket, task: BriefingTask) {
   return '기한 없음';
 }
 
-function ReminderShortcut({ title, onPress, disabled = false }: { title: string; onPress: () => void; disabled?: boolean }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${title} 알림 상태 확인 및 설정`} disabled={disabled} style={[styles.reminderShortcut, disabled ? styles.inlineCompleteBusy : null]} onPress={onPress}>
-    <Text style={styles.reminderShortcutText}>🔔 알림 상태 확인</Text>
-  </Pressable>;
+function ReminderShortcut({ id, title, onPress, disabled = false }: { id?: string; title: string; onPress: () => void; disabled?: boolean }) {
+  return <CompactReminderLabel id={id} record title={title} onPress={onPress} disabled={disabled} />;
 }
 
 
@@ -184,7 +183,7 @@ function TaskRow({ bucket, task, onOpen, onReminder, onEdit, onDelete, onComplet
       {task.institution ? <Text style={styles.taskBadge}>{task.institution}</Text> : null}
       {task.followUp ? <Text style={styles.followUp}>↳ {task.followUp}</Text> : null}
       </Pressable>
-      {task.pageId ? <ReminderShortcut title={task.title || '업무'} onPress={onReminder} disabled={completing} /> : null}
+      {task.pageId ? <ReminderShortcut id={task.pageId} title={task.title || '업무'} onPress={onReminder} disabled={completing} /> : null}
     </View>
     {task.pageId ? <View style={styles.taskActions}>
       <View style={styles.taskMinorActions}>
@@ -209,7 +208,7 @@ function NoteRow({ note, onEdit, onDelete, onAcknowledge, onReminder, acknowledg
       <Text style={styles.taskTitle}>{note.title || '제목 없는 메모'}</Text>
       {formatNoteJournalDate(note.journalDate) ? <Text style={styles.taskMeta}>{formatNoteJournalDate(note.journalDate)}</Text> : null}
       {note.institution ? <Text style={styles.taskBadge}>{note.institution}</Text> : null}
-      {note.pageId ? <ReminderShortcut title={note.title || '메모'} onPress={onReminder} disabled={acknowledging} /> : null}
+      {note.pageId ? <ReminderShortcut id={note.pageId} title={note.title || '메모'} onPress={onReminder} disabled={acknowledging} /> : null}
     </View>
     {note.pageId ? <View style={styles.taskActions}>
       <View style={styles.taskMinorActions}>
@@ -392,6 +391,8 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const editReadEpoch = useRef(0);
+  const editDirty = useRef({ title: false, date: false, time: false, kind: false });
+  useEffect(() => () => { editReadEpoch.current += 1; }, [session?.user.id]);
   const editDetailsCache = useRef(new Map<string, Awaited<ReturnType<typeof readWorklogDetails>>>());
   const [editReady, setEditReady] = useState(false);
   const [editStatus, setEditStatus] = useState('');
@@ -774,23 +775,29 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     }
   }
 
-  async function loadTaskEditorDetails(pageId: string, fallbackTitle = '', fallbackDate = '') {
-    if (!session || !client || editBusy || editLoading) return;
+  async function loadTaskEditorDetails(pageId: string, fallbackTitle = '', fallbackDate = '', seedTime?: string) {
+    if (!session || !client || editBusy) return;
     const epoch = ++editReadEpoch.current;
     const cache = editDetailsCache.current;
     const cached = cache.get(pageId);
-    setEditLoading(!cached);
-    setEditReady(false);
+    const completeSeed = cached || (typeof seedTime === 'string' ? { title: fallbackTitle, dueDate: fallbackDate, dueTime: seedTime } : null);
+    setEditLoading(!completeSeed);
+    setEditReady(Boolean(completeSeed));
+    if (completeSeed) {
+      setEditTitle(completeSeed.title);
+      setEditDate(completeSeed.dueDate);
+      setEditTime(completeSeed.dueTime);
+    }
     setEditStatus('');
     setEditStatusTone('neutral');
     try {
-      const details = cached || await readWorklogDetails(await getFreshAccessToken(client), pageId);
+      const details = await readWorklogDetails(await getFreshAccessToken(client), pageId);
       if (epoch !== editReadEpoch.current) return;
       if (cache === editDetailsCache.current) cache.set(pageId, details);
-      setEditTitle(details.title || fallbackTitle);
-      setEditDate(details.dueDate);
-      setEditTime(details.dueTime || '');
-      setEditActionKind(details.actionKind);
+      if (!editDirty.current.title) setEditTitle(details.title || fallbackTitle);
+      if (!editDirty.current.date) setEditDate(details.dueDate);
+      if (!editDirty.current.time) setEditTime(details.dueTime || '');
+      if (!editDirty.current.kind) setEditActionKind(details.actionKind);
       setEditOriginalActionKind(details.actionKind);
       setEditActionConversionAllowed(details.actionConversionAllowed === true);
       setEditReady(true);
@@ -842,7 +849,8 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   }
 
   async function openTaskEditor(task: BriefingTask) {
-    if (!session || !task.pageId || editBusy || editLoading) return;
+    if (!session || !task.pageId || editBusy) return;
+    editDirty.current = { title: false, date: false, time: false, kind: false };
     setEditTaskId(task.pageId);
     setEditTitle(task.title || '');
     setEditDate(task.dueKey || '');
@@ -853,11 +861,12 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
-    await loadTaskEditorDetails(task.pageId, task.title || '', task.dueKey || '');
+    await loadTaskEditorDetails(task.pageId, task.title || '', task.dueKey || '', task.dueTime);
   }
 
   async function openNoteEditor(note: BriefingNote) {
-    if (!session || !note.pageId || editBusy || editLoading) return;
+    if (!session || !note.pageId || editBusy) return;
+    editDirty.current = { title: false, date: false, time: false, kind: false };
     setEditTaskId(note.pageId);
     setEditTitle(note.title || '');
     setEditDate('');
@@ -931,6 +940,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       setEditStatusTone('error');
       return;
     }
+    editReadEpoch.current += 1; // A background read must not change fields once saving begins.
     setEditBusy(true);
     setEditStatus('');
     setEditStatusTone('neutral');
@@ -1068,7 +1078,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
 
-  return <View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
+  return <HomeReminderStatus client={client} briefing={briefing} scope={`${session.user.id}:${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenJournal={openJournal} onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
     {savedReminder ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
@@ -1098,7 +1108,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
 
       {briefing?.scheduleEnabled && !overview.empty ? <View style={styles.card}>
         <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>📅 일정</Text><Text style={styles.sectionTitle}>오늘 일정</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable></View></View>
-        <View style={styles.reminderHelp}><Text style={styles.reminderHelpTitle}>알림은 이 휴대폰 기준입니다</Text><Text style={styles.reminderHelpText}>초록은 예약 확인됨 · 회색은 미설정 · 주황은 확인 필요</Text></View>
+        <Pressable accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => Alert.alert('이 기기의 알림', '예약됨은 이 기기의 예약을 확인한 상태입니다. 알림 없음은 미설정, 확인 필요는 아직 확인할 수 없는 상태입니다. 예약 확인은 실제 전달을 보장하지 않습니다.')}><Text style={styles.helpText}>이 기기 기준 · 알림 표시 도움말 ⓘ</Text></Pressable>
         {notificationScheduleId ? <View style={styles.notificationFocus}><Text style={styles.detailTitle}>{scheduleFocusReason === 'created' ? '✅ 방금 생성된 일정' : '🔔 알림에서 연 일정'}</Text><ScheduleRows key={`${briefingNow}:${Boolean(reminderTarget)}`} onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={allSchedules.filter((schedule) => schedule.scheduleId === notificationScheduleId)} empty="연결된 일정을 찾지 못했습니다." /></View> : null}
         <View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘</Text><ScheduleRows key={`${briefingNow}:${Boolean(reminderTarget)}`} onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={briefing.schedules?.today?.filter(schedule => schedule.scheduleId !== notificationScheduleId)} empty={briefing.schedules?.today?.length ? '선택한 일정은 위에 표시했습니다.' : '오늘 확정 일정이 없습니다.'} /></View>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: upcomingExpanded }} onPress={() => setUpcomingExpanded(value => !value)}><Text style={styles.linkText}>다가오는 일정 {briefing.schedules?.upcoming?.length || 0}개 · {upcomingExpanded ? '접기' : '보기'}</Text></Pressable>
@@ -1170,6 +1180,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   </View> : null}
     {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
   <WorkRecordEditSheet
+    allowTitleWhileLoading
     visible={Boolean(editTaskId)}
     title={editTitle}
     date={editDate}
@@ -1181,15 +1192,15 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     actionConversionAllowed={editActionConversionAllowed}
     statusText={editStatus}
     statusTone={editStatusTone}
-    onTitle={setEditTitle}
-    onDate={setEditDate}
-    onTime={setEditTime}
-    onActionKind={setEditActionKind}
+    onTitle={(value) => { editDirty.current.title = true; setEditTitle(value); }}
+    onDate={(value) => { editDirty.current.date = true; editDirty.current.time = true; setEditDate(value); }}
+    onTime={(value) => { editDirty.current.time = true; editDirty.current.date = true; setEditTime(value); }}
+    onActionKind={(value) => { editDirty.current.kind = true; setEditActionKind(value); }}
     onSave={() => void saveTaskEditor()}
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
   />
-</View></KeyboardAvoidingView></View>;
+</View></KeyboardAvoidingView></View></HomeReminderStatus>;
 }
 
 function PanelHead({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) {

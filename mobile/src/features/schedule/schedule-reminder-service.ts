@@ -230,6 +230,13 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
       const state = await read();
       return Object.values(state.intents).some(intent => intent.scheduleId === sid) || Boolean(state.legacyCleanup[sid]?.length);
     }),
+    readReminderSnapshot: (ids: string[]) => serial(async () => {
+      const state = await read();
+      return Object.fromEntries(ids.map(id => [id, {
+        stored: Object.values(state.reminders[id] || {}).sort((a, b) => a.offsetMinutes - b.offsetMinutes),
+        pending: Object.values(state.intents).some(intent => intent.scheduleId === id) || Boolean(state.legacyCleanup[id]?.length),
+      }]));
+    }),
     listScheduleReminders: (sid: string) => serial(() => list(sid)),
     listTrackedReminderScheduleIds: () => serial(async () => {
       const state = await read();

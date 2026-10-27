@@ -29,7 +29,7 @@ test('Internal schedules stay visible and creatable without external Calendar', 
   assert.match(homeSource, /업무 · 메모 · 일정/);
   assert.match(homeSource, /ScheduleRows/);
   assert.match(homeSource, /scheduleCreated/);
-  assert.match(homeSource, /알림은 이 휴대폰 기준입니다/);
+  assert.match(homeSource, /이 기기 기준 · 알림 표시 도움말/);
 });
 
 test('Local notifications remain available without Calendar startup recovery', () => {
