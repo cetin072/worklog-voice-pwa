@@ -4,7 +4,11 @@ set -euo pipefail
 variant="${1:?production or qa}"
 output="${2:?capture directory}"
 mkdir -p "$output"
-adb shell am force-stop com.cetin072.worklog
+app_package=com.cetin072.worklog
+if [[ "${EXPO_PUBLIC_WORKLOG_APP_VARIANT:-production}" == "qa" ]]; then
+  app_package=com.cetin072.worklog.qa
+fi
+adb shell am force-stop "$app_package"
 adb shell input keyevent KEYCODE_HOME
 # Synchronize with the home activity before sending the all-apps gesture. Without
 # this dump, a gesture sent during HOME transition can be discarded by Launcher3.

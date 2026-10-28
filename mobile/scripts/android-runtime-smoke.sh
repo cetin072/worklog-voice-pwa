@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ANDROID_DIR="$ROOT/mobile/android"
 APK="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
 PACKAGE="com.cetin072.worklog"
+if [[ "${EXPO_PUBLIC_WORKLOG_APP_VARIANT:-production}" == "qa" ]]; then
+  PACKAGE="com.cetin072.worklog.qa"
+fi
 ACTIVITY="$PACKAGE/.MainActivity"
 
 cd "$ANDROID_DIR"
@@ -80,7 +83,7 @@ rendered=0
 for attempt in $(seq 1 24); do
   dump_window /sdcard/worklog-window.xml "$WINDOW_XML"
 
-  if grep -q '업무일지 열기' "$WINDOW_XML" && grep -q '음성 기록 시작' "$WINDOW_XML"; then
+  if grep -q '설정 열기' "$WINDOW_XML" && grep -q '음성 기록 시작' "$WINDOW_XML"; then
     rendered=1
     break
   fi
@@ -119,12 +122,19 @@ done
 FIRST_TOUCH_MS="$(date +%s%3N)"
 echo "Android first-touch latency after activity start: $((FIRST_TOUCH_MS - APP_START_MS)) ms"
 
-# Tap the production header and require HomeScreenApp's real setScreen('journal')
-# navigation, then return through the production panel close action.
-HEADER_COORDS="$(find_node_center "$WINDOW_XML" "업무일지 열기")"
-read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
-adb shell input tap "$HEADER_X" "$HEADER_Y"
-sleep 1
+# Open the journal through Settings, using the same production menu as users.
+open_journal_from_settings() {
+  local source_xml="$1"
+  local coords
+  coords="$(find_node_center "$source_xml" "설정 열기")"
+  read -r HEADER_X HEADER_Y <<<"$coords"
+  adb shell input tap "$HEADER_X" "$HEADER_Y"
+  dump_window /sdcard/worklog-settings.xml /tmp/worklog-settings.xml
+  coords="$(find_node_center /tmp/worklog-settings.xml "업무일지 열기")"
+  read -r HEADER_X HEADER_Y <<<"$coords"
+  adb shell input tap "$HEADER_X" "$HEADER_Y"
+}
+open_journal_from_settings "$WINDOW_XML"
 dump_window /sdcard/worklog-header-after.xml /tmp/worklog-header-after.xml
 if ! grep -q '업무일지' /tmp/worklog-header-after.xml || ! grep -q '닫기' /tmp/worklog-header-after.xml; then
   echo "HomeScreenApp did not navigate to the production journal screen."
@@ -136,6 +146,12 @@ CLOSE_COORDS="$(find_node_center /tmp/worklog-header-after.xml "닫기")"
 read -r CLOSE_X CLOSE_Y <<<"$CLOSE_COORDS"
 adb shell input tap "$CLOSE_X" "$CLOSE_Y"
 sleep 1
+dump_window /sdcard/worklog-settings-return.xml /tmp/worklog-settings-return.xml
+if ! grep -q '내 업무공간' /tmp/worklog-settings-return.xml; then
+  echo "Journal close did not return to Settings."
+  exit 1
+fi
+adb shell input keyevent KEYCODE_BACK
 dump_window /sdcard/worklog-home-return.xml /tmp/worklog-home-return.xml
 if ! grep -q '음성 기록 시작' /tmp/worklog-home-return.xml; then
   echo "Production journal close did not return to HomeScreenApp."
@@ -209,10 +225,7 @@ if ! grep -q '음성 기록 시작' /tmp/worklog-cancel-after.xml; then
 fi
 
 # After cancellation, exercise the same production navigation path again.
-HEADER_COORDS="$(find_node_center /tmp/worklog-cancel-after.xml "업무일지 열기")"
-read -r HEADER_X HEADER_Y <<<"$HEADER_COORDS"
-adb shell input tap "$HEADER_X" "$HEADER_Y"
-sleep 1
+open_journal_from_settings /tmp/worklog-cancel-after.xml
 dump_window /sdcard/worklog-header-retry.xml /tmp/worklog-header-retry.xml
 if ! grep -q '업무일지' /tmp/worklog-header-retry.xml || ! grep -q '닫기' /tmp/worklog-header-retry.xml; then
   echo "HomeScreenApp did not navigate after Quick Voice cancellation."
