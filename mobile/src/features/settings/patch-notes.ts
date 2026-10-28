@@ -9,6 +9,15 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-10-28',
+    title: '업무일지를 설정으로 이동',
+    summary: '홈 상단을 간결하게 정리하고 날짜별 업무일지는 설정에서 열도록 바꿨습니다.',
+    items: [
+      '설정 → 기록 → 업무일지에서 날짜별 일정과 업무·메모를 확인합니다.',
+      '업무일지의 닫기와 Android 뒤로가기는 설정으로 돌아갑니다.',
+    ],
+  },
+  {
     date: '2026-10-27',
     title: '새 아이콘·업데이트 안내·간결한 알림 표시',
     summary: '앱 아이콘을 바꾸고 일정과 업무의 알림 상태를 같은 짧은 버튼으로 정리했습니다.',
