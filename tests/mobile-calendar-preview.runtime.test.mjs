@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const ts = createRequire(new URL('../mobile/package.json', import.meta.url))('typescript');
-test('actual preview opens, labels approval and timezone honestly, closes by button/back, wraps and scrolls', () => {
+test('actual QA preview opens and closes; production never exposes unfinished Calendar UI', (t) => {
+  const previous = process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT;
+  t.after(() => { if (previous === undefined) delete process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT; else process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT = previous; });
+  process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT = 'qa';
   let state = false;
   const React = { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }), useState: () => [state, next => { state = next; }] };
   const native = Object.fromEntries(['Modal','Pressable','ScrollView','Text','View'].map(key => [key,key]));
@@ -22,4 +25,9 @@ test('actual preview opens, labels approval and timezone honestly, closes by but
   assert.equal(buttons()[0].props.style.minHeight,48);
   buttons()[1].props.onPress(); assert.equal(state,false);
   buttons()[0].props.onPress(); all(render()).find(n=>n.type==='Modal').props.onRequestClose(); assert.equal(state,false);
+  for (const variant of ['production', undefined]) {
+    if (variant === undefined) delete process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT;
+    else process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT = variant;
+    assert.equal(render(), null);
+  }
 });

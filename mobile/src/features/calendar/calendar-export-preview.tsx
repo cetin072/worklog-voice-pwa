@@ -5,6 +5,8 @@ import { CALENDAR_APPROVAL_MESSAGE } from './calendar-export';
 /** Approval-gated preview only. No login escalation or implied Google success. */
 export function CalendarExportPreview({ title, startsAt, allDay, dateKey }: { title: string; startsAt?: string; allDay?: boolean; dateKey?: string }) {
   const [visible, setVisible] = useState(false);
+  // Keep this unfinished integration out of Play while QA work continues.
+  if (process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT !== 'qa') return null;
   const date = startsAt && Number.isFinite(Date.parse(startsAt))
     ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'medium', ...(allDay ? {} : { timeStyle: 'short' }) }).format(new Date(startsAt)) : dateKey || '시간 확인 필요';
   return <>
