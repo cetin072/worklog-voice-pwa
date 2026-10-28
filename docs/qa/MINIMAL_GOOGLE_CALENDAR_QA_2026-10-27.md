@@ -50,3 +50,18 @@ Human QA after gates: QA co-installation, QA login/callback, voice record/save, 
 ## Next Codex/Work instruction
 
 Continue Draft `feat/minimal-calendar-qa-20261027`, preserve #466 ancestry and latest main. Read this report and current PR first. Do not claim Calendar complete from the approval-gated preview. Obtain explicit OAuth scope/project and synthetic test-account/calendar approval, then implement the authorized account-bound adapter wiring and canonical re-read/end confirmation; test real insert/readback and same-ID retries only within that approved scope. Build exact-head normal QA APK with existing QA identity/signing, verify APK SHA/package/version and runtime captures, deliver raw APK through Library. Wait for user phone QA before any Play submission; existing Alpha update and public release are distinct. Do not change production web schedule, keys, terms, costs, or security settings.
+
+## QA feedback — 2026-10-28
+
+The user confirmed checking the code5 QA installation, requested collecting further
+changes before the next official Play update, and moved the journal entry into
+Settings. This confirmation does not complete live Google Calendar acceptance.
+
+- Header now retains search/settings; journal uses the existing SettingsMenuItem
+  under 기록 → 업무일지. Its close action and Android back return to Settings.
+- Existing Android emulator/Robo navigation scripts follow Settings → journal →
+  Settings → Home; recording controls/layout remain unchanged.
+- This is a JS/TS menu change. No manually requested standalone rebuild, reinstall,
+  production merge, Play submission, OAuth/permission or operational data change.
+- Include the menu move in local patch notes when the product change is eventually
+  merged into main; do not claim the previously delivered code5 APK contains it.

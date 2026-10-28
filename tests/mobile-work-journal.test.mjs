@@ -16,12 +16,15 @@ test("mobile exposes a typed automatic work journal loader",()=>{
   assert.match(api,/parseWorkJournalDay/);
 });
 
-test("home header exposes a direct 업무일지 entry without replacing existing search/settings",()=>{
-  assert.match(home,/accessibilityLabel="업무일지 열기"/);
-  assert.match(home,/>📒 업무일지</);
-  assert.match(home,/accessibilityLabel="과거 업무 검색"/);
-  assert.match(home,/accessibilityLabel="설정 열기"/);
-  assert.match(home,/type AppScreen = 'home' \| 'journal'/);
+test("journal entry lives in settings while header retains search/settings",()=>{
+  const header=home.slice(home.indexOf('function HomeHeader('),home.indexOf('export default function HomeScreen'));
+  const settings=home.slice(home.indexOf("{screen === 'settings' ?"),home.indexOf("{screen === 'patchNotes' ?"));
+  assert.doesNotMatch(header,/업무일지|onOpenJournal/);
+  assert.match(header,/accessibilityLabel="과거 업무 검색"/);
+  assert.match(header,/accessibilityLabel="설정 열기"/);
+  assert.match(settings,/title="업무일지" accessibilityLabel="업무일지 열기"[\s\S]*onPress=\{openJournal\}/);
+  assert.match(home,/title="업무일지" onClose=\{\(\) => setScreen\('settings'\)\}/);
+  assert.match(home,/setScreen\(screen === 'journal' \? 'settings' : 'home'\)/);
 });
 
 test("journal screen uses simple previous today next navigation rather than a monthly calendar",()=>{
@@ -42,7 +45,7 @@ test("journal renders the four approved sections and future open work is labeled
 });
 
 test("journal is view-first and does not add a separate daily writing workflow",()=>{
-  const start=home.indexOf("screen === 'journal'");
+  const start=home.indexOf("{screen === 'journal' ?");
   const end=home.indexOf("screen === 'recordSearch'",start);
   assert.ok(start>=0 && end>start);
   const journalScreen=home.slice(start,end);
