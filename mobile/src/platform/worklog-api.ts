@@ -187,7 +187,7 @@ function requestId() {
 export type SaveWorklogOptions = Readonly<{
   clientRequestId?: string;
   recordedAt?: string;
-  sourceType?: 'direct' | 'voice';
+  sourceType?: 'direct' | 'voice' | 'capture';
   institution?: string;
   institutionSource?: 'user_selected' | 'user_confirmed';
   status?: string;
