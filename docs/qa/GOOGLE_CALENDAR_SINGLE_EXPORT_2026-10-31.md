@@ -35,11 +35,16 @@ ID가 404로 사라져도 재생성하지 않는다. 재시작/재연결 뒤에�
 ## OAuth / 토큰 경계
 
 일반 앱 로그인과 Calendar 연결은 별도다. 클릭 전 인증/Calendar 요청이 없다.
-Calendar 전용 Supabase client는 persistSession:false, autoRefreshToken:false,
-detectSessionInUrl:false, flowType:pkce, 별도 storageKey를 쓴다.
-설치된 auth-js는 persistSession:false일 때 SDK 자체 메모리 storage를 사용한다.
-SecureStore나 기본 앱 client를 넘기지 않으며 provider token을 app session에 합치지 않는다.
-SDK client는 교환 후 dispose하고 Google access token만 Adapter closure에 보관한다.
+Calendar 전용 어댑터는 기존 Supabase Auth의 공개 `/authorize`, `/token?grant_type=pkce`
+프로토콜을 사용한다. 앱 client/SDK 세션을 만들거나 setSession을 호출하지 않고,
+교환 응답의 Supabase JWT/refresh 필드는 버린다. PKCE verifier와 Google access token은
+함수/Adapter closure 메모리에만 보관한다. SecureStore·localStorage·DB 쓰기는 없다.
+설치 SDK 2.116은 WebCrypto가 없는 native에서 Math.random/plain fallback을 쓰므로
+그 경로를 사용하지 않는다. 기존 Expo Crypto의 native getRandomBytesAsync(32)와
+SHA256 BASE64로 S256을 생성한다. crypto 실패 시 브라우저를 열기 전에 차단하며
+plain/global crypto shim/새 패키지를 도입하지 않는다. 시스템 브라우저와 Supabase의
+기존 Google provider/state/callback 처리는 재사용한다. 테스트용 native smoke에서
+난수/PKCE 생성과 SHA256 알려진 벡터를 실행하고 marker가 없으면 runtime gate를 실패시킨다.
 Google refresh token은 요청/저장/사용하지 않는다(access_type:online).
 50분의 보수적 연결 수명 또는 HTTP 401이면 재연결한다. 403은 거부/철회로 표시한다.
 앱 종료/앱 사용자 변경/로그아웃/연결 해제 시 메모리 연결을 폐기한다.
@@ -118,4 +123,4 @@ runtime smoke 및 APK package/version/certificate/SHA-256 확인 뒤 raw APK를 
 - [Supabase Google](https://supabase.com/docs/guides/auth/social-sign-in/auth-google): provider_token과 Google refresh token의 별도 성격.
 - [Supabase signInWithOAuth](https://supabase.com/docs/reference/javascript/auth-signinwithoauth): 추가 scope/PKCE.
 - [Supabase PKCE](https://supabase.com/docs/guides/auth/sessions/pkce-flow): callback code와 verifier 교환.
-- 설치된 @supabase/auth-js GoTrueClient의 persistSession:false 메모리 storage 분기 및 dispose 구현도 검사했다.
+- 설치된 @supabase/auth-js의 PKCE endpoint/필드와 native plain fallback을 확인했다. Calendar는 그 fallback을 사용하지 않는다. [Expo Crypto](https://docs.expo.dev/versions/latest/sdk/crypto/)의 기존 native 난수/SHA256을 재사용한다.

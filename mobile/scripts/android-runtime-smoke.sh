@@ -111,7 +111,7 @@ if [[ "$rendered" != "1" ]]; then
 fi
 
 PLATFORM_LOG="$(adb logcat -d -v brief | grep '\[android-touch-smoke\]' || true)"
-for marker in 'platform-phase=loading' 'platform-session-restored' 'platform-phase=ready'; do
+for marker in 'platform-phase=loading' 'platform-session-restored' 'platform-phase=ready' 'calendar-pkce-native=verified'; do
   if ! printf '%s\n' "$PLATFORM_LOG" | grep -q "$marker"; then
     echo "PlatformProvider smoke lifecycle marker missing: $marker"
     printf '%s\n' "$PLATFORM_LOG"

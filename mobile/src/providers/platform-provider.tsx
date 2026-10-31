@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { resetCalendarConnection } from '@/src/features/calendar/calendar-service';
+import { resetCalendarConnection, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
 import { AppState } from 'react-native';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
@@ -135,6 +135,8 @@ export function PlatformProvider({ children }: PropsWithChildren) {
       try {
         if (ANDROID_TOUCH_SMOKE_MODE) {
           console.info('[android-touch-smoke] platform-phase=loading');
+          await verifyCalendarNativeCrypto();
+          console.info('[android-touch-smoke] calendar-pkce-native=verified');
           await seedAndroidTouchSmokeSession();
         }
         const nextConfig = ANDROID_TOUCH_SMOKE_MODE ? ANDROID_TOUCH_SMOKE_CONFIG : await loadPublicPlatformConfig();
