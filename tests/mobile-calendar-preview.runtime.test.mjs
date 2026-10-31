@@ -49,3 +49,22 @@ test('actual QA UI opens server preview, connects only on click, confirms one ev
   assert.equal(service.info().email,'qa@example.invalid');assert.equal(posts,1);
   for(const variant of ['production',undefined]){if(variant===undefined)delete process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT;else process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT=variant;assert.equal(render(),null);}
 });
+
+test('real server confirmed projection reaches actual Home Calendar entry; tentative schedules do not',async()=>{
+  const {createWorklogDataCoreBriefingSource}=await import('../netlify/shared/worklog-data-core-briefing-source.mjs');
+  const brief=await createWorklogDataCoreBriefingSource({client:{rpc:async()=>({workspace_id:'synthetic-workspace',today:'2026-11-02',tasks:[],schedules:[
+    {id:'22222222-2222-4222-8222-222222222222',title:'확정 검수',starts_at:'2026-11-02T10:00:00+09:00',status:'confirmed'},
+    {id:'33333333-3333-4333-8333-333333333333',title:'임시 검수',starts_at:'2026-11-02T11:00:00+09:00',status:'tentative'},
+  ]})}}).load();
+  assert.equal(brief.schedules.today[0].status,'확정');
+  const file=ts.createSourceFile('index.tsx',readFileSync('mobile/app/index.tsx','utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+  const node=file.statements.find(s=>ts.isFunctionDeclaration(s)&&s.name?.text==='ScheduleRows');assert.ok(node);
+  const code=ts.transpileModule(ts.createPrinter().printNode(ts.EmitHint.Unspecified,node,file),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
+  const React={createElement:(type,props,...children)=>({type,props:{...props,children}})};
+  const rows=new Function('React','styles','formatSchedule','ScheduleReminderLabel','CalendarExportPreview',code+';return ScheduleRows;')(React,{},()=>'', 'ScheduleReminderLabel','CalendarExportPreview');
+  const all=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(all):[n,...all(n.props.children)];
+  const tree=rows({schedules:brief.schedules.today,empty:'none',onReminder(){}});
+  const entries=all(tree).filter(n=>n.type==='CalendarExportPreview');
+  assert.equal(entries.length,1);assert.equal(entries[0].props.scheduleId,brief.schedules.today[0].scheduleId);
+  assert.equal(all(rows({schedules:[{...brief.schedules.today[0],status:'confirmed'}],empty:'none',onReminder(){}})).filter(n=>n.type==='CalendarExportPreview').length,1);
+});
