@@ -20,7 +20,7 @@ export function CaptureImportButton({ compact = false, disabled = false }: { com
     finally { pending.current = false;if (mounted.current) setBusy(false); }
   }
   if (Platform.OS !== 'android') return null;
-  if (compact) return <Pressable accessibilityRole="button" accessibilityLabel="캡처 가져오기" accessibilityHint="사진: 갤러리에서 캡처 한 장 선택" disabled={busy || !owner || disabled} onPress={() => void choose()} style={[styles.quickButton, busy || disabled ? styles.disabled : null]}><Text style={styles.quickIcon}>🖼️</Text><Text style={styles.quickLabel}>{busy ? '가져오는 중' : '사진'}</Text></Pressable>;
+  if (compact) return <Pressable accessibilityRole="button" accessibilityLabel="사진 · 캡처 가져오기" accessibilityHint="사진: 갤러리에서 캡처 한 장 선택" disabled={busy || !owner || disabled} onPress={() => void choose()} style={[styles.quickButton, busy || disabled ? styles.disabled : null]}><Text style={styles.quickIcon}>🖼️</Text><Text style={styles.quickLabel}>{busy ? '가져오는 중' : '사진'}</Text></Pressable>;
   return <View style={styles.group}><Pressable accessibilityRole="button" accessibilityLabel="캡처 가져오기" accessibilityHint="갤러리에서 이미지 한 장을 선택하면 자동으로 기록합니다" disabled={busy || !owner} onPress={() => void choose()} style={styles.button}>
     <Text style={styles.title}>{busy ? '이미지 가져오는 중…' : '캡처 가져오기'}</Text><Text style={styles.help}>갤러리에서 한 장 선택 · 자동 기록</Text>
   </Pressable>{error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}</View>;

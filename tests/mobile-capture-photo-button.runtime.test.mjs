@@ -21,7 +21,7 @@ function harness({disabled=false,cancel=false}={}) {
  return {tree,pushes,calls,finish:()=>finish?.(),unmount:()=>effects.forEach(x=>x?.())};
 }
 test('photo shortcut reuses one gallery import and opens the normal capture route',async()=>{
- const h=harness();assert.equal(h.tree.props.accessibilityLabel,'캡처 가져오기');
+ const h=harness();assert.equal(h.tree.props.accessibilityLabel,'사진 · 캡처 가져오기');
  assert.ok(h.tree.props.children.some(x=>x.props.children==='사진'));
  h.tree.props.onPress();h.tree.props.onPress();assert.equal(h.calls.length,1);
  h.finish();await tick();assert.equal(h.pushes.length,1);assert.equal(h.pushes[0].pathname,'/capture');
