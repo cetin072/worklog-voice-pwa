@@ -9,8 +9,6 @@ const scheduled = readFileSync(new URL("../netlify/functions/afternoon-push.mts"
 const preview = readFileSync(new URL("../netlify/functions/afternoon-push-preview.mts", import.meta.url), "utf8");
 const preferencesApi = readFileSync(new URL("../netlify/functions/notification-preferences.mts", import.meta.url), "utf8");
 const settingsHtml = readFileSync(new URL("../public/settings.html", import.meta.url), "utf8");
-const settingsJs = readFileSync(new URL("../public/morning-push-settings.js", import.meta.url), "utf8");
-const notificationsJs = readFileSync(new URL("../public/notifications.js", import.meta.url), "utf8");
 const safetyMigration = readFileSync(new URL("../supabase/migrations/20260919154119_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
 
 test("afternoon reminder shows one priority task and remaining counts", () => {
@@ -46,15 +44,6 @@ test("afternoon detail title is clipped and body stays compact", () => {
   assert.ok(body.includes("…"));
   assert.ok(body.length <= 160);
   assert.match(body, /지난 업무 3건$/);
-});
-
-test("afternoon schedule is fixed to 16:30 Asia/Seoul and reuses Web Push infrastructure", () => {
-  assert.match(scheduled, /schedule:"30 7 \* \* \*"/);
-  assert.match(scheduled, /16:30 Asia\/Seoul/);
-  assert.match(scheduled, /claimAfternoon/);
-  assert.match(scheduled, /sendWebPush/);
-  assert.match(scheduled, /client\.finish/);
-  assert.doesNotMatch(scheduled, /OneSignal|Firebase Admin|Pusher|Twilio/);
 });
 
 test("afternoon preferences default off and claim sends only when due incomplete work remains", () => {
@@ -120,32 +109,3 @@ test("scheduler client normalizes afternoon claims through the shared claim cont
   assert.equal(calls[0].body.appOrigin, "https://worklog.example.test");
 });
 
-test("notification settings exposes and persists the afternoon option without weakening Push connection checks", () => {
-  assert.match(preferencesApi, /afternoon_enabled/);
-  assert.match(preferencesApi, /afternoon_time:"16:30:00"/);
-  assert.match(preferencesApi, /afternoonEnabled/);
-  assert.match(preferencesApi, /PUSH_SUBSCRIPTION_REQUIRED/);
-  assert.match(preferencesApi, /app_origin:`eq\.\$\{origin\}`/);
-  assert.match(settingsHtml, /id="settingsAfternoonPushEnabled"/);
-  assert.match(settingsHtml, /오후 미완료 업무 알림 · 오후 4:30/);
-  assert.match(settingsJs, /afternoonEnabled: desired/);
-});
-
-test("afternoon preview uses live Supabase data and never consumes scheduled delivery dedupe", () => {
-  assert.match(preview, /get_my_briefing_source/);
-  assert.match(preview, /buildMorningPushPreviewState/);
-  assert.match(preview, /buildAfternoonPushPayload/);
-  assert.match(preview, /app_origin:`eq\.\$\{origin\}`/);
-  assert.match(preview, /path:"\/api\/afternoon-push-preview"/);
-  assert.doesNotMatch(preview, /notification_deliveries/);
-  assert.doesNotMatch(preview, /claim_afternoon_notification_deliveries/);
-});
-
-test("afternoon preview is one-tap in diagnostics and uses shared expired-subscription recovery", () => {
-  assert.match(settingsJs, /settingsAfternoonPushPreview/);
-  assert.match(settingsJs, /오후 업무 알림 보내보기/);
-  assert.match(settingsJs, /notifications\?\.sendAfternoonPreviewPush/);
-  assert.match(notificationsJs, /sendAfternoonPreviewPush[\s\S]*withServerPushSubscriptionRecovery/);
-  assert.match(notificationsJs, /\/api\/afternoon-push-preview/);
-  assert.doesNotMatch(settingsJs, /fetch\("\/api\/afternoon-push-preview"/);
-});

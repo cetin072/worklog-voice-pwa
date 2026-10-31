@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 
 test("service worker separates API, navigation, and static asset strategies", () => {
-  assert.match(source, /const CACHE="worklog-v41-home-briefing-dedup"/);
-  assert.match(source, /"\/morning-push-settings\.js"/);
+  assert.match(source, /const CACHE="worklog-v42-retired-web-push"/);
+  assert.doesNotMatch(source, /"\/morning-push-settings\.js"/);
   assert.match(source, /"\/home-ux\.css"/);
   assert.match(source, /"\/home-ux\.js"/);
   assert.match(source, /"\/icons\/icon-192-v6\.png"/);
@@ -15,7 +15,7 @@ test("service worker separates API, navigation, and static asset strategies", ()
   assert.doesNotMatch(source, /"\/icons\/icon-192-v[345]\.png"/);
   assert.doesNotMatch(source, /"\/icons\/icon-512-v[345]\.png"/);
   assert.doesNotMatch(source, /"\/icons\/icon-maskable-512-v[345]\.png"/);
-  assert.match(source, /icon:"\/icons\/icon-192-v6\.png"/);
+  assert.doesNotMatch(source, /self\.addEventListener\("push"/);
   assert.match(source, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(source, /event\.respondWith\(fetch\(request\)\)/);
   assert.match(source, /request\.mode==="navigate" \|\| request\.destination==="document"/);
@@ -32,7 +32,7 @@ test("static assets use stale-while-revalidate while versioned assets avoid stal
 });
 
 test("API responses are never written into the service worker cache", () => {
-  const fetchHandler = source.slice(source.indexOf('self.addEventListener("fetch"'), source.indexOf('self.addEventListener("push"'));
+  const fetchHandler = source.slice(source.indexOf('self.addEventListener("fetch"'), source.length);
   const apiStart = fetchHandler.indexOf('url.pathname.startsWith("/api/")');
   const apiEnd = fetchHandler.indexOf('if(request.mode===', apiStart);
   const apiBranch = fetchHandler.slice(apiStart, apiEnd);
