@@ -247,7 +247,7 @@ adb shell input keyevent KEYCODE_BACK
 GALLERY_COORDS=""
 for attempt in 1 2 3 4 5; do
   dump_window /sdcard/worklog-gallery-home.xml /tmp/worklog-gallery-home.xml
-  GALLERY_COORDS="$(find_node_center /tmp/worklog-gallery-home.xml "캡처 가져오기" || true)"
+  GALLERY_COORDS="$(find_node_center /tmp/worklog-gallery-home.xml "사진 · 캡처 가져오기" || true)"
   if [[ -n "$GALLERY_COORDS" ]]; then break; fi
   adb shell input swipe 500 1500 500 500 300
 done
