@@ -38,9 +38,11 @@ export default function CaptureScreen() {
         setEntry(next);
       }
     } catch (e) {
-      if (current === epoch.current) setError(e instanceof Error && e.message === 'CAPTURE_NO_TEXT'
-        ? '글자를 읽지 못했습니다. 다시 공유하거나 직접 입력해주세요.'
-        : '자동 저장을 마치지 못했습니다. 이미지는 보관되어 있습니다. 로그인·네트워크를 확인하고 다시 시도해주세요.');
+      if (current === epoch.current) setError(incomingError
+        ? '이미지를 가져오지 못했습니다. 이미지 한 장을 다시 공유하거나 직접 입력해주세요.'
+        : e instanceof Error && e.message === 'CAPTURE_NO_TEXT'
+          ? '글자를 읽지 못했습니다. 다시 공유하거나 직접 입력해주세요.'
+          : '자동 저장을 마치지 못했습니다. 로그인·네트워크를 확인하고 다시 시도해주세요.');
     } finally { if (current === epoch.current) setBusy(false); }
   }, [hash, owner, client, incomingError]);
   useEffect(() => { setEntry(null);setEditing(false);void receive();return () => { epoch.current++; }; }, [receive]);
