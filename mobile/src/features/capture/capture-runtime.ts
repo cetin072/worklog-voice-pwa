@@ -67,6 +67,22 @@ export function processCapture(entry: CaptureEntry, client: PlatformSupabaseClie
       entry = { ...entry, saved: result }; await captureInbox.put(entry);
     }
     await current();
+    // New review imports preserve their scanned appointment text. Keep the
+    // existing date-neutral save contract, then use the owned edit API once.
+    // The saved receipt survives failures; retry cannot insert a second record.
+    if (entry.decision?.kind === 'review' && !entry.reviewContentApplied) {
+      const token = await captureToken(client, owner);
+      const recordId = entry.saved!.dataCoreWorkRecordId || entry.saved!.pageId!;
+      const existing = await readWorklogDetails(token, recordId);
+      await current();
+      const scannedTitle = entry.decision.reviewContentTitle ? entry.decision.title : entry.decision.description.slice(0, 140);
+      if (existing.title === '캡처 일정 확인 필요' && scannedTitle.trim()) {
+        await updateWorklogDetails(token, { pageId: recordId, title: scannedTitle, dueDate: existing.dueDate, dueTime: existing.dueTime });
+        entry = { ...entry, details: { title: scannedTitle, dueDate: existing.dueDate, dueTime: existing.dueTime } };
+      } else entry = { ...entry, details: existing }; // Preserve any intervening user edit.
+      entry = { ...entry, reviewContentApplied: true };
+      await captureInbox.put(entry);
+    }
     captureChanges.publish({ owner, recordId: entry.saved!.dataCoreWorkRecordId || entry.saved!.pageId!, dueDate: entry.details?.dueDate || entry.decision?.date || '' });
     // Storage success and reminder success are deliberately separate.
     const ids = entry.saved?.scheduleIds || (entry.saved?.scheduleId ? [entry.saved.scheduleId] : []);

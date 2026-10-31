@@ -8,6 +8,7 @@ register('./helpers/mobile-ts-loader.mjs',import.meta.url);
 const {createCaptureInbox}=await import('../mobile/src/features/capture/capture-inbox.ts');
 const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
 function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',review=false,linkAfterEdit=false}={}) {
+ let details=review?{title:'캡처 일정 확인 필요',dueDate:'',dueTime:''}:{title:'서버 회의 제목',dueDate:'2099-11-03',dueTime:'15:00'};
  const map=new Map(),remote=new Map(),calls=[],sid='11111111-1111-4111-8111-111111111111';let actor='alice',timeout=false,failOcr=false,switchToken=false,failReminder=false;
  const storage={getItem:async k=>map.get(k)||null,setItem:async(k,v)=>{map.set(k,v);}};
  const client={auth:{getUser:async()=>({data:{user:{id:actor}}})}};
@@ -21,8 +22,8 @@ function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',r
   './capture-ocr':{recognizeCapture:async()=>{if(failOcr)throw Error('OCR');return ocrText;}},
   '@/src/platform/worklog-api':{
    saveWorklog:async(token,text,options)=>{calls.push(['save',token,text,options]);if(!remote.has(options.clientRequestId))remote.set(options.clientRequestId,{pageId:'record-a',scheduleCreated:!review,scheduleId:review?undefined:sid});if(timeout){timeout=false;throw Error('connection lost after commit');}return remote.get(options.clientRequestId);},
-   readWorklogDetails:async()=>({title:'서버 회의 제목',dueDate:'2099-11-03',dueTime:'15:00'}),
-   updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);return{title:input.title,schedule:linkAfterEdit?null:{id:sid,status:'confirmed'}};},
+   readWorklogDetails:async()=>({...details}),
+   updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);details={title:input.title,dueDate:input.dueDate,dueTime:input.dueTime};return{title:input.title,schedule:linkAfterEdit?null:{id:sid,status:'confirmed'}};},
    deleteWorklog:async(_client,id)=>{calls.push(['delete',id]);return{cancelledScheduleIds:[sid]};},
   },
   '@/src/features/schedule/schedule-reminder-post-save':{
@@ -33,7 +34,7 @@ function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',r
  };
  const exports={};const code=ts.transpileModule(readFileSync('mobile/src/features/capture/capture-runtime.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  vm.runInNewContext(code,{exports,require:n=>{assert.ok(modules[n],n);return modules[n];}});
- return{api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
+ return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
 }
 test('automatic save has no confirmation; two overlapping runs share the persisted receipt',async()=>{
  const h=harness(),entry=await h.receive();const [a,b]=await Promise.all([h.api.processCapture(entry,h.client,'alice'),h.api.processCapture(entry,h.client,'alice')]);
@@ -45,6 +46,7 @@ test('the reported relative-date capture is a saved undated review, and editing 
  const h=harness({ocrText:'오늘 오후 13시 담당자 거래처 방문',review:true,linkAfterEdit:true}),changes=[];
  const unsubscribe=h.api.captureChanges.subscribe(change=>changes.push(change));
  const saved=await h.api.processCapture(await h.receive(),h.client,'alice');
+ assert.equal(saved.details.title,'오늘 오후 13시 담당자 거래처 방문');assert.equal(saved.details.dueDate,'');assert.equal(saved.reviewContentApplied,true);
  assert.equal(saved.decision.kind,'review');assert.equal(saved.saved.scheduleCreated,false);
  const save=h.calls.find(x=>x[0]==='save');assert.equal(save[2],'캡처 일정 확인 필요');assert.match(save[3].followUp,/담당자/);
  assert.equal(changes[0].recordId,'record-a');assert.equal(changes[0].dueDate,'');
@@ -78,4 +80,14 @@ test('OCR failure retains image and account change before token submission canno
 test('reminder failure never reports record save failure and is visible separately',async()=>{
  const h=harness();h.failReminder();const saved=await h.api.processCapture(await h.receive(),h.client,'alice');
  assert.ok(saved.saved.pageId);assert.match(saved.reminderWarning,/알림/);assert.equal(h.remote.size,1);
+});
+
+test('reopening a legacy capture repairs only its placeholder title and preserves an edited date',async()=>{
+ const h=harness({review:true});let entry=await h.receive();
+ h.setDetails({title:'캡처 일정 확인 필요',dueDate:'2099-11-04',dueTime:'13:00'});
+ entry={...entry,saved:{pageId:'record-a'},decision:{kind:'review',title:'캡처 일정 확인 필요',date:'',time:'',description:'담당자 거래처 방문',reason:'unknown',transcript:'캡처 일정 확인 필요',status:'확인필요',followUp:'담당자 거래처 방문'}};
+ await h.api.captureInbox.put(entry);const result=await h.api.processCapture(entry,h.client,'alice');
+ assert.equal(result.details.title,'담당자 거래처 방문');assert.equal(result.details.dueDate,'2099-11-04');assert.equal(result.details.dueTime,'13:00');
+ assert.equal(h.calls.filter(c=>c[0]==='save').length,0);
+ await h.api.processCapture(result,h.client,'alice');assert.equal(h.calls.filter(c=>c[0]==='edit').length,1);
 });

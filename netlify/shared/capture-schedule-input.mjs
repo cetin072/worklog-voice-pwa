@@ -21,9 +21,9 @@ export function captureScheduleInput(ocr, now = new Date().toISOString()) {
   const reviewLine = eventLine || body.find(x => countKoreanDateSignals(normalized(x), { policy: 'journal' }) || countKoreanTimeSignals(x)) || body.find(x => x.length >= 6);
   const relevant = [reviewLine, place && place !== reviewLine ? place : ''].filter(Boolean).join(' · ');
   const description = (relevant || '날짜와 약속 내용을 확인해주세요.').slice(0, 200);
-  const review = reason => ({ kind: 'review', title: '캡처 일정 확인 필요', date: '', time: '', description, reason,
+  const review = reason => ({ kind: 'review', title: description.slice(0, 140), date: '', time: '', description, reason,
     // Dates stay in a non-parsed existing followUp field, never in transcript.
-    transcript: '캡처 일정 확인 필요', status: '확인필요', followUp: description });
+    reviewContentTitle: true, transcript: '캡처 일정 확인 필요', status: '확인필요', followUp: description });
   if (headers.length > 1 || CHANGE.test(text)) return review('changed_or_multiple_conversations');
   if (!EVENT.test(text)) return review('no_confirmed_event');
   const header = headers[0] && normalized(headers[0]).match(DATE);
