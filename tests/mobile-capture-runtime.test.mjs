@@ -9,7 +9,7 @@ const {createCaptureInbox}=await import('../mobile/src/features/capture/capture-
 const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
 function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',review=false,linkAfterEdit=false}={}) {
  let details=review?{title:'캡처 일정 확인 필요',dueDate:'',dueTime:''}:{title:'서버 회의 제목',dueDate:'2099-11-03',dueTime:'15:00'};
- const map=new Map(),remote=new Map(),calls=[],sid='11111111-1111-4111-8111-111111111111';let actor='alice',timeout=false,failOcr=false,switchToken=false,failReminder=false;
+ const map=new Map(),remote=new Map(),calls=[],sid='11111111-1111-4111-8111-111111111111';let actor='alice',timeout=false,failOcr=false,switchToken=false,failReminder=false,failEdit=false,failEditReminder=false;
  const storage={getItem:async k=>map.get(k)||null,setItem:async(k,v)=>{map.set(k,v);}};
  const client={auth:{getUser:async()=>({data:{user:{id:actor}}})}};
  const modules={
@@ -23,18 +23,18 @@ function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',r
   '@/src/platform/worklog-api':{
    saveWorklog:async(token,text,options)=>{calls.push(['save',token,text,options]);if(!remote.has(options.clientRequestId))remote.set(options.clientRequestId,{pageId:'record-a',scheduleCreated:!review,scheduleId:review?undefined:sid});if(timeout){timeout=false;throw Error('connection lost after commit');}return remote.get(options.clientRequestId);},
    readWorklogDetails:async()=>({...details}),
-   updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);details={title:input.title,dueDate:input.dueDate,dueTime:input.dueTime};return{title:input.title,schedule:linkAfterEdit?null:{id:sid,status:'confirmed'}};},
+   updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);if(failEdit)throw Error('서버에서 수정을 저장하지 못했습니다.');details={title:input.title,dueDate:input.dueDate,dueTime:input.dueTime};return{title:input.title,schedule:linkAfterEdit?null:{id:sid,status:'confirmed'}};},
    deleteWorklog:async(_client,id)=>{calls.push(['delete',id]);return{cancelledScheduleIds:[sid]};},
   },
   '@/src/features/schedule/schedule-reminder-post-save':{
    synchronizeSavedScheduleReminders:async result=>{calls.push(['reminders',result]);if(failReminder)throw Error('permission');},
-   synchronizeEditedWorklogReminder:async(_c,input)=>{calls.push(['edit-reminders',input]);return linkAfterEdit?'created':'linked';},
+   synchronizeEditedWorklogReminder:async(_c,input)=>{calls.push(['edit-reminders',input]);if(failEditReminder)throw Error('alarm permission denied');return linkAfterEdit?'created':'linked';},
    cancelSavedScheduleReminders:async ids=>calls.push(['cancel-reminders',ids]),
   },
  };
  const exports={};const code=ts.transpileModule(readFileSync('mobile/src/features/capture/capture-runtime.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  vm.runInNewContext(code,{exports,require:n=>{assert.ok(modules[n],n);return modules[n];}});
- return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
+ return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,failEdit:()=>failEdit=true,failEditReminder:()=>failEditReminder=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
 }
 test('automatic save has no confirmation; two overlapping runs share the persisted receipt',async()=>{
  const h=harness(),entry=await h.receive();const [a,b]=await Promise.all([h.api.processCapture(entry,h.client,'alice'),h.api.processCapture(entry,h.client,'alice')]);
@@ -90,4 +90,21 @@ test('reopening a legacy capture repairs only its placeholder title and preserve
  assert.equal(result.details.title,'담당자 거래처 방문');assert.equal(result.details.dueDate,'2099-11-04');assert.equal(result.details.dueTime,'13:00');
  assert.equal(h.calls.filter(c=>c[0]==='save').length,0);
  await h.api.processCapture(result,h.client,'alice');assert.equal(h.calls.filter(c=>c[0]==='edit').length,1);
+});
+
+
+test('committed capture edit survives alarm failure and reopening preserves the new title and date',async()=>{
+ const h=harness({review:true,linkAfterEdit:true});const entry=await h.api.processCapture(await h.receive(),h.client,'alice');
+ h.failEditReminder();const result=await h.api.editCapture(h.client,entry,{title:'수정한 방문 일정',dueDate:'2099-11-04',dueTime:'23:00'});
+ assert.match(result.reminderWarning,/수정은 저장됐지만 알림/);assert.equal(result.scheduleCreated,true);
+ assert.equal(result.entry.details.title,'수정한 방문 일정');assert.equal(result.entry.details.dueTime,'23:00');
+ const durable=await h.api.captureInbox.get(entry.hash,'alice');assert.equal(durable.details.dueDate,'2099-11-04');assert.equal(durable.details.title,'수정한 방문 일정');
+ const reopened=await h.api.processCapture(durable,h.client,'alice');assert.equal(reopened.details.dueTime,'23:00');
+ assert.equal(h.calls.filter(c=>c[0]==='save').length,1);assert.equal(h.calls.filter(c=>c[0]==='edit'&&c[2].title==='수정한 방문 일정').length,1);
+});
+test('failed server edit keeps the existing receipt and never attempts alarm reservation',async()=>{
+ const h=harness({review:true}),entry=await h.api.processCapture(await h.receive(),h.client,'alice');h.failEdit();
+ await assert.rejects(h.api.editCapture(h.client,entry,{title:'보존할 입력',dueDate:'2099-11-04',dueTime:'23:00'}),/서버/);
+ assert.equal(h.calls.filter(c=>c[0]==='edit-reminders').length,0);
+ assert.equal((await h.api.captureInbox.get(entry.hash,'alice')).details.dueDate,'');
 });

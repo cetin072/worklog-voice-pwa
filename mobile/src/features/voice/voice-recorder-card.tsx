@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Pressable, StyleSheet, Text, TextInput, Vibration, View } from 'react-native';
 
 import { type QuickVoicePcmAudioInput } from '@/src/features/voice/audio-input';
@@ -27,6 +27,7 @@ type QuickVoiceProps = Readonly<{
 type VoiceRecorderCardProps = {
   mode?: 'quick';
   onOpenWorklogInput?: () => void;
+  renderPhotoAction?: (disabled: boolean) => ReactNode;
   quickVoice?: QuickVoiceProps;
   navigationGuard?: { current: boolean };
   /** Test-only observer used by the Android release smoke to prove the real capture state transition. */
@@ -35,6 +36,7 @@ type VoiceRecorderCardProps = {
   freezeQuickVoiceTimer?: boolean;
 } | {
   mode: 'meeting';
+  renderPhotoAction?: never;
   onOpenWorklogInput?: () => void;
   quickVoice?: QuickVoiceProps;
   navigationGuard?: { current: boolean };
@@ -70,7 +72,7 @@ function quickStatus(phase: QuickVoicePhase) {
   return ({ idle: '대기', preparing: '녹음 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
 }
 
-export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoice, navigationGuard, onQuickVoicePhaseChange, freezeQuickVoiceTimer = false }: VoiceRecorderCardProps) {
+export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPhotoAction, quickVoice, navigationGuard, onQuickVoicePhaseChange, freezeQuickVoiceTimer = false }: VoiceRecorderCardProps) {
   const meeting = useMeetingRecordingSession();
   const quickCapture = useQuickVoicePcmCapture();
   const [quickPhase, applyQuickPhase] = useState<QuickVoicePhase>('idle');
@@ -537,9 +539,11 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, quickVoi
           </Pressable>
         </View>
 
-        <View pointerEvents="none" style={[styles.quickAuxiliaryStatus, styles.quickAuxiliaryStatusRight]}>
+        <View pointerEvents={renderPhotoAction ? 'auto' : 'none'} style={[styles.quickAuxiliaryStatus, styles.quickAuxiliaryStatusRight]}>
+          {renderPhotoAction ? renderPhotoAction(quickActive) : <>
           <Text style={styles.quickStatusIcon}>{statusDone ? '✓' : quickPhase === 'transcript_error' || quickPhase === 'save_error' ? '!' : '●'}</Text>
           <Text style={styles.quickSideLabel}>{statusDone ? '저장됨' : isRecording ? '녹음 중' : quickPhase === 'idle' ? '대기' : '처리 중'}</Text>
+          </>}
         </View>
       </View>
 

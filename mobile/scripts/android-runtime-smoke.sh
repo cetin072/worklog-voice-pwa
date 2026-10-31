@@ -238,6 +238,11 @@ echo "Android production HomeScreenApp E2E PASS: navigation, Quick Voice recordi
 # Return journal -> Settings -> Home, then exercise the real system photo picker.
 # Cancel without selecting bytes: no user data or backend write is involved.
 adb shell input keyevent KEYCODE_BACK
+dump_window /sdcard/worklog-gallery-settings.xml /tmp/worklog-gallery-settings.xml
+if ! grep -q '내 업무공간' /tmp/worklog-gallery-settings.xml; then
+  echo "Journal back did not return to Settings before closing Settings."
+  exit 1
+fi
 adb shell input keyevent KEYCODE_BACK
 GALLERY_COORDS=""
 for attempt in 1 2 3 4 5; do
@@ -248,6 +253,10 @@ for attempt in 1 2 3 4 5; do
 done
 if [[ -z "$GALLERY_COORDS" ]]; then
   echo "Capture import button was not reachable on Home."
+  exit 1
+fi
+if ! grep -q '사진' /tmp/worklog-gallery-home.xml; then
+  echo "The photo shortcut was not rendered in the Quick Voice dock."
   exit 1
 fi
 read -r GALLERY_X GALLERY_Y <<<"$GALLERY_COORDS"

@@ -109,13 +109,34 @@ export async function editCapture(client: PlatformSupabaseClient, entry: Capture
   const recordId = entry.saved?.dataCoreWorkRecordId || entry.saved?.pageId;
   if (!recordId) throw new Error('CAPTURE_SAVE_UNCONFIRMED');
   const result = await updateWorklogDetails(await captureToken(client, entry.owner), { pageId: recordId, ...input });
+  let schedule = result.schedule || null;
+  let reminderWarning: string | undefined;
+  const remember = async () => {
+    entry = { ...entry, saved: { ...entry.saved, scheduleCreated: schedule?.status === 'confirmed', scheduleId: schedule?.id, scheduleIds: schedule ? [schedule.id] : [], schedule: schedule || undefined },
+      details: { title: result.title ?? input.title, dueDate: result.dueDate ?? input.dueDate, dueTime: result.dueTime ?? input.dueTime },
+      decision: entry.decision ? { ...entry.decision, title: result.title ?? input.title, date: result.dueDate ?? input.dueDate, time: result.dueTime ?? input.dueTime } : undefined, reminderWarning };
+    try { await captureInbox.put(entry); }
+    catch { reminderWarning = '수정은 저장됐습니다. 기기 표시를 갱신하지 못해 홈에서 다시 확인해주세요.'; entry = { ...entry, reminderWarning }; }
+  };
+  // A committed edit is a success even when a later device operation fails.
+  // Persist its receipt before reserving alarms, so reopening cannot restore
+  // the old date/title or encourage another server write.
+  await remember();
+  captureChanges.publish({ owner: entry.owner!, recordId, dueDate: entry.details!.dueDate });
   try {
     const outcome = await synchronizeEditedWorklogReminder(client, { recordId, schedule: result.schedule, dueDate: input.dueDate, dueTime: input.dueTime }, guard);
-    const schedule = result.schedule || (outcome === 'created' ? await findWorklogReminder(client, { recordId, title: input.title }, guard) : null);
-    return { ...result, schedule, scheduleCreated: schedule?.status === 'confirmed' };
-  } finally {
-    captureChanges.publish({ owner: entry.owner!, recordId, dueDate: input.dueDate });
+    schedule = result.schedule || (outcome === 'created' ? await findWorklogReminder(client, { recordId, title: input.title }, guard) : null);
+  } catch {
+    reminderWarning = '수정은 저장됐지만 알림 예약은 확인이 필요합니다.';
+    // Confirmation may already have committed a Schedule before Android failed.
+    // Re-read only; do not repeat the write or claim a reservation succeeded.
+    if (!schedule && guard()) {
+      try { schedule = await findWorklogReminder(client, { recordId, title: input.title }, guard); }
+      catch { /* Unknown schedule state stays unconfirmed. */ }
+    }
   }
+  await remember();
+  return { ...result, schedule, scheduleCreated: schedule?.status === 'confirmed', reminderWarning, entry };
 }
 export async function undoCapture(client: PlatformSupabaseClient, entry: CaptureEntry) {
   const guard = reminderSessionEpoch.capture();

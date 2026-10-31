@@ -23,7 +23,7 @@ function harness(seed = details) {
     visible: { hash: 'a', owner: 'alice', saved: { pageId: 'record-a' }, details: seed },
     getFreshAccessToken: async () => 'synthetic',
     readWorklogDetails: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
-    editCapture: (_client, _entry, input) => new Promise(resolve => { save = { input, resolve }; }),
+    editCapture: (_client, _entry, input) => new Promise((resolve,reject) => { save = { input, resolve, reject }; }),
     captureInbox: { put: async entry => writes.push(entry) },
   };
   for (const setter of new Set(code.match(/set[A-Z][A-Za-z]+/g))) scope[setter] = value => {
@@ -67,7 +67,21 @@ test('saving keeps its loading state and invalidates an older background read', 
   const saving = h.api.saveEdit(); assert.equal(h.state.setBusy, true); assert.equal(h.save().input.dueTime, '17:30');
   h.pending[0].resolve({ ...details, title: '저장 중 늦은 응답' }); await read;
   assert.equal(h.state.setTitle, details.title); assert.equal(h.state.setTime, '17:30');
-  h.save().resolve({scheduleCreated:true,schedule:{id:'canonical-schedule',status:'confirmed'}}); await saving;
-  assert.equal(h.writes[0].details.dueTime, '17:30'); assert.equal(h.state.setBusy, false); assert.equal(h.state.setEditing, false);
-  assert.equal(h.writes[0].saved.scheduleCreated,true);assert.equal(h.writes[0].saved.scheduleId,'canonical-schedule');
+  h.save().resolve({entry:{...h.scope.visible,details:{...details,dueTime:'17:30'},saved:{scheduleCreated:true,scheduleId:'canonical-schedule'}}}); await saving;
+  assert.equal(h.state.setEntry.details.dueTime, '17:30'); assert.equal(h.state.setBusy, false); assert.equal(h.state.setEditing, false);
+  assert.equal(h.state.setEntry.saved.scheduleCreated,true);assert.equal(h.state.setEntry.saved.scheduleId,'canonical-schedule');
+});
+
+
+test('alarm warning after a committed edit closes the editor and shows the saved receipt',async()=>{
+ const h=harness();void h.api.openEditor();h.api.onDate('2030-11-04');const saving=h.api.saveEdit();
+ const entry={...h.scope.visible,details:{...details,dueDate:'2030-11-04'},reminderWarning:'수정은 저장됐지만 알림 예약은 확인이 필요합니다.'};
+ h.save().resolve({entry});await saving;
+ assert.equal(h.state.setEditing,false);assert.equal(h.state.setEntry,entry);assert.equal(h.state.setEditError,'');
+});
+test('server edit error retains user input and editor, and displays the actual safe API reason',async()=>{
+ const h=harness();void h.api.openEditor();h.api.onTitle('유지할 제목');const saving=h.api.saveEdit();
+ h.save().reject(Error('개인 업무공간을 찾지 못했습니다.'));await saving;
+ assert.equal(h.state.setEditing,true);assert.equal(h.state.setTitle,'유지할 제목');assert.equal(h.state.setEntry,undefined);
+ assert.equal(h.state.setEditError,'개인 업무공간을 찾지 못했습니다.');assert.equal(h.state.setBusy,false);
 });
