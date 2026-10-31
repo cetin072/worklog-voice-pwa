@@ -7,6 +7,10 @@ import { readScheduleReminderEvidenceBatch } from '../schedule/local-notificatio
 import { reminderLabel } from './reminder-label';
 
 const Labels = createContext<Record<string, string>>({});
+const CalendarLinks = createContext<Record<string, string>>({});
+export function useCalendarScheduleId(recordId?: string) {
+  return useContext(CalendarLinks)[recordId || ''];
+}
 export function useReminderStatus(id?: string, record = false) {
   return useContext(Labels)[`${record ? 'record' : 'schedule'}:${id}`] || '알림 확인 필요';
 }
@@ -14,7 +18,7 @@ export function useReminderStatus(id?: string, record = false) {
 export function HomeReminderStatus({ client, briefing, scope, children }: {
   client: PlatformSupabaseClient | null; briefing: MobileBriefing | null; scope: string; children: ReactNode;
 }) {
-  const [result, setResult] = useState<{ scope: string; briefing: MobileBriefing | null; labels: Record<string, string> } | null>(null);
+  const [result, setResult] = useState<{ scope: string; briefing: MobileBriefing | null; labels: Record<string, string>; calendarLinks: Record<string, string> } | null>(null);
   useEffect(() => {
     let alive = true;
     const session = reminderSessionEpoch.capture();
@@ -31,6 +35,7 @@ export function HomeReminderStatus({ client, briefing, scope, children }: {
       const snapshots = await readOwnedReminderSnapshots(client!, ids, current);
       const evidence = await readScheduleReminderEvidenceBatch(snapshots.rows.map(row => row.id));
       const labels: Record<string, string> = {};
+      const calendarLinks: Record<string, string> = {};
       for (const row of snapshots.rows) {
         const displayed = [...(briefing!.schedules?.today || []), ...(briefing!.schedules?.upcoming || [])].find(item => item.scheduleId === row.id);
         const staleDisplay = displayed && (displayed.startsAt !== row.startsAt || displayed.title !== row.title);
@@ -42,11 +47,13 @@ export function HomeReminderStatus({ client, briefing, scope, children }: {
       }
       for (const [record, linked] of Object.entries(links)) {
         if (linked.length === 1) labels[`record:${record}`] = labels[`schedule:${linked[0]}`] || '알림 확인 필요';
+        if (linked.length === 1 && snapshots.rows.some(row => row.id === linked[0] && row.status === 'confirmed')) calendarLinks[record] = linked[0];
       }
-      if (current()) setResult({ scope, briefing, labels });
+      if (current()) setResult({ scope, briefing, labels, calendarLinks });
     }
-    void read().catch(() => { if (current()) setResult({ scope, briefing, labels: {} }); });
+    void read().catch(() => { if (current()) setResult({ scope, briefing, labels: {}, calendarLinks: {} }); });
     return () => { alive = false; };
   }, [client, briefing, scope]);
-  return <Labels.Provider value={result?.scope === scope && result.briefing === briefing ? result.labels : {}}>{children}</Labels.Provider>;
+  const current = result?.scope === scope && result.briefing === briefing;
+  return <Labels.Provider value={current ? result.labels : {}}><CalendarLinks.Provider value={current ? result.calendarLinks : {}}>{children}</CalendarLinks.Provider></Labels.Provider>;
 }

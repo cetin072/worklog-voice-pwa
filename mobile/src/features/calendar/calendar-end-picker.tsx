@@ -28,7 +28,10 @@ export function CalendarEndPicker({ source, value, disabled, onChange }: {
   const displayValue = source.allDay && value ? new Date(Date.parse(`${value}T12:00:00Z`) - 86400000).toISOString().slice(0, 10) : value;
   return <View>
     <Text>{source.allDay ? '마지막 날짜' : '종료 날짜·시간'} · {source.timeZone}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel="종료 날짜와 시간 선택" disabled={disabled || !!source.end} onPress={() => setMode('date')} style={{ minHeight: 48, justifyContent: 'center' }}>
+    <Pressable accessibilityRole="button" accessibilityLabel="종료 날짜와 시간 선택" disabled={disabled} onPress={() => {
+      setCandidate(new Date(source.allDay ? `${displayValue || source.start}T12:00:00Z` : value || source.start));
+      setMode('date');
+    }} style={{ minHeight: 48, justifyContent: 'center' }}>
       <Text style={{ fontSize: 16, color: '#1d4ed8' }}>{calendarDateLabel(displayValue, source.allDay, source.timeZone)}</Text>
     </Pressable>
     {mode ? <>
