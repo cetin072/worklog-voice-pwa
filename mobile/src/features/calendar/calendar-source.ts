@@ -35,9 +35,25 @@ export async function readCalendarSource(client: PlatformSupabaseClient, id: str
 
 export function confirmedCalendarDraft(source: CalendarSource, explicitEnd: string): CalendarDraft {
   const draft: CalendarDraft = { scheduleId: source.scheduleId, title: source.title, status: source.status,
-    timeZone: source.timeZone, allDay: source.allDay, start: source.start, end: source.end || explicitEnd.trim() };
+    timeZone: source.timeZone, allDay: source.allDay, start: source.start, end: explicitEnd.trim() || source.end };
   validateCalendarDraft(draft);
   return draft;
+}
+
+export function calendarEndIssue(source: CalendarSource, end: string) {
+  if (!end.trim()) return source.allDay ? '마지막 날짜를 선택해주세요.' : '종료 시각을 선택해주세요.';
+  if (Date.parse(end) <= Date.parse(source.start)) return source.allDay
+    ? '마지막 날짜는 시작일보다 빠를 수 없습니다.' : '종료 시각은 시작 시각보다 늦어야 합니다.';
+  try { confirmedCalendarDraft(source, end); return ''; }
+  catch { return '종료 날짜와 시간을 확인해주세요.'; }
+}
+
+/** Google display length only; never persisted into the Worklog source. */
+export function calendarExportEnd(source: CalendarSource) {
+  if (source.end) return source.end;
+  return source.allDay
+    ? new Date(Date.parse(`${source.start}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)
+    : new Date(Date.parse(source.start) + 30 * 60000).toISOString();
 }
 
 export function sameCalendarSource(a: CalendarSource, b: CalendarSource) {

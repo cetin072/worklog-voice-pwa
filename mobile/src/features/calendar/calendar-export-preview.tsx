@@ -1,19 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { usePlatform } from '../../providers/platform-provider';
 import { reminderSessionEpoch } from '../schedule/schedule-reminder-snapshot';
 import { useCalendarConnection } from './use-calendar-connection';
 import { CalendarEndPicker, calendarDateLabel } from './calendar-end-picker';
-import { readCalendarSource, type CalendarSource } from './calendar-source';
+import { calendarEndIssue, calendarExportEnd, readCalendarSource, type CalendarSource } from './calendar-source';
+import { useCalendarScheduleId } from '../home/home-reminder-status';
 
 /** QA-only optional output. Opening or connecting never writes an event. */
-export function CalendarExportPreview({ scheduleId, title }: {
-  scheduleId?: string; title: string; startsAt?: string; allDay?: boolean; dateKey?: string;
+export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, title }: {
+  scheduleId?: string; recordId?: string; title: string; startsAt?: string; allDay?: boolean; dateKey?: string;
 }) {
+  const linkedScheduleId = useCalendarScheduleId(recordId);
+  const scheduleId = directScheduleId || linkedScheduleId;
   const platform = usePlatform();
   const [visible, setVisible] = useState(false);
   const [source, setSource] = useState<CalendarSource | null>(null);
   const [end, setEnd] = useState('');
+  const [adjustTime, setAdjustTime] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('아직 등록하지 않았습니다.');
   const [, redraw] = useState(0);
@@ -32,17 +36,21 @@ export function CalendarExportPreview({ scheduleId, title }: {
     return { userId, current: () => captured === generation.current && userId === owner.current && sessionCurrent() };
   };
   async function open() {
-    generation.current++; setVisible(true); setSource(null); setEnd(''); setMessage('서버의 최신 원본을 확인하는 중…');
+    generation.current++; setVisible(true); setSource(null); setEnd(''); setAdjustTime(false); setMessage('서버의 최신 원본을 확인하는 중…');
     const { userId, current } = context();
     if (!platform.client || !userId || !scheduleId) { setMessage('일정과 로그인 상태를 다시 확인해주세요.'); return; }
     try {
       const latest = await readCalendarSource(platform.client, scheduleId, userId, current);
       if (!current()) return;
-      setSource(latest); setEnd(latest.end); setMessage('아직 등록하지 않았습니다. 계정과 일정 한 건을 확인해주세요.');
+      const exportEnd = calendarExportEnd(latest);
+      setSource(latest); setEnd(exportEnd); setAdjustTime(!!calendarEndIssue(latest, exportEnd));
+      setMessage('아직 등록하지 않았습니다.');
     } catch { if (current()) setMessage('온라인에서 확정된 원본 일정을 조회하지 못했습니다. 닫고 다시 시도해주세요.'); }
   }
   async function send() {
     if (!connection || !source || !platform.client || gate.current) return;
+    const issue = calendarEndIssue(source, end);
+    if (issue) { setMessage(issue); return; }
     const { userId, current } = context(); if (!userId) return;
     gate.current = true; setBusy(true); setMessage('최신 원본과 Google 등록 결과를 확인하는 중…');
     try {
@@ -56,29 +64,49 @@ export function CalendarExportPreview({ scheduleId, title }: {
     } finally { if (current()) { gate.current = false; setBusy(false); redraw(value => value + 1); } }
   }
   const info = connection?.info();
-  if ((!info || info.expired) && !visible) return null;
+  const endIssue = source ? calendarEndIssue(source, end) : '';
+  const disabled = busy || !source || !!endIssue || !info || info.expired;
+  if ((!scheduleId || !info || info.expired) && !visible) return null;
   return <>
-    <Pressable accessibilityRole="button" onPress={() => void open()} style={styles.button}><Text style={styles.link}>Google 캘린더에 보내기</Text></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title} Google 캘린더에 보내기`} onPress={() => void open()} style={styles.shortcut}>
+      <Image accessible={false} source={require('../../../assets/google-g.png')} style={styles.googleIcon} /><Text style={styles.shortcutText}>캘린더 추가</Text>
+    </Pressable>
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
       <View style={styles.overlay}><View style={styles.card}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text accessibilityRole="header" style={styles.heading}>Google 캘린더에 추가</Text>
         <Text style={styles.text}>{source?.title || title}</Text>
         {source ? <>
           <Text style={styles.text}>시작: {calendarDateLabel(source.start, source.allDay, source.timeZone)}{source.allDay ? ' · 종일' : ''}</Text>
-          <CalendarEndPicker key={source.scheduleId} source={source} value={end} disabled={busy} onChange={setEnd} />
-          {!source.end ? <Text style={styles.text}>종료를 선택해주세요. 업무수첩 원본은 바뀌지 않습니다.</Text> : null}
+          {!source.allDay ? <Text style={styles.text}>종료: {calendarDateLabel(end, false, source.timeZone)}</Text> : null}
+          {!source.end && end === calendarExportEnd(source) ? <Text style={styles.hint}>{source.allDay ? 'Google에는 종일 일정으로 하루 표시합니다.' : 'Google에는 기본 30분 일정으로 표시합니다.'}</Text> : null}
+          <Pressable accessibilityRole="button" disabled={busy} onPress={() => setAdjustTime(value => !value)} style={styles.button}><Text style={styles.link}>{adjustTime ? '시간 변경 닫기' : '시간 변경'}</Text></Pressable>
+          {adjustTime ? <CalendarEndPicker key={source.scheduleId} source={source} value={end} disabled={busy} onChange={setEnd} /> : null}
+          {adjustTime && !source.allDay ? <View style={styles.durationRow}>{[30, 60].map(minutes => <Pressable key={minutes} accessibilityRole="button" disabled={busy}
+            accessibilityLabel={`${minutes}분 일정으로 선택`} style={styles.duration}
+            onPress={() => setEnd(new Date(Date.parse(source.start) + minutes * 60000).toISOString())}>
+            <Text style={styles.shortcutText}>{minutes === 60 ? '1시간' : '30분'}</Text>
+          </Pressable>)}</View> : null}
+          {endIssue ? <Text accessibilityLiveRegion="polite" style={styles.validation}>{endIssue}</Text> : null}
+          <Text style={styles.hint}>Google에 보낼 시간입니다. 업무수첩 원본은 바뀌지 않습니다.</Text>
         </> : null}
         <Text style={styles.text}>대상: {info?.email || '연결 만료 · 설정에서 다시 연결해주세요'} · 기본 캘린더</Text>
         <Text accessibilityLiveRegion="polite" style={styles.text}>{message}</Text>
-        <Pressable accessibilityRole="button" disabled={busy || !source || !end.trim() || !info || info.expired} onPress={() => void send()} style={styles.button}><Text style={styles.link}>확인한 일정 한 건 보내기</Text></Pressable>
-        <Text style={styles.text}>중복·응답 유실 시 같은 ID로 다시 확인합니다. 처리 중 닫아도 이미 전송된 Google 요청은 취소되지 않을 수 있습니다. 닫은 뒤에는 성공으로 표시하지 않습니다.</Text>
-        <Pressable accessibilityRole="button" onPress={close} style={styles.button}><Text style={styles.link}>닫기</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="확인한 일정 한 건 보내기" accessibilityState={{ disabled: !!disabled }} disabled={!!disabled} onPress={() => void send()}
+          style={[styles.primaryButton, disabled ? styles.disabled : null]}><Text style={styles.primaryText}>{busy ? '추가 중…' : '추가'}</Text></Pressable>
+        <Text style={styles.hint}>{busy ? '처리 중 닫아도 이미 시작한 등록은 취소되지 않을 수 있습니다.' : '같은 일정을 다시 보내면 기존 등록을 확인해 중복을 방지합니다.'}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="캘린더 추가 닫기" onPress={close} style={styles.button}><Text style={styles.link}>닫기</Text></Pressable>
       </ScrollView></View></View>
     </Modal>
   </>;
 }
 const styles = StyleSheet.create({
   button: { minHeight: 48, justifyContent: 'center', paddingVertical: 10 }, link: { color: '#1d4ed8', fontSize: 15 },
+  shortcut: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, paddingHorizontal: 12, marginTop: 8, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc', borderRadius: 12 },
+  googleIcon: { width: 18, height: 18 }, shortcutText: { fontSize: 14, fontWeight: '600', color: '#334155' },
+  durationRow: { flexDirection: 'row', gap: 10 }, duration: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10 },
+  validation: { color: '#b45309', fontSize: 15, lineHeight: 23 }, hint: { color: '#64748b', fontSize: 13, lineHeight: 21 },
+  primaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#1d4ed8' },
+  primaryText: { color: '#fff', fontSize: 16, fontWeight: '700' }, disabled: { backgroundColor: '#cbd5e1' },
   overlay: { flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 16 },
   card: { backgroundColor: '#fff', borderRadius: 16, maxHeight: '85%' }, content: { padding: 20, gap: 16 },
   input: { borderWidth: 1, borderColor: '#94a3b8', borderRadius: 8, padding: 12, minHeight: 48, fontSize: 16, color: '#0f172a' },

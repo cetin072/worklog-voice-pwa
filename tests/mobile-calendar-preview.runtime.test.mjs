@@ -40,7 +40,8 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   const remountedSettings=component('mobile/src/features/settings/calendar-settings.tsx','CalendarSettings');
   assert.match(text(remountedSettings()),/qa@example.invalid/);assert.equal(posts,0);
   button(render,'Google 캘린더에 보내기').props.onPress();await flush();
-  assert.equal(button(render,'확인한 일정').props.disabled,true);
+  assert.equal(button(render,'확인한 일정').props.disabled,false);assert.match(text(render()),/기본 30분/);assert.equal(posts,0);
+  button(render,'시간 변경').props.onPress();
   const picker=all(render()).find(n=>n.type==='CalendarEndPicker');
   picker.props.onChange(row.starts_at);
   assert.equal(button(render,'확인한 일정').props.disabled,true);assert.match(text(render()),/종료 시각은 시작 시각보다 늦어야/);assert.equal(posts,0);
@@ -50,7 +51,7 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   button(render,'확인한 일정').props.onPress();await flush();assert.equal(posts,1);assert.match(text(render()),/등록 완료/);
   button(render,'확인한 일정').props.onPress();await flush();assert.equal(posts,1);assert.match(text(render()),/이미 등록/);
   assert.equal(all(render()).some(n=>n.type==='TextInput'),false);
-  button(render,'닫기').props.onPress();assert.equal(service.info().email,'qa@example.invalid');
+  button(render,'캘린더 추가 닫기').props.onPress();assert.equal(service.info().email,'qa@example.invalid');
   button(settings,'연결 해제').props.onPress();assert.equal(service.info(),null);assert.equal(render(),null);
   process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT='production';assert.equal(settings(),null);assert.equal(render(),null);
 });

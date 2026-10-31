@@ -45,3 +45,11 @@ test('equal or earlier explicit end is a local input error with no canonical or 
   }
   assert.equal(reads,0);assert.equal(posts,0);
 });
+
+test('Google display end defaults to 30 minutes or one all-day date without changing the source', async () => {
+  const {calendarExportEnd}=await import('../mobile/src/features/calendar/calendar-source.ts');
+  const timed={start:'2026-11-02T10:00:00+09:00',end:'',allDay:false};
+  assert.equal(calendarExportEnd(timed),'2026-11-02T01:30:00.000Z');assert.equal(timed.end,'');
+  assert.equal(calendarExportEnd({...timed,allDay:true,start:'2026-11-02'}),'2026-11-03');
+  assert.equal(calendarExportEnd({...timed,end:'2026-11-02T11:00:00+09:00'}),'2026-11-02T11:00:00+09:00');
+});
