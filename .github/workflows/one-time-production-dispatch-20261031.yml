@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   dispatch-existing-workflow:
-    if: ${{ github.repository == 'cetin072/worklog-voice-pwa' && github.event.head_commit.message == 'chore(release): one-time dispatch approved 2026-10-31' }}
+    if: ${{ github.repository == 'cetin072/worklog-voice-pwa' && contains(github.event.head_commit.message, 'one-time dispatch approved 2026-10-31') }}
     runs-on: ubuntu-latest
     steps:
       - name: Invoke existing guarded production-release workflow (latest main)
