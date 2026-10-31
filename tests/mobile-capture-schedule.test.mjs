@@ -21,7 +21,7 @@ test('relative day uses chat date, never capture date or message clock', () => {
   assert.equal(captureScheduleInput('오후 11:30\n내일 오후 3시 회의',now).kind,'review');
 });
 test('unsafe conversations save a review record without scheduling their dates', () => {
-  for (const text of ['11월 3일 오후 3시 회의','회의 날짜는 나중에 정해요','2026년 10월 20일 화요일\n내일 오후 3시 회의',
+  for (const text of ['11월 3일 오후 3시 회의','회의 날짜는 나중에 정해요','2026년 11월 2일 월요일\n내일 오후 3시 회의','2026년 10월 20일 화요일\n내일 오후 3시 회의',
     '2026년 15월 3일 오후 3시 회의', '2026년 11월 3일 오후 3시 회의 없음', '2026년 11월 3일 오후 3시 회의 취소','2026년 11월 3일 오후 3시 회의에서 11월 4일로 변경',
     '2026년 11월 3일 오후 3시 회의\n11월 4일 오후 4시 방문', '2026년 11월 3일 3시 회의',
     '2026년 11월 3일 오후 3시 회의 어때요?', '2026년 11월 1일 일요일\n2026년 11월 2일 월요일\n내일 오후 3시 회의']) {

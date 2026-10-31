@@ -77,6 +77,7 @@ export async function undoCapture(client: PlatformSupabaseClient, entry: Capture
   const guard = reminderSessionEpoch.capture();
   const recordId = entry.saved?.dataCoreWorkRecordId || entry.saved?.pageId;
   if (!recordId) throw new Error('CAPTURE_SAVE_UNCONFIRMED');
+  await captureToken(client, entry.owner);
   const result = await deleteWorklog(client, recordId);
   await cancelSavedScheduleReminders(result.cancelledScheduleIds, guard);
   const undone = { ...entry, undone: true }; await captureInbox.put(undone); return undone;

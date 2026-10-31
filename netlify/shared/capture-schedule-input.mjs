@@ -25,7 +25,8 @@ export function captureScheduleInput(ocr, now = new Date().toISOString()) {
   if (!EVENT.test(text)) return review('no_confirmed_event');
   const header = headers[0] && normalized(headers[0]).match(DATE);
   const explicit = text.match(DATE);
-  if (!explicit && !header) return review('conversation_date_unknown');
+  const chatClock = lines.some(x => /(?:^|\s)(?:오전|오후)\s*\d{1,2}:\d{2}$/.test(x));
+  if (!explicit && (!header || !/[월화수목금토일]요일/.test(headers[0]) || !chatClock)) return review('conversation_date_unknown');
   for (const parts of [header, explicit].filter(Boolean)) {
     const checked = new Date(Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])));
     if (checked.getUTCFullYear() !== Number(parts[1]) || checked.getUTCMonth() + 1 !== Number(parts[2]) || checked.getUTCDate() !== Number(parts[3])) return review('invalid_calendar_date');

@@ -57,6 +57,8 @@ test('OCR failure retains image and account change before token submission canno
  const h=harness(),entry=await h.receive();h.failOcr();await assert.rejects(h.api.processCapture(entry,h.client,'alice'));
  assert.ok((await h.api.captureInbox.get(entry.hash,'alice')).uri);assert.equal(h.calls.length,0);
  const h2=harness(),e2=await h2.receive();h2.switchToken();await assert.rejects(h2.api.processCapture(e2,h2.client,'alice'),/CAPTURE_ACCOUNT_CHANGED/);assert.equal(h2.remote.size,0);
+ const h3=harness(),e3=await h3.api.processCapture(await h3.receive(),h3.client,'alice');h3.switchToken();
+ await assert.rejects(h3.api.undoCapture(h3.client,e3),/CAPTURE_ACCOUNT_CHANGED/);assert.equal(h3.calls.filter(x=>x[0]==='delete').length,0);
 });
 test('reminder failure never reports record save failure and is visible separately',async()=>{
  const h=harness();h.failReminder();const saved=await h.api.processCapture(await h.receive(),h.client,'alice');

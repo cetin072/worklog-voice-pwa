@@ -77,7 +77,8 @@ export default function CaptureScreen() {
   }
   async function leave(manual = false) {
     if (visible && !visible.saved) await captureInbox.put({ ...visible, paused: true });
-    router.replace(manual ? '/capture-manual' : '/');
+    if (!manual && router.canGoBack()) router.back();
+    else router.replace(manual ? '/capture-manual' : '/');
   }
   const Button = ({ label, action }: { label: string; action(): void }) => <Pressable accessibilityRole="button" disabled={busy} onPress={action} style={styles.button}><Text style={styles.buttonText}>{label}</Text></Pressable>;
   return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><ScrollView contentContainerStyle={styles.content}>

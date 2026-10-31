@@ -1,11 +1,21 @@
+import Constants from 'expo-constants';
 import { Image } from 'react-native';
 import * as Legacy from 'expo-file-system/legacy';
 import { File } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 
 const root = `${Legacy.documentDirectory}capture-inbox/`;
+export function incomingCaptureUri(uri: string, ownPackage = Constants.expoConfig?.android?.package || '') {
+  try {
+    const url = new URL(uri);
+    if (url.username || url.password) return false;
+    if (url.protocol === 'content:') return Boolean(url.hostname) && !(ownPackage && (url.hostname === ownPackage || url.hostname.startsWith(`${ownPackage}.`)));
+    // Do not let another app ask us to read our own private files (cross-account inbox/auth data).
+    return url.protocol === 'file:' && !url.hostname && /^\/(?:storage|sdcard)\//.test(url.pathname);
+  } catch { return false; }
+}
 export async function importCaptureImage(uri: string) {
-  if (!Legacy.documentDirectory || !/^(content|file):\/\//.test(uri)) throw new Error('CAPTURE_INVALID_URI');
+  if (!Legacy.documentDirectory || !incomingCaptureUri(uri)) throw new Error('CAPTURE_INVALID_URI');
   await Legacy.makeDirectoryAsync(root, { intermediates: true });
   const temporary = `${root}${Crypto.randomUUID()}.image`;
   try {

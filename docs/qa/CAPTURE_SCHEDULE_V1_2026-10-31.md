@@ -33,11 +33,11 @@ Android 단일 image/* → Expo Sharing → 개인 앱 저장소 복사/해시 �
 
 ## 현재 검사
 
-- 캡처 정책·영속 inbox·실제 coordinator를 native/network 경계 mock으로 실행: 12/12 PASS.
-- 전체 저장소 Node 회귀: 995/995 PASS.
+- 캡처 정책·영속 inbox·실제 coordinator를 native/network 경계 mock으로 실행: 17/17 PASS.
+- 전체 저장소 Node 회귀: 1000/1000 PASS.
 - Mobile TypeScript, Expo dependency compatibility, QA Android Hermes export: PASS.
 - QA prebuild: PASS. Android SEND image/* 단일 필터, QA package, 기존 scheme/audio/notification 설정 보존 확인.
-- 로컬 Kotlin 빌드는 Gradle 배포 다운로드 Network is unreachable로 중단됐다. SDK/컴파일 성공을 주장하지 않는다.
+- 로컬 기본 Kotlin 빌드는 Gradle 배포 다운로드 Network is unreachable로 중단됐다. 환경의 기존 프록시를 Java에 적용한 뒤 Gradle 실행은 확인했지만 제한 시간 내 native compile은 완료하지 못했다. SDK/컴파일 성공을 주장하지 않는다.
 - GitHub 기존 Mobile App 네이티브 build/runtime smoke 및 실기 공유/OCR는 아직 별도 확인 대상이다. 모의 OCR 텍스트 검사를 한국어 native OCR 실실행으로 보고하지 않는다.
 
 ## 검수 경계
@@ -49,3 +49,5 @@ Android 단일 image/* → Expo Sharing → 개인 앱 저장소 복사/해시 �
 ## 최소 동선 보강
 
 직접 입력은 기존 Home 입력 화면을 initialScreen prop으로 그대로 재사용한다. 실패 후 직접 입력/홈으로 나가면 대기 항목을 삭제하지 않고 자동 재진입만 멈춘다. 명시적 장소 행을 제목/설명에 포함하고, 잘못된 달력 날짜·없음/완료/부정 표현을 확인 필요로 보수 처리한다. 공유 수신 중 다른 intent/계정 전환이 와도 새 payload를 지우지 않고 직렬 처리한다.
+
+추가 안전 검사: warm URL 수신(AppState 전환 없음), 수신 중 새 intent·계정 전환, own-provider/앱-private file URI 거부, OAuth·알림 path 보존을 production 함수로 실행했다. 기존 Home은 공유 화면 아래에 보존해 미완성 음성/직접입력 상태를 임의 폐기하지 않는다. 상대 날짜는 연도·요일이 있는 대화 구분선과 메시지 시각이 함께 보일 때만 처리하며, 일반 캡처의 날짜 제목을 대화 날짜로 단정하지 않는다.
