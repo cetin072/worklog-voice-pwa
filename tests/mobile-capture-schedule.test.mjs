@@ -29,6 +29,8 @@ test('unsafe conversations save a review record without scheduling their dates',
     assert.equal(value.status,'확인필요');assert.equal(extractScheduleFromText(value.transcript,now).matched,false);
   }
   assert.throws(()=>captureScheduleInput(' \n '),/CAPTURE_NO_TEXT/);
+  const unfamiliar = captureScheduleInput('서류 초안을 챙겨주세요',now);
+  assert.equal(unfamiliar.kind,'review');assert.equal(unfamiliar.followUp,'서류 초안을 챙겨주세요');
 });
 test('same bytes concurrent/restarted retry keeps request ID and saved receipt; owners stay isolated', async () => {
   const data=new Map();const storage={getItem:async k=>data.get(k)||null,setItem:async(k,v)=>{data.set(k,v);}};

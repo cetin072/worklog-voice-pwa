@@ -16,7 +16,9 @@ export function captureScheduleInput(ocr, now = new Date().toISOString()) {
   const text = normalized(body.join(' '));
   const eventLine = body.find(x => EVENT.test(x));
   const place = body.find(x => /^(?:장소|위치|주소)\s*[:：]/.test(x));
-  const relevant = [eventLine, place && place !== eventLine ? place : ''].filter(Boolean).join(' · ');
+  // A review record still needs one useful sentence when event wording is unfamiliar.
+  const reviewLine = eventLine || body.find(x => countKoreanDateSignals(normalized(x), { policy: 'journal' }) || countKoreanTimeSignals(x)) || body.find(x => x.length >= 6);
+  const relevant = [reviewLine, place && place !== reviewLine ? place : ''].filter(Boolean).join(' · ');
   const description = (relevant || '날짜와 약속 내용을 확인해주세요.').slice(0, 200);
   const review = reason => ({ kind: 'review', title: '캡처 일정 확인 필요', date: '', time: '', description, reason,
     // Dates stay in a non-parsed existing followUp field, never in transcript.
