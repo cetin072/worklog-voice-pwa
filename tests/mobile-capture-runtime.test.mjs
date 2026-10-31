@@ -9,13 +9,13 @@ const {createCaptureInbox}=await import('../mobile/src/features/capture/capture-
 const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
 function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',review=false,linkAfterEdit=false}={}) {
  let details=review?{title:'캡처 일정 확인 필요',dueDate:'',dueTime:''}:{title:'서버 회의 제목',dueDate:'2099-11-03',dueTime:'15:00'};
- const map=new Map(),remote=new Map(),calls=[],sid='11111111-1111-4111-8111-111111111111';let actor='alice',timeout=false,failOcr=false,switchToken=false,failReminder=false,failEdit=false,failEditReminder=false;
+ const map=new Map(),remote=new Map(),calls=[],sid='11111111-1111-4111-8111-111111111111';let actor='alice',timeout=false,failOcr=false,switchToken=false,failReminder=false,failEdit=false,failEditReminder=false,staleLink=false;
  const storage={getItem:async k=>map.get(k)||null,setItem:async(k,v)=>{map.set(k,v);}};
  const client={auth:{getUser:async()=>({data:{user:{id:actor}}})}};
  const modules={
   '../../../../netlify/shared/capture-schedule-input.mjs':{captureScheduleInput},
   '@/src/platform/secure-storage':{secureSessionStorage:storage},'./capture-inbox':{createCaptureInbox},
-  '@/src/features/schedule/worklog-reminder-adapter':{findWorklogReminder:async()=>({id:sid,status:'confirmed',title:'서버 확인 일정',startsAt:'2099-11-04T07:00:00Z'})},
+  '@/src/features/schedule/worklog-reminder-adapter':{findWorklogReminder:async()=>({id:sid,status:'confirmed',title:details.title,startsAt:staleLink?'2099-11-01T07:00:00Z':`${details.dueDate}T${details.dueTime}:00+09:00`})},
   '@/src/platform/authenticated-access':{getFreshAccessToken:async()=>{if(switchToken)actor='bob';return actor+'-token';}},
   '@/src/features/schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[{id:sid,title:'회의',startsAt:'2099-11-03T06:00:00Z',status:'confirmed',allDay:false}]})},
   './capture-files':{removeCaptureImage:async uri=>calls.push(['remove',uri])},
@@ -34,7 +34,7 @@ function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',r
  };
  const exports={};const code=ts.transpileModule(readFileSync('mobile/src/features/capture/capture-runtime.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  vm.runInNewContext(code,{exports,require:n=>{assert.ok(modules[n],n);return modules[n];}});
- return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,failEdit:()=>failEdit=true,failEditReminder:()=>failEditReminder=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
+ return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,failEdit:()=>failEdit=true,failEditReminder:()=>failEditReminder=true,staleLink:()=>staleLink=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
 }
 test('automatic save has no confirmation; two overlapping runs share the persisted receipt',async()=>{
  const h=harness(),entry=await h.receive();const [a,b]=await Promise.all([h.api.processCapture(entry,h.client,'alice'),h.api.processCapture(entry,h.client,'alice')]);
@@ -107,4 +107,11 @@ test('failed server edit keeps the existing receipt and never attempts alarm res
  await assert.rejects(h.api.editCapture(h.client,entry,{title:'보존할 입력',dueDate:'2099-11-04',dueTime:'23:00'}),/서버/);
  assert.equal(h.calls.filter(c=>c[0]==='edit-reminders').length,0);
  assert.equal((await h.api.captureInbox.get(entry.hash,'alice')).details.dueDate,'');
+});
+
+test('a stale linked Schedule cannot be advertised as the newly edited appointment',async()=>{
+ const h=harness({review:true,linkAfterEdit:true}),entry=await h.api.processCapture(await h.receive(),h.client,'alice');h.failEditReminder();h.staleLink();
+ const result=await h.api.editCapture(h.client,entry,{title:'새 방문 일정',dueDate:'2099-11-04',dueTime:'23:00'});
+ assert.equal(result.scheduleCreated,false);assert.equal(result.schedule,null);assert.match(result.reminderWarning,/알림/);
+ assert.equal(result.entry.details.dueDate,'2099-11-04');assert.equal(result.entry.details.dueTime,'23:00');
 });
