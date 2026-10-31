@@ -46,7 +46,40 @@
       "expo-notifications",
       "./plugins/with-worklog-boot-reminder-recovery.js",
       "./plugins/with-worklog-play-signing.js",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-sharing",
+        {
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "image/*"
+            ],
+            "multipleShareMimeTypes": []
+          },
+          "ios": {
+            "enabled": false
+          }
+        }
+      ],
+      [
+        "rn-mlkit-ocr",
+        {
+          "ocrModels": [
+            "korean",
+            "latin"
+          ],
+          "ocrUseBundled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "선택한 캡처 이미지를 업무수첩에 가져옵니다.",
+          "cameraPermission": false,
+          "microphonePermission": "업무수첩이 빠른 음성 업무 기록을 위해 마이크를 사용하도록 허용해주세요."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -19,6 +19,7 @@ export function homeHarness(context) {
   styles: new Proxy({}, { get: (_o, key) => key }), sectionToneStyles: {},
   CompactReminderLabel: props => node('Pressable', { onPress: props.onPress, accessibilityLabel: `${props.title} 알림 확인 필요` }, '알림 확인 필요'),
   ScheduleReminderLabel: props => node('Text', {}, '알림 확인 필요'), MeetingRecordingBanner: () => null,
+  CalendarExportPreview: () => null, CaptureImportButton: () => node('CaptureImportButton', {}),
   lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
   briefingNow: 0, reminderTarget: null, upcomingExpanded: false, expandedBuckets: {}, taskBusyId: null, noteBusyId: null, notes: [], visibleNotes: [], extraNotes: 0,
   undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},

@@ -20,6 +20,11 @@ on:
       - 'mobile/app/**'
       - 'mobile/src/providers/platform-provider.tsx'
       - 'mobile/src/features/voice/**'
+      - 'mobile/src/features/capture/**'
+      - 'mobile/metro.config.js'
+      - 'netlify/shared/capture-schedule-input.*'
+      - 'netlify/shared/korean-date-core.mjs'
+      - 'netlify/shared/schedule-extract.mjs'
       - 'mobile/package-lock.json'
       - 'mobile/app.json'
 
