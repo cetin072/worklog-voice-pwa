@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-10-31',
+    title: '수정 화면의 불필요한 대기 개선',
+    summary: '이미 확인된 업무 날짜와 시간이 수정 화면에 바로 이어지도록 서버 응답을 보강했습니다.',
+    items: ['시간이 확인된 기록은 브리핑의 값을 재사용하고, 시간이 미확인인 기록은 기존 확인 절차를 유지합니다.'],
+  },
+  {
     date: '2026-10-28',
     title: '업무일지를 설정으로 이동',
     summary: '홈 상단을 간결하게 정리하고 날짜별 업무일지는 설정에서 열도록 바꿨습니다.',
