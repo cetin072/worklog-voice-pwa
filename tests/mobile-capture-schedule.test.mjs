@@ -68,3 +68,21 @@ test('native config keeps QA and production identity while registering only sing
  const source=readFileSync('mobile/app/+native-intent.ts','utf8');
  assert.match(source,/hostname === 'expo-sharing'/);assert.match(source,/return path/);
 });
+
+test('explicit restart preserves edited fields, advances the request only once, and rejects stale receipts',async()=>{
+ const data=new Map(),storage={getItem:async k=>data.get(k)||null,setItem:async(k,v)=>data.set(k,v)};
+ let inbox=createCaptureInbox(storage);const image={hash:'d'.repeat(64),uri:'file:///private/capture'};
+ const original=await inbox.receive(image,'alice');
+ const decision=captureScheduleInput('회의 날짜를 나중에 확인',now);
+ const cancelled={...original,decision,saved:{pageId:'old-record'},undone:true,details:{title:'수정한 방문',dueDate:'2099-11-05',dueTime:'13:00'}};
+ await inbox.put(cancelled);
+ assert.equal((await inbox.receive(image,'alice')).undone,true);
+ await assert.rejects(inbox.restart(image.hash,'bob',original.requestId),/CAPTURE_ENTRY_MISSING/);
+ const [a,b]=await Promise.all([inbox.restart(image.hash,'alice',original.requestId),inbox.restart(image.hash,'alice',original.requestId)]);
+ assert.equal(a.requestId,b.requestId);assert.equal(a.requestId,original.requestId+'-r1');assert.equal(a.saved,undefined);assert.equal(a.undone,undefined);
+ assert.deepEqual(a.restartDetails,cancelled.details);
+ await assert.rejects(inbox.put(cancelled),/CAPTURE_REGISTRATION_CHANGED/);
+ inbox=createCaptureInbox(storage);const recovered=await inbox.receive(image,'alice');assert.equal(recovered.requestId,a.requestId);assert.deepEqual(recovered.restartDetails,cancelled.details);
+ await inbox.put({...recovered,saved:{pageId:'new-record'},undone:true});
+ const next=await inbox.restart(image.hash,'alice',recovered.requestId);assert.equal(next.requestId,original.requestId+'-r2');
+});

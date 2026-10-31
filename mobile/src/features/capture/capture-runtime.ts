@@ -67,6 +67,16 @@ export function processCapture(entry: CaptureEntry, client: PlatformSupabaseClie
       entry = { ...entry, saved: result }; await captureInbox.put(entry);
     }
     await current();
+    if (entry.restartDetails) {
+      // A new idempotent save creates a new record; the cancelled record stays
+      // cancelled. Apply the last confirmed edit through the existing edit API
+      // rather than parsing old relative dates or running OCR again.
+      const edited = await editCapture(client, entry, entry.restartDetails);
+      entry = { ...edited.entry, restartDetails: undefined, reviewContentApplied: true };
+      await current(); await captureInbox.put(entry);
+      if (entry.uri) { await removeCaptureImage(entry.uri); entry = { ...entry, uri: undefined }; await captureInbox.put(entry); }
+      return entry;
+    }
     // New review imports preserve their scanned appointment text. Keep the
     // existing date-neutral save contract, then use the owned edit API once.
     // The saved receipt survives failures; retry cannot insert a second record.
@@ -152,5 +162,9 @@ export async function undoCapture(client: PlatformSupabaseClient, entry: Capture
   captureChanges.publish({ owner: entry.owner!, recordId, dueDate: '', cancelled: true });
   await cancelSavedScheduleReminders(result.cancelledScheduleIds, guard);
   const undone = { ...entry, undone: true }; await captureInbox.put(undone); return undone;
+}
+export async function restartCapture(client: PlatformSupabaseClient, entry: CaptureEntry) {
+  await captureToken(client, entry.owner);
+  return captureInbox.restart(entry.hash, entry.owner!, entry.requestId);
 }
 export { readWorklogDetails };
