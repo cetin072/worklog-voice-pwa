@@ -53,6 +53,8 @@ export function createCalendarConnection(deps: {
       const run = async (): Promise<CalendarExportResult> => {
         if (!active || !send) return { state: 'blocked', message: 'Google 캘린더 계정을 먼저 연결해주세요.' };
         if (now() >= active.expiresAt) { disconnect(); return { state: 'expired', message: '연결 시간이 만료됐습니다. 다시 연결해주세요.' }; }
+        try { confirmedCalendarDraft(source, end); }
+        catch (error) { return { state: 'blocked', message: (error as Error).message }; }
         try {
           const latest = await read();
           if (!isCurrent()) return { state: 'cancelled', message: '계정이 변경되었거나 등록을 취소했습니다.' };
