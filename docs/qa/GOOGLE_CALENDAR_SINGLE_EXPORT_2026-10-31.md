@@ -124,3 +124,17 @@ runtime smoke 및 APK package/version/certificate/SHA-256 확인 뒤 raw APK를 
 - [Supabase signInWithOAuth](https://supabase.com/docs/reference/javascript/auth-signinwithoauth): 추가 scope/PKCE.
 - [Supabase PKCE](https://supabase.com/docs/guides/auth/sessions/pkce-flow): callback code와 verifier 교환.
 - 설치된 @supabase/auth-js의 PKCE endpoint/필드와 native plain fallback을 확인했다. Calendar는 그 fallback을 사용하지 않는다. [Expo Crypto](https://docs.expo.dev/versions/latest/sdk/crypto/)의 기존 native 난수/SHA256을 재사용한다.
+
+
+
+## 실기기 피드백 후속 수정
+
+- Calendar 연결/상태/해제는 Settings 한 곳으로 이동. 연결되지 않은 일정에는 CTA가 없고, 연결 후 한 건 보내기만 표시한다.
+- 연결 서비스가 completion/error를 구독 화면에 통지한다. 브라우저 복귀 중 화면 재생성/토큰 갱신이 개별 시트의 결과 표시를 무효화해도 서비스의 연결 결과와 오류는 남는다. 같은 앱 사용자로 복귀할 때 초기 owner effect가 이미 만든 연결을 지우지 않는다. 앱 사용자 변경/로그아웃/해제 시 grant 폐기는 유지한다.
+- 인증 실패는 결과 교환/Google 접근 정보 누락/계정 확인 단계로 구분해 안전한 문구로 표시. 비밀 URL/code/token은 기록하지 않는다.
+- 실제 Google 동의 후 복귀했는데 연결 안 됨이라는 현상의 원인은 아직 실기기에서 확정되지 않았다. 이 패치의 상태 전달/초기화 수정과 격리 검사 통과만으로 실제 Google 연결 성공을 주장하지 않는다.
+- 종료는 기존 native date/time picker를 재사용. 시작은 사용자 시간대로 표시. 종일 마지막 날짜는 내부에서 exclusive end로 변환. 선택 전 임의 종료값으로 전송하지 않는다.
+- 편집 로딩: 기존 briefing RPC가 전달하는 metadata.dueTimeExplicit을 projection이 보존하지 않는 경로를 보완. 명시적 시간/날짜만의 구분을 유지하여 기존 completeSeed 즉시 편집 경로에 전달. 메타데이터가 없으면 임의 시간 추정 없이 기존 최신 상세 조회를 유지한다. 이 부분은 서버 코드이므로 운영에 반영하려면 별도 승인된 웹/backend 배포가 필요하다. 현재 운영 배포는 실행하지 않는다.
+- #473 캡처 코드는 이 브랜치에 통합하지 않았다. 전체 앱 최신 기능 통합 완료로 안내하지 않는다.
+- QA versionCode 7. 이전 c4533a2/vc6 APK에는 위 수정이 없다.
+- 사용자 확인으로 QA callback 한 항목 추가와 Google Test user 등록 완료. 이후 Google 동의 화면 통과/앱 복귀를 보고했지만 실제 연결/이벤트 등록은 미통과. 관리자 설정을 처음부터 다시 요구하지 않는다.

@@ -52,15 +52,16 @@ export async function authorizeGoogleCalendar(config: PublicPlatformConfig, call
     method: 'POST', headers: { apikey: config.publishableKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ auth_code: code, code_verifier: proof.verifier }),
   });
-  if (!exchange.ok) throw Error('CALENDAR_AUTH_FAILED');
+  if (!exchange.ok) throw Error(`CALENDAR_AUTH_EXCHANGE_${exchange.status}`);
   const payload = await exchange.json();
   const token = payload?.provider_token;
-  if (typeof token !== 'string' || !token) throw Error('CALENDAR_AUTH_FAILED');
+  if (typeof token !== 'string' || !token) throw Error('CALENDAR_AUTH_TOKEN_MISSING');
   const response = await boundedFetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) throw Error('CALENDAR_AUTH_FAILED');
+  if (!response.ok) throw Error(`CALENDAR_AUTH_IDENTITY_${response.status}`);
   const identity = await response.json();
   if (typeof identity.id !== 'string' || typeof identity.email !== 'string' || identity.verified_email !== true) throw Error('CALENDAR_AUTH_FAILED');
   const target = { accountId: identity.id, calendarId: 'primary' };
   return { target, email: identity.email, expiresAt: Date.now() + 50 * 60000,
     adapter: createGoogleCalendarAdapter(target, token, fetchImpl) };
 }
+

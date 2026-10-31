@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { resetCalendarConnection, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
+import { resetCalendarConnection, selectCalendarOwner, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
 import { AppState } from 'react-native';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
@@ -113,7 +113,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
   const [reloadKey, setReloadKey] = useState(0);
 
   // Calendar grants never survive an app account transition (including logout).
-  useEffect(() => { resetCalendarConnection(); }, [session?.user.id]);
+  useEffect(() => { selectCalendarOwner(session?.user.id || null); }, [session?.user.id]);
 
   useEffect(() => {
     let alive = true;
@@ -267,3 +267,4 @@ export function usePlatform() {
   if (!value) throw new Error('usePlatform must be used inside PlatformProvider.');
   return value;
 }
+

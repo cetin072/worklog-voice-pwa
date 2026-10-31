@@ -13,20 +13,34 @@ export function createCalendarConnection(deps: {
   let epoch = 0;
   let connecting: Promise<boolean> | null = null;
   let exporter: ReturnType<typeof createCalendarExporter> | null = null;
+  const listeners = new Set<() => void>();
+  let message = '';
+  const notify = () => { for (const listener of listeners) listener(); };
   const now = deps.now || Date.now;
   const pending = new Map<string, Promise<CalendarExportResult>>();
-  const disconnect = () => { epoch++; connection = null; exporter = null; };
+  const disconnect = () => { epoch++; connection = null; exporter = null; message = ''; notify(); };
   return {
     disconnect,
+    subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    status() { return { connecting: !!connecting, message }; },
     info() { return connection ? { email: connection.email, target: { ...connection.target }, expired: now() >= connection.expiresAt } : null; },
     connect() {
       if (connecting) return connecting;
       disconnect();
       const captured = epoch;
       connecting = deps.authorize().then(next => {
-        if (captured !== epoch || !next || next.expiresAt <= now()) return false;
-        connection = next; exporter = createCalendarExporter(next.adapter); return true;
-      }).finally(() => { connecting = null; });
+        if (captured !== epoch) return false;
+        if (!next || next.expiresAt <= now()) { message = '연결을 취소했거나 연결 시간이 만료되었습니다.'; return false; }
+        connection = next; exporter = createCalendarExporter(next.adapter); message = '연결되었습니다.'; return true;
+      }).catch(error => {
+        if (captured === epoch) message = (error as Error).message === 'CALENDAR_AUTH_DENIED'
+          ? '구글 권한 동의가 거부되었습니다.' :
+          /^CALENDAR_AUTH_EXCHANGE_\d{3}$/.test((error as Error).message) ? '인증 결과 교환에 실패했습니다. 다시 연결해주세요.' :
+          /^CALENDAR_AUTH_IDENTITY_\d{3}$/.test((error as Error).message) ? '연결한 구글 계정을 확인하지 못했습니다.' :
+          (error as Error).message === 'CALENDAR_AUTH_TOKEN_MISSING' ? '구글 캘린더 접근 정보를 받지 못했습니다. 권한 동의를 확인해주세요.' : '연결을 완료하지 못했습니다. 다시 연결해주세요.';
+        throw error;
+      }).finally(() => { connecting = null; notify(); });
+      notify();
       return connecting;
     },
     send(source: CalendarSource, end: string, read: () => Promise<CalendarSource>, current: () => boolean) {
@@ -51,3 +65,4 @@ export function createCalendarConnection(deps: {
     },
   };
 }
+

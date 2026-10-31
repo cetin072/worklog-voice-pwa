@@ -28,6 +28,10 @@ function seoulDateKey(value) {
 }
 
 function toBriefingTask(row = {}) {
+  // The deployed briefing RPC includes metadata; older versions do not project
+  // due_has_time separately. Preserve its explicit-time flag instead of dropping
+  // a known time and forcing the mobile editor to fetch it again.
+  const hasTime = typeof row.due_has_time === "boolean" ? row.due_has_time : row.metadata?.dueTimeExplicit;
   return Object.freeze({
     pageId: text(row.id, 200),
     title: text(row.title, 200),
@@ -35,7 +39,7 @@ function toBriefingTask(row = {}) {
     status: TASK_STATUS_MAP[text(row.status, 80)] || "",
     project: text(row?.metadata?.project, 80),
     dueKey: seoulDateKey(row.due_at),
-    ...(typeof row.due_has_time === "boolean" ? { dueTime: row.due_has_time && seoulDateKey(row.due_at)
+    ...(typeof hasTime === "boolean" ? { dueTime: hasTime && seoulDateKey(row.due_at)
       ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(row.due_at)) : "" } : {}),
     nextAttentionAt: text(row.next_attention_at, 64),
     actionKind: text(row.action_kind, 20),
