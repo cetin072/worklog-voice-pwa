@@ -19,9 +19,9 @@ function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',r
   '@/src/platform/authenticated-access':{getFreshAccessToken:async()=>{if(switchToken)actor='bob';return actor+'-token';}},
   '@/src/features/schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[{id:sid,title:'회의',startsAt:'2099-11-03T06:00:00Z',status:'confirmed',allDay:false}]})},
   './capture-files':{removeCaptureImage:async uri=>calls.push(['remove',uri])},
-  './capture-ocr':{recognizeCapture:async()=>{if(failOcr)throw Error('OCR');return ocrText;}},
+  './capture-ocr':{recognizeCapture:async()=>{if(failOcr)throw Error('OCR');calls.push(['ocr']);return ocrText;}},
   '@/src/platform/worklog-api':{
-   saveWorklog:async(token,text,options)=>{calls.push(['save',token,text,options]);if(!remote.has(options.clientRequestId))remote.set(options.clientRequestId,{pageId:'record-a',scheduleCreated:!review,scheduleId:review?undefined:sid});if(timeout){timeout=false;throw Error('connection lost after commit');}return remote.get(options.clientRequestId);},
+   saveWorklog:async(token,text,options)=>{calls.push(['save',token,text,options]);if(!remote.has(options.clientRequestId))remote.set(options.clientRequestId,{pageId:remote.size===0?'record-a':`record-${remote.size+1}`,scheduleCreated:!review,scheduleId:review?undefined:sid});if(timeout){timeout=false;throw Error('connection lost after commit');}return remote.get(options.clientRequestId);},
    readWorklogDetails:async()=>({...details}),
    updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);if(failEdit)throw Error('서버에서 수정을 저장하지 못했습니다.');details={title:input.title,dueDate:input.dueDate,dueTime:input.dueTime};return{title:input.title,schedule:linkAfterEdit?null:{id:sid,status:'confirmed'}};},
    deleteWorklog:async(_client,id)=>{calls.push(['delete',id]);return{cancelledScheduleIds:[sid]};},
@@ -34,7 +34,7 @@ function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',r
  };
  const exports={};const code=ts.transpileModule(readFileSync('mobile/src/features/capture/capture-runtime.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  vm.runInNewContext(code,{exports,require:n=>{assert.ok(modules[n],n);return modules[n];}});
- return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,failEdit:()=>failEdit=true,failEditReminder:()=>failEditReminder=true,staleLink:()=>staleLink=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
+ return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,failEdit:()=>failEdit=true,setEditFailure:value=>failEdit=value,failEditReminder:()=>failEditReminder=true,staleLink:()=>staleLink=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
 }
 test('automatic save has no confirmation; two overlapping runs share the persisted receipt',async()=>{
  const h=harness(),entry=await h.receive();const [a,b]=await Promise.all([h.api.processCapture(entry,h.client,'alice'),h.api.processCapture(entry,h.client,'alice')]);
@@ -114,4 +114,33 @@ test('a stale linked Schedule cannot be advertised as the newly edited appointme
  const result=await h.api.editCapture(h.client,entry,{title:'새 방문 일정',dueDate:'2099-11-04',dueTime:'23:00'});
  assert.equal(result.scheduleCreated,false);assert.equal(result.schedule,null);assert.match(result.reminderWarning,/알림/);
  assert.equal(result.entry.details.dueDate,'2099-11-04');assert.equal(result.entry.details.dueTime,'23:00');
+});
+
+
+test('cancel then explicitly register the same capture creates one new record with edited fields',async()=>{
+ const h=harness({review:true,linkAfterEdit:true});let entry=await h.api.processCapture(await h.receive(),h.client,'alice');
+ const edited=await h.api.editCapture(h.client,entry,{title:'마지막으로 수정한 방문',dueDate:'2099-11-05',dueTime:'13:00'});
+ entry=await h.api.undoCapture(h.client,edited.entry);const oldId=entry.saved.pageId;
+ const unchanged=await h.api.processCapture(await h.receive(),h.client,'alice');assert.equal(unchanged.undone,true);assert.equal(h.remote.size,1);
+ const [a,b]=await Promise.all([h.api.restartCapture(h.client,entry),h.api.restartCapture(h.client,entry)]);
+ const [r1,r2]=await Promise.all([h.api.processCapture(a,h.client,'alice'),h.api.processCapture(b,h.client,'alice')]);
+ assert.equal(h.remote.size,2);assert.notEqual(r1.saved.pageId,oldId);assert.equal(r1.saved.pageId,r2.saved.pageId);
+ assert.equal(r1.details.title,'마지막으로 수정한 방문');assert.equal(r1.details.dueDate,'2099-11-05');assert.equal(r1.details.dueTime,'13:00');assert.equal(r1.restartDetails,undefined);
+ assert.equal(h.calls.filter(c=>c[0]==='ocr').length,1);assert.equal(h.calls.filter(c=>c[0]==='delete').length,1);
+ const writes=h.calls.filter(c=>c[0]==='save');assert.notEqual(writes[0][3].clientRequestId,writes[1][3].clientRequestId);
+ const lastEdit=h.calls.filter(c=>c[0]==='edit').at(-1);assert.equal(lastEdit[2].pageId,r1.saved.pageId);
+});
+test('restart save response loss and edit failure resume the new request without another record',async()=>{
+ const h=harness({review:true}),first=await h.api.processCapture(await h.receive(),h.client,'alice');
+ const cancelled=await h.api.undoCapture(h.client,first);const pending=await h.api.restartCapture(h.client,cancelled);h.setTimeout();
+ await assert.rejects(h.api.processCapture(pending,h.client,'alice'));assert.equal(h.remote.size,2);
+ h.failEdit();await assert.rejects(h.api.processCapture(await h.api.captureInbox.get(pending.hash,'alice'),h.client,'alice'));
+ assert.ok((await h.api.captureInbox.get(pending.hash,'alice')).saved);
+ h.setEditFailure(false);const result=await h.api.processCapture(await h.api.captureInbox.get(pending.hash,'alice'),h.client,'alice');
+ assert.equal(h.remote.size,2);assert.equal(result.requestId,pending.requestId);assert.equal(result.restartDetails,undefined);
+ const retries=h.calls.filter(c=>c[0]==='save').slice(1);assert.equal(retries[0][3].clientRequestId,retries[1][3].clientRequestId);
+});
+test('account changes cannot explicitly restart another owner capture',async()=>{
+ const h=harness({review:true}),entry=await h.api.processCapture(await h.receive(),h.client,'alice');const cancelled=await h.api.undoCapture(h.client,entry);h.switchToken();
+ await assert.rejects(h.api.restartCapture(h.client,cancelled),/CAPTURE_ACCOUNT_CHANGED/);assert.equal((await h.api.captureInbox.get(entry.hash,'alice')).undone,true);
 });

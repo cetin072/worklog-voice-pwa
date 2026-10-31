@@ -45,3 +45,9 @@ The right Quick Voice status orb is now a Photo shortcut using the existing gall
 Regression coverage: committed edit + alarm failure + reopen; server failure preserves the old receipt and input; success with warning closes the editor; Photo action, duplicate tap, cancellation, unmount and recording disable. Android smoke asserts the intermediate Settings state before a second back event, then opens the real picker from Photo and cancels. No timeout expansion or skipped checks.
 
 QA-only versionCode 11. Calendar runtime/provider code is unchanged. Native build/execution and exact-head artifact must pass before delivery; Google/OCR real-account acceptance is not implied by synthetic fixtures.
+
+## QA 12 — explicit re-registration after cancellation
+
+A repeated image used its persisted cancellation tombstone, so the screen offered no way to intentionally register it again. Keep automatic dedupe; add one explicit Register again action on the cancelled screen. A serialized inbox restart advances the request generation once and persists it before network activity. Save retries and double taps reuse that generation. Stale callbacks cannot overwrite a newer registration. The cancelled server record is never restored or edited.
+
+Re-registration reuses retained OCR and the last edited title/date/time. A date-neutral new save plus the existing edit/reminder path applies those fields without guessing dates from the original chat. The new save receipt survives uncertain responses or later edit failures. Owner verification remains before resetting the local entry. Regression coverage includes cancel/re-share, explicit restart, edited fields, no repeated OCR, distinct new record ID, response loss, edit retry, app restart, stale callback rejection and account isolation. QA-only versionCode 12; no provider/native dependency/production schema change. Exact-head Mobile gate and artifact must pass before delivery.

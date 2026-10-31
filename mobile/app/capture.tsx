@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
-import { captureInbox, processCapture, readWorklogDetails, editCapture, undoCapture } from '@/src/features/capture/capture-runtime';
+import { captureInbox, processCapture, readWorklogDetails, editCapture, undoCapture, restartCapture } from '@/src/features/capture/capture-runtime';
 import type { CaptureEntry } from '@/src/features/capture/capture-inbox';
 
 export default function CaptureScreen() {
@@ -85,6 +85,18 @@ export default function CaptureScreen() {
     catch { if (current === epoch.current) setError('취소 또는 알림 정리를 마치지 못했습니다. 다시 시도해주세요.'); }
     finally { if (current === epoch.current) setBusy(false); }
   }
+  async function registerAgain() {
+    if (!client || !visible?.undone || !owner || busy) return;
+    const current = ++epoch.current; setBusy(true);setError('');
+    try {
+      const pending = await restartCapture(client, visible);
+      if (current !== epoch.current) return;
+      setEntry(pending);
+      const next = await processCapture(pending, client, owner);
+      if (current === epoch.current) setEntry(next);
+    } catch { if (current === epoch.current) setError('다시 등록을 마치지 못했습니다. 같은 요청으로 다시 시도할 수 있습니다.'); }
+    finally { if (current === epoch.current) setBusy(false); }
+  }
   async function leave(manual = false) {
     if (visible && !visible.saved) await captureInbox.put({ ...visible, paused: true });
     if (!manual && router.canGoBack()) router.back();
@@ -97,6 +109,7 @@ export default function CaptureScreen() {
     {!owner ? <View style={styles.card}><Text>이미지는 이 기기에 보관했습니다. 로그인하면 자동으로 저장합니다.</Text><Button label="로그인하기" action={() => router.replace('/')} /></View> : null}
     {visible?.saved ? <View style={styles.card}>
       <Text accessibilityLiveRegion="polite" style={styles.title}>{visible.undone ? '등록을 취소했습니다.' : visible.saved.scheduleCreated ? '일정을 저장했습니다.' : '확인 필요 기록으로 저장했습니다.'}</Text>
+      {visible.undone ? <><Text>{visible.details?.title || visible.decision?.title}</Text><Text>같은 캡처를 다시 등록할 수 있습니다.</Text><Button label="다시 등록" action={() => void registerAgain()} /></> : null}
       {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{visible.details?.dueDate || visible.decision?.date || '날짜 확인 필요'} {visible.details?.dueTime || visible.decision?.time || ''}</Text>{visible.decision?.description && visible.decision.description !== (visible.details?.title || visible.decision.title) ? <Text>{visible.decision.description}</Text> : null}
         {!visible.saved.scheduleCreated ? <Text>{visible.details?.dueDate ? '업무의 날짜를 저장했습니다. 일정과 알림 상태는 홈에서 확인할 수 있습니다.' : '날짜·시간을 확정하지 못해 일정은 만들지 않았습니다. 홈의 ‘기한 없음’에서 확인하거나 여기서 날짜·시간을 수정해주세요.'}</Text> : null}
         {visible.reminderWarning ? <Text>{visible.reminderWarning}</Text> : null}

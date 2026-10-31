@@ -8,20 +8,22 @@ const source = readFileSync('mobile/app/capture.tsx', 'utf8');
 const ast = ts.createSourceFile('capture.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const functions = [], handlers = {};
 function walk(node) {
-  if (ts.isFunctionDeclaration(node) && ['openEditor', 'saveEdit'].includes(node.name?.text)) functions.push(node.getText(ast));
+  if (ts.isFunctionDeclaration(node) && ['openEditor', 'saveEdit', 'registerAgain'].includes(node.name?.text)) functions.push(node.getText(ast));
   if (ts.isJsxAttribute(node) && ['onTitle', 'onDate', 'onTime', 'onCancel'].includes(node.name.getText(ast))) handlers[node.name.getText(ast)] = node.initializer.expression.getText(ast);
   ts.forEachChild(node, walk);
 }
 walk(ast);
-const code = ts.transpileModule(`${functions.join('\n')}\nreturn { openEditor, saveEdit, ${Object.entries(handlers).map(([name, body]) => `${name}: ${body}`).join(',')} };`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const code = ts.transpileModule(`${functions.join('\n')}\nreturn { openEditor, saveEdit, registerAgain, ${Object.entries(handlers).map(([name, body]) => `${name}: ${body}`).join(',')} };`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const details = { title: '저장된 회의', dueDate: '2030-11-03', dueTime: '15:00' };
 function harness(seed = details) {
   const pending = [], state = {}, writes = [];
   let save;
-  const scope = { client: {}, id: 'record-a', busy: false, editReady: false, epoch: { current: 0 }, editDirty: { current: {} },
+  const scope = { owner:'alice', client: {}, id: 'record-a', busy: false, editReady: false, epoch: { current: 0 }, editDirty: { current: {} },
     visible: { hash: 'a', owner: 'alice', saved: { pageId: 'record-a' }, details: seed },
     getFreshAccessToken: async () => 'synthetic',
+    restartCapture: async(_client,entry)=>{writes.push(entry);return {...entry,undone:false,requestId:'new-request'};},
+    processCapture: async entry=>({...entry,saved:{pageId:'new-record'}}),
     readWorklogDetails: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
     editCapture: (_client, _entry, input) => new Promise((resolve,reject) => { save = { input, resolve, reject }; }),
     captureInbox: { put: async entry => writes.push(entry) },
@@ -84,4 +86,11 @@ test('server edit error retains user input and editor, and displays the actual s
  h.save().reject(Error('개인 업무공간을 찾지 못했습니다.'));await saving;
  assert.equal(h.state.setEditing,true);assert.equal(h.state.setTitle,'유지할 제목');assert.equal(h.state.setEntry,undefined);
  assert.equal(h.state.setEditError,'개인 업무공간을 찾지 못했습니다.');assert.equal(h.state.setBusy,false);
+});
+
+
+test('explicit cancelled-screen registration invokes one restart and shows the new receipt',async()=>{
+ const h=harness();h.scope.visible.undone=true;
+ await Promise.all([h.api.registerAgain(),h.api.registerAgain()]);
+ assert.equal(h.writes.length,1);assert.equal(h.state.setEntry.saved.pageId,'new-record');assert.equal(h.state.setEntry.undone,false);assert.equal(h.state.setBusy,false);
 });
