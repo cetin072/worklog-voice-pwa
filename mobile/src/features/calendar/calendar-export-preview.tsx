@@ -24,7 +24,7 @@ export function CalendarExportPreview({ scheduleId, title }: {
   const connection = platform.config && platform.session
     ? calendarConnection(platform.config, platform.session.user.id) : null;
   if (process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT !== 'qa') return null;
-  const close = () => { generation.current++; setVisible(false); setBusy(false); gate.current = false; };
+  const close = () => { generation.current++; if (gate.current) connection?.disconnect(); setVisible(false); setBusy(false); gate.current = false; };
   const context = () => {
     const captured = generation.current;
     const userId = owner.current;
@@ -47,7 +47,8 @@ export function CalendarExportPreview({ scheduleId, title }: {
     try {
       const connected = await connection.connect();
       if (current()) { redraw(value => value + 1); setMessage(connected ? '계정 연결됨 · 아직 등록하지 않았습니다. 아래 한 건 보내기를 눌러주세요.' : '연결을 취소했습니다. 아직 등록하지 않았습니다.'); }
-      else connection.disconnect();
+      // An OAuth callback may remount the screen. Keep the account-bound memory
+      // grant for reopening the sheet; explicit close/logout already invalidates it.
     } catch (error) {
       if (current()) setMessage((error as Error).message === 'CALENDAR_AUTH_DENIED' ? '캘린더 권한 동의를 거부했습니다. 아직 등록하지 않았습니다.' : '계정 연결을 확인하지 못했습니다. 온라인 상태와 관리자 callback 설정을 확인해주세요.');
     } finally { if (current()) { gate.current = false; setBusy(false); } }

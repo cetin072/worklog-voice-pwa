@@ -12,15 +12,15 @@ test('actual QA UI opens server preview, connects only on click, confirms one ev
   t.after(()=>{if(previous===undefined)delete process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT;else process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT=previous;});
   process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT='qa';
   const row={id:'22222222-2222-4222-8222-222222222222',workspace_id:'workspace',created_by_user_id:'owner',title:'긴 제목 '.repeat(20),status:'confirmed',starts_at:'2026-11-02T10:00:00+09:00',ends_at:null,all_day:false,timezone:'Asia/Seoul',updated_at:'2026-10-31T01:00:00Z'};
-  let connects=0,posts=0,stored=null;
+  let connects=0,posts=0,stored=null,authorizationPause=null,cleanup=null;
   const target={accountId:'google-id',calendarId:'primary'};
-  const service=createCalendarConnection({authorize:async()=>{connects++;return {target,email:'qa@example.invalid',expiresAt:Date.now()+60000,adapter:{target,get:async()=>stored,insert:async(id,draft)=>{posts++;stored={id,draft:{...draft,title:draft.title.trim()},status:'confirmed',sourceId:draft.scheduleId};return stored;}}};}});
+  const service=createCalendarConnection({authorize:async()=>{connects++;if(authorizationPause)await authorizationPause;return {target,email:'qa@example.invalid',expiresAt:Date.now()+60000,adapter:{target,get:async()=>stored,insert:async(id,draft)=>{posts++;stored={id,draft:{...draft,title:draft.title.trim()},status:'confirmed',sourceId:draft.scheduleId};return stored;}}};}});
   const query={select:()=>query,eq:()=>query,single:async()=>({data:row})};
   const platform={config:{},session:{user:{id:'owner'}},client:{auth:{getUser:async()=>({data:{user:{id:'owner'}}})},from:()=>query}};
   let slots=[],cursor=0;
   const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),
     useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=init;return[slots[i],next=>slots[i]=typeof next==='function'?next(slots[i]):next];},
-    useRef:init=>{const i=cursor++;if(!(i in slots))slots[i]={current:init};return slots[i];},useEffect:()=>{}};
+    useRef:init=>{const i=cursor++;if(!(i in slots))slots[i]={current:init};return slots[i];},useEffect:fn=>{if(!cleanup)cleanup=fn();}};
   React.default=React;
   const native=Object.fromEntries(['Modal','Pressable','ScrollView','Text','TextInput','View'].map(k=>[k,k]));native.StyleSheet={create:v=>v};
   const exports={};
@@ -44,5 +44,8 @@ test('actual QA UI opens server preview, connects only on click, confirms one ev
   assert.ok(all(render()).some(n=>n.type==='ScrollView'));assert.ok(all(render()).filter(n=>n.type==='Text').every(n=>n.props.numberOfLines===undefined));
   assert.equal(button('닫기').props.style.minHeight,48);
   all(render()).find(n=>n.type==='Modal').props.onRequestClose();assert.equal(all(render()).find(n=>n.type==='Modal').props.visible,false);
+  let finishAuthorization;authorizationPause=new Promise(resolve=>finishAuthorization=resolve);
+  button('다른 Google 계정 연결').props.onPress();cleanup();finishAuthorization();await flush();
+  assert.equal(service.info().email,'qa@example.invalid');assert.equal(posts,1);
   for(const variant of ['production',undefined]){if(variant===undefined)delete process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT;else process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT=variant;assert.equal(render(),null);}
 });
