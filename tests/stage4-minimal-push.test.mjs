@@ -21,11 +21,9 @@ test('minimal Push keeps no-send behavior for empty briefing candidates while ap
   assert.deepEqual(focus.map((task) => [task.pageId, task.reason]), [['task-1', 'attention']]);
 });
 
-test('only the established Web/PWA automatic Push schedules remain, with no new Push provider', () => {
-  assert.match(morning, /schedule:"30 23 \* \* \*"/);
-  assert.match(afternoon, /schedule:"30 7 \* \* \*"/);
-  assert.match(morning, /claimMorning/);
-  assert.match(afternoon, /claimAfternoon/);
+test('retired Web/PWA has no automatic Push schedule or delivery', () => {
+  assert.doesNotMatch(morning, /schedule:|sendWebPush|claimMorning/);
+  assert.doesNotMatch(afternoon, /schedule:|sendWebPush|claimAfternoon/);
   assert.doesNotMatch(`${morning}\n${afternoon}`, /OneSignal|Firebase Admin|Pusher|Twilio/);
 });
 

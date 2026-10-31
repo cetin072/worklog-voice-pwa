@@ -10,7 +10,6 @@ const scheduled = readFileSync(new URL("../netlify/functions/morning-push.mts", 
 const preferencesApi = readFileSync(new URL("../netlify/functions/notification-preferences.mts", import.meta.url), "utf8");
 const subscriptionApi = readFileSync(new URL("../netlify/functions/push-subscription.mts", import.meta.url), "utf8");
 const settingsHtml = readFileSync(new URL("../public/settings.html", import.meta.url), "utf8");
-const settingsJs = readFileSync(new URL("../public/morning-push-settings.js", import.meta.url), "utf8");
 const safetyMigration = readFileSync(new URL("../supabase/migrations/20260919154119_stage4_notification_scheduler_safety.sql", import.meta.url), "utf8");
 
 test("morning digest keeps count summary and can show two useful titles", () => {
@@ -54,14 +53,6 @@ test("morning detail titles are clipped and the notification body stays compact"
   assert.match(body, /오늘 할 일 1건 · 오늘 일정 1건$/);
 });
 
-test("morning schedule is fixed to 08:30 Asia/Seoul and uses existing free infrastructure", () => {
-  assert.match(scheduled, /schedule:"30 23 \* \* \*"/);
-  assert.match(scheduled, /08:30 Asia\/Seoul/);
-  assert.match(scheduled, /sendWebPush/);
-  assert.match(scheduled, /claimMorning/);
-  assert.doesNotMatch(scheduled, /OneSignal|Firebase Admin|Pusher|Twilio/);
-});
-
 test("morning preferences default off and delivery claim skips empty state with per-device daily dedupe", () => {
   assert.match(migration, /morning_enabled boolean not null default false/);
   assert.match(migration, /morning_time time without time zone not null default time '08:30'/);
@@ -90,29 +81,6 @@ test("scheduled RPC keeps hashed secret validation but Stage 4-0 removes public 
   assert.match(safetyMigration, /revoke all on function public\.claim_morning_notification_deliveries[\s\S]*from public, anon, authenticated/);
   assert.match(safetyMigration, /grant execute on function public\.claim_morning_notification_deliveries[\s\S]*to service_role/);
   assert.doesNotMatch(safetyMigration, /grant execute[\s\S]*to anon/);
-});
-
-test("preference API requires current-origin Push connection before enabling morning alerts", () => {
-  assert.match(preferencesApi, /PUSH_SUBSCRIPTION_REQUIRED/);
-  assert.match(preferencesApi, /app_origin:`eq\.\$\{origin\}`/);
-  assert.match(preferencesApi, /morning_time:"08:30:00"/);
-  assert.match(preferencesApi, /timezone:"Asia\/Seoul"/);
-  assert.match(preferencesApi, /morning_detail_enabled/);
-  assert.match(preferencesApi, /detailEnabled/);
-  assert.match(subscriptionApi, /app_origin:origin/);
-});
-
-test("settings separates everyday notification options from collapsed diagnostics", () => {
-  assert.match(settingsHtml, /<h2>알림 설정<\/h2>/);
-  assert.match(settingsHtml, /id="settingsMorningPushEnabled"/);
-  assert.match(settingsHtml, /id="settingsMorningPushDetailEnabled"/);
-  assert.match(settingsHtml, /업무·일정 제목 표시/);
-  assert.match(settingsHtml, /id="settingsNotificationDiagnostics"/);
-  assert.match(settingsHtml, /알림 테스트·문제 해결/);
-  assert.doesNotMatch(settingsHtml, /<details[^>]*id="settingsNotificationDiagnostics"[^>]*\sopen(?:\s|=|>)/);
-  assert.match(settingsJs, /ensureServerPushSubscription\(\)/);
-  assert.match(settingsJs, /morningEnabled: desired/);
-  assert.match(settingsJs, /detailEnabled: Boolean\(detailToggle\.checked\)/);
 });
 
 test("scheduler config fails closed without a long server secret", () => {
