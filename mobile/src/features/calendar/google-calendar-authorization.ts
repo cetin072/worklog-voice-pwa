@@ -38,7 +38,10 @@ export async function authorizeGoogleCalendar(config: PublicPlatformConfig, call
   const params = { provider: 'google', redirect_to: redirect, scopes: `openid email profile ${CALENDAR_SCOPE}`,
     code_challenge: proof.challenge, code_challenge_method: 's256', access_type: 'online', prompt: 'select_account consent' };
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-  const result = await openBrowser(url.toString(), redirect);
+  // Android Expo matches the return URL with startsWith. OAuth may reorder
+  // query parameters (code before purpose), so match only the callback base.
+  // Validate the full destination and Calendar purpose below before exchange.
+  const result = await openBrowser(url.toString(), callback);
   if (result.type === 'cancel' || result.type === 'dismiss') return null;
   if (result.type !== 'success' || !result.url) throw Error('CALENDAR_AUTH_FAILED');
   const returned = new URL(result.url);

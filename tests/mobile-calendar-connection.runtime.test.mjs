@@ -57,7 +57,7 @@ const {randomBytes,createHash}=await import('node:crypto');
 const makePkce=()=>createCalendarPkce(async()=>randomBytes(32),async v=>createHash('sha256').update(v).digest('base64'));
 function oauthHarness(change={}) {
   const calls=[];let authorizeUrl,proof;
-  const open=async(url,redirect)=>{authorizeUrl=new URL(url);assert.equal(redirect,callback+'?purpose=calendar');return {type:'success',url:callback+'?purpose=calendar&code=synthetic-code',...change};};
+  const open=async(url,redirect)=>{authorizeUrl=new URL(url);assert.equal(redirect,callback);return {type:'success',url:callback+'?purpose=calendar&code=synthetic-code',...change};};
   const fetcher=async(url,init)=>{
     calls.push({url,init});
     if(String(url).includes('/auth/v1/token')) {proof=JSON.parse(init.body);return Response.json({provider_token:'ephemeral-google-token',refresh_token:'discarded-app-refresh',provider_refresh_token:'discarded-google-refresh'});}
@@ -119,3 +119,4 @@ test('Calendar callback cannot be completed by the existing durable login handle
   assert.equal(await exp.completeGoogleOAuthFromUrl(client,base+'?purpose=calendar&code=synthetic'),false);
   assert.equal(exp.isGoogleAuthCallbackUrl(base+'?code=normal-login'),true);
 });
+

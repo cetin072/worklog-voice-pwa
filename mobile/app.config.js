@@ -15,7 +15,7 @@ module.exports = ({ config }) => {
       ...config.android,
       ...(qa ? {
         package: 'com.cetin072.worklog.qa',
-        versionCode: Math.max(7, config.android.versionCode),
+        versionCode: Math.max(8, config.android.versionCode),
       } : {}),
       icon: `./assets/icons/${name}-1024.png`,
       adaptiveIcon: {
