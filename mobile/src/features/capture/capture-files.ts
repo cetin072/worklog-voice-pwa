@@ -16,6 +16,18 @@ export function incomingCaptureUri(uri: string, ownPackage = Constants.expoConfi
 }
 export async function importCaptureImage(uri: string) {
   if (!Legacy.documentDirectory || !incomingCaptureUri(uri)) throw new Error('CAPTURE_INVALID_URI');
+  return copyCaptureImage(uri);
+}
+/** Only the trusted system picker may hand us an app-cache file. External shares cannot. */
+export async function importPickedCaptureImage(uri: string) {
+  const parsed = new URL(uri);
+  if (!Legacy.cacheDirectory || parsed.protocol !== 'file:' || parsed.host || parsed.username || parsed.password || /%2f|%5c/i.test(uri)
+    || !parsed.href.startsWith(new URL(Legacy.cacheDirectory).href)) throw new Error('CAPTURE_INVALID_PICKED_URI');
+  try { return await copyCaptureImage(uri); }
+  finally { await Legacy.deleteAsync(uri, { idempotent: true }).catch(() => undefined); }
+}
+async function copyCaptureImage(uri: string) {
+  if (!Legacy.documentDirectory) throw new Error('CAPTURE_STORAGE_UNAVAILABLE');
   await Legacy.makeDirectoryAsync(root, { intermediates: true });
   const temporary = `${root}${Crypto.randomUUID()}.image`;
   try {

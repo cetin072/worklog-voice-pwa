@@ -6,11 +6,33 @@ import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import { synchronizeSavedScheduleReminders, synchronizeEditedWorklogReminder, cancelSavedScheduleReminders } from '@/src/features/schedule/schedule-reminder-post-save';
 import { reminderSessionEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { readOwnedReminderSnapshots } from '@/src/features/schedule/schedule-reminder-snapshot';
+import { findWorklogReminder } from '@/src/features/schedule/worklog-reminder-adapter';
 import { recognizeCapture } from './capture-ocr';
 import { removeCaptureImage } from './capture-files';
 import { createCaptureInbox, type CaptureEntry } from './capture-inbox';
 
 export const captureInbox = createCaptureInbox(secureSessionStorage);
+export const captureImportState = { galleryActive: false };
+type CaptureChange = { owner: string; recordId: string; dueDate: string; cancelled?: boolean };
+const captureListeners = new Map<(change: CaptureChange) => void, string | undefined>();
+const pendingCaptureChanges = new Map<string, CaptureChange>();
+/** Invalidate the existing Home read model; never inject a synthetic saved row. */
+export const captureChanges = {
+  subscribe(listener: (change: CaptureChange) => void, owner?: string) {
+    captureListeners.set(listener, owner);
+    const pending = owner ? pendingCaptureChanges.get(owner) : null;
+    if (pending) { pendingCaptureChanges.delete(owner!); listener(pending); }
+    return () => { captureListeners.delete(listener); };
+  },
+  publish(change: CaptureChange) {
+    let delivered = false;
+    for (const [listener, owner] of captureListeners) {
+      if (owner && owner !== change.owner) continue;
+      try { listener(change); if (owner === change.owner) delivered = true; } catch { /* UI refresh cannot turn a committed save into failure. */ }
+    }
+    if (!delivered) pendingCaptureChanges.set(change.owner, change);
+  },
+};
 let tail: Promise<unknown> = Promise.resolve();
 async function captureToken(client: PlatformSupabaseClient, owner: string | null) {
   if (!owner) throw new Error('CAPTURE_ACCOUNT_CHANGED');
@@ -45,6 +67,7 @@ export function processCapture(entry: CaptureEntry, client: PlatformSupabaseClie
       entry = { ...entry, saved: result }; await captureInbox.put(entry);
     }
     await current();
+    captureChanges.publish({ owner, recordId: entry.saved!.dataCoreWorkRecordId || entry.saved!.pageId!, dueDate: entry.details?.dueDate || entry.decision?.date || '' });
     // Storage success and reminder success are deliberately separate.
     const ids = entry.saved?.scheduleIds || (entry.saved?.scheduleId ? [entry.saved.scheduleId] : []);
     if (ids.length) {
@@ -70,8 +93,13 @@ export async function editCapture(client: PlatformSupabaseClient, entry: Capture
   const recordId = entry.saved?.dataCoreWorkRecordId || entry.saved?.pageId;
   if (!recordId) throw new Error('CAPTURE_SAVE_UNCONFIRMED');
   const result = await updateWorklogDetails(await captureToken(client, entry.owner), { pageId: recordId, ...input });
-  await synchronizeEditedWorklogReminder(client, { recordId, schedule: result.schedule, dueDate: input.dueDate, dueTime: input.dueTime }, guard);
-  return result;
+  try {
+    const outcome = await synchronizeEditedWorklogReminder(client, { recordId, schedule: result.schedule, dueDate: input.dueDate, dueTime: input.dueTime }, guard);
+    const schedule = result.schedule || (outcome === 'created' ? await findWorklogReminder(client, { recordId, title: input.title }, guard) : null);
+    return { ...result, schedule, scheduleCreated: schedule?.status === 'confirmed' };
+  } finally {
+    captureChanges.publish({ owner: entry.owner!, recordId, dueDate: input.dueDate });
+  }
 }
 export async function undoCapture(client: PlatformSupabaseClient, entry: CaptureEntry) {
   const guard = reminderSessionEpoch.capture();
@@ -79,6 +107,7 @@ export async function undoCapture(client: PlatformSupabaseClient, entry: Capture
   if (!recordId) throw new Error('CAPTURE_SAVE_UNCONFIRMED');
   await captureToken(client, entry.owner);
   const result = await deleteWorklog(client, recordId);
+  captureChanges.publish({ owner: entry.owner!, recordId, dueDate: '', cancelled: true });
   await cancelSavedScheduleReminders(result.cancelledScheduleIds, guard);
   const undone = { ...entry, undone: true }; await captureInbox.put(undone); return undone;
 }

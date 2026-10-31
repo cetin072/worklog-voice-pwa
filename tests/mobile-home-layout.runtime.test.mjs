@@ -15,6 +15,7 @@ export function fixture(kind) {
 for (const kind of ['empty','populated','overdue','schedules','mixed']) test(`current home JSX renders ${kind} with one action row per filtered task`, () => {
  const h = homeHarness(fixture(kind));
  const text = words(h.render());
+ assert.equal(nodes(h.render()).filter(n => n.type === 'CaptureImportButton').length,1);
  assert.match(text, /오늘 한눈에/);
  if (kind === 'empty') assert.doesNotMatch(text, /오늘 확정 일정이 없습니다/);
  for (const key of ['today','overdue','upcoming','undated']) {

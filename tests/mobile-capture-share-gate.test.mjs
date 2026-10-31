@@ -14,18 +14,25 @@ const settle=async()=>{for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r)
 function harness(actor='alice') {
  const values=[],routes=[],clears=[],data=new Map();let cursor=0,cleanup=null,effect,link,active,raw=[],copy=null;
  const inbox=createCaptureInbox({getItem:async k=>data.get(k)||null,setItem:async(k,v)=>data.set(k,v)});
+ const importState={galleryActive:false};
  const share=load('mobile/src/features/capture/capture-share-gate.tsx',{
   react:{useRef:v=>{const i=cursor++;return values[i]||=( {current:v} );},useEffect:fn=>effect=fn},
   'react-native':{Platform:{OS:'android'},AppState:{addEventListener:(_e,fn)=>{active=fn;return{remove(){}};}},Linking:{addEventListener:(_e,fn)=>{link=fn;return{remove(){}};}}},
   'expo-router':{usePathname:()=> '/',useRouter:()=>({push:x=>routes.push(x),replace:x=>routes.push(x)})},
   'expo-sharing':{getSharedPayloads:()=>raw,clearSharedPayloads:()=>{clears.push(raw[0]?.value);raw=[];}},
   '@/src/providers/platform-provider':{usePlatform:()=>({session:actor?{user:{id:actor}}:null})},
-  './capture-runtime':{captureInbox:inbox},
+  './capture-runtime':{captureInbox:inbox,captureImportState:importState},
   './capture-files':{importCaptureImage:async uri=>copy?copy(uri):{hash:(uri.endsWith('b')?'b':'a').repeat(64),uri:'file:///private/'+uri.at(-1)},removeCaptureImage:async()=>{}},
  });
  const render=()=>{if(cleanup)cleanup();cursor=0;share.CaptureShareGate();cleanup=effect();};
- return{render,routes,clears,inbox,setRaw:uri=>raw=[{value:uri,mimeType:'image/png',shareType:'image'}],url:()=>link({url:'worklog-qa://expo-sharing'}),activate:()=>active('active'),defer:fn=>copy=fn,setActor:value=>actor=value};
+ return{render,routes,clears,inbox,importState,setRaw:uri=>raw=[{value:uri,mimeType:'image/png',shareType:'image'}],url:()=>link({url:'worklog-qa://expo-sharing'}),activate:()=>active('active'),defer:fn=>copy=fn,setActor:value=>actor=value};
 }
+test('gallery foreground return does not steal navigation for older pending work; incoming shares still work',async()=>{
+ const h=harness();h.importState.galleryActive=true;
+ await h.inbox.receive({hash:'c'.repeat(64),uri:'file:///private/older'},'alice');
+ h.render();await settle();h.activate();await settle();assert.equal(h.routes.length,0);
+ h.setRaw('content://gallery/a');h.url();await settle();assert.equal(h.routes.at(-1).params.hash,'a'.repeat(64));
+});
 test('cold share is retained before login and warm URL shares work without AppState changes',async()=>{
  const h=harness(null);h.setRaw('content://gallery/a');h.render();await settle();
  assert.equal((await h.inbox.pending(null)).hash,'a'.repeat(64));assert.equal(h.routes.at(-1).params.hash,'a'.repeat(64));

@@ -57,3 +57,14 @@ Android 단일 image/* → Expo Sharing → 개인 앱 저장소 복사/해시 �
 캡처 결과에 이미 서버 상세(title/dueDate/dueTime)가 있으면 첫 수정부터 즉시 편집한다. 빈 시간 문자열은 시간이 없다는 확인된 정보이므로 재조회를 기다리지 않는다. 필수 상세가 없는 경우만 조회를 기다린다. 최신 정보 조회는 뒤에서 진행하고 사용자가 바꾼 필드는 덮어쓰지 않는다. 취소·항목 변경·계정 변경·저장 시작은 이전 조회 응답을 무효화한다. 실제 수정 저장 중 대기 표시는 유지한다.
 
 프로덕션 화면의 실제 편집 함수/입력 handler를 실행하는 회귀검사 4건을 추가했다. 즉시 편집, 누락 상세, 오프라인 갱신, 입력 중 늦은 응답, 빠른 항목 전환, 취소, 저장 중 응답을 검사한다. 기존 홈 편집 회귀검사 5건도 통과했다. 네이티브 의존성·권한·서버 계약 변경은 없다. 실제 기기에서의 체감 검수는 자동 함수 검사와 구분한다.
+
+## 후속: 앱 안에서 캡처 가져오기 / 저장 후 찾기
+
+- 홈의 회의 녹음·직접 입력 아래에 Android ‘캡처 가져오기’를 추가한다. 공식 expo-image-picker 57.0.20(MIT, Expo SDK57 호환 버전)을 사용하며 기존 공유 수신도 유지한다. 이미지 한 장, 편집 없음, quality:1로 원본 bytes를 복사하는 provider를 사용해 기존 SHA-256/inbox/멱등 저장 경로로 합류한다. 취소하면 저장/복사/화면 이동이 없다.
+- 기존 expo-intent-launcher 57.0.1의 native 반환은 URI 대신 Intent.toString()이어서 이미지 주소를 추측 파싱하지 않고 공식 picker를 선택했다. 카메라 권한은 차단하고 기존 마이크 권한/음성 기능은 보존한다. 전체 갤러리 접근 권한을 요청하지 않는다. Android Photo Picker/문서 선택의 선택된 항목만 사용한다.
+- picker가 만든 앱 cache 파일만 별도의 trusted import로 받아 개인 inbox에 복사하고 cache를 정리한다. 외부 share URI는 앱-private/cache 경로를 계속 거부한다. 새 입력은 계정 전환 시 원래 계정에만 보관하고 다른 계정 화면을 열지 않는다. picker 복귀 시 오래된 대기 항목이 화면 이동을 가로채지 않게 한다.
+- 사용자 실기기 결과에서 날짜 미확정 기록은 Schedule이 아닌 기한 없는 확인 필요 업무임을 확인했다. 원본 캡처/사용자 이름을 공개 테스트에 복제하지 않고 구조만 익명 예제로 재현한다. Home을 보존한 채 저장하면 목록이 갱신되지 않던 누락을 수정했다. 저장/수정/취소 완료는 계정·기록 ID를 기준으로 기존 Home 조회를 무효화한다. Home이 아직 없는 cold share도 해당 계정의 후속 화면에서 반영하고, 확인 필요 항목은 기한 없음 탭을 선택·펼친다. 가짜 저장 행을 주입하지 않고 서버 목록을 다시 읽는다.
+- 날짜·시간 수정으로 새 Schedule이 생성되면 기존 연결 조회로 서버 Schedule ID를 확인하고 결과의 저장 상태도 바꾼다. 홈 갱신은 일정 생성 시도 이후 수행한다. 기존 서버 데이터/DB 스키마 변경은 없다.
+- runtime smoke에 실제 홈 버튼 → Android system picker 열기 → 취소 → 앱 복귀의 비파괴 검사를 추가했다. 실제 선택 이미지의 한국어 OCR·서버 저장·알림 전체 동선과 구분한다. 사용자가 제시한 화면만으로 서버 DB 행을 직접 확인했다고 주장하지 않는다.
+
+참고: https://docs.expo.dev/versions/v57.0.0/sdk/imagepicker/ 및 설치된 Android MediaHandler/RawImageExporter/Manifest/config plugin 소스. Android 원칙: https://developer.android.com/training/data-storage/shared/photo-picker

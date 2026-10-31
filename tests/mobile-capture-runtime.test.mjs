@@ -7,26 +7,27 @@ import { captureScheduleInput } from '../netlify/shared/capture-schedule-input.m
 register('./helpers/mobile-ts-loader.mjs',import.meta.url);
 const {createCaptureInbox}=await import('../mobile/src/features/capture/capture-inbox.ts');
 const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
-function harness() {
+function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',review=false,linkAfterEdit=false}={}) {
  const map=new Map(),remote=new Map(),calls=[],sid='11111111-1111-4111-8111-111111111111';let actor='alice',timeout=false,failOcr=false,switchToken=false,failReminder=false;
  const storage={getItem:async k=>map.get(k)||null,setItem:async(k,v)=>{map.set(k,v);}};
  const client={auth:{getUser:async()=>({data:{user:{id:actor}}})}};
  const modules={
   '../../../../netlify/shared/capture-schedule-input.mjs':{captureScheduleInput},
   '@/src/platform/secure-storage':{secureSessionStorage:storage},'./capture-inbox':{createCaptureInbox},
+  '@/src/features/schedule/worklog-reminder-adapter':{findWorklogReminder:async()=>({id:sid,status:'confirmed',title:'서버 확인 일정',startsAt:'2099-11-04T07:00:00Z'})},
   '@/src/platform/authenticated-access':{getFreshAccessToken:async()=>{if(switchToken)actor='bob';return actor+'-token';}},
   '@/src/features/schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[{id:sid,title:'회의',startsAt:'2099-11-03T06:00:00Z',status:'confirmed',allDay:false}]})},
   './capture-files':{removeCaptureImage:async uri=>calls.push(['remove',uri])},
-  './capture-ocr':{recognizeCapture:async()=>{if(failOcr)throw Error('OCR');return '2099년 11월 3일 오후 3시 회사에서 회의';}},
+  './capture-ocr':{recognizeCapture:async()=>{if(failOcr)throw Error('OCR');return ocrText;}},
   '@/src/platform/worklog-api':{
-   saveWorklog:async(token,text,options)=>{calls.push(['save',token,text,options]);if(!remote.has(options.clientRequestId))remote.set(options.clientRequestId,{pageId:'record-a',scheduleCreated:true,scheduleId:sid});if(timeout){timeout=false;throw Error('connection lost after commit');}return remote.get(options.clientRequestId);},
+   saveWorklog:async(token,text,options)=>{calls.push(['save',token,text,options]);if(!remote.has(options.clientRequestId))remote.set(options.clientRequestId,{pageId:'record-a',scheduleCreated:!review,scheduleId:review?undefined:sid});if(timeout){timeout=false;throw Error('connection lost after commit');}return remote.get(options.clientRequestId);},
    readWorklogDetails:async()=>({title:'서버 회의 제목',dueDate:'2099-11-03',dueTime:'15:00'}),
-   updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);return{title:input.title,schedule:{id:sid,status:'confirmed'}};},
+   updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);return{title:input.title,schedule:linkAfterEdit?null:{id:sid,status:'confirmed'}};},
    deleteWorklog:async(_client,id)=>{calls.push(['delete',id]);return{cancelledScheduleIds:[sid]};},
   },
   '@/src/features/schedule/schedule-reminder-post-save':{
    synchronizeSavedScheduleReminders:async result=>{calls.push(['reminders',result]);if(failReminder)throw Error('permission');},
-   synchronizeEditedWorklogReminder:async(_c,input)=>calls.push(['edit-reminders',input]),
+   synchronizeEditedWorklogReminder:async(_c,input)=>{calls.push(['edit-reminders',input]);return linkAfterEdit?'created':'linked';},
    cancelSavedScheduleReminders:async ids=>calls.push(['cancel-reminders',ids]),
   },
  };
@@ -39,6 +40,20 @@ test('automatic save has no confirmation; two overlapping runs share the persist
  assert.equal(a.saved.pageId,b.saved.pageId);assert.equal(h.calls.filter(x=>x[0]==='save').length,1);
  const call=h.calls.find(x=>x[0]==='save');assert.equal(call[3].sourceType,'capture');assert.ok(call[2].includes('약속:'));
  assert.equal(a.details.title,'서버 회의 제목');assert.equal(a.uri,undefined);
+});
+test('the reported relative-date capture is a saved undated review, and editing resolves canonical schedule status',async()=>{
+ const h=harness({ocrText:'오늘 오후 13시 담당자 거래처 방문',review:true,linkAfterEdit:true}),changes=[];
+ const unsubscribe=h.api.captureChanges.subscribe(change=>changes.push(change));
+ const saved=await h.api.processCapture(await h.receive(),h.client,'alice');
+ assert.equal(saved.decision.kind,'review');assert.equal(saved.saved.scheduleCreated,false);
+ const save=h.calls.find(x=>x[0]==='save');assert.equal(save[2],'캡처 일정 확인 필요');assert.match(save[3].followUp,/담당자/);
+ assert.equal(changes[0].recordId,'record-a');assert.equal(changes[0].dueDate,'');
+ const replay=[];const stopOther=h.api.captureChanges.subscribe(change=>replay.push(change),'bob');assert.equal(replay.length,0);
+ const stopHome=h.api.captureChanges.subscribe(change=>replay.push(change),'alice');assert.equal(replay.length,1);assert.equal(replay[0].recordId,'record-a');stopOther();stopHome();
+ const result=await h.api.editCapture(h.client,saved,{title:'담당자 거래처 방문',dueDate:'2099-11-04',dueTime:'13:00'});
+ assert.equal(result.scheduleCreated,true);assert.equal(result.schedule.id,'11111111-1111-4111-8111-111111111111');
+ assert.equal(changes.at(-1).dueDate,'2099-11-04');
+ await h.api.undoCapture(h.client,saved);assert.equal(changes.at(-1).cancelled,true);unsubscribe();
 });
 test('uncertain response retries the exact request ID and creates only one remote record',async()=>{
  const h=harness(),entry=await h.receive();h.setTimeout();await assert.rejects(h.api.processCapture(entry,h.client,'alice'));

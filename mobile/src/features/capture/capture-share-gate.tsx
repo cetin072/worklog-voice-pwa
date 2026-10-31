@@ -3,7 +3,7 @@ import { AppState, Platform, Linking } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { getSharedPayloads, clearSharedPayloads } from 'expo-sharing';
 import { usePlatform } from '@/src/providers/platform-provider';
-import { captureInbox } from './capture-runtime';
+import { captureInbox, captureImportState } from './capture-runtime';
 import { importCaptureImage, removeCaptureImage } from './capture-files';
 
 /** Receive immediately, including before login. Share bytes never leave the sandbox. */
@@ -45,6 +45,7 @@ export function CaptureShareGate() {
           if (alive && account === owner.current) open({ hash: entry.hash });
           return;
         }
+        if (captureImportState.galleryActive) return;
         const pending = await captureInbox.pending(owner.current) || await captureInbox.pending(null);
         if (alive && pending) open({ hash: pending.hash });
       } catch {

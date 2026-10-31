@@ -67,6 +67,7 @@ test('saving keeps its loading state and invalidates an older background read', 
   const saving = h.api.saveEdit(); assert.equal(h.state.setBusy, true); assert.equal(h.save().input.dueTime, '17:30');
   h.pending[0].resolve({ ...details, title: '저장 중 늦은 응답' }); await read;
   assert.equal(h.state.setTitle, details.title); assert.equal(h.state.setTime, '17:30');
-  h.save().resolve({}); await saving;
+  h.save().resolve({scheduleCreated:true,schedule:{id:'canonical-schedule',status:'confirmed'}}); await saving;
   assert.equal(h.writes[0].details.dueTime, '17:30'); assert.equal(h.state.setBusy, false); assert.equal(h.state.setEditing, false);
+  assert.equal(h.writes[0].saved.scheduleCreated,true);assert.equal(h.writes[0].saved.scheduleId,'canonical-schedule');
 });

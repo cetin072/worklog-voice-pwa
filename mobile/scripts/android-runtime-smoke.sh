@@ -234,3 +234,37 @@ if ! grep -q '업무일지' /tmp/worklog-header-retry.xml || ! grep -q '닫기' 
 fi
 
 echo "Android production HomeScreenApp E2E PASS: navigation, Quick Voice recording, cancel, and post-cancel navigation."
+
+# Return journal -> Settings -> Home, then exercise the real system photo picker.
+# Cancel without selecting bytes: no user data or backend write is involved.
+adb shell input keyevent KEYCODE_BACK
+adb shell input keyevent KEYCODE_BACK
+GALLERY_COORDS=""
+for attempt in 1 2 3 4 5; do
+  dump_window /sdcard/worklog-gallery-home.xml /tmp/worklog-gallery-home.xml
+  GALLERY_COORDS="$(find_node_center /tmp/worklog-gallery-home.xml "캡처 가져오기" || true)"
+  if [[ -n "$GALLERY_COORDS" ]]; then break; fi
+  adb shell input swipe 500 1500 500 500 300
+done
+if [[ -z "$GALLERY_COORDS" ]]; then
+  echo "Capture import button was not reachable on Home."
+  exit 1
+fi
+read -r GALLERY_X GALLERY_Y <<<"$GALLERY_COORDS"
+adb shell input tap "$GALLERY_X" "$GALLERY_Y"
+sleep 1
+dump_window /sdcard/worklog-gallery-picker.xml /tmp/worklog-gallery-picker.xml
+if ! grep -Eq 'com\.(google\.android|android)\.(providers\.media|documentsui)' /tmp/worklog-gallery-picker.xml; then
+  echo "Capture import did not open the Android system photo/document picker."
+  cat /tmp/worklog-gallery-picker.xml
+  exit 1
+fi
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+dump_window /sdcard/worklog-gallery-cancel.xml /tmp/worklog-gallery-cancel.xml
+if ! grep -q '캡처 가져오기' /tmp/worklog-gallery-cancel.xml; then
+  echo "Canceling the picker did not return to the capture import button."
+  cat /tmp/worklog-gallery-cancel.xml
+  exit 1
+fi
+echo "Android capture gallery picker/cancel E2E PASS."

@@ -71,9 +71,9 @@ export default function CaptureScreen() {
     if (!client || !visible || busy || !editReady) return;
     const current = ++epoch.current; setBusy(true);setEditError('');
     try {
-      await editCapture(client, visible, { title, dueDate: date, dueTime: time });
+      const result = await editCapture(client, visible, { title, dueDate: date, dueTime: time });
       if (current === epoch.current) {
-        const next = { ...visible, details: { title, dueDate: date, dueTime: time }, decision: visible.decision ? { ...visible.decision, title, date, time } : undefined };
+        const next = { ...visible, saved: { ...visible.saved, scheduleCreated: result.scheduleCreated, ...(result.schedule ? { scheduleId: result.schedule.id, scheduleIds: [result.schedule.id], schedule: result.schedule } : {}) }, details: { title: result.title || title, dueDate: result.dueDate ?? date, dueTime: result.dueTime ?? time }, decision: visible.decision ? { ...visible.decision, title, date, time } : undefined };
         await captureInbox.put(next);setEntry(next);setEditing(false);
       }
     } catch { if (current === epoch.current) setEditError('수정 또는 알림 갱신을 마치지 못했습니다. 입력은 유지됩니다. 다시 시도해주세요.'); }
@@ -99,6 +99,7 @@ export default function CaptureScreen() {
     {visible?.saved ? <View style={styles.card}>
       <Text accessibilityLiveRegion="polite" style={styles.title}>{visible.undone ? '등록을 취소했습니다.' : visible.saved.scheduleCreated ? '일정을 저장했습니다.' : '확인 필요 기록으로 저장했습니다.'}</Text>
       {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{visible.details?.dueDate || visible.decision?.date || '날짜 확인 필요'} {visible.details?.dueTime || visible.decision?.time || ''}</Text><Text>{visible.decision?.description}</Text>
+        {!visible.saved.scheduleCreated ? <Text>날짜·시간을 확정하지 못해 일정은 만들지 않았습니다. 홈의 ‘기한 없음’에서 확인하거나 여기서 날짜·시간을 수정해주세요.</Text> : null}
         {visible.reminderWarning ? <Text>{visible.reminderWarning}</Text> : null}
         <Button label="수정" action={() => void openEditor()} /><Button label="실행 취소" action={() => void undo()} /></> : null}
     </View> : null}
