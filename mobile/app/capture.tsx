@@ -19,6 +19,7 @@ export default function CaptureScreen() {
   const [title, setTitle] = useState(''); const [date, setDate] = useState(''); const [time, setTime] = useState('');
   const [editReady, setEditReady] = useState(false); const [editError, setEditError] = useState('');
   const epoch = useRef(0);
+  const editDirty = useRef({ title: false, date: false, time: false });
   const receive = useCallback(async () => {
     const current = ++epoch.current; setBusy(true);setError('');
     try {
@@ -46,21 +47,29 @@ export default function CaptureScreen() {
     } finally { if (current === epoch.current) setBusy(false); }
   }, [hash, owner, client, incomingError]);
   useEffect(() => { setEntry(null);setEditing(false);void receive();return () => { epoch.current++; }; }, [receive]);
-  const visible = entry && entry.owner === owner ? entry : !owner && entry?.owner === null ? entry : null;
+  const visible = entry && entry.owner === owner && (!hash || entry.hash === hash) ? entry : null;
   const id = visible?.saved?.dataCoreWorkRecordId || visible?.saved?.pageId;
   async function openEditor() {
     if (!client || !id || busy) return;
-    const current = ++epoch.current; setEditing(true); setEditLoading(true);setEditReady(false);setEditError('');
+    const current = ++epoch.current;
+    const seed = visible?.details;
+    const complete = seed && typeof seed.title === 'string' && typeof seed.dueDate === 'string' && typeof seed.dueTime === 'string';
+    editDirty.current = { title: false, date: false, time: false };
+    setTitle(seed?.title || visible?.decision?.title || '');setDate(seed?.dueDate || '');setTime(seed?.dueTime || '');
+    setEditing(true);setEditLoading(!complete);setEditReady(Boolean(complete));setEditError('');
     try {
       const details = await readWorklogDetails(await getFreshAccessToken(client), id);
       if (current !== epoch.current) return;
-      setTitle(details.title);setDate(details.dueDate);setTime(details.dueTime);setEditReady(true);
-    } catch { if (current === epoch.current) setEditError('저장된 정보를 읽지 못했습니다. 다시 시도해주세요.'); }
+      if (!editDirty.current.title) setTitle(details.title);
+      if (!editDirty.current.date) setDate(details.dueDate);
+      if (!editDirty.current.time) setTime(details.dueTime);
+      setEditReady(true);
+    } catch { if (current === epoch.current) setEditError(complete ? '최신 정보를 확인하지 못했습니다. 표시된 내용으로 수정할 수 있습니다.' : '저장된 정보를 읽지 못했습니다. 다시 시도해주세요.'); }
     finally { if (current === epoch.current) setEditLoading(false); }
   }
   async function saveEdit() {
     if (!client || !visible || busy || !editReady) return;
-    const current = epoch.current; setBusy(true);setEditError('');
+    const current = ++epoch.current; setBusy(true);setEditError('');
     try {
       await editCapture(client, visible, { title, dueDate: date, dueTime: time });
       if (current === epoch.current) {
@@ -95,8 +104,8 @@ export default function CaptureScreen() {
     </View> : null}
     {error ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{error}</Text><Button label="다시 시도" action={() => void receive()} /><Button label="직접 입력" action={() => void leave(true)} /></View> : null}
     <Button label="업무수첩으로" action={() => void leave()} />
-  </ScrollView><WorkRecordEditSheet visible={editing} title={title} date={date} time={time} loading={editLoading} saving={busy} ready={editReady}
-    statusText={editError} statusTone={editError ? 'error' : 'neutral'} onTitle={setTitle} onDate={setDate} onTime={setTime}
+  </ScrollView><WorkRecordEditSheet visible={editing && Boolean(visible?.saved)} title={title} date={date} time={time} loading={editLoading} saving={busy} ready={editReady}
+    statusText={editError} statusTone={editError ? 'error' : 'neutral'} onTitle={value => { editDirty.current.title = true;setTitle(value); }} onDate={value => { editDirty.current.date = true;setDate(value); }} onTime={value => { editDirty.current.time = true;setTime(value); }}
     onSave={() => void saveEdit()} onCancel={() => { epoch.current++;setEditing(false); }} onRetry={() => void openEditor()} /></View>;
 }
 const styles = StyleSheet.create({
