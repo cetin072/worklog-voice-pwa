@@ -61,7 +61,7 @@ test('real server confirmed projection reaches actual Home Calendar entry; tenta
   const node=file.statements.find(s=>ts.isFunctionDeclaration(s)&&s.name?.text==='ScheduleRows');assert.ok(node);
   const code=ts.transpileModule(ts.createPrinter().printNode(ts.EmitHint.Unspecified,node,file),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
   const React={createElement:(type,props,...children)=>({type,props:{...props,children}})};
-  const rows=new Function('React','styles','formatSchedule','ScheduleReminderLabel','CalendarExportPreview',code+';return ScheduleRows;')(React,{},()=>'', 'ScheduleReminderLabel','CalendarExportPreview');
+  const rows=new Function('React','styles','formatSchedule','ScheduleReminderLabel','CalendarExportPreview','View','Text',code+';return ScheduleRows;')(React,{},()=>'', 'ScheduleReminderLabel','CalendarExportPreview','View','Text');
   const all=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(all):[n,...all(n.props.children)];
   const tree=rows({schedules:brief.schedules.today,empty:'none',onReminder(){}});
   const entries=all(tree).filter(n=>n.type==='CalendarExportPreview');
