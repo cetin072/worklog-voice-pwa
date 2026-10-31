@@ -28,9 +28,7 @@ function seoulDateKey(value) {
 }
 
 function toBriefingTask(row = {}) {
-  // The deployed briefing RPC includes metadata; older versions do not project
-  // due_has_time separately. Preserve its explicit-time flag instead of dropping
-  // a known time and forcing the mobile editor to fetch it again.
+  // Older RPC versions expose the explicit-time flag only in metadata.
   const hasTime = typeof row.due_has_time === "boolean" ? row.due_has_time : row.metadata?.dueTimeExplicit;
   return Object.freeze({
     pageId: text(row.id, 200),
