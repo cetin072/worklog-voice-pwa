@@ -75,6 +75,10 @@ export default function CaptureScreen() {
     catch { if (current === epoch.current) setError('취소 또는 알림 정리를 마치지 못했습니다. 다시 시도해주세요.'); }
     finally { if (current === epoch.current) setBusy(false); }
   }
+  async function leave(manual = false) {
+    if (visible && !visible.saved) await captureInbox.put({ ...visible, paused: true });
+    router.replace(manual ? '/capture-manual' : '/');
+  }
   const Button = ({ label, action }: { label: string; action(): void }) => <Pressable accessibilityRole="button" disabled={busy} onPress={action} style={styles.button}><Text style={styles.buttonText}>{label}</Text></Pressable>;
   return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><ScrollView contentContainerStyle={styles.content}>
     <Text accessibilityRole="header" style={styles.heading}>캡처에서 일정 등록</Text>
@@ -86,8 +90,8 @@ export default function CaptureScreen() {
         {visible.reminderWarning ? <Text>{visible.reminderWarning}</Text> : null}
         <Button label="수정" action={() => void openEditor()} /><Button label="실행 취소" action={() => void undo()} /></> : null}
     </View> : null}
-    {error ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{error}</Text><Button label="다시 시도" action={() => void receive()} /><Button label="직접 입력" action={() => router.replace('/')} /></View> : null}
-    <Button label="업무수첩으로" action={() => router.replace('/')} />
+    {error ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{error}</Text><Button label="다시 시도" action={() => void receive()} /><Button label="직접 입력" action={() => void leave(true)} /></View> : null}
+    <Button label="업무수첩으로" action={() => void leave()} />
   </ScrollView><WorkRecordEditSheet visible={editing} title={title} date={date} time={time} loading={editLoading} saving={busy} ready={editReady}
     statusText={editError} statusTone={editError ? 'error' : 'neutral'} onTitle={setTitle} onDate={setDate} onTime={setTime}
     onSave={() => void saveEdit()} onCancel={() => { epoch.current++;setEditing(false); }} onRetry={() => void openEditor()} /></View>;

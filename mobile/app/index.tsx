@@ -319,12 +319,12 @@ function HomeHeader({ onOpenRecordSearch, onOpenSettings }: { onOpenRecordSearch
   </View>;
 }
 
-export default function HomeScreen() {
+export default function HomeScreen({ initialScreen = 'home' }: { initialScreen?: 'home' | 'input' } = {}) {
   const { session } = usePlatform();
-  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} key={session?.user.id || 'signed-out'} />;
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} initialScreen={initialScreen} key={session?.user.id || 'signed-out'} />;
 }
 
-function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
+function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { androidTouchSmoke?: boolean; initialScreen?: 'home' | 'input' }) {
   const platform = usePlatform();
   const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
   const phase = platform.phase;
@@ -347,7 +347,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') updateClock(); });
     return () => { clearInterval(timer); subscription.remove(); };
   }, []);
-  const [screen, applyScreen] = useState<AppScreen>('home');
+  const [screen, applyScreen] = useState<AppScreen>(initialScreen);
   const quickVoiceNavigation = useRef(false);
   function warnPendingVoice() {
     Alert.alert('음성 기록을 먼저 확인해주세요', '녹음을 마치고 전사문을 저장하거나 버리면 다른 화면으로 이동할 수 있습니다.');

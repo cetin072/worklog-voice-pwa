@@ -3,7 +3,7 @@ import type { CaptureDecision } from '../../../../netlify/shared/capture-schedul
 
 export type CaptureEntry = {
   hash: string; uri?: string; owner: string | null; requestId: string; recordedAt: string;
-  details?: { title: string; dueDate: string; dueTime: string }; decision?: CaptureDecision; saved?: SavedWorklog; undone?: boolean; reminderWarning?: string;
+  details?: { title: string; dueDate: string; dueTime: string }; decision?: CaptureDecision; saved?: SavedWorklog; undone?: boolean; paused?: boolean; reminderWarning?: string;
 };
 type Storage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<void> };
 /** Single serialized owner, encrypted backing store. No image bytes or full OCR in ledger. */
@@ -29,7 +29,7 @@ export function createCaptureInbox(storage: Storage) {
       await storage.setItem(key, JSON.stringify([...rows, entry])); return entry;
     }); },
     get(hash: string, owner: string | null) { return serial(async () => (await read()).find(x => x.hash === hash && x.owner === owner) || null); },
-    pending(owner: string | null) { return serial(async () => (await read()).filter(x => x.owner === owner && !x.saved && !x.undone).at(-1) || null); },
+    pending(owner: string | null) { return serial(async () => (await read()).filter(x => x.owner === owner && !x.saved && !x.undone && !x.paused).at(-1) || null); },
     put(entry: CaptureEntry) { return serial(async () => {
       const rows = await read(); const index = rows.findIndex(x => x.hash === entry.hash && x.owner === entry.owner);
       if (index < 0) throw new Error('CAPTURE_ENTRY_MISSING');

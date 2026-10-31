@@ -14,6 +14,7 @@ export function CaptureShareGate() {
   owner.current = session?.user.id || null;
   const processing = useRef(false);
   const queued = useRef(false);
+  const resume = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     let alive = true;
@@ -41,14 +42,16 @@ export function CaptureShareGate() {
         if (alive && pending) router.replace({ pathname: '/capture', params: { hash: pending.hash } });
       } catch {
         if (alive) router.replace({ pathname: '/capture', params: { error: 'receive' } });
-      } finally { processing.current = false; if (alive && queued.current) { queued.current = false; void receive(); } }
+      } finally { processing.current = false; if (queued.current && resume.current) { queued.current = false; resume.current(); } }
     }
-    void receive();
+    const run = () => { void receive(); };
+    resume.current = run;
+    run();
     const link = Linking.addEventListener('url', event => {
       try { if (new URL(event.url).hostname === 'expo-sharing') void receive(); } catch { /* Not an incoming share. */ }
     });
     const sub = AppState.addEventListener('change', value => { if (value === 'active') void receive(); });
-    return () => { alive = false; sub.remove(); link.remove(); };
+    return () => { alive = false; if (resume.current === run) resume.current = null; sub.remove(); link.remove(); };
   }, [router, session?.user.id]);
   return null;
 }
