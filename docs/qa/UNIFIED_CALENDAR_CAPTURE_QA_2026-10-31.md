@@ -35,3 +35,13 @@ Local integrated basic tests: 1008 pass; TypeScript pass. Native dependency inst
 - Home task and schedule rows use one row of visually smaller reminder/Google controls. The reminder chip shows a short status; full status remains in its accessibility label and existing reminder sheet. Visual height 32 plus vertical hit slop preserves a 44-point touch target. Duplicate title/follow-up text is hidden.
 - Settings retains short connection state/actions with details collapsed. QA package remains com.cetin072.worklog.qa, version 0.1.0 (10). Existing connected-Google UX is retained.
 - Local basic tests 1013/1013, Mobile 429/429, TypeScript passed before remote native build. Real Google write/readback and actual screenshot OCR remain device acceptance tasks. No existing Google events, account permissions or production schema are modified.
+
+## QA 11 — capture edit and photo shortcut
+
+User QA escape: the capture editor used one failure path for the server update and later alarm reservation. A committed edit could therefore show a red save failure and retain the old local receipt. Persist the successful server result first, keep alarm failure as a separate warning, and reconcile a possibly committed Schedule by an owner-guarded read without repeating its write. Actual server failures retain input and display the existing safe API reason. Existing cancelled production records are not revived or edited during verification.
+
+The right Quick Voice status orb is now a Photo shortcut using the existing gallery controller, durable inbox and capture route. The left memo/cancel and central microphone remain. Photos are disabled during voice work, picker cancellation is harmless, rapid taps use the existing lock, and account/unmount guards remain. The top orb retains voice status. The duplicate large Home gallery entry moves into this persistent dock. No new provider, native permission or dependency.
+
+Regression coverage: committed edit + alarm failure + reopen; server failure preserves the old receipt and input; success with warning closes the editor; Photo action, duplicate tap, cancellation, unmount and recording disable. Android smoke asserts the intermediate Settings state before a second back event, then opens the real picker from Photo and cancels. No timeout expansion or skipped checks.
+
+QA-only versionCode 11. Calendar runtime/provider code is unchanged. Native build/execution and exact-head artifact must pass before delivery; Google/OCR real-account acceptance is not implied by synthetic fixtures.
