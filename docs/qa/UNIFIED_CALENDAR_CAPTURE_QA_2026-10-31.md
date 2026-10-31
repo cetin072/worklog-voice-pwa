@@ -27,3 +27,11 @@ Preserve both native smoke paths: Settings Calendar connection, gallery picker/c
 ## Verification boundary
 
 Local integrated basic tests: 1008 pass; TypeScript pass. Native dependency installation uses the capture PR lockfile. CI exact-head APK/runtime evidence must be checked before delivery. Google real insert/GET/duplicate acceptance and real Korean capture OCR/date confirmation still require user device QA. No existing Google event is changed/deleted, no production DB is modified, and no long-lived Google token is stored.
+
+## QA 10 feedback completion
+
+- Google export resolves the RLS-owned work record and existing get_my_work_record_edit RPC without creating reminders or writing a Schedule. Date-only records become an all-day Google copy; undated records request a date without guessing one. Schedule-list and record-card entries resolve the same work record identity. Legacy Google schedule IDs are GET-reconciled and never duplicated or overwritten. Canonical creator/status/revision/date fields are rechecked before accepting a receipt.
+- Review capture decisions retain the useful scanned appointment line as title. The existing date-neutral save contract and existing owned edit API are reused, avoiding a new backend contract, migration or production deployment. The durable save receipt survives edit errors; retries do not insert a second record. A legacy import's unchanged placeholder title is repaired only when that import is reopened, preserving existing dates and manual titles. No bulk production repair is run.
+- Home task and schedule rows use one row of visually smaller reminder/Google controls. The reminder chip shows a short status; full status remains in its accessibility label and existing reminder sheet. Visual height 32 plus vertical hit slop preserves a 44-point touch target. Duplicate title/follow-up text is hidden.
+- Settings retains short connection state/actions with details collapsed. QA package remains com.cetin072.worklog.qa, version 0.1.0 (10). Existing connected-Google UX is retained.
+- Local basic tests 1013/1013, Mobile 429/429, TypeScript passed before remote native build. Real Google write/readback and actual screenshot OCR remain device acceptance tasks. No existing Google events, account permissions or production schema are modified.

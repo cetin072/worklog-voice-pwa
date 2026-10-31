@@ -3,7 +3,7 @@ import type { CaptureDecision } from '../../../../netlify/shared/capture-schedul
 
 export type CaptureEntry = {
   hash: string; uri?: string; owner: string | null; requestId: string; recordedAt: string;
-  details?: { title: string; dueDate: string; dueTime: string }; decision?: CaptureDecision; saved?: SavedWorklog; undone?: boolean; paused?: boolean; reminderWarning?: string;
+  details?: { title: string; dueDate: string; dueTime: string }; decision?: CaptureDecision; saved?: SavedWorklog; undone?: boolean; paused?: boolean; reminderWarning?: string; reviewContentApplied?: boolean;
 };
 type Storage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<void> };
 /** Single serialized owner, encrypted backing store. No image bytes or full OCR in ledger. */

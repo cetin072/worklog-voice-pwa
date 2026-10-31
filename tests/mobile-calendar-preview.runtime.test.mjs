@@ -5,6 +5,7 @@ import { createRequire, register } from 'node:module';
 register('./helpers/mobile-ts-loader.mjs', import.meta.url);
 const {createCalendarConnection}=await import('../mobile/src/features/calendar/calendar-connection.ts');
 const sourceModule=await import('../mobile/src/features/calendar/calendar-source.ts');
+const entryModule=await import('../mobile/src/features/calendar/calendar-record-source.ts');
 const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
 
 test('settings owns OAuth; disconnected schedules are hidden; mounted export reads shared connection',async(t)=>{
@@ -14,9 +15,12 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   const row={id:'22222222-2222-4222-8222-222222222222',workspace_id:'workspace',created_by_user_id:'owner',title:'합성 일정',status:'confirmed',starts_at:'2026-11-02T10:00:00+09:00',ends_at:null,all_day:false,timezone:'Asia/Seoul',updated_at:'2026-10-31T01:00:00Z'};
   let connects=0,posts=0,stored=null,finish;
   const target={accountId:'google-id',calendarId:'primary'};
-  const service=createCalendarConnection({authorize:async()=>{connects++;await new Promise(r=>finish=r);return {target,email:'qa@example.invalid',expiresAt:Date.now()+60000,adapter:{target,get:async()=>stored,insert:async(id,draft)=>{posts++;stored={id,draft,status:'confirmed',sourceId:draft.scheduleId};return stored;}}};}});
+  const service=createCalendarConnection({authorize:async()=>{connects++;await new Promise(r=>finish=r);return {target,email:'qa@example.invalid',expiresAt:Date.now()+60000,adapter:{target,get:async id=>stored?.id===id?stored:null,insert:async(id,draft)=>{posts++;stored={id,draft,status:'confirmed',sourceId:draft.scheduleId};return stored;}}};}});
+  const record={...row,id:'33333333-3333-4333-8333-333333333333',status:'in_progress',due_at:row.starts_at,metadata:{dueTimeExplicit:true}};
   const query={select:()=>query,eq:()=>query,single:async()=>({data:row})};
-  const platform={config:{},session:{user:{id:'owner'}},client:{auth:{getUser:async()=>({data:{user:{id:'owner'}}})},from:()=>query}};
+  const recordQuery={select:()=>recordQuery,eq:()=>recordQuery,single:async()=>({data:record})};
+  query.or=async()=>({data:[],count:0});
+  const platform={config:{},session:{user:{id:'owner'}},client:{auth:{getUser:async()=>({data:{user:{id:'owner'}}})},from:table=>table==='work_records'?recordQuery:query,rpc:async()=>({data:[{record_id:record.id,title_value:record.title,due_at_value:record.due_at,due_has_time:true}]})}};
   const all=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(all):[n,...all(n.props.children)];
   const text=n=>all(n).filter(n=>n.type==='Text').flatMap(n=>n.props.children).filter(v=>typeof v==='string').join(' ');
   function component(path, name, props={}) {
@@ -26,7 +30,7 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
       useRef:init=>{const i=cursor++;if(!(i in slots))slots[i]={current:init};return slots[i];},useEffect:()=>{}};React.default=React;
     const native=Object.fromEntries(['Image','Modal','Pressable','ScrollView','Text','View'].map(k=>[k,k]));native.StyleSheet={create:v=>v};
     const exp={};const code=ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
-    new Function('require','exports',code)(mod=>mod==='react'?React:mod==='react/jsx-runtime'?{}:mod==='react-native'?native:mod.includes('home-reminder-status')?{useCalendarScheduleId:()=>row.id}:mod.includes('use-calendar-connection')?{useCalendarConnection:()=>service}:mod.includes('calendar-end-picker')?{CalendarEndPicker:'CalendarEndPicker',calendarDateLabel:()=> '2026년 11월 2일 오전 10시'}:mod.includes('platform-provider')?{usePlatform:()=>platform}:mod.includes('snapshot')?{reminderSessionEpoch:{capture:()=>()=>true}}:mod.includes('calendar-source')?sourceModule:{CALENDAR_PERMISSION_NOTICE:'선택한 일정 한 건'},exp);
+    new Function('require','exports',code)(mod=>mod==='react'?React:mod==='react/jsx-runtime'?{}:mod==='react-native'?native:mod.includes('home-reminder-status')?{useCalendarScheduleId:()=>row.id}:mod.includes('use-calendar-connection')?{useCalendarConnection:()=>service}:mod.includes('calendar-end-picker')?{CalendarEndPicker:'CalendarEndPicker',calendarDateLabel:()=> '2026년 11월 2일 오전 10시'}:mod.includes('platform-provider')?{usePlatform:()=>platform}:mod.includes('snapshot')?{reminderSessionEpoch:{capture:()=>()=>true}}:mod.includes('calendar-record-source')?entryModule:mod.includes('calendar-source')?sourceModule:{CALENDAR_PERMISSION_NOTICE:'선택한 일정 한 건'},exp);
     return ()=>{cursor=0;return exp[name](props);};
   }
   const render=component('mobile/src/features/calendar/calendar-export-preview.tsx','CalendarExportPreview',{scheduleId:row.id,title:'snapshot'});
@@ -52,6 +56,11 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   button(render,'확인한 일정').props.onPress();await flush();assert.equal(posts,1);assert.match(text(render()),/이미 등록/);
   assert.equal(all(render()).some(n=>n.type==='TextInput'),false);
   button(render,'캘린더 추가 닫기').props.onPress();assert.equal(service.info().email,'qa@example.invalid');
+  const task=component('mobile/src/features/calendar/calendar-export-preview.tsx','CalendarExportPreview',{recordId:record.id,title:record.title});
+  button(task,'Google 캘린더에 보내기').props.onPress();await flush();
+  assert.equal(button(task,'확인한 일정').props.disabled,false);
+  button(task,'확인한 일정').props.onPress();await flush();assert.equal(posts,2);assert.match(text(task()),/등록 완료/);
+  button(task,'캘린더 추가 닫기').props.onPress();
   button(settings,'연결 해제').props.onPress();assert.equal(service.info(),null);assert.equal(render(),null);
   process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT='production';assert.equal(settings(),null);assert.equal(render(),null);
 });

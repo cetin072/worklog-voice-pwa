@@ -14,7 +14,7 @@ export type CalendarExportResult = { state: 'confirmed'; eventId: string; alread
   | { state: 'unknown' | 'blocked' | 'cancelled' | 'expired' | 'denied' | 'offline'; message: string };
 export const CALENDAR_APPROVAL_MESSAGE = 'Google 캘린더 연결 승인 대기 중입니다. 아직 등록하지 않았습니다. Google 로그인만으로는 캘린더 권한이 부여되지 않습니다.';
 
-function providerFailure(error: unknown): CalendarExportResult | null {
+export function providerFailure(error: unknown): CalendarExportResult | null {
   const code = (error as Error)?.message;
   if (code === 'CALENDAR_EXPIRED') return { state: 'expired', message: 'Google 연결이 만료됐습니다. 다시 연결해주세요.' };
   if (code === 'CALENDAR_DENIED') return { state: 'denied', message: '캘린더 권한이 거부되거나 철회됐습니다. 권한을 확인해주세요.' };
@@ -58,13 +58,7 @@ export function createCalendarExporter(adapter: CalendarExportAdapter | null) {
     const id = calendarEventId(draft.scheduleId);
     if (pending.has(id)) return pending.get(id)!;
     const run = async (): Promise<CalendarExportResult> => {
-      const matches = (event: CalendarReceipt | null) => {
-        const remote = event?.draft;
-        const sameTime = (a: string, b: string) => draft.allDay ? a === b : Date.parse(a) === Date.parse(b);
-        return event?.id === id && event.status === 'confirmed' && event.sourceId === draft.scheduleId
-          && !!remote && remote.title === draft.title.trim() && remote.allDay === draft.allDay
-          && (draft.allDay || remote.timeZone === draft.timeZone) && sameTime(remote.start, draft.start) && sameTime(remote.end, draft.end);
-      };
+      const matches = (event: CalendarReceipt | null) => calendarReceiptMatches(event, draft, id);
       try {
         const existing = await adapter.get(id);
         if (!isCurrent()) return { state: 'unknown', message: '계정 또는 일정이 변경되어 등록 결과를 표시하지 않았습니다.' };
@@ -95,4 +89,12 @@ export function createCalendarExporter(adapter: CalendarExportAdapter | null) {
     pending.set(id, promise);
     return promise;
   };
+}
+
+export function calendarReceiptMatches(event: CalendarReceipt | null, draft: CalendarDraft, id: string, sourceId = draft.scheduleId) {
+        const remote = event?.draft;
+        const sameTime = (a: string, b: string) => draft.allDay ? a === b : Date.parse(a) === Date.parse(b);
+        return event?.id === id && event.status === 'confirmed' && event.sourceId === sourceId
+          && !!remote && remote.title === draft.title.trim() && remote.allDay === draft.allDay
+          && (draft.allDay || remote.timeZone === draft.timeZone) && sameTime(remote.start, draft.start) && sameTime(remote.end, draft.end);
 }

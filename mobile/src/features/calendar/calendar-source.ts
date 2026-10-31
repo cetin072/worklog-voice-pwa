@@ -1,7 +1,7 @@
 import type { PlatformSupabaseClient } from '../../platform/supabase';
 import { calendarEventId, validateCalendarDraft, type CalendarDraft } from './calendar-export';
 
-export type CalendarSource = CalendarDraft & { ownerId: string; workspaceId: string; revision: string };
+export type CalendarSource = CalendarDraft & { ownerId: string; workspaceId: string; revision: string; legacyScheduleId?: string };
 
 function localDate(instant: string, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(instant));
@@ -14,7 +14,7 @@ export async function readCalendarSource(client: PlatformSupabaseClient, id: str
   const before = await client.auth.getUser();
   if (!current() || before.error || before.data.user?.id !== ownerId) throw Error('SOURCE_OWNER_CHANGED');
   const { data: row, error } = await client.from('schedules')
-    .select('id,workspace_id,created_by_user_id,title,status,starts_at,ends_at,all_day,timezone,updated_at')
+    .select('id,workspace_id,created_by_user_id,title,status,starts_at,ends_at,all_day,timezone,updated_at,metadata')
     .eq('id', id).eq('created_by_user_id', ownerId).single();
   const after = await client.auth.getUser();
   if (!current() || after.error || after.data.user?.id !== ownerId) throw Error('SOURCE_OWNER_CHANGED');
@@ -22,6 +22,12 @@ export async function readCalendarSource(client: PlatformSupabaseClient, id: str
     || row.status !== 'confirmed' || !row.updated_at || !Number.isFinite(Date.parse(row.updated_at))
     || typeof row.title !== 'string' || !row.title.trim() || typeof row.all_day !== 'boolean'
     || !Number.isFinite(Date.parse(row.starts_at))) throw Error('SOURCE_UNAVAILABLE');
+  const recordId = row.metadata?.workRecordId || row.metadata?.reminderWorkRecordId;
+  if (recordId) {
+    if (row.metadata?.workRecordId && row.metadata?.reminderWorkRecordId && row.metadata.workRecordId !== row.metadata.reminderWorkRecordId) throw Error('SOURCE_UNAVAILABLE');
+    const { readRecordCalendarSource } = await import('./calendar-record-source');
+    return readRecordCalendarSource(client, recordId, ownerId, current);
+  }
   const timeZone = row.timezone;
   new Intl.DateTimeFormat('en', { timeZone }).format();
   if (!timeZone) throw Error('SOURCE_UNAVAILABLE');

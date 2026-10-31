@@ -1,4 +1,4 @@
-import { createCalendarExporter, type CalendarExportAdapter, type CalendarExportResult, type CalendarTarget } from './calendar-export';
+import { providerFailure, calendarReceiptMatches, calendarEventId, createCalendarExporter, type CalendarExportAdapter, type CalendarExportResult, type CalendarTarget } from './calendar-export';
 import { confirmedCalendarDraft, sameCalendarSource, type CalendarSource } from './calendar-source';
 
 export type CalendarConnection = {
@@ -59,9 +59,19 @@ export function createCalendarConnection(deps: {
           const latest = await read();
           if (!isCurrent()) return { state: 'cancelled', message: '계정이 변경되었거나 등록을 취소했습니다.' };
           if (!sameCalendarSource(source, latest)) return { state: 'blocked', message: '원본 일정이 변경되었습니다. 닫고 다시 열어 현재 값을 확인해주세요.' };
+          if (source.legacyScheduleId && source.legacyScheduleId !== source.scheduleId) {
+            const legacyId = calendarEventId(source.legacyScheduleId);
+            const legacy = await active.adapter.get(legacyId);
+            if (!isCurrent()) return { state: 'cancelled', message: '연결 또는 일정이 변경되었습니다.' };
+            if (legacy) {
+              if (calendarReceiptMatches(legacy, confirmedCalendarDraft(latest, end), legacyId, source.legacyScheduleId)
+                && sameCalendarSource(source, await read()) && isCurrent()) return { state: 'confirmed', eventId: legacyId, alreadyExists: true };
+              return { state: 'blocked', message: '이전 Google 등록 내용이 다릅니다. 중복 추가하거나 수정하지 않았습니다.' };
+            }
+          }
           return await send(confirmedCalendarDraft(latest, end), active.target, isCurrent,
             async () => sameCalendarSource(source, await read()));
-        } catch { return { state: 'blocked', message: '최신 원본·소유권·종료 시각을 확인하지 못했습니다. 연결과 일정을 다시 확인해주세요.' }; }
+        } catch (error) { return providerFailure(error) || { state: 'blocked', message: '최신 원본·소유권·종료 시각을 확인하지 못했습니다. 연결과 일정을 다시 확인해주세요.' }; }
       };
       const work = run().finally(() => pending.delete(key)); pending.set(key, work); return work;
     },

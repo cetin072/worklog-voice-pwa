@@ -98,7 +98,7 @@ export default function CaptureScreen() {
     {!owner ? <View style={styles.card}><Text>이미지는 이 기기에 보관했습니다. 로그인하면 자동으로 저장합니다.</Text><Button label="로그인하기" action={() => router.replace('/')} /></View> : null}
     {visible?.saved ? <View style={styles.card}>
       <Text accessibilityLiveRegion="polite" style={styles.title}>{visible.undone ? '등록을 취소했습니다.' : visible.saved.scheduleCreated ? '일정을 저장했습니다.' : '확인 필요 기록으로 저장했습니다.'}</Text>
-      {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{visible.details?.dueDate || visible.decision?.date || '날짜 확인 필요'} {visible.details?.dueTime || visible.decision?.time || ''}</Text><Text>{visible.decision?.description}</Text>
+      {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{visible.details?.dueDate || visible.decision?.date || '날짜 확인 필요'} {visible.details?.dueTime || visible.decision?.time || ''}</Text>{visible.decision?.description && visible.decision.description !== (visible.details?.title || visible.decision.title) ? <Text>{visible.decision.description}</Text> : null}
         {!visible.saved.scheduleCreated ? <Text>날짜·시간을 확정하지 못해 일정은 만들지 않았습니다. 홈의 ‘기한 없음’에서 확인하거나 여기서 날짜·시간을 수정해주세요.</Text> : null}
         {visible.reminderWarning ? <Text>{visible.reminderWarning}</Text> : null}
         <Button label="수정" action={() => void openEditor()} /><Button label="실행 취소" action={() => void undo()} /></> : null}
