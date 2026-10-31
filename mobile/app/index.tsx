@@ -1,4 +1,6 @@
 import { CalendarExportPreview } from '@/src/features/calendar/calendar-export-preview';
+import { CaptureImportButton } from '@/src/features/capture/capture-import-button';
+import { captureChanges } from '@/src/features/capture/capture-runtime';
 import { homeOverview } from '@/src/features/home/home-overview';
 import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
 import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
@@ -319,12 +321,12 @@ function HomeHeader({ onOpenRecordSearch, onOpenSettings }: { onOpenRecordSearch
   </View>;
 }
 
-export default function HomeScreen() {
+export default function HomeScreen({ initialScreen = 'home' }: { initialScreen?: 'home' | 'input' } = {}) {
   const { session } = usePlatform();
-  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} key={session?.user.id || 'signed-out'} />;
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} initialScreen={initialScreen} key={session?.user.id || 'signed-out'} />;
 }
 
-function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
+function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { androidTouchSmoke?: boolean; initialScreen?: 'home' | 'input' }) {
   const platform = usePlatform();
   const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
   const phase = platform.phase;
@@ -347,7 +349,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') updateClock(); });
     return () => { clearInterval(timer); subscription.remove(); };
   }, []);
-  const [screen, applyScreen] = useState<AppScreen>('home');
+  const [screen, applyScreen] = useState<AppScreen>(initialScreen);
   const quickVoiceNavigation = useRef(false);
   function warnPendingVoice() {
     Alert.alert('음성 기록을 먼저 확인해주세요', '녹음을 마치고 전사문을 저장하거나 버리면 다른 화면으로 이동할 수 있습니다.');
@@ -406,6 +408,20 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
+  useEffect(() => {
+    if (!session || !client) return;
+    return captureChanges.subscribe(change => {
+      if (change.owner !== session.user.id) return;
+      if (!change.cancelled) {
+        const today = seoulTodayKey();
+        const bucket: BriefingBucket = !change.dueDate ? 'undated' : change.dueDate === today ? 'today' : change.dueDate < today ? 'overdue' : 'upcoming';
+        setTaskFilter(bucket);
+        setExpandedBuckets(current => ({ ...current, [bucket]: true }));
+        setUpcomingExpanded(true);
+      }
+      void refreshBriefing();
+    }, session.user.id);
+  }, [client, session?.user.id, session?.access_token]);
   useEffect(() => {
     reminderSessionEpoch.invalidate();
     reminderSyncEpoch.invalidate();
@@ -1107,6 +1123,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
       </View>
 
       <View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무 · 메모 · 일정</Text></Pressable></View>
+      <CaptureImportButton />
 
       {briefing?.scheduleEnabled && !overview.empty ? <View style={styles.card}>
         <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>📅 일정</Text><Text style={styles.sectionTitle}>오늘 일정</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable></View></View>
