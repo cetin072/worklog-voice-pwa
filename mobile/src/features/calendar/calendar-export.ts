@@ -3,7 +3,7 @@ export type CalendarDraft = {
   scheduleId: string; title: string; status: string; timeZone: string;
   allDay: boolean; start: string; end: string;
 };
-export type CalendarReceipt = { id: string; status: string; sourceId: string };
+export type CalendarReceipt = { id: string; status: string; sourceId: string; draft?: CalendarDraft };
 export type CalendarTarget = { accountId: string; calendarId: string };
 export type CalendarExportAdapter = {
   target: CalendarTarget;
@@ -11,7 +11,7 @@ export type CalendarExportAdapter = {
   insert(id: string, draft: CalendarDraft): Promise<CalendarReceipt>;
 };
 export type CalendarExportResult = { state: 'confirmed'; eventId: string; alreadyExists: boolean }
-  | { state: 'unknown' | 'blocked' | 'cancelled'; message: string };
+  | { state: 'unknown' | 'blocked' | 'cancelled' | 'expired' | 'denied' | 'offline'; message: string };
 export const CALENDAR_APPROVAL_MESSAGE = 'Google 캘린더 연결 승인 대기 중입니다. 아직 등록하지 않았습니다. Google 로그인만으로는 캘린더 권한이 부여되지 않습니다.';
 
 function validDate(value: string) {
@@ -41,7 +41,8 @@ export function calendarEventId(scheduleId: string) {
 }
 export function createCalendarExporter(adapter: CalendarExportAdapter | null) {
   const pending = new Map<string, Promise<CalendarExportResult>>();
-  return function exportOne(draft: CalendarDraft, confirmedTarget: CalendarTarget | null, isCurrent = () => true): Promise<CalendarExportResult> {
+  const observed = new Set<string>();
+  return function exportOne(draft: CalendarDraft, confirmedTarget: CalendarTarget | null, isCurrent = () => true, verifySource = async () => true): Promise<CalendarExportResult> {
     if (!confirmedTarget || !isCurrent()) return Promise.resolve({ state: 'cancelled', message: '등록을 취소했습니다.' });
     if (!adapter) return Promise.resolve({ state: 'blocked', message: CALENDAR_APPROVAL_MESSAGE });
     if (adapter.target.accountId !== confirmedTarget.accountId || adapter.target.calendarId !== confirmedTarget.calendarId) return Promise.resolve({ state: 'blocked', message: '선택한 계정을 다시 확인해주세요.' });
@@ -49,18 +50,36 @@ export function createCalendarExporter(adapter: CalendarExportAdapter | null) {
     const id = calendarEventId(draft.scheduleId);
     if (pending.has(id)) return pending.get(id)!;
     const run = async (): Promise<CalendarExportResult> => {
-      const matches = (event: CalendarReceipt | null) => event?.id === id && event.status === 'confirmed' && event.sourceId === draft.scheduleId;
+      const matches = (event: CalendarReceipt | null) => {
+        const remote = event?.draft;
+        const sameTime = (a: string, b: string) => draft.allDay ? a === b : Date.parse(a) === Date.parse(b);
+        return event?.id === id && event.status === 'confirmed' && event.sourceId === draft.scheduleId
+          && !!remote && remote.title === draft.title.trim() && remote.allDay === draft.allDay
+          && (draft.allDay || remote.timeZone === draft.timeZone) && sameTime(remote.start, draft.start) && sameTime(remote.end, draft.end);
+      };
       try {
         const existing = await adapter.get(id);
         if (!isCurrent()) return { state: 'unknown', message: '계정 또는 일정이 변경되어 등록 결과를 표시하지 않았습니다.' };
-        if (existing) return matches(existing)
-          ? { state: 'confirmed', eventId: id, alreadyExists: true }
-          : { state: 'blocked', message: '기존 등록이 삭제됐거나 일치하지 않습니다. Google 캘린더에서 확인해주세요.' };
+        if (!await verifySource() || !isCurrent()) return { state: 'blocked', message: '원본 일정이 변경되었습니다. 다시 열어 확인해주세요.' };
+        if (existing) {
+          if (!matches(existing)) return { state: 'blocked', message: '기존 등록이 삭제됐거나 일치하지 않습니다. Google 캘린더에서 확인해주세요.' };
+          observed.add(id);
+          return { state: 'confirmed', eventId: id, alreadyExists: true };
+        }
+        if (observed.has(id)) return { state: 'blocked', message: '전에 확인한 Google 일정이 보이지 않습니다. 원격 삭제 또는 접근 상태를 확인해주세요. 재생성하지 않았습니다.' };
         // Network failure may happen AFTER the server committed. Always read the same ID.
         try { await adapter.insert(id, draft); } catch { /* reconcile below; never blind retry */ }
         const saved = await adapter.get(id);
-        if (isCurrent() && matches(saved)) return { state: 'confirmed', eventId: id, alreadyExists: false };
-      } catch { /* no raw provider errors/tokens in UI */ }
+        if (isCurrent() && matches(saved) && await verifySource() && isCurrent()) {
+          observed.add(id);
+          return { state: 'confirmed', eventId: id, alreadyExists: false };
+        }
+      } catch (error) {
+        // Only local stable codes, never raw provider responses or callback URLs.
+        if ((error as Error).message === 'CALENDAR_EXPIRED') return { state: 'expired', message: 'Google 연결이 만료됐습니다. 다시 연결해주세요.' };
+        if ((error as Error).message === 'CALENDAR_DENIED') return { state: 'denied', message: '캘린더 권한이 거부되거나 철회됐습니다. 권한을 확인해주세요.' };
+        if ((error as Error).message === 'CALENDAR_OFFLINE') return { state: 'offline', message: '연결되지 않아 결과를 확인하지 못했습니다. 온라인에서 같은 일정을 다시 확인해주세요.' };
+      }
       return { state: 'unknown', message: '등록 결과 미확인. 연결을 확인하고 다시 확인해주세요. 같은 일정은 같은 ID로 확인합니다.' };
     };
     const promise = run().finally(() => pending.delete(id));

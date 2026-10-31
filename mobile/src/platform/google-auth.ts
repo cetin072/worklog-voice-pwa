@@ -16,6 +16,9 @@ let callbackInFlight: { url: string; completion: Promise<boolean> } | null = nul
 
 function parseGoogleAuthCallback(url: string) {
   const parsed = new URL(url);
+  // Calendar uses a separate ephemeral PKCE client. Never feed its callback to
+  // the durable app-login client, including callbacks received after a restart.
+  if (parsed.searchParams.get('purpose') === 'calendar') return null;
   if (parsed.protocol !== new URL(MOBILE_AUTH_CALLBACK_URL).protocol || parsed.hostname !== 'google-auth') return null;
 
   const query = parsed.searchParams;

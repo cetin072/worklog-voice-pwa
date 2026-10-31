@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
+import { resetCalendarConnection } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
 import { AppState } from 'react-native';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
@@ -111,6 +112,9 @@ export function PlatformProvider({ children }: PropsWithChildren) {
   const [rememberedEmail, setRememberedEmail] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Calendar grants never survive an app account transition (including logout).
+  useEffect(() => { resetCalendarConnection(); }, [session?.user.id]);
+
   useEffect(() => {
     let alive = true;
     let activeClient: PlatformSupabaseClient | null = null;
@@ -163,6 +167,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
         const { data: authData } = nextClient.auth.onAuthStateChange((_event, nextSession) => {
           if (!alive) return;
+          if (_event === 'SIGNED_OUT') resetCalendarConnection();
           setSession(nextSession);
           if (nextSession?.user.email) {
             setRememberedEmail(nextSession.user.email);
@@ -243,6 +248,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
       },
       signOut: async () => {
         if (!client) return;
+        resetCalendarConnection();
         setAuthError('');
         const { error: signOutError } = await client.auth.signOut();
         if (signOutError) throw signOutError;
