@@ -131,7 +131,12 @@ export async function editCapture(client: PlatformSupabaseClient, entry: Capture
     // Confirmation may already have committed a Schedule before Android failed.
     // Re-read only; do not repeat the write or claim a reservation succeeded.
     if (!schedule && guard()) {
-      try { schedule = await findWorklogReminder(client, { recordId, title: input.title }, guard); }
+      try {
+        const candidate = await findWorklogReminder(client, { recordId, title: input.title }, guard);
+        const expected = Date.parse(`${input.dueDate}T${input.dueTime}:00+09:00`);
+        if (candidate?.status === 'confirmed' && candidate.title === input.title && Number.isFinite(expected)
+          && !candidate.allDay && Date.parse(candidate.startsAt || '') === expected) schedule = candidate;
+      }
       catch { /* Unknown schedule state stays unconfirmed. */ }
     }
   }
