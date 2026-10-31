@@ -14,6 +14,14 @@ export type CalendarExportResult = { state: 'confirmed'; eventId: string; alread
   | { state: 'unknown' | 'blocked' | 'cancelled' | 'expired' | 'denied' | 'offline'; message: string };
 export const CALENDAR_APPROVAL_MESSAGE = 'Google 캘린더 연결 승인 대기 중입니다. 아직 등록하지 않았습니다. Google 로그인만으로는 캘린더 권한이 부여되지 않습니다.';
 
+function providerFailure(error: unknown): CalendarExportResult | null {
+  const code = (error as Error)?.message;
+  if (code === 'CALENDAR_EXPIRED') return { state: 'expired', message: 'Google 연결이 만료됐습니다. 다시 연결해주세요.' };
+  if (code === 'CALENDAR_DENIED') return { state: 'denied', message: '캘린더 권한이 거부되거나 철회됐습니다. 권한을 확인해주세요.' };
+  if (code === 'CALENDAR_OFFLINE') return { state: 'offline', message: '연결되지 않아 결과를 확인하지 못했습니다. 온라인에서 같은 일정을 다시 확인해주세요.' };
+  return null;
+}
+
 function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))
     && new Date(value).toISOString().slice(0, 10) === value;
@@ -68,17 +76,18 @@ export function createCalendarExporter(adapter: CalendarExportAdapter | null) {
         }
         if (observed.has(id)) return { state: 'blocked', message: '전에 확인한 Google 일정이 보이지 않습니다. 원격 삭제 또는 접근 상태를 확인해주세요. 재생성하지 않았습니다.' };
         // Network failure may happen AFTER the server committed. Always read the same ID.
-        try { await adapter.insert(id, draft); } catch { /* reconcile below; never blind retry */ }
+        let insertError: unknown;
+        try { await adapter.insert(id, draft); } catch (error) { insertError = error; /* reconcile below; never blind retry */ }
         const saved = await adapter.get(id);
         if (isCurrent() && matches(saved) && await verifySource() && isCurrent()) {
           observed.add(id);
           return { state: 'confirmed', eventId: id, alreadyExists: false };
         }
+        if (saved && !matches(saved)) return { state: 'blocked', message: 'Google 일정이 삭제됐거나 확인 내용과 다릅니다. 자동 수정하지 않았습니다.' };
+        if (!saved && insertError) { const failure = providerFailure(insertError); if (failure) return failure; }
       } catch (error) {
         // Only local stable codes, never raw provider responses or callback URLs.
-        if ((error as Error).message === 'CALENDAR_EXPIRED') return { state: 'expired', message: 'Google 연결이 만료됐습니다. 다시 연결해주세요.' };
-        if ((error as Error).message === 'CALENDAR_DENIED') return { state: 'denied', message: '캘린더 권한이 거부되거나 철회됐습니다. 권한을 확인해주세요.' };
-        if ((error as Error).message === 'CALENDAR_OFFLINE') return { state: 'offline', message: '연결되지 않아 결과를 확인하지 못했습니다. 온라인에서 같은 일정을 다시 확인해주세요.' };
+        const failure = providerFailure(error); if (failure) return failure;
       }
       return { state: 'unknown', message: '등록 결과 미확인. 연결을 확인하고 다시 확인해주세요. 같은 일정은 같은 ID로 확인합니다.' };
     };

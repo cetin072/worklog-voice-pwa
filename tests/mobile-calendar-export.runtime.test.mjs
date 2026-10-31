@@ -88,3 +88,12 @@ test('409 after lost creation response rechecks exact payload; changed remote fi
   assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
   stored=null;assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
 });
+
+test('POST-only permission denial or expiry is distinguished after same-ID reconciliation',async()=>{
+  for(const [status,state] of [[401,'expired'],[403,'denied']]){
+    const methods=[];
+    const api=createGoogleCalendarAdapter(target,'synthetic',async(_url,options)=>{methods.push(options.method);return new Response('',{status:options.method==='POST'?status:404});});
+    assert.equal((await createCalendarExporter(api)(draft,target)).state,state);
+    assert.deepEqual(methods,['GET','POST','GET']);
+  }
+});
