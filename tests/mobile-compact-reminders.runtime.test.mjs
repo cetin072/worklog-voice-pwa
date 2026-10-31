@@ -43,7 +43,7 @@ test('compact schedule and task buttons share words, wrapping and >=44 point tar
   const upper=ScheduleReminderLabel({schedule:{scheduleId:sid,title:'Synthetic'},onPress:()=>calls++});
   const schedule=upper.type(upper.props);
   assert.deepEqual(record.children,schedule.children);
-  assert.equal(record.props.style.minHeight,44);assert.equal(record.props.style.maxWidth,'100%');
+  assert.equal(record.props.style.minHeight,32);assert.ok(record.props.style.minHeight+record.props.hitSlop.top+record.props.hitSlop.bottom>=44);assert.equal(record.props.style.maxWidth,'100%');
   assert.equal(record.children[0].props.numberOfLines,undefined);
   assert.ok(record.props.accessibilityLabel.includes(current));record.props.onPress();
  }

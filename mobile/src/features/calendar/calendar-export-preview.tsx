@@ -4,15 +4,15 @@ import { usePlatform } from '../../providers/platform-provider';
 import { reminderSessionEpoch } from '../schedule/schedule-reminder-snapshot';
 import { useCalendarConnection } from './use-calendar-connection';
 import { CalendarEndPicker, calendarDateLabel } from './calendar-end-picker';
-import { calendarEndIssue, calendarExportEnd, readCalendarSource, type CalendarSource } from './calendar-source';
-import { useCalendarScheduleId } from '../home/home-reminder-status';
+import { calendarEndIssue, calendarExportEnd, type CalendarSource } from './calendar-source';
+import { readCalendarEntry } from './calendar-record-source';
 
 /** QA-only optional output. Opening or connecting never writes an event. */
 export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, title }: {
   scheduleId?: string; recordId?: string; title: string; startsAt?: string; allDay?: boolean; dateKey?: string;
 }) {
-  const linkedScheduleId = useCalendarScheduleId(recordId);
-  const scheduleId = directScheduleId || linkedScheduleId;
+  const scheduleId = directScheduleId;
+  const target = { recordId, scheduleId };
   const platform = usePlatform();
   const [visible, setVisible] = useState(false);
   const [source, setSource] = useState<CalendarSource | null>(null);
@@ -38,14 +38,14 @@ export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, 
   async function open() {
     generation.current++; setVisible(true); setSource(null); setEnd(''); setAdjustTime(false); setMessage('서버의 최신 원본을 확인하는 중…');
     const { userId, current } = context();
-    if (!platform.client || !userId || !scheduleId) { setMessage('일정과 로그인 상태를 다시 확인해주세요.'); return; }
+    if (!platform.client || !userId || (!scheduleId && !recordId)) { setMessage('일정과 로그인 상태를 다시 확인해주세요.'); return; }
     try {
-      const latest = await readCalendarSource(platform.client, scheduleId, userId, current);
+      const latest = await readCalendarEntry(platform.client, target, userId, current);
       if (!current()) return;
       const exportEnd = calendarExportEnd(latest);
       setSource(latest); setEnd(exportEnd); setAdjustTime(!!calendarEndIssue(latest, exportEnd));
       setMessage('아직 등록하지 않았습니다.');
-    } catch { if (current()) setMessage('온라인에서 확정된 원본 일정을 조회하지 못했습니다. 닫고 다시 시도해주세요.'); }
+    } catch (error) { if (current()) setMessage((error as Error).message === 'CALENDAR_DATE_REQUIRED' ? '업무의 날짜를 먼저 설정해주세요. 알림 설정은 필요하지 않습니다.' : '최신 업무의 날짜와 시간을 확인하지 못했습니다. 닫고 다시 시도해주세요.'); }
   }
   async function send() {
     if (!connection || !source || !platform.client || gate.current) return;
@@ -55,7 +55,7 @@ export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, 
     gate.current = true; setBusy(true); setMessage('최신 원본과 Google 등록 결과를 확인하는 중…');
     try {
       const result = await connection.send(source, end,
-        () => readCalendarSource(platform.client!, source.scheduleId, userId, current), current);
+        () => readCalendarEntry(platform.client!, target, userId, current), current);
       if (!current()) return;
       if (result.state === 'expired' || result.state === 'denied') connection.disconnect();
       setMessage(result.state === 'confirmed'
@@ -66,10 +66,10 @@ export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, 
   const info = connection?.info();
   const endIssue = source ? calendarEndIssue(source, end) : '';
   const disabled = busy || !source || !!endIssue || !info || info.expired;
-  if ((!scheduleId || !info || info.expired) && !visible) return null;
+  if (((!scheduleId && !recordId) || !info || info.expired) && !visible) return null;
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title} Google 캘린더에 보내기`} onPress={() => void open()} style={styles.shortcut}>
-      <Image accessible={false} source={require('../../../assets/google-g.png')} style={styles.googleIcon} /><Text style={styles.shortcutText}>캘린더 추가</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title} Google 캘린더에 보내기`} onPress={() => void open()} hitSlop={{ top: 6, bottom: 6, left: 3, right: 3 }} style={styles.shortcut}>
+      <Image accessible={false} source={require('../../../assets/google-g.png')} style={styles.googleIcon} /><Text style={styles.shortcutText}>캘린더</Text>
     </Pressable>
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
       <View style={styles.overlay}><View style={styles.card}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -101,8 +101,8 @@ export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, 
 }
 const styles = StyleSheet.create({
   button: { minHeight: 48, justifyContent: 'center', paddingVertical: 10 }, link: { color: '#1d4ed8', fontSize: 15 },
-  shortcut: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, paddingHorizontal: 12, marginTop: 8, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc', borderRadius: 12 },
-  googleIcon: { width: 18, height: 18 }, shortcutText: { fontSize: 14, fontWeight: '600', color: '#334155' },
+  shortcut: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 32, paddingHorizontal: 8, maxWidth: '100%', borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc', borderRadius: 12 },
+  googleIcon: { width: 14, height: 14 }, shortcutText: { fontSize: 12, flexShrink: 1, fontWeight: '600', color: '#334155' },
   durationRow: { flexDirection: 'row', gap: 10 }, duration: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10 },
   validation: { color: '#b45309', fontSize: 15, lineHeight: 23 }, hint: { color: '#64748b', fontSize: 13, lineHeight: 21 },
   primaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#1d4ed8' },

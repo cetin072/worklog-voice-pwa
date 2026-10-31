@@ -183,10 +183,12 @@ function TaskRow({ bucket, task, onOpen, onReminder, onEdit, onDelete, onComplet
       <Text style={styles.taskMeta}>{taskNote(bucket, task)}{task.status ? ` · ${task.status}` : ''}</Text>
       {task.nextAttentionAt ? <Text style={styles.taskMeta}>다시 확인할 업무</Text> : null}
       {task.institution ? <Text style={styles.taskBadge}>{task.institution}</Text> : null}
-      {task.followUp ? <Text style={styles.followUp}>↳ {task.followUp}</Text> : null}
+      {task.followUp && task.followUp !== task.title ? <Text style={styles.followUp}>↳ {task.followUp}</Text> : null}
       </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 12, rowGap: 12, marginTop: 6 }}>
       {task.pageId ? <ReminderShortcut id={task.pageId} title={task.title || '업무'} onPress={onReminder} disabled={completing} /> : null}
       {task.pageId ? <CalendarExportPreview recordId={task.pageId} title={task.title || '업무'} /> : null}
+      </View>
     </View>
     {task.pageId ? <View style={styles.taskActions}>
       <View style={styles.taskMinorActions}>
@@ -268,7 +270,7 @@ function JournalScheduleRows({ schedules, empty }: { schedules?: BriefingSchedul
 
 function ScheduleRows({ schedules, empty, onReminder }: { schedules?: BriefingSchedule[]; empty: string; onReminder(schedule: BriefingSchedule): void }) {
   if (!schedules?.length) return <Text style={styles.emptyText}>{empty}</Text>;
-  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{schedule.scheduleId ? <><ScheduleReminderLabel schedule={schedule} onPress={() => onReminder(schedule)} />{['confirmed', '확정'].includes(schedule.status || '') ? <CalendarExportPreview scheduleId={schedule.scheduleId} title={schedule.title || '일정'} startsAt={schedule.startsAt} allDay={schedule.allDay} dateKey={schedule.dateKey} /> : null}</> : null}</View>);
+  return schedules.map((schedule, index) => <View key={schedule.scheduleId || `${schedule.title}-${index}`} style={styles.scheduleRow}><Text style={styles.scheduleDate}>{formatSchedule(schedule)}</Text><Text style={styles.taskTitle}>{schedule.title || '제목 없는 일정'}</Text>{schedule.location ? <Text style={styles.taskMeta}>{schedule.location}</Text> : null}{schedule.scheduleId ? <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 12, rowGap: 12, marginTop: 6 }}><ScheduleReminderLabel schedule={schedule} onPress={() => onReminder(schedule)} />{['confirmed', '확정'].includes(schedule.status || '') ? <CalendarExportPreview scheduleId={schedule.scheduleId} title={schedule.title || '일정'} startsAt={schedule.startsAt} allDay={schedule.allDay} dateKey={schedule.dateKey} /> : null}</View> : null}</View>);
 }
 
 function AuthAction({ title, variant, disabled = false, onPress }: { title: string; variant: 'google' | 'primary'; disabled?: boolean; onPress: () => void }) {
@@ -375,3 +377,4 @@ export function homeHarness(context) {
 }
 export function nodes(tree) { return Array.isArray(tree) ? tree.flatMap(nodes) : tree && typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : []; }
 export function words(tree) { return Array.isArray(tree) ? tree.map(words).join(' ') : tree && typeof tree === 'object' ? words(tree.props?.children) : String(tree ?? ''); }
+
