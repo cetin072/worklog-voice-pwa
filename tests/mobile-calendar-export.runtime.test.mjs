@@ -7,7 +7,7 @@ const { createGoogleCalendarAdapter } = await import('../mobile/src/features/cal
 const target = { accountId: 'synthetic-account', calendarId: 'synthetic-calendar' };
 const draft = { scheduleId: '22222222-2222-4222-8222-222222222222', title: '검수용 <일정> & 회의', status: 'confirmed', allDay: false, timeZone: 'Asia/Seoul', start: '2026-10-28T10:00:00+09:00', end: '2026-10-28T11:00:00+09:00' };
 const id = calendarEventId(draft.scheduleId);
-const receipt = { id, status: 'confirmed', sourceId: draft.scheduleId };
+const receipt = { id, status: 'confirmed', sourceId: draft.scheduleId, draft };
 function driver(overrides = {}) {
   let event = null; let writes = 0;
   return { target, get: async () => event, insert: async () => { writes++; event = receipt; return event; }, count: () => writes, ...overrides };
@@ -25,7 +25,7 @@ test('double click, relaunch and changed title keep one server event and read ba
   const d = driver(); const send = createCalendarExporter(d);
   const a = send(draft, target); const b = send(draft, target); assert.equal(a, b);
   assert.equal((await a).state, 'confirmed'); assert.equal(d.count(), 1);
-  assert.deepEqual(await createCalendarExporter(d)({ ...draft, title: '변경 제목' }, target), { state: 'confirmed', eventId: id, alreadyExists: true });
+  assert.equal((await createCalendarExporter(d)({ ...draft, title: '변경 제목' }, target)).state, 'blocked');
   assert.equal(d.count(), 1); assert.match(id, /^[a-v0-9]{5,1024}$/);
 });
 test('write committed but response lost is reconciled; offline/read failure/unknown result is not success', async () => {
@@ -69,8 +69,34 @@ test('real HTTP adapter uses exact calendar, preserves title/timezone/all-day, n
 test('HTTP denial, conflict and tombstones cannot become false success', async () => {
   for (const status of [401, 403, 409, 429, 500]) {
     const api = createGoogleCalendarAdapter(target, 'synthetic', async () => new Response('', { status }));
-    assert.equal((await createCalendarExporter(api)(draft, target)).state, 'unknown');
+    assert.equal((await createCalendarExporter(api)(draft, target)).state, status === 401 ? 'expired' : status === 403 ? 'denied' : 'unknown');
   }
   const api = createGoogleCalendarAdapter(target, 'synthetic', async () => new Response('', { status: 410 }));
   assert.equal((await createCalendarExporter(api)(draft, target)).state, 'blocked');
+});
+
+test('409 after lost creation response rechecks exact payload; changed remote fields and deleted known event are blocked',async()=>{
+  let stored=null,posts=0;const calls=[];
+  const api=createGoogleCalendarAdapter(target,'synthetic',async(url,opts)=>{
+    calls.push(opts.method);
+    if(opts.method==='POST'){posts++;stored={...JSON.parse(opts.body),status:'confirmed'};return new Response('',{status:409});}
+    return stored?Response.json(stored):new Response('',{status:404});
+  });
+  const send=createCalendarExporter(api);
+  assert.equal((await send(draft,target)).state,'confirmed');assert.deepEqual(calls,['GET','POST','GET']);
+  const confirmedRemote=stored;
+  stored={...stored,start:{dateTime:stored.start.dateTime},end:{dateTime:stored.end.dateTime}};
+  assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
+  stored={...confirmedRemote,summary:'외부에서 바뀐 제목'};
+  assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
+  stored=null;assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
+});
+
+test('POST-only permission denial or expiry is distinguished after same-ID reconciliation',async()=>{
+  for(const [status,state] of [[401,'expired'],[403,'denied']]){
+    const methods=[];
+    const api=createGoogleCalendarAdapter(target,'synthetic',async(_url,options)=>{methods.push(options.method);return new Response('',{status:options.method==='POST'?status:404});});
+    assert.equal((await createCalendarExporter(api)(draft,target)).state,state);
+    assert.deepEqual(methods,['GET','POST','GET']);
+  }
 });
