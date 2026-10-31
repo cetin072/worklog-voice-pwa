@@ -4,7 +4,8 @@ import { extractScheduleFromText } from './schedule-extract.mjs';
 const EVENT = /회의|미팅|약속|면담|상담|방문|만나|교육|행사|예약|식사|출발|도착/;
 const CHANGE = /취소|변경|연기|미뤄|미루|안\s*만나|없던\s*일|안\s*하기|하지\s*(?:말|않)|없(?:어|습|음)|안\s*(?:해|하|가|갈|할)|못\s*(?:가|해|하)|완료|끝났|아니고|대신|어때|어떨|할까|가능|괜찮|\?|？/;
 const DATE = /(20\d{2})[년.\/-]\s*(\d{1,2})[월.\/-]\s*(\d{1,2})일?/;
-const normalized = s => s.replace(/(20\d{2})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})\.?/g, '$1년 $2월 $3일');
+const normalized = s => s.replace(/(20\d{2})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})\.?/g, '$1년 $2월 $3일')
+  .replace(/오후\s*(1[3-9]|2[0-3])\s*시/g, '$1시');
 
 /** Conservative capture input policy. Reuses date Core; never anchors to screenshot time. */
 export function captureScheduleInput(ocr, now = new Date().toISOString()) {

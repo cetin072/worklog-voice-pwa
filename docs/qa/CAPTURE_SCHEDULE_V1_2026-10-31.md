@@ -68,3 +68,5 @@ Android 단일 image/* → Expo Sharing → 개인 앱 저장소 복사/해시 �
 - runtime smoke에 실제 홈 버튼 → Android system picker 열기 → 취소 → 앱 복귀의 비파괴 검사를 추가했다. 실제 선택 이미지의 한국어 OCR·서버 저장·알림 전체 동선과 구분한다. 사용자가 제시한 화면만으로 서버 DB 행을 직접 확인했다고 주장하지 않는다.
 
 참고: https://docs.expo.dev/versions/v57.0.0/sdk/imagepicker/ 및 설치된 Android MediaHandler/RawImageExporter/Manifest/config plugin 소스. Android 원칙: https://developer.android.com/training/data-storage/shared/photo-picker
+
+사용된 시각 표현 확인 과정에서 기존 시간 Core는 ‘오후 13시’를 인식하지 못함을 재현했다. 공통 Core는 바꾸지 않고 캡처 입력의 중복 오후 표기(13~23시)만 24시간 표기로 정규화한다. ‘오전 13시’처럼 모순된 표기는 확정하지 않으며, 상대 날짜의 대화 날짜 검증은 유지한다. 실제 사용자 이름/원문은 회귀검사에 넣지 않는다.

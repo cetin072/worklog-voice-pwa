@@ -20,6 +20,13 @@ test('relative day uses chat date, never capture date or message clock', () => {
   assert.equal(value.kind,'schedule');assert.equal(value.date,'2026-11-03');assert.equal(value.time,'15:00');
   assert.equal(captureScheduleInput('오후 11:30\n내일 오후 3시 회의',now).kind,'review');
 });
+test('redundant afternoon with a 24-hour clock is normalized without guessing the conversation date',()=>{
+ const value=captureScheduleInput('2026년 11월 3일 오후 13시 거래처 방문',now);
+ assert.equal(value.kind,'schedule');assert.equal(value.time,'13:00');
+ assert.equal(extractScheduleFromText(value.transcript,now).dueStart,'2026-11-03T13:00:00+09:00');
+ assert.equal(captureScheduleInput('오늘 오후 13시 거래처 방문',now).kind,'review');
+ assert.equal(captureScheduleInput('2026년 11월 3일 오전 13시 거래처 방문',now).kind,'review');
+});
 test('unsafe conversations save a review record without scheduling their dates', () => {
   for (const text of ['11월 3일 오후 3시 회의','회의 날짜는 나중에 정해요','2026년 11월 2일 월요일\n내일 오후 3시 회의','2026년 10월 20일 화요일\n내일 오후 3시 회의',
     '2026년 15월 3일 오후 3시 회의', '2026년 11월 3일 오후 3시 회의 없음', '2026년 11월 3일 오후 3시 회의 취소','2026년 11월 3일 오후 3시 회의에서 11월 4일로 변경',
