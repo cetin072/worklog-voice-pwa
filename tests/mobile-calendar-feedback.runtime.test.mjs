@@ -32,3 +32,16 @@ test('briefing metadata supplies explicit time to the existing immediate edit pa
   assert.equal(tasks.find(t=>t.pageId==='b').dueTime,'');
   assert.equal(tasks.find(t=>t.pageId==='c').dueTime,undefined);
 });
+
+test('equal or earlier explicit end is a local input error with no canonical or Google request', async () => {
+  let reads=0,posts=0;
+  const target={accountId:'synthetic',calendarId:'primary'};
+  const service=createCalendarConnection({authorize:async()=>({target,email:'qa@example.invalid',expiresAt:Date.now()+60000,adapter:{target,get:async()=>{posts++;},insert:async()=>{posts++;}}})});
+  await service.connect();
+  const source={scheduleId:'22222222-2222-4222-8222-222222222222',title:'synthetic',status:'confirmed',timeZone:'Asia/Seoul',allDay:false,start:'2026-11-02T10:00:00+09:00',end:'',ownerId:'synthetic',workspaceId:'synthetic',revision:'v1'};
+  for(const end of [source.start,'2026-11-02T09:00:00+09:00']) {
+    const result=await service.send(source,end,async()=>{reads++;return source;},()=>true);
+    assert.equal(result.state,'blocked');assert.match(result.message,/시작·종료/);
+  }
+  assert.equal(reads,0);assert.equal(posts,0);
+});

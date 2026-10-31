@@ -24,14 +24,14 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
     const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),
       useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],next=>slots[i]=typeof next==='function'?next(slots[i]):next];},
       useRef:init=>{const i=cursor++;if(!(i in slots))slots[i]={current:init};return slots[i];},useEffect:()=>{}};React.default=React;
-    const native=Object.fromEntries(['Modal','Pressable','ScrollView','Text','View'].map(k=>[k,k]));native.StyleSheet={create:v=>v};
+    const native=Object.fromEntries(['Image','Modal','Pressable','ScrollView','Text','View'].map(k=>[k,k]));native.StyleSheet={create:v=>v};
     const exp={};const code=ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
-    new Function('require','exports',code)(mod=>mod==='react'?React:mod==='react/jsx-runtime'?{}:mod==='react-native'?native:mod.includes('use-calendar-connection')?{useCalendarConnection:()=>service}:mod.includes('calendar-end-picker')?{CalendarEndPicker:'CalendarEndPicker',calendarDateLabel:()=> '2026년 11월 2일 오전 10시'}:mod.includes('platform-provider')?{usePlatform:()=>platform}:mod.includes('snapshot')?{reminderSessionEpoch:{capture:()=>()=>true}}:mod.includes('calendar-source')?sourceModule:{CALENDAR_PERMISSION_NOTICE:'선택한 일정 한 건'},exp);
+    new Function('require','exports',code)(mod=>mod==='react'?React:mod==='react/jsx-runtime'?{}:mod==='react-native'?native:mod.includes('home-reminder-status')?{useCalendarScheduleId:()=>row.id}:mod.includes('use-calendar-connection')?{useCalendarConnection:()=>service}:mod.includes('calendar-end-picker')?{CalendarEndPicker:'CalendarEndPicker',calendarDateLabel:()=> '2026년 11월 2일 오전 10시'}:mod.includes('platform-provider')?{usePlatform:()=>platform}:mod.includes('snapshot')?{reminderSessionEpoch:{capture:()=>()=>true}}:mod.includes('calendar-source')?sourceModule:{CALENDAR_PERMISSION_NOTICE:'선택한 일정 한 건'},exp);
     return ()=>{cursor=0;return exp[name](props);};
   }
   const render=component('mobile/src/features/calendar/calendar-export-preview.tsx','CalendarExportPreview',{scheduleId:row.id,title:'snapshot'});
   const settings=component('mobile/src/features/settings/calendar-settings.tsx','CalendarSettings');
-  const button=(render,label)=>all(render()).find(n=>n.type==='Pressable'&&text(n).includes(label));
+  const button=(render,label)=>all(render()).find(n=>n.type==='Pressable'&&(text(n).includes(label)||n.props.accessibilityLabel?.includes(label)));
   const flush=()=>new Promise(r=>setImmediate(r));
   assert.equal(render(),null);assert.equal(connects,0);
   button(settings,'Google 캘린더 연결').props.onPress();assert.equal(service.status().connecting,true);
@@ -41,7 +41,11 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   assert.match(text(remountedSettings()),/qa@example.invalid/);assert.equal(posts,0);
   button(render,'Google 캘린더에 보내기').props.onPress();await flush();
   assert.equal(button(render,'확인한 일정').props.disabled,true);
-  const picker=all(render()).find(n=>n.type==='CalendarEndPicker');picker.props.onChange('2026-11-02T02:00:00Z');
+  const picker=all(render()).find(n=>n.type==='CalendarEndPicker');
+  picker.props.onChange(row.starts_at);
+  assert.equal(button(render,'확인한 일정').props.disabled,true);assert.match(text(render()),/종료 시각은 시작 시각보다 늦어야/);assert.equal(posts,0);
+  button(render,'30분').props.onPress();assert.equal(button(render,'확인한 일정').props.disabled,false);
+  picker.props.onChange('2026-11-02T02:00:00Z');
   assert.equal(button(render,'확인한 일정').props.disabled,false);
   button(render,'확인한 일정').props.onPress();await flush();assert.equal(posts,1);assert.match(text(render()),/등록 완료/);
   button(render,'확인한 일정').props.onPress();await flush();assert.equal(posts,1);assert.match(text(render()),/이미 등록/);
