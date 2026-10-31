@@ -84,7 +84,10 @@ test('409 after lost creation response rechecks exact payload; changed remote fi
   });
   const send=createCalendarExporter(api);
   assert.equal((await send(draft,target)).state,'confirmed');assert.deepEqual(calls,['GET','POST','GET']);
-  stored={...stored,summary:'외부에서 바뀐 제목'};
+  const confirmedRemote=stored;
+  stored={...stored,start:{dateTime:stored.start.dateTime},end:{dateTime:stored.end.dateTime}};
+  assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
+  stored={...confirmedRemote,summary:'외부에서 바뀐 제목'};
   assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
   stored=null;assert.equal((await send(draft,target)).state,'blocked');assert.equal(posts,1);
 });

@@ -6,7 +6,7 @@ export function createGoogleCalendarAdapter(target: CalendarTarget, accessToken:
   const receipt = (data: any): CalendarReceipt => ({ id: data?.id, status: data?.status, sourceId: data?.extendedProperties?.private?.worklogScheduleId,
     draft: { scheduleId: data?.extendedProperties?.private?.worklogScheduleId, status: data?.status,
       title: data?.summary, allDay: !!data?.start?.date,
-      timeZone: data?.start?.timeZone || data?.end?.timeZone || 'Asia/Seoul',
+      timeZone: data?.start?.timeZone || data?.end?.timeZone || '',
       start: data?.start?.date || data?.start?.dateTime, end: data?.end?.date || data?.end?.dateTime } });
   async function request(url: string, body?: object) {
     const controller = new AbortController();
