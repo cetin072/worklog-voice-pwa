@@ -120,6 +120,16 @@
 - Lightweight Main Path의 저위험 변경은 별도 병합 승인 없이 진행 가능하다.
 - 큰 기능 PR, production 구조 변경, 유료 서비스, production secret, Play Store 제출, 비가역 데이터 변경은 사용자 승인 없이 진행하지 않는다.
 
+## Firebase 실기기 검사 — 무료 한도 운영
+
+- 상세 실행 기준은 `docs/operations/FIREBASE_DEVICE_QA_POLICY.md`를 따른다. 채팅방을 바꾸어도 이 저장소 기준을 유지한다.
+- 수정 중에는 TypeScript·코드 회귀·기존 Android bundle/에뮬레이터 검사를 사용한다. 작은 문구·UI/JS 수정마다 Firebase를 자동 실행하지 않는다.
+- Firebase는 최종 출시 후보 또는 native dependency/permission/manifest, 인증·deep link, 음성·알림·사진 등 기기 경계 변경의 안정된 체크포인트에서 명시 실행한다. 최종 후보 검사를 상시 생략하지 않는다.
+- `Android Physical Device Gate`를 main에서 수동 실행하며 40자리 `source_sha`를 지정한다. 같은 SHA·고정 기기의 최근 유효 PASS 기록은 재사용하고 출처를 남긴다. 실패/한도 초과 기록은 재사용하지 않는다.
+- `TEST_QUOTA_EXCEEDED`는 `WAITING_QUOTA(검사 대기)`이며 PASS가 아니다. 자동 반복 실행·다른 프로젝트로 한도 우회·임의 유료 전환을 하지 않는다. 다음 할당량을 기다리거나 승인된 로컬 실기기 검수 근거를 기록한다.
+- Play AAB에는 동일 source SHA의 Firebase 결과 run ID가 필요하다. 생략이 필요하면 사용자에게 승인받은 사유를 `physical_gate_exception`에 기록한다. 에뮬레이터 성공을 Firebase 실기기 PASS로 대신 표시하지 않는다.
+- 실제 Google 계정·운영 데이터·스토어 이동 등 Robo가 검증하지 않는 사용자 흐름은 별도 기기 수용 검수로 구분한다.
+
 ## User Acceptance Ready — Web / Mobile 분리
 
 - 사용자 Preview 검수 직전 공통 기준은 `cetin072/ai-development-system/docs/USER_ACCEPTANCE_READY_GATE.md`다.
