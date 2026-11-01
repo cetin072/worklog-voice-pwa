@@ -129,31 +129,6 @@ test("Push subscription migration is user/workspace owned and RLS protected", ()
   assert.match(sql, /unique \(user_id, endpoint\)/);
 });
 
-test("settings exposes closed-app server Push test and client subscribes with PushManager", () => {
-  const html = fs.readFileSync("public/settings.html", "utf8");
-  const notifications = fs.readFileSync("public/notifications.js", "utf8");
-  const settings = fs.readFileSync("public/push-settings.js", "utf8");
-  assert.match(html, /id="settingsServerPushTest"/);
-  assert.match(html, /\/push-settings\.js\?v=/);
-  assert.match(notifications, /pushManager\.subscribe/);
-  assert.match(notifications, /applicationServerKey/);
-  assert.match(notifications, /\/api\/push-subscription/);
-  assert.match(notifications, /\/api\/push-test-closed/);
-  assert.match(settings, /지금 업무수첩을 닫고 홈 화면으로 이동하세요/);
-});
-
-test("server Push APIs keep VAPID private key server-side and scope subscription lookup to the authenticated user", () => {
-  const subscribeFn = fs.readFileSync("netlify/functions/push-subscription.mts", "utf8");
-  const testFn = fs.readFileSync("netlify/functions/push-test.mts", "utf8");
-  const closedFn = fs.readFileSync("netlify/functions/push-test-closed-background.mts", "utf8");
-  assert.doesNotMatch(fs.readFileSync("public/notifications.js", "utf8"), /WEB_PUSH_VAPID_PRIVATE_KEY/);
-  assert.match(testFn, /Netlify\.env\.get\("WEB_PUSH_VAPID_PRIVATE_KEY"\)/);
-  assert.match(closedFn, /Netlify\.env\.get\("WEB_PUSH_VAPID_PRIVATE_KEY"\)/);
-  assert.match(subscribeFn, /user_id:workspace\.userId/);
-  assert.match(testFn, /user_id:`eq\.\$\{workspace\.userId\}`/);
-  assert.match(closedFn, /user_id:`eq\.\$\{workspace\.userId\}`/);
-});
-
 test('ephemeral P-256 scalar is padded when OpenSSL omits leading zero octets', () => {
   const source = fs.readFileSync('netlify/shared/web-push.mjs', 'utf8');
   const body = source.match(/function generateServerPrivateKey\(\) \{([\s\S]*?)\n\}/)[1];

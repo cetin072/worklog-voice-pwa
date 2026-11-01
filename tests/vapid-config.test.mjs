@@ -31,9 +31,3 @@ test("invalid VAPID private key fails closed", () => {
   assert.equal(config.publicKey, "");
 });
 
-test("public subscription endpoint never serializes the VAPID private key", () => {
-  const source = fs.readFileSync("netlify/functions/push-subscription.mts", "utf8");
-  assert.match(source, /vapidConfigFromEnv/);
-  assert.match(source, /publicKey:config\.publicKey/);
-  assert.doesNotMatch(source, /json\([^\n]*privateKey/);
-});

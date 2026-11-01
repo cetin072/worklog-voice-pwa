@@ -68,26 +68,21 @@ try {
   throw new Error('UAR_ENV_BRIEFING_ERROR_RESPONSE_INVALID');
 }
 
-// Server Push must validate the real Deploy Preview runtime secret, not only a
-// synthetic unit-test key. The GET endpoint derives the public VAPID key from the
-// private Netlify secret, so a malformed/missing private key fails this gate before
-// a user is ever asked to test on a phone.
+// Retired PWA Web Push must be unavailable in the actual Preview runtime.
+// A 410 tombstone also prevents old cached web-app clients from registering
+// another subscription after the scheduled sender has been retired.
 const pushConfig = await get('/api/push-subscription');
-if (!pushConfig.response.ok) {
-  throw new Error(`UAR_ENV_PUSH_CONFIG_HTTP_${pushConfig.response.status}`);
+if (pushConfig.response.status !== 410) {
+  throw new Error(`UAR_ENV_PUSH_NOT_RETIRED_HTTP_${pushConfig.response.status}`);
 }
 let pushJson;
 try {
   pushJson = JSON.parse(pushConfig.text);
 } catch {
-  throw new Error('UAR_ENV_PUSH_CONFIG_INVALID_JSON');
+  throw new Error('UAR_ENV_PUSH_RETIREMENT_INVALID_JSON');
 }
-if (pushJson?.configured !== true) {
-  throw new Error(`UAR_ENV_PUSH_NOT_CONFIGURED:${JSON.stringify({ configured: pushJson?.configured })}`);
-}
-const vapidPublicKey = String(pushJson?.publicKey || '');
-if (!/^[A-Za-z0-9_-]{80,100}$/.test(vapidPublicKey)) {
-  throw new Error('UAR_ENV_PUSH_PUBLIC_KEY_INVALID');
+if (pushJson?.error !== 'WEB_PUSH_RETIRED') {
+  throw new Error('UAR_ENV_PUSH_RETIREMENT_MARKER_MISSING');
 }
 for (const forbidden of ['privateKey', 'private_key', 'WEB_PUSH_VAPID_PRIVATE_KEY']) {
   if (Object.prototype.hasOwnProperty.call(pushJson, forbidden) || pushConfig.text.includes(forbidden)) {
@@ -120,4 +115,4 @@ if (!robots.includes('noindex')) {
   throw new Error(`UAR_ENV_NOINDEX_HEADER_MISSING:${robots}`);
 }
 
-console.log(`UAR_ENVIRONMENT_PARITY_PASS preview=${base.hostname} owner_secret_isolated=true push_configured=true briefing_status=${briefing.response.status}`);
+console.log(`UAR_ENVIRONMENT_PARITY_PASS preview=${base.hostname} owner_secret_isolated=true push_retired=true briefing_status=${briefing.response.status}`);
