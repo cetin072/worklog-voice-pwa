@@ -68,7 +68,7 @@ test('Play privacy and account-deletion web resources are public static pages', 
   const deletion = readFileSync(new URL('../public/account-deletion.html', import.meta.url), 'utf8');
 
   assert.match(privacy, /<title>업무수첩 개인정보처리방침<\/title>/);
-  assert.match(privacy, /시행일: 2026년 9월 26일/);
+  assert.match(privacy, /시행일: 2026년 11월 1일/);
   assert.match(privacy, /Supabase/);
   assert.match(privacy, /Netlify/);
   assert.match(privacy, /Android의 음성 인식/);
