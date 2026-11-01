@@ -9,6 +9,19 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-01',
+    title: '사진으로 일정 등록·Google 캘린더 보내기',
+    summary: '캡처에서 업무와 일정을 만들고, 선택한 일정만 Google 캘린더에 보낼 수 있습니다.',
+    items: [
+      '음성 기록 오른쪽 사진 버튼이나 이미지 공유로 캡처를 가져옵니다.',
+      '인식한 내용을 업무명으로 보존하고, 불확실한 날짜만 확인하도록 개선했습니다.',
+      '캡처 수정 결과와 알림 상태를 구분하고, 취소한 같은 캡처를 다시 등록할 수 있습니다.',
+      '설정에서 Google 캘린더를 연결한 뒤 원하는 일정 한 건만 보낼 수 있습니다.',
+      '알림 설정과 별개로 캘린더에 보낼 수 있으며 종료 시간 입력은 선택 사항입니다.',
+      '알림·캘린더 버튼과 연결 설정을 간결하게 정리했습니다.',
+    ],
+  },
+  {
     date: '2026-10-31',
     title: '수정 화면의 불필요한 대기 개선',
     summary: '이미 확인된 업무 날짜와 시간이 수정 화면에 바로 이어지도록 서버 응답을 보강했습니다.',
