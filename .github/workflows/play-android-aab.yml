@@ -18,8 +18,20 @@ on:
         required: true
         type: number
 
+      physical_gate_run_id:
+        description: 'Successful exact-source Android Physical Device Gate run ID (or approved exception below)'
+        required: false
+        default: ''
+        type: string
+      physical_gate_exception:
+        description: 'Only when user approved skipping: approval reference, reason and alternative evidence'
+        required: false
+        default: ''
+        type: string
+
 permissions:
   contents: read
+  actions: read
 
 jobs:
   play-aab:
@@ -35,6 +47,30 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_ref }}
+
+      - name: Verify physical-device release evidence or approved exception
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHYSICAL_GATE_RUN_ID: ${{ inputs.physical_gate_run_id }}
+          PHYSICAL_GATE_EXCEPTION: ${{ inputs.physical_gate_exception }}
+        run: |
+          export SOURCE_SHA="$(git rev-parse HEAD)"
+          if [[ -n "$PHYSICAL_GATE_RUN_ID" ]]; then
+            [[ "$PHYSICAL_GATE_RUN_ID" =~ ^[0-9]+$ ]] || exit 1
+            mkdir -p physical-result
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PHYSICAL_GATE_RUN_ID" > physical-result/run.json
+            gh run download "$PHYSICAL_GATE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name firebase-physical-result --dir physical-result
+          fi
+          node scripts/firebase-device-qa.mjs verify
+
+      - name: Preserve physical release decision
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-release-decision
+          path: physical-result/release-decision.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Apply Console-verified version for this build only
         env:
@@ -160,6 +196,7 @@ jobs:
           cp "$manifest" play-artifact/AndroidManifest.xml
           git rev-parse HEAD > play-artifact/SOURCE_SHA.txt
           cp mobile/app.json play-artifact/build-app-config.json
+          cp physical-result/release-decision.json play-artifact/physical-release-decision.json
 
       - name: Package Play artifact
         shell: bash

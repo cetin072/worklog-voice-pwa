@@ -1,41 +1,27 @@
 name: Android Physical Device Gate
 
+run-name: Physical QA ${{ inputs.source_sha }}
+
 on:
   workflow_dispatch:
     inputs:
-      device_model:
-        description: 'Firebase Test Lab physical Android model id'
+      source_sha:
+        description: 'Exact 40-character SHA of the stable release/native checkpoint'
         required: true
-        default: 'redfin'
         type: string
-      android_version:
-        description: 'Android OS version id supported by the selected model'
-        required: true
-        default: '30'
-        type: string
-  pull_request:
-    paths:
-      - '.github/workflows/firebase-test-lab.yml'
-      - 'mobile/qa/firebase/**'
-      - 'mobile/app/**'
-      - 'mobile/src/providers/platform-provider.tsx'
-      - 'mobile/src/features/voice/**'
-      - 'mobile/src/features/capture/**'
-      - 'mobile/metro.config.js'
-      - 'netlify/shared/capture-schedule-input.*'
-      - 'netlify/shared/korean-date-core.mjs'
-      - 'netlify/shared/schedule-extract.mjs'
-      - 'mobile/package-lock.json'
-      - 'mobile/app.json'
+
+# Queue identical candidates; the second run reuses the first successful receipt.
+concurrency:
+  group: firebase-physical-${{ inputs.source_sha }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 jobs:
   physical-touch:
-    # The workflow path filter already limits PR runs to meaningful Android/mobile changes.
-    # Keep the job itself unconditional so every matching PR gets the real physical-device gate.
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -43,20 +29,60 @@ jobs:
       WIF_PROVIDER: projects/406892117471/locations/global/workloadIdentityPools/github-actions/providers/github-actions
       TESTLAB_SERVICE_ACCOUNT: worklog-testlab-ci@worklog-mobile-qa.iam.gserviceaccount.com
     steps:
+      - name: Validate exact candidate
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Use a full lowercase commit SHA"; exit 1; }
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Run this workflow from main"; exit 1; }
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+
+      - name: Find existing successful candidate evidence
+        id: previous
+        uses: actions/github-script@v7
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.actions.listWorkflowRuns({owner, repo, workflow_id: 'firebase-test-lab.yml', event: 'workflow_dispatch', status: 'success', per_page: 100});
+            for (const run of data.workflow_runs) {
+              if (run.id === context.runId || run.display_title !== `Physical QA ${process.env.SOURCE_SHA}` || run.head_branch !== 'main') continue;
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({owner, repo, run_id: run.id});
+              if (artifacts.data.artifacts.some(a => a.name === 'firebase-physical-result' && !a.expired)) {
+                core.setOutput('run_id', String(run.id));
+                break;
+              }
+            }
+
+      - name: Reuse exact candidate receipt
+        if: steps.previous.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_RUN_ID: ${{ steps.previous.outputs.run_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          gh run download "$PREVIOUS_RUN_ID" --repo "$GITHUB_REPOSITORY" --name firebase-physical-result --dir physical-result
+          node scripts/firebase-device-qa.mjs reuse
 
       - uses: actions/setup-node@v4
+        if: steps.previous.outputs.run_id == ''
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
       - uses: actions/setup-java@v5
+        if: steps.previous.outputs.run_id == ''
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Authenticate to Google Cloud with Workload Identity Federation
+        if: steps.previous.outputs.run_id == ''
         uses: google-github-actions/auth@v3
         with:
           project_id: ${{ env.FIREBASE_PROJECT_ID }}
@@ -64,9 +90,11 @@ jobs:
           service_account: ${{ env.TESTLAB_SERVICE_ACCOUNT }}
 
       - name: Set up gcloud
+        if: steps.previous.outputs.run_id == ''
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Enable required Test Lab APIs
+        if: steps.previous.outputs.run_id == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -76,11 +104,12 @@ jobs:
             --project="$FIREBASE_PROJECT_ID"
 
       - name: Confirm Test Lab target is physical Pixel 5
+        if: steps.previous.outputs.run_id == ''
         shell: bash
         run: |
           set -euo pipefail
-          MODEL="${{ github.event_name == 'workflow_dispatch' && inputs.device_model || 'redfin' }}"
-          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.android_version || '30' }}"
+          MODEL="redfin"
+          VERSION="30"
           gcloud firebase test android models describe "$MODEL" --project="$FIREBASE_PROJECT_ID" | tee /tmp/testlab-model.txt
           grep -qi 'physical' /tmp/testlab-model.txt || {
             echo "Requested Test Lab model is not confirmed physical: $MODEL"
@@ -89,16 +118,19 @@ jobs:
           echo "Test Lab physical target: $MODEL / $VERSION"
 
       - name: Install locked mobile dependencies
+        if: steps.previous.outputs.run_id == ''
         working-directory: mobile
         run: npm ci --no-audit --no-fund
 
       - name: Generate Android project
+        if: steps.previous.outputs.run_id == ''
         working-directory: mobile
         env:
           CI: '1'
         run: npx expo prebuild --platform android --no-install
 
       - name: Build ARM64 physical-device QA APK
+        if: steps.previous.outputs.run_id == ''
         working-directory: mobile/android
         env:
           NODE_ENV: production
@@ -106,13 +138,18 @@ jobs:
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
       - name: Run physical-device Robo gate
+        if: steps.previous.outputs.run_id == ''
         shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
           APK="mobile/android/app/build/outputs/apk/release/app-release.apk"
-          MODEL="${{ github.event_name == 'workflow_dispatch' && inputs.device_model || 'redfin' }}"
-          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.android_version || '30' }}"
+          MODEL="redfin"
+          VERSION="30"
           test -f "$APK"
+          mkdir -p physical-result
+          set +e
           gcloud firebase test android run \
             --project="$FIREBASE_PROJECT_ID" \
             --type=robo \
@@ -120,4 +157,17 @@ jobs:
             --robo-script="mobile/qa/firebase/physical-touch-robo.json" \
             --device="model=$MODEL,version=$VERSION,locale=ko,orientation=portrait" \
             --timeout=5m \
-            --client-details="matrixLabel=worklog-physical-touch-${GITHUB_SHA::8}"
+            --client-details="matrixLabel=worklog-physical-touch-${SOURCE_SHA::8}" 2>&1 | tee physical-result/testlab.log
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          export TEST_EXIT_CODE
+          node scripts/firebase-device-qa.mjs record
+
+      - name: Preserve candidate result including quota wait
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebase-physical-result
+          path: physical-result/
+          if-no-files-found: ignore
+          retention-days: 30
