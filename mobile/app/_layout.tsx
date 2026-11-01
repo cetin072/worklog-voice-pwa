@@ -1,3 +1,4 @@
+import { CaptureShareGate } from '@/src/features/capture/capture-share-gate';
 import { useEffect } from 'react';
 import { AppUpdatePrompt } from '@/src/features/startup/app-update-prompt';
 import { configureScheduleNotificationHandler } from '@/src/features/schedule/local-notifications';
@@ -17,6 +18,7 @@ export default function RootLayout() {
           <MeetingRecordingProvider>
             <Stack screenOptions={{ headerShown: false }} />
             <AppUpdatePrompt />
+            <CaptureShareGate />
           </MeetingRecordingProvider>
         </PlatformProvider>
       </SafeAreaProvider>

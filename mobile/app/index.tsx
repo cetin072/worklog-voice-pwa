@@ -1,4 +1,6 @@
 import { CalendarExportPreview } from '@/src/features/calendar/calendar-export-preview';
+import { CaptureImportButton } from '@/src/features/capture/capture-import-button';
+import { captureChanges } from '@/src/features/capture/capture-runtime';
 import { homeOverview } from '@/src/features/home/home-overview';
 import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
 import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
@@ -319,12 +321,12 @@ function HomeHeader({ onOpenRecordSearch, onOpenSettings }: { onOpenRecordSearch
   </View>;
 }
 
-export default function HomeScreen() {
+export default function HomeScreen({ initialScreen = 'home' }: { initialScreen?: 'home' | 'input' } = {}) {
   const { session } = usePlatform();
-  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} key={session?.user.id || 'signed-out'} />;
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} initialScreen={initialScreen} key={session?.user.id || 'signed-out'} />;
 }
 
-function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: boolean }) {
+function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { androidTouchSmoke?: boolean; initialScreen?: 'home' | 'input' }) {
   const platform = usePlatform();
   const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
   const phase = platform.phase;
@@ -347,7 +349,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') updateClock(); });
     return () => { clearInterval(timer); subscription.remove(); };
   }, []);
-  const [screen, applyScreen] = useState<AppScreen>('home');
+  const [screen, applyScreen] = useState<AppScreen>(initialScreen);
   const quickVoiceNavigation = useRef(false);
   function warnPendingVoice() {
     Alert.alert('음성 기록을 먼저 확인해주세요', '녹음을 마치고 전사문을 저장하거나 버리면 다른 화면으로 이동할 수 있습니다.');
@@ -406,6 +408,20 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
 
   useEffect(() => { if (!email && rememberedEmail) setEmail(rememberedEmail); }, [email, rememberedEmail]);
+  useEffect(() => {
+    if (!session || !client) return;
+    return captureChanges.subscribe(change => {
+      if (change.owner !== session.user.id) return;
+      if (!change.cancelled) {
+        const today = seoulTodayKey();
+        const bucket: BriefingBucket = !change.dueDate ? 'undated' : change.dueDate === today ? 'today' : change.dueDate < today ? 'overdue' : 'upcoming';
+        setTaskFilter(bucket);
+        setExpandedBuckets(current => ({ ...current, [bucket]: true }));
+        setUpcomingExpanded(true);
+      }
+      void refreshBriefing();
+    }, session.user.id);
+  }, [client, session?.user.id, session?.access_token]);
   useEffect(() => {
     reminderSessionEpoch.invalidate();
     reminderSyncEpoch.invalidate();
@@ -1178,7 +1194,7 @@ function HomeScreenApp({ androidTouchSmoke = false }: { androidTouchSmoke?: bool
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>업무수첩에 반영된 최근 변경사항입니다.</Text>{MOBILE_PATCH_NOTES.map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    <VoiceRecorderCard mode="quick" navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); let reminderMessage: string; try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); } catch (nextError) { reminderMessage = reminderFailureMessage(nextError); } if (reminderGuard()) setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage }); if (reminderGuard() && saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
+    <VoiceRecorderCard mode="quick" renderPhotoAction={disabled => <CaptureImportButton compact disabled={disabled} />} navigationGuard={quickVoiceNavigation} onOpenWorklogInput={() => setScreen('input')} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(session.access_token, transcript, { ...options, sourceType: 'voice' }); let reminderMessage: string; try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); } catch (nextError) { reminderMessage = reminderFailureMessage(nextError); } if (reminderGuard()) setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage }); if (reminderGuard() && saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing }} />
   </View> : null}
     {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
   <WorkRecordEditSheet

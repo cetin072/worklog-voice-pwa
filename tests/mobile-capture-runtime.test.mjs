@@ -1,0 +1,146 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+import { createRequire, register } from 'node:module';
+import { captureScheduleInput } from '../netlify/shared/capture-schedule-input.mjs';
+register('./helpers/mobile-ts-loader.mjs',import.meta.url);
+const {createCaptureInbox}=await import('../mobile/src/features/capture/capture-inbox.ts');
+const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
+function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',review=false,linkAfterEdit=false}={}) {
+ let details=review?{title:'캡처 일정 확인 필요',dueDate:'',dueTime:''}:{title:'서버 회의 제목',dueDate:'2099-11-03',dueTime:'15:00'};
+ const map=new Map(),remote=new Map(),calls=[],sid='11111111-1111-4111-8111-111111111111';let actor='alice',timeout=false,failOcr=false,switchToken=false,failReminder=false,failEdit=false,failEditReminder=false,staleLink=false;
+ const storage={getItem:async k=>map.get(k)||null,setItem:async(k,v)=>{map.set(k,v);}};
+ const client={auth:{getUser:async()=>({data:{user:{id:actor}}})}};
+ const modules={
+  '../../../../netlify/shared/capture-schedule-input.mjs':{captureScheduleInput},
+  '@/src/platform/secure-storage':{secureSessionStorage:storage},'./capture-inbox':{createCaptureInbox},
+  '@/src/features/schedule/worklog-reminder-adapter':{findWorklogReminder:async()=>({id:sid,status:'confirmed',title:details.title,startsAt:staleLink?'2099-11-01T07:00:00Z':`${details.dueDate}T${details.dueTime}:00+09:00`})},
+  '@/src/platform/authenticated-access':{getFreshAccessToken:async()=>{if(switchToken)actor='bob';return actor+'-token';}},
+  '@/src/features/schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[{id:sid,title:'회의',startsAt:'2099-11-03T06:00:00Z',status:'confirmed',allDay:false}]})},
+  './capture-files':{removeCaptureImage:async uri=>calls.push(['remove',uri])},
+  './capture-ocr':{recognizeCapture:async()=>{if(failOcr)throw Error('OCR');calls.push(['ocr']);return ocrText;}},
+  '@/src/platform/worklog-api':{
+   saveWorklog:async(token,text,options)=>{calls.push(['save',token,text,options]);if(!remote.has(options.clientRequestId))remote.set(options.clientRequestId,{pageId:remote.size===0?'record-a':`record-${remote.size+1}`,scheduleCreated:!review,scheduleId:review?undefined:sid});if(timeout){timeout=false;throw Error('connection lost after commit');}return remote.get(options.clientRequestId);},
+   readWorklogDetails:async()=>({...details}),
+   updateWorklogDetails:async(token,input)=>{calls.push(['edit',token,input]);if(failEdit)throw Error('서버에서 수정을 저장하지 못했습니다.');details={title:input.title,dueDate:input.dueDate,dueTime:input.dueTime};return{title:input.title,schedule:linkAfterEdit?null:{id:sid,status:'confirmed'}};},
+   deleteWorklog:async(_client,id)=>{calls.push(['delete',id]);return{cancelledScheduleIds:[sid]};},
+  },
+  '@/src/features/schedule/schedule-reminder-post-save':{
+   synchronizeSavedScheduleReminders:async result=>{calls.push(['reminders',result]);if(failReminder)throw Error('permission');},
+   synchronizeEditedWorklogReminder:async(_c,input)=>{calls.push(['edit-reminders',input]);if(failEditReminder)throw Error('alarm permission denied');return linkAfterEdit?'created':'linked';},
+   cancelSavedScheduleReminders:async ids=>calls.push(['cancel-reminders',ids]),
+  },
+ };
+ const exports={};const code=ts.transpileModule(readFileSync('mobile/src/features/capture/capture-runtime.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ vm.runInNewContext(code,{exports,require:n=>{assert.ok(modules[n],n);return modules[n];}});
+ return{setDetails:value=>details=value,api:exports,client,calls,remote,owner:()=>actor,setTimeout:()=>timeout=true,failOcr:()=>failOcr=true,switchToken:()=>switchToken=true,failReminder:()=>failReminder=true,failEdit:()=>failEdit=true,setEditFailure:value=>failEdit=value,failEditReminder:()=>failEditReminder=true,staleLink:()=>staleLink=true,receive:()=>exports.captureInbox.receive({hash:'a'.repeat(64),uri:'file:///private/capture'},'alice')};
+}
+test('automatic save has no confirmation; two overlapping runs share the persisted receipt',async()=>{
+ const h=harness(),entry=await h.receive();const [a,b]=await Promise.all([h.api.processCapture(entry,h.client,'alice'),h.api.processCapture(entry,h.client,'alice')]);
+ assert.equal(a.saved.pageId,b.saved.pageId);assert.equal(h.calls.filter(x=>x[0]==='save').length,1);
+ const call=h.calls.find(x=>x[0]==='save');assert.equal(call[3].sourceType,'capture');assert.ok(call[2].includes('약속:'));
+ assert.equal(a.details.title,'서버 회의 제목');assert.equal(a.uri,undefined);
+});
+test('the reported relative-date capture is a saved undated review, and editing resolves canonical schedule status',async()=>{
+ const h=harness({ocrText:'오늘 오후 13시 담당자 거래처 방문',review:true,linkAfterEdit:true}),changes=[];
+ const unsubscribe=h.api.captureChanges.subscribe(change=>changes.push(change));
+ const saved=await h.api.processCapture(await h.receive(),h.client,'alice');
+ assert.equal(saved.details.title,'오늘 오후 13시 담당자 거래처 방문');assert.equal(saved.details.dueDate,'');assert.equal(saved.reviewContentApplied,true);
+ assert.equal(saved.decision.kind,'review');assert.equal(saved.saved.scheduleCreated,false);
+ const save=h.calls.find(x=>x[0]==='save');assert.equal(save[2],'캡처 일정 확인 필요');assert.match(save[3].followUp,/담당자/);
+ assert.equal(changes[0].recordId,'record-a');assert.equal(changes[0].dueDate,'');
+ const replay=[];const stopOther=h.api.captureChanges.subscribe(change=>replay.push(change),'bob');assert.equal(replay.length,0);
+ const stopHome=h.api.captureChanges.subscribe(change=>replay.push(change),'alice');assert.equal(replay.length,1);assert.equal(replay[0].recordId,'record-a');stopOther();stopHome();
+ const result=await h.api.editCapture(h.client,saved,{title:'담당자 거래처 방문',dueDate:'2099-11-04',dueTime:'13:00'});
+ assert.equal(result.scheduleCreated,true);assert.equal(result.schedule.id,'11111111-1111-4111-8111-111111111111');
+ assert.equal(changes.at(-1).dueDate,'2099-11-04');
+ await h.api.undoCapture(h.client,saved);assert.equal(changes.at(-1).cancelled,true);unsubscribe();
+});
+test('uncertain response retries the exact request ID and creates only one remote record',async()=>{
+ const h=harness(),entry=await h.receive();h.setTimeout();await assert.rejects(h.api.processCapture(entry,h.client,'alice'));
+ const pending=await h.api.captureInbox.get(entry.hash,'alice');assert.ok(pending.uri);assert.ok(pending.decision);
+ await h.api.processCapture(pending,h.client,'alice');const saves=h.calls.filter(x=>x[0]==='save');assert.equal(saves.length,2);assert.equal(saves[0][3].clientRequestId,saves[1][3].clientRequestId);assert.equal(h.remote.size,1);
+});
+test('post-save edit and undo consume the canonical response and clean related reminders',async()=>{
+ const h=harness();let entry=await h.api.processCapture(await h.receive(),h.client,'alice');
+ await h.api.editCapture(h.client,entry,{title:'변경된 회의',dueDate:'2099-11-04',dueTime:'16:00'});
+ assert.equal(h.calls.find(x=>x[0]==='edit-reminders')[1].dueTime,'16:00');
+ entry=await h.api.undoCapture(h.client,entry);assert.equal(entry.undone,true);
+ assert.equal(h.calls.find(x=>x[0]==='cancel-reminders')[1][0],'11111111-1111-4111-8111-111111111111');
+ await h.api.processCapture(entry,h.client,'alice');assert.equal(h.calls.filter(x=>x[0]==='save').length,1);
+});
+test('OCR failure retains image and account change before token submission cannot save to another account',async()=>{
+ const h=harness(),entry=await h.receive();h.failOcr();await assert.rejects(h.api.processCapture(entry,h.client,'alice'));
+ assert.ok((await h.api.captureInbox.get(entry.hash,'alice')).uri);assert.equal(h.calls.length,0);
+ const h2=harness(),e2=await h2.receive();h2.switchToken();await assert.rejects(h2.api.processCapture(e2,h2.client,'alice'),/CAPTURE_ACCOUNT_CHANGED/);assert.equal(h2.remote.size,0);
+ const h3=harness(),e3=await h3.api.processCapture(await h3.receive(),h3.client,'alice');h3.switchToken();
+ await assert.rejects(h3.api.undoCapture(h3.client,e3),/CAPTURE_ACCOUNT_CHANGED/);assert.equal(h3.calls.filter(x=>x[0]==='delete').length,0);
+});
+test('reminder failure never reports record save failure and is visible separately',async()=>{
+ const h=harness();h.failReminder();const saved=await h.api.processCapture(await h.receive(),h.client,'alice');
+ assert.ok(saved.saved.pageId);assert.match(saved.reminderWarning,/알림/);assert.equal(h.remote.size,1);
+});
+
+test('reopening a legacy capture repairs only its placeholder title and preserves an edited date',async()=>{
+ const h=harness({review:true});let entry=await h.receive();
+ h.setDetails({title:'캡처 일정 확인 필요',dueDate:'2099-11-04',dueTime:'13:00'});
+ entry={...entry,saved:{pageId:'record-a'},decision:{kind:'review',title:'캡처 일정 확인 필요',date:'',time:'',description:'담당자 거래처 방문',reason:'unknown',transcript:'캡처 일정 확인 필요',status:'확인필요',followUp:'담당자 거래처 방문'}};
+ await h.api.captureInbox.put(entry);const result=await h.api.processCapture(entry,h.client,'alice');
+ assert.equal(result.details.title,'담당자 거래처 방문');assert.equal(result.details.dueDate,'2099-11-04');assert.equal(result.details.dueTime,'13:00');
+ assert.equal(h.calls.filter(c=>c[0]==='save').length,0);
+ await h.api.processCapture(result,h.client,'alice');assert.equal(h.calls.filter(c=>c[0]==='edit').length,1);
+});
+
+
+test('committed capture edit survives alarm failure and reopening preserves the new title and date',async()=>{
+ const h=harness({review:true,linkAfterEdit:true});const entry=await h.api.processCapture(await h.receive(),h.client,'alice');
+ h.failEditReminder();const result=await h.api.editCapture(h.client,entry,{title:'수정한 방문 일정',dueDate:'2099-11-04',dueTime:'23:00'});
+ assert.match(result.reminderWarning,/수정은 저장됐지만 알림/);assert.equal(result.scheduleCreated,true);
+ assert.equal(result.entry.details.title,'수정한 방문 일정');assert.equal(result.entry.details.dueTime,'23:00');
+ const durable=await h.api.captureInbox.get(entry.hash,'alice');assert.equal(durable.details.dueDate,'2099-11-04');assert.equal(durable.details.title,'수정한 방문 일정');
+ const reopened=await h.api.processCapture(durable,h.client,'alice');assert.equal(reopened.details.dueTime,'23:00');
+ assert.equal(h.calls.filter(c=>c[0]==='save').length,1);assert.equal(h.calls.filter(c=>c[0]==='edit'&&c[2].title==='수정한 방문 일정').length,1);
+});
+test('failed server edit keeps the existing receipt and never attempts alarm reservation',async()=>{
+ const h=harness({review:true}),entry=await h.api.processCapture(await h.receive(),h.client,'alice');h.failEdit();
+ await assert.rejects(h.api.editCapture(h.client,entry,{title:'보존할 입력',dueDate:'2099-11-04',dueTime:'23:00'}),/서버/);
+ assert.equal(h.calls.filter(c=>c[0]==='edit-reminders').length,0);
+ assert.equal((await h.api.captureInbox.get(entry.hash,'alice')).details.dueDate,'');
+});
+
+test('a stale linked Schedule cannot be advertised as the newly edited appointment',async()=>{
+ const h=harness({review:true,linkAfterEdit:true}),entry=await h.api.processCapture(await h.receive(),h.client,'alice');h.failEditReminder();h.staleLink();
+ const result=await h.api.editCapture(h.client,entry,{title:'새 방문 일정',dueDate:'2099-11-04',dueTime:'23:00'});
+ assert.equal(result.scheduleCreated,false);assert.equal(result.schedule,null);assert.match(result.reminderWarning,/알림/);
+ assert.equal(result.entry.details.dueDate,'2099-11-04');assert.equal(result.entry.details.dueTime,'23:00');
+});
+
+
+test('cancel then explicitly register the same capture creates one new record with edited fields',async()=>{
+ const h=harness({review:true,linkAfterEdit:true});let entry=await h.api.processCapture(await h.receive(),h.client,'alice');
+ const edited=await h.api.editCapture(h.client,entry,{title:'마지막으로 수정한 방문',dueDate:'2099-11-05',dueTime:'13:00'});
+ entry=await h.api.undoCapture(h.client,edited.entry);const oldId=entry.saved.pageId;
+ const unchanged=await h.api.processCapture(await h.receive(),h.client,'alice');assert.equal(unchanged.undone,true);assert.equal(h.remote.size,1);
+ const [a,b]=await Promise.all([h.api.restartCapture(h.client,entry),h.api.restartCapture(h.client,entry)]);
+ const [r1,r2]=await Promise.all([h.api.processCapture(a,h.client,'alice'),h.api.processCapture(b,h.client,'alice')]);
+ assert.equal(h.remote.size,2);assert.notEqual(r1.saved.pageId,oldId);assert.equal(r1.saved.pageId,r2.saved.pageId);
+ assert.equal(r1.details.title,'마지막으로 수정한 방문');assert.equal(r1.details.dueDate,'2099-11-05');assert.equal(r1.details.dueTime,'13:00');assert.equal(r1.restartDetails,undefined);
+ assert.equal(h.calls.filter(c=>c[0]==='ocr').length,1);assert.equal(h.calls.filter(c=>c[0]==='delete').length,1);
+ const writes=h.calls.filter(c=>c[0]==='save');assert.notEqual(writes[0][3].clientRequestId,writes[1][3].clientRequestId);
+ const lastEdit=h.calls.filter(c=>c[0]==='edit').at(-1);assert.equal(lastEdit[2].pageId,r1.saved.pageId);
+});
+test('restart save response loss and edit failure resume the new request without another record',async()=>{
+ const h=harness({review:true}),first=await h.api.processCapture(await h.receive(),h.client,'alice');
+ const cancelled=await h.api.undoCapture(h.client,first);const pending=await h.api.restartCapture(h.client,cancelled);h.setTimeout();
+ await assert.rejects(h.api.processCapture(pending,h.client,'alice'));assert.equal(h.remote.size,2);
+ h.failEdit();await assert.rejects(h.api.processCapture(await h.api.captureInbox.get(pending.hash,'alice'),h.client,'alice'));
+ assert.ok((await h.api.captureInbox.get(pending.hash,'alice')).saved);
+ h.setEditFailure(false);const result=await h.api.processCapture(await h.api.captureInbox.get(pending.hash,'alice'),h.client,'alice');
+ assert.equal(h.remote.size,2);assert.equal(result.requestId,pending.requestId);assert.equal(result.restartDetails,undefined);
+ const retries=h.calls.filter(c=>c[0]==='save').slice(1);assert.equal(retries[0][3].clientRequestId,retries[1][3].clientRequestId);
+});
+test('account changes cannot explicitly restart another owner capture',async()=>{
+ const h=harness({review:true}),entry=await h.api.processCapture(await h.receive(),h.client,'alice');const cancelled=await h.api.undoCapture(h.client,entry);h.switchToken();
+ await assert.rejects(h.api.restartCapture(h.client,cancelled),/CAPTURE_ACCOUNT_CHANGED/);assert.equal((await h.api.captureInbox.get(entry.hash,'alice')).undone,true);
+});

@@ -39,10 +39,14 @@ for spec in '320 1.0' '390 1.0' '320 1.4'; do
     if [[ "$calendar_captured" == false ]]; then
       point=$(python3 - "$output/$name-page-$page.xml" <<'PYXML'
 import re, sys, xml.etree.ElementTree as ET
-for node in ET.parse(sys.argv[1]).iter('node'):
+root = ET.parse(sys.argv[1])
+dock_labels = {'음성 기록 시작', '음성 기록 종료 후 바로 저장', '업무 직접 입력 열기', '녹음 취소'}
+dock_top = min((int(re.findall(r'\d+', n.get('bounds'))[1]) for n in root.iter('node') if n.get('content-desc') in dock_labels), default=810)
+for node in root.iter('node'):
     if node.get('text') == 'Google 캘린더 · 연결 준비':
         x1,y1,x2,y2 = map(int,re.findall(r'\d+',node.get('bounds')))
-        if y1 > 0 and y2 < 810:
+        # Scroll farther if the actual floating controls cover this target.
+        if y1 > 0 and y2 < min(810, dock_top - 8):
             print((x1+x2)//2,(y1+y2)//2)
             break
 PYXML

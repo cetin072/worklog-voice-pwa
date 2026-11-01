@@ -15,6 +15,9 @@ on:
       - 'mobile/package-lock.json'
       - 'tests/mobile-*.test.mjs'
       - 'tests/helpers/**'
+      - 'netlify/shared/capture-schedule-input.*'
+      - 'netlify/shared/korean-date-core.mjs'
+      - 'netlify/shared/schedule-extract.mjs'
       - 'scripts/verify-mobile-device-mutations.mjs'
       - '.github/workflows/mobile-foundation.yml'
   push:
@@ -31,6 +34,9 @@ on:
       - 'mobile/package-lock.json'
       - 'tests/mobile-*.test.mjs'
       - 'tests/helpers/**'
+      - 'netlify/shared/capture-schedule-input.*'
+      - 'netlify/shared/korean-date-core.mjs'
+      - 'netlify/shared/schedule-extract.mjs'
       - 'scripts/verify-mobile-device-mutations.mjs'
       - '.github/workflows/mobile-foundation.yml'
   workflow_dispatch:
@@ -97,7 +103,7 @@ jobs:
 
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee /tmp/mobile-changed-files.txt
 
-          if grep -Eq '^(mobile/(app/|src/|app\.json|app\.config\.(js|ts)|package-lock\.json|android/|ios/)|\.github/workflows/mobile-foundation\.yml)' /tmp/mobile-changed-files.txt; then
+          if grep -Eq '^(mobile/(app/|src/|app\.json|app\.config\.(js|ts)|metro\.config\.js|package-lock\.json|android/|ios/)|netlify/shared/(capture-schedule-input\.|korean-date-core\.mjs|schedule-extract\.mjs)|\.github/workflows/mobile-foundation\.yml)' /tmp/mobile-changed-files.txt; then
             echo "android=true" >> "$GITHUB_OUTPUT"
           else
             echo "android=false" >> "$GITHUB_OUTPUT"

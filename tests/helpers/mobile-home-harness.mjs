@@ -9,7 +9,11 @@ const declarations = ast.statements.filter(node => ts.isFunctionDeclaration(node
 const start = source.indexOf("{screen === 'home' ? <>") + "{screen === 'home' ? ".length;
 const end = source.indexOf("\n    {screen === 'journal'", start);
 const home = source.slice(start, end).trim().replace(/ : null\}$/, '');
-const compiled = ts.transpileModule(`${declarations}\nfunction renderHome() { return (${home}); }\nreturn { renderHome, TaskRow };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
+let photoAction;
+function findPhoto(node) { if (ts.isJsxAttribute(node) && node.name.getText(ast) === 'renderPhotoAction') photoAction = node.initializer.expression.getText(ast); ts.forEachChild(node, findPhoto); }
+findPhoto(ast);
+if (!photoAction) throw Error('Home Photo action is missing');
+const compiled = ts.transpileModule(`${declarations}\nfunction renderHome() { return (${home}); }\nreturn { renderHome, TaskRow, renderPhoto: ${photoAction} };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
 export function homeHarness(context) {
  const states = []; let cursor = 0; let back; let cleanup;
  const node = (type, props, ...children) => ({ type, props: { ...props, children } });
@@ -19,6 +23,7 @@ export function homeHarness(context) {
   styles: new Proxy({}, { get: (_o, key) => key }), sectionToneStyles: {},
   CompactReminderLabel: props => node('Pressable', { onPress: props.onPress, accessibilityLabel: `${props.title} 알림 확인 필요` }, '알림 확인 필요'),
   ScheduleReminderLabel: props => node('Text', {}, '알림 확인 필요'), MeetingRecordingBanner: () => null,
+  CalendarExportPreview: () => null, CaptureImportButton: props => node('CaptureImportButton', props),
   lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
   briefingNow: 0, reminderTarget: null, upcomingExpanded: false, expandedBuckets: {}, taskBusyId: null, noteBusyId: null, notes: [], visibleNotes: [], extraNotes: 0,
   undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
@@ -36,7 +41,7 @@ export function homeHarness(context) {
   if (typeof value.type === 'function') return expand(value.type(value.props));
   return { ...value, props: { ...value.props, children: expand(value.props.children) } };
  }
- return { context: base, render() { cursor = 0; return expand(api.renderHome()); }, back() { return back?.(); } };
+ return { context: base, photo(disabled = false) { return expand(api.renderPhoto(disabled)); }, render() { cursor = 0; return expand(api.renderHome()); }, back() { return back?.(); } };
 }
 export function nodes(tree) { return Array.isArray(tree) ? tree.flatMap(nodes) : tree && typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : []; }
 export function words(tree) { return Array.isArray(tree) ? tree.map(words).join(' ') : tree && typeof tree === 'object' ? words(tree.props?.children) : String(tree ?? ''); }
