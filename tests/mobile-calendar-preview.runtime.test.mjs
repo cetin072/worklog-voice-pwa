@@ -62,7 +62,14 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   button(task,'확인한 일정').props.onPress();await flush();assert.equal(posts,2);assert.match(text(task()),/등록 완료/);
   button(task,'캘린더 추가 닫기').props.onPress();
   button(settings,'연결 해제').props.onPress();assert.equal(service.info(),null);assert.equal(render(),null);
-  process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT='production';assert.equal(settings(),null);assert.equal(render(),null);
+  process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT='production';
+  assert.ok(settings());assert.equal(render(),null);assert.equal(posts,2);
+  button(settings,'Google 캘린더 연결').props.onPress();finish();await flush();
+  assert.match(text(settings()),/연결됨/);assert.ok(button(render,'Google 캘린더에 보내기'));
+  button(render,'Google 캘린더에 보내기').props.onPress();await flush();
+  button(render,'확인한 일정').props.onPress();await flush();assert.equal(posts,3);assert.match(text(render()),/등록 완료/);
+  delete process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT;assert.ok(settings());assert.equal(connects,2);
+
 });
 
 test('real server confirmed projection reaches actual Home Calendar entry; tentative schedules do not',async()=>{

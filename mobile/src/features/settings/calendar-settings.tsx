@@ -6,7 +6,6 @@ import { CALENDAR_PERMISSION_NOTICE } from '../calendar/calendar-service';
 export function CalendarSettings() {
   const connection = useCalendarConnection();
   const [showDetails, setShowDetails] = useState(false);
-  if (process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT !== 'qa') return null;
   const info = connection?.info();
   const status = connection?.status();
   return <View style={styles.card}>

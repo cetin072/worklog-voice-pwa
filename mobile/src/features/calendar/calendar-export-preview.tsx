@@ -7,7 +7,7 @@ import { CalendarEndPicker, calendarDateLabel } from './calendar-end-picker';
 import { calendarEndIssue, calendarExportEnd, type CalendarSource } from './calendar-source';
 import { readCalendarEntry } from './calendar-record-source';
 
-/** QA-only optional output. Opening or connecting never writes an event. */
+/** Optional Calendar output. Opening or connecting never writes an event. */
 export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, title }: {
   scheduleId?: string; recordId?: string; title: string; startsAt?: string; allDay?: boolean; dateKey?: string;
 }) {
@@ -27,7 +27,6 @@ export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, 
   owner.current = platform.session?.user.id;
   useEffect(() => () => { generation.current++; }, []);
   const connection = useCalendarConnection();
-  if (process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT !== 'qa') return null;
   const close = () => { generation.current++; setVisible(false); setBusy(false); gate.current = false; };
   const context = () => {
     const captured = generation.current;

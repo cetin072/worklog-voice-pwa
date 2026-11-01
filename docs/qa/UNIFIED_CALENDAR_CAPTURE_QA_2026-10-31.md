@@ -1,0 +1,53 @@
+# Calendar + capture unified QA
+
+QA-only integration of Calendar PR #474 and capture/gallery PR #473. It is not a production merge and does not replace either product PR.
+
+- Main preserved: 9aed364fa0f79b3353b6f7cb629637147b835141 (deployed edit-loading metadata fallback and web Push retirement).
+- Calendar source: f1213172e6f5d5a66d3dbf4135affdf2a8811b72 plus 43fb4e069fcf5f0332d2d38e8411d6bd6bdcdf75 (input validation, compact action, linked record action).
+- Capture source: 881f0833a7c7b6da863ba1861202a1b2218abcaf, including Home gallery import, image share, Korean OCR, result refresh and editing.
+- QA identity com.cetin072.worklog.qa, version 0.1.0 (9). Same QA signer; production app coexists.
+- Branch qa/calendar-capture-20261031 uses the existing Mobile gate on push. Main/production deployment policy is unchanged. No new product PR or production migration is introduced.
+
+## Confirmed defects and fixes
+
+The screenshot reports Google connected successfully. A visible end equal to the start could enable Send, then fail validation inside a broad source-read catch. Validate before reads, show a precise inline end error, and disable invalid submissions. At the user's request, missing end defaults to a visibly disclosed 30-minute Google display length (one day for all-day). Original Worklog data is unchanged. Optional time adjustment uses existing native date/time picker and 30-minute/one-hour controls. Existing source end can also be adjusted for the Google copy.
+
+The Today/overdue/upcoming work cards and schedule list used different UI paths. Reuse the existing bounded reminder linkage/snapshot read to expose a unique confirmed schedule ID to record cards. No extra per-card query, fabricated schedule, date guessing or ambiguous link selection. Canonical source/owner/status is re-read before export.
+
+Preserve both native smoke paths: Settings Calendar connection, gallery picker/cancel, voice/navigation, native crypto. The old capture screenshot script's per-schedule connection target is obsolete and remains replaced by the Settings target.
+
+## Reuse assessment
+
+- Google Calendar official REST is already the provider. Its small adapter handles GET/insert/readback; app source validation, duplicate policy and UI remain application responsibilities. https://developers.google.com/workspace/calendar/api/guides/create-events
+- expo-calendar opens device system calendar UI and accesses device calendars. It can reduce app-owned event UI, but does not provide the same connected-Google-account/direct-cloud-write/readback contract. Do not silently replace that behavior. https://docs.expo.dev/versions/latest/sdk/calendar/
+- react-native-add-calendar-event is MIT but deprecated in favor of expo-calendar; do not add it. https://github.com/vonovak/react-native-add-calendar-event
+- Google's googleapis Node client is Apache-2.0 and server-oriented; adding a Node runtime/backend solely for this two-method mobile adapter adds unnecessary structure. https://github.com/googleapis/google-api-nodejs-client
+- Reuse existing native date/time picker, Expo browser/crypto and #473's MIT OCR wrapper/gallery packages. Google ML Kit model terms are recorded in the capture QA document. No new provider or dependency is added by the Calendar fixes.
+
+## Verification boundary
+
+Local integrated basic tests: 1008 pass; TypeScript pass. Native dependency installation uses the capture PR lockfile. CI exact-head APK/runtime evidence must be checked before delivery. Google real insert/GET/duplicate acceptance and real Korean capture OCR/date confirmation still require user device QA. No existing Google event is changed/deleted, no production DB is modified, and no long-lived Google token is stored.
+
+## QA 10 feedback completion
+
+- Google export resolves the RLS-owned work record and existing get_my_work_record_edit RPC without creating reminders or writing a Schedule. Date-only records become an all-day Google copy; undated records request a date without guessing one. Schedule-list and record-card entries resolve the same work record identity. Legacy Google schedule IDs are GET-reconciled and never duplicated or overwritten. Canonical creator/status/revision/date fields are rechecked before accepting a receipt.
+- Review capture decisions retain the useful scanned appointment line as title. The existing date-neutral save contract and existing owned edit API are reused, avoiding a new backend contract, migration or production deployment. The durable save receipt survives edit errors; retries do not insert a second record. A legacy import's unchanged placeholder title is repaired only when that import is reopened, preserving existing dates and manual titles. No bulk production repair is run.
+- Home task and schedule rows use one row of visually smaller reminder/Google controls. The reminder chip shows a short status; full status remains in its accessibility label and existing reminder sheet. Visual height 32 plus vertical hit slop preserves a 44-point touch target. Duplicate title/follow-up text is hidden.
+- Settings retains short connection state/actions with details collapsed. QA package remains com.cetin072.worklog.qa, version 0.1.0 (10). Existing connected-Google UX is retained.
+- Local basic tests 1013/1013, Mobile 429/429, TypeScript passed before remote native build. Real Google write/readback and actual screenshot OCR remain device acceptance tasks. No existing Google events, account permissions or production schema are modified.
+
+## QA 11 — capture edit and photo shortcut
+
+User QA escape: the capture editor used one failure path for the server update and later alarm reservation. A committed edit could therefore show a red save failure and retain the old local receipt. Persist the successful server result first, keep alarm failure as a separate warning, and reconcile a possibly committed Schedule by an owner-guarded read without repeating its write. Actual server failures retain input and display the existing safe API reason. Existing cancelled production records are not revived or edited during verification.
+
+The right Quick Voice status orb is now a Photo shortcut using the existing gallery controller, durable inbox and capture route. The left memo/cancel and central microphone remain. Photos are disabled during voice work, picker cancellation is harmless, rapid taps use the existing lock, and account/unmount guards remain. The top orb retains voice status. The duplicate large Home gallery entry moves into this persistent dock. No new provider, native permission or dependency.
+
+Regression coverage: committed edit + alarm failure + reopen; server failure preserves the old receipt and input; success with warning closes the editor; Photo action, duplicate tap, cancellation, unmount and recording disable. Android smoke asserts the intermediate Settings state before a second back event, then opens the real picker from Photo and cancels. No timeout expansion or skipped checks.
+
+QA-only versionCode 11. Calendar runtime/provider code is unchanged. Native build/execution and exact-head artifact must pass before delivery; Google/OCR real-account acceptance is not implied by synthetic fixtures.
+
+## QA 12 — explicit re-registration after cancellation
+
+A repeated image used its persisted cancellation tombstone, so the screen offered no way to intentionally register it again. Keep automatic dedupe; add one explicit Register again action on the cancelled screen. A serialized inbox restart advances the request generation once and persists it before network activity. Save retries and double taps reuse that generation. Stale callbacks cannot overwrite a newer registration. The cancelled server record is never restored or edited.
+
+Re-registration reuses retained OCR and the last edited title/date/time. A date-neutral new save plus the existing edit/reminder path applies those fields without guessing dates from the original chat. The new save receipt survives uncertain responses or later edit failures. Owner verification remains before resetting the local entry. Regression coverage includes cancel/re-share, explicit restart, edited fields, no repeated OCR, distinct new record ID, response loss, edit retry, app restart, stale callback rejection and account isolation. QA-only versionCode 12; no provider/native dependency/production schema change. Exact-head Mobile gate and artifact must pass before delivery.
