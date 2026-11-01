@@ -43,7 +43,7 @@ test('compact schedule and task buttons share words, wrapping and >=44 point tar
   const upper=ScheduleReminderLabel({schedule:{scheduleId:sid,title:'Synthetic'},onPress:()=>calls++});
   const schedule=upper.type(upper.props);
   assert.deepEqual(record.children,schedule.children);
-  assert.equal(record.props.style.minHeight,44);assert.equal(record.props.style.maxWidth,'100%');
+  assert.equal(record.props.style.minHeight,32);assert.ok(record.props.style.minHeight+record.props.hitSlop.top+record.props.hitSlop.bottom>=44);assert.equal(record.props.style.maxWidth,'100%');
   assert.equal(record.children[0].props.numberOfLines,undefined);
   assert.ok(record.props.accessibilityLabel.includes(current));record.props.onPress();
  }
@@ -72,7 +72,7 @@ test('home snapshot shares one device read and drops late responses after accoun
  resolveNative({[sid]:{permission:'granted',stored:[],scheduled:[]}});await new Promise(resolve=>setImmediate(resolve));
  let tree=HomeReminderStatus(props);
  assert.equal(tree.props.value[`record:${rid}`],'이 기기 알림 없음 · 설정');
- assert.equal(tree.props.value[`record:${rid}`],tree.props.value[`schedule:${sid}`]);assert.equal(nativeReads,1);
+ assert.equal(tree.props.value[`record:${rid}`],tree.props.value[`schedule:${sid}`]);assert.equal(nativeReads,1);assert.equal(tree.children[0].props.value[rid],sid);
  cleanup();tree=HomeReminderStatus({...props,scope:'account-b:journal:2'});assert.deepEqual(tree.props.value,{});
  cleanup=effect();await new Promise(resolve=>setImmediate(resolve));cleanup();state=null;
  resolveNative({[sid]:{permission:'granted',stored:[],scheduled:[]}});await new Promise(resolve=>setImmediate(resolve));

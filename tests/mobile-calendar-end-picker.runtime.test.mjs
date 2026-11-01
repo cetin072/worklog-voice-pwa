@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
+test('native end selector requires an explicit selection, preserves timezone and uses exclusive all-day end',()=>{
+  let slots=[],cursor=0;const changes=[];
+  const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=init;return[slots[i],v=>slots[i]=v];}};React.default=React;
+  const exp={};const compiled=ts.transpileModule(readFileSync('mobile/src/features/calendar/calendar-end-picker.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React}}).outputText;
+  new Function('require','exports',compiled)(name=>name==='react'?React:name==='react-native'?{Platform:{OS:'android'},Pressable:'Pressable',Text:'Text',View:'View'}:{__esModule:true,default:'DateTimePicker'},exp);
+  let source={start:'2026-11-02T01:00:00Z',end:'',allDay:false,timeZone:'Asia/Seoul'};
+  const render=()=>{cursor=0;return exp.CalendarEndPicker({source,value:'',disabled:false,onChange:v=>changes.push(v)});};
+  const all=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(all):[n,...all(n.props.children)];
+  const picker=()=>all(render()).find(n=>n.type==='DateTimePicker');
+  all(render()).find(n=>n.type==='Pressable').props.onPress();
+  assert.equal(changes.length,0);assert.equal(picker().props.timeZoneName,'Asia/Seoul');
+  picker().props.onChange({type:'set'},new Date('2026-11-02T01:00:00Z'));
+  assert.equal(picker().props.mode,'time');assert.equal(changes.length,0);
+  picker().props.onChange({type:'set'},new Date('2026-11-02T02:00:00Z'));
+  assert.deepEqual(changes,['2026-11-02T02:00:00.000Z']);
+  source={...source,start:'2026-11-02',allDay:true};slots=[];
+  all(render()).find(n=>n.type==='Pressable').props.onPress();
+  picker().props.onChange({type:'dismissed'});assert.equal(changes.length,1);
+  all(render()).find(n=>n.type==='Pressable').props.onPress();
+  picker().props.onChange({type:'set'},new Date('2026-11-03T12:00:00Z'));
+  assert.equal(changes[1],'2026-11-04');
+  assert.match(exp.calendarDateLabel('2026-11-02T01:00:00Z',false,'Asia/Seoul'),/10:00/);
+});
