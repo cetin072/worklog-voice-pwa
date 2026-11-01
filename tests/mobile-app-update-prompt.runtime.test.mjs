@@ -17,7 +17,10 @@ function harness(check, openURL = async () => {}, timeout = 5000) {
     useState(value) { const i = cursor++; if (!(i in states)) states[i] = value; return [states[i], next => { states[i] = next; }]; },
     useEffect(fn) { effect = fn; },
     AppState: { currentState: 'active', addEventListener(_event, fn) { onState = fn; return { remove() { onState = null; } }; } },
-    updateSession: session, openUpdateStore, Linking: { openURL }, styles: new Proxy({}, { get: (_o, key) => key }),
+    updateSession: session, openUpdateStore, Linking: {
+      _validateURL(url) { assert.equal(typeof url, 'string'); },
+      openURL(url) { this._validateURL(url); return openURL(url); },
+    }, styles: new Proxy({}, { get: (_o, key) => key }),
   };
   for (const type of ['Modal', 'View', 'Text', 'ScrollView', 'Pressable']) scope[type] = type;
   const Component = new Function('scope', `with(scope) { ${compiled} }`)(scope);
@@ -46,7 +49,7 @@ test('actual prompt stays silent for current/offline/timeout and hides while bac
   }
   const h = harness(async () => true); h.mount(); await tick(); h.state('background'); assert.equal(h.render().props.visible, false); h.state('active'); await tick(); assert.equal(h.render().props.visible, true); h.unmount();
 });
-test('actual store button retries through HTTPS, dismisses on success, and keeps Later after failure', async () => {
+test('actual store button preserves the Linking receiver, retries HTTPS, and keeps Later after failure', async () => {
   const calls = []; const h = harness(async () => true, async url => { calls.push(url); if (url.startsWith('market:')) throw Error('missing handler'); });
   h.mount(); await tick(); h.press('업데이트하기'); await tick();
   assert.deepEqual(calls, ['market://details?id=com.cetin072.worklog', 'https://play.google.com/store/apps/details?id=com.cetin072.worklog']);
