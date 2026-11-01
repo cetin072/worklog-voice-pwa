@@ -25,7 +25,7 @@ export function AppUpdatePrompt() {
   async function openStore() {
     if (opening) return;
     setOpening(true); setError('');
-    try { await openUpdateStore(Linking.openURL); dismiss(); }
+    try { await openUpdateStore(url => Linking.openURL(url)); dismiss(); }
     catch { setError('Play 스토어를 열지 못했습니다. 연결을 확인하고 다시 시도하거나 나중에 업데이트해주세요.'); }
     finally { setOpening(false); }
   }
