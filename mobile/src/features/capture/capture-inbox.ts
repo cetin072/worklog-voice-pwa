@@ -8,7 +8,7 @@ export type CaptureEntry = {
 };
 type Storage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<void> };
 /** Single serialized owner, encrypted backing store. No image bytes or full OCR in ledger. */
-export function createCaptureInbox(storage: Storage) {
+export function createCaptureInbox(storage: Storage, newRegistrationId?: () => string) {
   let tail: Promise<unknown> = Promise.resolve();
   const serial = <T,>(fn: () => Promise<T>): Promise<T> => { const next = tail.then(fn); tail = next.catch(() => undefined); return next; };
   const key = 'worklog.capture.inbox.v1';
@@ -16,7 +16,7 @@ export function createCaptureInbox(storage: Storage) {
     const raw = await storage.getItem(key);
     if (!raw) return [];
     const rows = JSON.parse(raw);
-    if (!Array.isArray(rows) || rows.some(x => !/^[a-f0-9]{64}$/.test(x.hash) || !new RegExp(`^capture-${x.hash}(?:-r[1-9][0-9]{0,15})?$`).test(x.requestId))) throw new Error('CAPTURE_INBOX_CORRUPT');
+    if (!Array.isArray(rows) || rows.some(x => !/^[a-f0-9]{64}$/.test(x.hash) || !new RegExp(`^capture-${x.hash}(?:-r(?:[1-9][0-9]{0,15}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}))?$`).test(x.requestId))) throw new Error('CAPTURE_INBOX_CORRUPT');
     return rows;
   }
   return {
@@ -39,10 +39,10 @@ export function createCaptureInbox(storage: Storage) {
       // Double taps and stale screens resume the current attempt, never start two.
       if (old.requestId !== expectedRequestId) return old;
       if (!old.undone || !old.saved || !old.decision) throw new Error('CAPTURE_NOT_CANCELLED');
-      const generation = Number(old.requestId.match(/-r([0-9]+)$/)?.[1] || 0) + 1;
-      if (!Number.isSafeInteger(generation)) throw new Error('CAPTURE_INBOX_CORRUPT');
+      const nonce = newRegistrationId?.();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(nonce || '')) throw new Error('CAPTURE_REGISTRATION_ID_UNAVAILABLE');
       const restartDetails = old.details || { title: old.decision.title, dueDate: old.decision.date, dueTime: old.decision.time };
-      const next: CaptureEntry = { hash, owner, uri: old.uri, requestId: `capture-${hash}-r${generation}`, recordedAt: new Date().toISOString(),
+      const next: CaptureEntry = { hash, owner, uri: old.uri, requestId: `capture-${hash}-r${nonce}`, recordedAt: new Date().toISOString(),
         decision: { ...old.decision, transcript: '캡처 일정 확인 필요', status: '확인필요' }, restartDetails };
       rows[index] = next; await storage.setItem(key, JSON.stringify(rows)); return next;
     }); },

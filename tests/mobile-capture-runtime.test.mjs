@@ -16,7 +16,9 @@ function harness({ocrText='2099년 11월 3일 오후 3시 회사에서 회의',r
   assert.equal(table,'work_records');let id;
   const query={select:()=>query,eq:(field,value)=>{if(field==='id')id=value;return query;},single:async()=>({data:{id,created_by_user_id:'alice',status:cancelledRows.has(id)?'cancelled':'needs_review'}})};return query;
  }};
+ let nonce=0;
  const modules={
+  'expo-crypto':{randomUUID:()=>`aaaaaaaa-aaaa-4aaa-8aaa-${String(++nonce).padStart(12,'0')}`},
   '../../../../netlify/shared/capture-schedule-input.mjs':{captureScheduleInput},
   '@/src/platform/secure-storage':{secureSessionStorage:storage},'./capture-inbox':{createCaptureInbox},
   '@/src/features/schedule/worklog-reminder-adapter':{findWorklogReminder:async()=>({id:sid,status:'confirmed',title:details.title,startsAt:staleLink?'2099-11-01T07:00:00Z':`${details.dueDate}T${details.dueTime}:00+09:00`})},

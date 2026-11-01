@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { captureScheduleInput } from '../../../../netlify/shared/capture-schedule-input.mjs';
 import { secureSessionStorage } from '@/src/platform/secure-storage';
 import { saveWorklog, readWorklogDetails, updateWorklogDetails, deleteWorklog } from '@/src/platform/worklog-api';
@@ -11,7 +12,7 @@ import { recognizeCapture } from './capture-ocr';
 import { removeCaptureImage } from './capture-files';
 import { createCaptureInbox, type CaptureEntry } from './capture-inbox';
 
-export const captureInbox = createCaptureInbox(secureSessionStorage);
+export const captureInbox = createCaptureInbox(secureSessionStorage, () => Crypto.randomUUID());
 export const captureImportState = { galleryActive: false };
 type CaptureChange = { owner: string; recordId: string; dueDate: string; cancelled?: boolean };
 const captureListeners = new Map<(change: CaptureChange) => void, string | undefined>();
