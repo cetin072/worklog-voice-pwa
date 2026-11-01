@@ -67,6 +67,20 @@ export function processCapture(entry: CaptureEntry, client: PlatformSupabaseClie
       entry = { ...entry, saved: result }; await captureInbox.put(entry);
     }
     await current();
+    // QA and production have separate local inboxes but share server receipts.
+    // A replayed save can point at an already-cancelled record from the other
+    // installation. Read its owned status before claiming another success.
+    const savedId = entry.saved!.dataCoreWorkRecordId || entry.saved!.pageId!;
+    const state = await client.from('work_records').select('id,created_by_user_id,status')
+      .eq('id', savedId).eq('created_by_user_id', owner).single();
+    await current();
+    if (state.error || state.data?.id !== savedId || state.data?.created_by_user_id !== owner) throw new Error('CAPTURE_RECORD_UNCONFIRMED');
+    if (state.data.status === 'cancelled') {
+      const details = await readWorklogDetails(await captureToken(client, owner), savedId);
+      await current();
+      entry = { ...entry, details, undone: true }; await captureInbox.put(entry);
+      return entry;
+    }
     if (entry.restartDetails) {
       // A new idempotent save creates a new record; the cancelled record stays
       // cancelled. Apply the last confirmed edit through the existing edit API
