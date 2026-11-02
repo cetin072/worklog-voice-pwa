@@ -3,7 +3,7 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import { idempotencyHit, isValidClientRequestId, seoulDateFromRecordedAt } from "../shared/core-logic.mjs";
 import { classifyWorklogAction } from "../shared/action-engine-v1.mjs";
 import { multiActionChildRequestId, splitMultiActionText } from "../shared/multi-action-splitter.mjs";
-import { extractScheduleFromText } from "../shared/schedule-extract.mjs";
+import { worklogSchedule } from "../shared/manual-worklog-schedule.mjs";
 import { createNotionWorklogAdapter } from "../shared/notion-worklog-adapter.mjs";
 import { createSupabaseDataCoreRestClient } from "../shared/data-core/supabase-rest-client.mjs";
 import { createWorklogDataCoreAdapter } from "../shared/worklog-data-core-adapter.mjs";
@@ -183,6 +183,8 @@ export default async (req:Request, _context:Context) => {
 
   const recordedAtValue=body.recordedAt || new Date().toISOString();
   const explicitDueDate=String(body.dueDate || "").trim();
+  try { if (explicitDueDate) worklogSchedule(transcript, recordedAtValue, explicitDueDate, body.dueTime); }
+  catch (error) { return json(400,{ok:false,error:String(error?.message || "날짜·시간을 확인해주세요.")}); }
   const hasExplicitDueDate=/^\d{4}-\d{2}-\d{2}$/.test(explicitDueDate);
   const requestedSourceType=String(body.sourceType || "direct").trim().toLowerCase();
   const sourceType=["direct","voice","call","meeting","mail","capture","scan","notion","import","other"].includes(requestedSourceType)
@@ -205,7 +207,7 @@ export default async (req:Request, _context:Context) => {
     && !requestedType;
 
   function classifiedRecord(segment:string,clientRequestId:string,index:number|null=null,total:number|null=null){
-    const segmentSchedule=extractScheduleFromText(segment,recordedAtValue);
+    const segmentSchedule=worklogSchedule(segment,recordedAtValue,index===null ? explicitDueDate : "",index===null ? body.dueTime : undefined);
     const segmentAction=classifyWorklogAction({
       transcript:segment,
       recordedAt:recordedAtValue,

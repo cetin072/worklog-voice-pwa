@@ -62,17 +62,6 @@ function emptyManualWorkInput(): ManualWorkInputValue {
   };
 }
 
-function manualScheduleText(dueDate: string, dueTime: string) {
-  if (!dueDate) return '';
-  const date = dueDate.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1년 $2월 $3일');
-  const timeMatch = /^(\d{2}):(\d{2})$/.exec(dueTime);
-  if (!timeMatch) return ` ${date}`;
-  const hour = Number(timeMatch[1]);
-  const minute = timeMatch[2];
-  const meridiem = hour < 12 ? '오전' : '오후';
-  const displayHour = hour % 12 || 12;
-  return ` ${date} ${meridiem} ${displayHour}시 ${minute}분`;
-}
 
 const briefingBuckets: Array<{ key: BriefingBucket; label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' }> = [
   { key: 'today', label: '오늘', tone: 'warning' },
@@ -585,11 +574,11 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   async function persistDraft() {
     if (!session || !manualInput.transcript.trim() || busy) return;
     const original = manualInput.transcript.trim();
-    const saveText = `${original}${manualScheduleText(manualInput.dueDate, manualInput.dueTime)}`.trim();
     await run(async () => {
       const reminderGuard = reminderSessionEpoch.capture();
-      const saved = await saveWorklog(session.access_token, saveText, {
+      const saved = await saveWorklog(session.access_token, original, {
         dueDate: manualInput.dueDate,
+        dueTime: manualInput.dueTime,
         ...(manualInput.dueTime ? { type: '회의·통화' } : {}),
       });
       const feedback = {

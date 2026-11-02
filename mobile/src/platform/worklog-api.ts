@@ -185,6 +185,7 @@ function requestId() {
 }
 
 export type SaveWorklogOptions = Readonly<{
+  dueTime?: string;
   clientRequestId?: string;
   recordedAt?: string;
   sourceType?: 'direct' | 'voice' | 'capture';
@@ -344,7 +345,7 @@ export async function saveWorklog(
       ...(options.type ? { type: options.type.trim() } : {}),
       ...(options.amount !== undefined ? { amount: options.amount } : {}),
       ...(options.assignee ? { assignee: options.assignee.trim() } : {}),
-      ...(options.dueDate ? { dueDate: options.dueDate.trim() } : {}),
+      ...(options.dueDate ? { dueDate: options.dueDate.trim(), ...(options.dueTime !== undefined ? { dueTime: options.dueTime.trim() } : {}) } : {}),
       ...(options.followUp ? { followUp: options.followUp.trim() } : {}),
     }),
   });
