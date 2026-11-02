@@ -2,6 +2,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import { execFileSync } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
 
 const packageJson = JSON.parse(fs.readFileSync('mobile/package.json', 'utf8'));
 const readme = fs.readFileSync('mobile/README.md', 'utf8');
@@ -33,7 +36,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(workflow, /Detect native Android build scope/);
   assert.match(workflow, /'mobile\/app\/\*\*'/);
   assert.match(workflow, /'mobile\/src\/\*\*'/);
-  assert.match(workflow, /mobile\/\(app\/\|src\//);
+
   assert.match(workflow, /Bundle Android app with Metro/);
   assert.match(workflow, /android-runtime-smoke:/);
   assert.match(workflow, /android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d/);
@@ -81,4 +84,18 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
   assert.match(smokeScript, /did not navigate after Quick Voice cancellation/);
   assert.match(smokeScript, /Android production HomeScreenApp E2E PASS/);
   assert.match(workflow, /Build standalone ARM64 APK/);
+});
+
+
+test('QA build selector executes only for an explicit manual build request', () => {
+  const section = workflow.slice(workflow.indexOf('name: Detect native Android build scope'), workflow.indexOf('- name: Preserve exact PR source'));
+  const script = section.split('run: |')[1].split('\n').map(line => line.replace(/^          /, '')).join('\n');
+  for (const [event, force, expected] of [['pull_request','true','false'],['push','true','false'],['workflow_dispatch','false','false'],['workflow_dispatch','true','true']]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-build-selector-'));
+    const output = path.join(dir, 'output');
+    try {
+      execFileSync('bash', ['-c', script], {env: {...process.env,GITHUB_EVENT_NAME:event,FORCE_ANDROID:force,GITHUB_OUTPUT:output}});
+      assert.equal(fs.readFileSync(output, 'utf8').trim(), `android=${expected}`, event + ':' + force);
+    } finally { fs.rmSync(dir, {recursive:true,force:true}); }
+  }
 });

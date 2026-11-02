@@ -16,7 +16,7 @@ Parent milestone: #355
 3. 현재 앱의 development build + Metro 연결을 먼저 시도한다.
 4. native runtime이 바뀌지 않은 UI/TypeScript 변경은 기존 development build에서 반복 확인한다.
 5. native dependency/config/permission이 바뀔 때만 development build를 다시 만든다.
-6. standalone release APK는 milestone이나 native-change checkpoint에서만 생성한다.
+6. standalone QA APK는 사용자가 QA 앱 생성을 요청한 시점에만 생성한다. milestone/native 변경도 요청 없는 자동 생성 사유가 아니다.
 7. production OTA / Play Store / production credential 변경은 별도 승인 없이는 하지 않는다.
 
 ## 3. 1차 구현 — dependency 추가 없음
@@ -141,3 +141,8 @@ standalone ARM64 APK는 자동으로 생략한다.
 또한 `workflow_dispatch`에서 사람이 명시적으로 Android APK build를 요청할 수 있다.
 
 이 정책은 release 검증을 없애는 것이 아니라 **작은 JS/UI 커밋마다 동일한 Gradle 빌드를 반복하지 않는 것**이 목적이다.
+
+
+## 2026-11-02 사용자 확정 — 요청 시 모아서 빌드
+
+기존의 패치마다 QA 설치본 제공이라는 해석을 폐기한다. 일반 수정은 검사 후 main에 누적 → 사용자의 QA 요청 시 후보 SHA 고정·필요한 native/에뮬레이터 검사와 QA APK 제공 → 사용자 검수 → 정식 요청 시 Play 출시 순서다. 정식 반영을 미루면 코드 누적을 계속하고 다음 QA 요청 때 다시 빌드한다. PR/main 자동검사와 Metro bundle은 계속 실행하지만 설치형 APK 생성은 명시적인 workflow_dispatch + build_android=true에서만 실행한다. 현재 연결 오류 안내·연결 재확인 버튼(#481)과 직접 입력 날짜 수정(#480)도 이 기준을 적용한다. 기존 입력/기록 자동 변경, 자동 OTA, 무승인 운영 배포는 포함하지 않는다.
