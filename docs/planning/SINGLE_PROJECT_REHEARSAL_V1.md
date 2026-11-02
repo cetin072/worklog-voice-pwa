@@ -80,3 +80,11 @@
 태장 CI의 `google-email-release-auth-integration.mjs`는 **localhost:54321 + 지정 disposable Docker DB만** 허용하고 합성 계정으로 공식 Admin API 이메일 변경 후 UUID/deleted Profile/이력/감사/다른 계정 보존을 확인한다. 실제 계정 변경 도구나 운영 실행 스크립트가 아니다. 이 시험은 Google OAuth 성공의 증거가 아니다.
 
 현재 운영 변경은 여전히 0건. 위 단계 실행 및 실제 일정 표시 검수는 별도 승인과 사용자 Google 인증이 필요하다.
+
+## 2026-11-03 KST 실제 본인 pilot 복사
+
+승인 후 원본 snapshot을 비공개 백업하고 실제 PostgreSQL WASM 복원/동일 내용 해시 검사를 통과했다. `scripts/consolidation/verify-pilot-restore.mjs`는 네트워크·운영 credential 없이 주어진 백업과 대상 read-only migration을 검증한다. 원본 내용을 로그에 출력하지 않고 해시/개수만 비교한다.
+
+태장 PR575의 read-only migration을 실제 적용하고 본인 공간1/업무262/일정51(확정31)/source_refs262/normalizations262 및 부속 기록을 원자적으로 복사했다. 실제 typed JSON 대조를 통과했고 entity ID와 원문·시간을 유지했다. 다른 네 명의 자료는 제외했다. 원본 데이터/모바일 서버 설정을 변경하지 않았다.
+
+전체 RPC rehearsal SQL38개 및 쓰기/트리거 전환은 아직 운영 미적용이다. 실제 태장에는 네 dashboard 테이블 읽기만 부여하며 알림 등록 credential 조회·쓰기·발송은 차단했다. Google provider/manual linking, 이메일 점유 해소, Data API의 worklog expose, 실제 사용자 로그인과 기존 모바일의 쓰기 전환은 여전히 미완료다. 연결된 도구에 Auth Admin/설정 쓰기 및 사용자 관리자 브라우저 연결이 없어, SQL로 Auth를 직접 수정하거나 별도 공개 fallback API로 우회하지 않았다. 상세 실제 상태는 태장 docs/planning/ERP_WORKLOG_SINGLE_PROJECT_V1.md 마지막 체크포인트를 따른다.
