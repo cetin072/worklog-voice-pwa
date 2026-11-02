@@ -1,6 +1,6 @@
 name: Mobile App
 
-# Main pushes run the exact-SHA post-merge Pre-Human mobile revalidation.
+# PR/main changes accumulate with checks; installable builds require explicit workflow dispatch.
 on:
   pull_request:
     paths:
@@ -94,18 +94,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$GITHUB_EVENT_NAME" == "push" ]]; then
-            if [[ "$GITHUB_EVENT_NAME" == "push" || "${FORCE_ANDROID:-true}" == "true" ]]; then
-              echo "android=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "android=false" >> "$GITHUB_OUTPUT"
-            fi
-            exit 0
-          fi
-
-          git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee /tmp/mobile-changed-files.txt
-
-          if grep -Eq '^(mobile/(app/|src/|app\.json|app\.config\.(js|ts)|metro\.config\.js|package-lock\.json|android/|ios/)|netlify/shared/(capture-schedule-input\.|korean-date-core\.mjs|schedule-extract\.mjs)|\.github/workflows/mobile-foundation\.yml)' /tmp/mobile-changed-files.txt; then
+          # User policy: never build installable QA/emulator APKs per patch.
+          # Explicit QA requests dispatch this workflow with build_android=true.
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "${FORCE_ANDROID:-false}" == "true" ]]; then
             echo "android=true" >> "$GITHUB_OUTPUT"
           else
             echo "android=false" >> "$GITHUB_OUTPUT"
