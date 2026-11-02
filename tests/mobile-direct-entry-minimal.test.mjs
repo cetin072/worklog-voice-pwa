@@ -17,13 +17,12 @@ test('direct entry only exposes input date time and save', () => {
   }
 });
 
-test('direct entry date and time are folded into canonical save text without exposing legacy metadata controls', () => {
-  assert.match(home, /function manualScheduleText\(dueDate: string, dueTime: string\)/);
-  assert.match(home, /\$1년 \$2월 \$3일/);
-  assert.match(home, /meridiem = hour < 12 \? '오전' : '오후'/);
-  assert.match(home, /displayHour = hour % 12 \|\| 12/);
+test('direct entry date and time are separate from canonical save text without exposing legacy metadata controls', () => {
+  assert.doesNotMatch(home, /function manualScheduleText/);
+  assert.match(home, /dueDate: manualInput\.dueDate/);
+  assert.match(home, /dueTime: manualInput\.dueTime/);
   assert.match(home, /manualInput\.dueTime/);
-  assert.match(home, /saveWorklog\(session\.access_token, saveText/);
+  assert.match(home, /saveWorklog\(session\.access_token, original/);
   const save = home.slice(home.indexOf('async function persistDraft()'), home.indexOf('async function changeTaskStatus'));
   assert.match(save, /type: '회의·통화'/);
   assert.doesNotMatch(save, /institutionSource|manualInput\.status|manualInput\.type|manualInput\.amount|manualInput\.assignee|manualInput\.followUp/);

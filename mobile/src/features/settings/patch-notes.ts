@@ -9,6 +9,16 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-02',
+    title: '직접 입력 날짜 저장 수정',
+    summary: '선택한 날짜를 정확히 저장하고 제목에 날짜가 붙지 않도록 수정했습니다.',
+    items: [
+      '직접 선택한 날짜와 시간을 문장 분석보다 우선 적용합니다.',
+      '본문에 다른 요일 표현이 있어도 선택한 기한을 유지합니다.',
+      '기존에 저장된 기록은 자동 변경하지 않습니다.',
+    ],
+  },
+  {
     date: '2026-11-01',
     title: '업데이트 이동·사진 가져오기 안내',
     summary: '업데이트 버튼의 스토어 이동을 바로잡고 사진 등록 방법을 찾기 쉽게 정리했습니다.',
