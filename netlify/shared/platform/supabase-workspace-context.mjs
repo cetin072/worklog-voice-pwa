@@ -1,3 +1,4 @@
+import {worklogDataSchema,dataSchemaHeaders} from "../data-core/data-schema.mjs";
 function resolverError(code, message) {
   const error = new Error(message);
   error.code = code;
@@ -14,8 +15,9 @@ function httpsOrigin(value) {
   }
 }
 
-export function createSupabaseWorkspaceContextResolver({ supabaseUrl, publishableKey, fetchImpl = fetch } = {}) {
+export function createSupabaseWorkspaceContextResolver({ supabaseUrl, publishableKey, dataSchema = worklogDataSchema(), fetchImpl = fetch } = {}) {
   const origin = httpsOrigin(supabaseUrl);
+  const profile = dataSchemaHeaders(dataSchema);
   const key = String(publishableKey || "").trim();
   if (!key) throw resolverError("SUPABASE_WORKSPACE_PUBLISHABLE_KEY_REQUIRED", "Supabase publishable key가 필요합니다.");
   if (typeof fetchImpl !== "function") throw resolverError("SUPABASE_WORKSPACE_FETCH_REQUIRED", "Supabase fetch 구현이 필요합니다.");
@@ -25,7 +27,7 @@ export function createSupabaseWorkspaceContextResolver({ supabaseUrl, publishabl
     if (!token) throw resolverError("SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED", "인증된 사용자 access token이 필요합니다.");
     const response = await fetchImpl(`${origin}${path}`, {
       ...options,
-      headers: { apikey: key, authorization: `Bearer ${token}`, ...(options.headers || {}) },
+      headers: { ...(path.startsWith("/rest/v1/") ? profile : {}), apikey: key, authorization: `Bearer ${token}`, ...(options.headers || {}) },
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw resolverError("SUPABASE_WORKSPACE_AUTH_FAILED", String(data?.msg || data?.message || "Platform 계정을 확인하지 못했습니다."));

@@ -1,0 +1,26 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{readFile}from'node:fs/promises';import{PGlite}from'@electric-sql/pglite';import{pg_trgm}from'@electric-sql/pglite/contrib/pg_trgm';
+const actor='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222',space='33333333-3333-4333-8333-333333333333';
+test('full adapted RPCs save/read/search/edit/complete under active imported owner; unprovisioned and suspended users are denied',async()=>{
+ const db=new PGlite({extensions:{pg_trgm}});try{
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create table public.profiles(id uuid primary key references auth.users(id),account_status text);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;create extension pg_trgm;`);
+ for(const file of ['unified-worklog-catalog.sql','unified-worklog-rpcs.sql'])try{await db.exec(await readFile(new URL('../supabase/rehearsal/'+file,import.meta.url),'utf8'));}catch(e){throw Error(file+': '+e.message);}
+ await db.query('insert into auth.users values($1),($2)',[actor,other]);await db.query("insert into public.profiles values($1,'active'),($2,'active')",[actor,other]);await db.query("insert into worklog.workspaces(id,name,owner_user_id,created_by_user_id) values($1,'합성 공간',$2,$2)",[space,actor]);await db.query("insert into worklog.workspace_members(workspace_id,user_id,role) values($1,$2,'owner')",[space,actor]);
+ await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${actor}',false)`);
+ assert.equal((await db.query('select * from worklog.bootstrap_personal_workspace()')).rows[0].workspace_id,space);
+ const saved=await db.query("select * from worklog.save_my_worklog_with_schedule_v2(p_client_request_id=>'synthetic-unified-0001',p_title=>'합성 통합 일정',p_content=>'합성 내용',p_original_text=>'합성 원문',p_record_type=>'task',p_status=>'in_progress',p_schedule_title=>'합성 달력',p_schedule_starts_at=>'2099-11-02T01:00:00Z')");
+ const id=saved.rows[0].work_record_id;assert.ok(id);assert.ok(saved.rows[0].schedule_id);
+ assert.equal((await db.query('select * from worklog.get_my_briefing_source()')).rows.length,1);
+ assert.ok((await db.query("select * from worklog.search_my_work_records('합성')")).rows.length>0);
+ assert.equal((await db.query('select * from worklog.get_my_work_record_edit_v2($1)',[id])).rows[0].record_id,id);
+ await db.query("select * from worklog.update_my_work_record_status($1,'completed')",[id]);
+ assert.equal((await db.query('select status from worklog.work_records where id=$1',[id])).rows[0].status,'completed');
+ await db.exec(`select set_config('request.jwt.claim.sub','${other}',false)`);
+ await assert.rejects(db.query('select * from worklog.bootstrap_personal_workspace()'),/WORKLOG_ACCESS_NOT_PROVISIONED/);
+ assert.equal((await db.query('select * from worklog.work_records')).rows.length,0);await assert.rejects(db.query('select * from worklog.get_my_work_record_edit_v2($1)',[id]),/NOT_FOUND|FORBIDDEN|WORKSPACE_MISSING/);
+ await assert.rejects(db.query("insert into worklog.workspaces(name,owner_user_id,created_by_user_id) values('self-grant',$1,$1)",[other]),/permission denied/);
+ await db.exec('reset role');await db.query("update public.profiles set account_status='suspended' where id=$1",[actor]);await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${actor}',false)`);assert.equal((await db.query('select * from worklog.work_records')).rows.length,0);
+ await assert.rejects(db.query('select * from worklog.bootstrap_personal_workspace()'),/WORKLOG_ACCESS_NOT_PROVISIONED/);
+ await db.exec('reset role');assert.equal((await db.query("select worklog._notification_scheduler_secret_ok('source-secret') as enabled")).rows[0].enabled,false);
+ assert.equal((await db.query("select count(*)::int n from pg_trigger where tgrelid='auth.users'::regclass and not tgisinternal")).rows[0].n,0);
+ }finally{await db.close();}
+});

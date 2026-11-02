@@ -7,6 +7,7 @@ import { secureSessionStorage } from './secure-storage';
 
 export function createPlatformSupabaseClient(config: PublicPlatformConfig) {
   return createClient(config.supabaseUrl, config.publishableKey, {
+    ...(config.dataSchema === 'worklog' ? {db:{schema:'worklog'}} : {}),
     auth: {
       storage: secureSessionStorage,
       autoRefreshToken: true,

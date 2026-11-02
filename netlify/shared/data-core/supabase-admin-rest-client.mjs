@@ -1,3 +1,4 @@
+import {worklogDataSchema,dataSchemaHeaders} from "./data-schema.mjs";
 function adminClientError(code, message) {
   const error = new Error(message);
   error.code = code;
@@ -51,12 +52,13 @@ async function jsonOrEmpty(response) {
   return response.json().catch(() => null);
 }
 
-export function createSupabaseAdminRestClient({ supabaseUrl, secretKey, fetchImpl = fetch } = {}) {
+export function createSupabaseAdminRestClient({ supabaseUrl, secretKey, dataSchema = worklogDataSchema(), fetchImpl = fetch } = {}) {
   const origin = httpsOrigin(supabaseUrl);
   const key = requireSecret(secretKey);
   if (typeof fetchImpl !== "function") throw adminClientError("SUPABASE_ADMIN_FETCH_REQUIRED", "fetch 구현이 필요합니다.");
 
-  const headers = (extra = {}) => ({ apikey: key, ...extra });
+  const profile = dataSchemaHeaders(dataSchema);
+  const headers = (extra = {}) => ({ ...profile, apikey: key, ...extra });
 
   return Object.freeze({
     configured: true,

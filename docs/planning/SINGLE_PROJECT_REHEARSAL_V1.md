@@ -36,7 +36,7 @@
 1. 태장과 업무수첩에 notification_deliveries 동명 테이블이 있으므로 public 그대로 일괄 replay 금지.
 2. 사용자가 Google 로그인에 쓸 이메일은 태장 Auth에도 이미 존재. 해당 Profile은 deleted, 이메일 미인증/email provider 상태이며 정상 Google identity는 아님. 그 행은 Profile1건·상태변경 이력2건·감사로그1건에서 참조됨. 삭제/복구/역할 승계 금지. 이 이메일 충돌을 이력 보존 방식으로 해소하는 구체적인 Auth 작업안 검수 전에는 identity linking을 실행하지 않음.
 3. 원본5명 중 본인 외4명의 이전 대상/동의/대상ID가 미확정. 본인만 매핑하고 전체 이전 완료로 처리하지 않음. 개인 이름/이메일 자동 매칭 금지.
-4. 원본 RPC 전체, notification gateway/scheduler secret, OAuth callback/redirect 허용, 모바일 서버 URL/key/schema/session 전환, 알림 재등록, local-first 원본/첨부는 후속 이전 계약이다. 이번 카탈로그 재생은 이 항목들을 구현/이전하지 않음.
+4. RPC·gateway·모바일·웹의 schema 소비 코드는 아래와 같이 준비했다. 실제 Data API schema 노출, OAuth/provider/manual linking/redirect 설정, 사용자 Google 인증, 알림 재등록, 기기 local-first 원본/첨부와 실제 이전은 수행하지 않았다.
 
 ## 실행본과 검증 범위
 
@@ -46,7 +46,7 @@
 - 이 SQL은 **운영 migration이 아님**. read rehearsal을 위해 authenticated SELECT만 부여. 앱 쓰기 권한, 전체 RPC, Auth bootstrap trigger, scheduler secret/cron은 포함하지 않음. pg_trgm 필요. 실제 migration 경로에 넣지 않음.
 - `tests/unified-worklog-transfer.test.mjs`: PGlite(PostgreSQL WASM)에서 실제 DDL/RLS/FK/transaction 실행. 업무·일정 합성 데이터 소유권 치환/ID·원문 보존, 타 직원/익명 차단, 태장 동명 알림 테이블 불변, 실패 트랜잭션 rollback. 완전한 Supabase/Auth/REST/실사용 검수와 구분.
 - Push subscription은 데이터 개수/이력은 보존하되 새 프로젝트에서 재발송되지 않도록 disabled 상태로 변환. 원본 시스템의 값을 바꾸지 않음. 정상 알림은 재등록·재검수 후 별도 활성화. delivery 이력은 재시도 대기로 바꾸지 않음.
-- 태장 PR575에는 통합형 read API/UI와 회귀검사만 반영. 업무수첩 앱/runtime는 아직 바꾸지 않음. 모바일 패치노트/APK/Play 제출 대상 아님.
+- 태장 PR575에는 통합형 read API/UI와 Google PKCE 연결 화면을 기본 비활성 상태로 준비. 업무수첩 runtime은 아래 명시적 opt-in만 추가하며 기존 public 기본값을 보존. APK/Play 제출 없음.
 
 ## 실제 적용 전 남은 순서
 
@@ -60,3 +60,23 @@
 현재 상태: 코드/합성 이전 시험 준비. 운영 데이터 복사0, Auth 변경0, 실제 본인 Google 로그인 연결0. 원래 성공 조건(모바일에 이미 있는 실제 일정이 ERP첫 화면에 표시)은 미달성.
 
 공식 근거: https://supabase.com/docs/guides/auth/auth-identity-linking , https://supabase.com/docs/guides/api/using-custom-schemas . 수동 identity linking은 설정 활성화 및 로그인한 사용자의 Google OAuth가 필요하며 프로젝트 간 Auth identity를 SQL로 복제하는 대체재가 아니다.
+
+## 추가 실행 준비: 앱과 전체 RPC
+
+- `unified-worklog-rpcs.sql`: 운영 함수 정의를 스키마만 옮긴 38개 함수의 격리 재생 파일. migration 폴더 밖에 있으며 실제 운영 적용 없음. 기존 catalog 파일 다음 실행한다. 저장·일정 연동·오늘 브리핑·검색·편집·완료 흐름을 합성 데이터로 실행한다.
+- 일반 사용자 bootstrap은 **기존에 이전된 본인 personal workspace + owner membership + 활성 태장 Profile**만 확인한다. 새 workspace나 권한을 자동 부여하지 않는다. 미지정 직원과 정지 계정은 조회/시작 차단. Auth signup trigger를 설치하지 않는다.
+- `WORKLOG_DATA_SCHEMA=worklog`일 때 서버 REST/RPC, workspace resolver, 웹 검색, 모바일 Supabase SDK가 같은 schema를 사용한다. 미설정은 기존 public 동작 유지. 잘못된 schema는 차단하며 public 재시도 없음. Auth 요청에는 schema header를 붙이지 않는다.
+- 모바일은 기존 SDK의 프로젝트별 SecureStore key를 유지하므로 기존 프로젝트 토큰을 새 프로젝트로 재사용하지 않고, 기존 key도 삭제하지 않는다. 웹은 통합 설정에서 JWT issuer routing guard로 옛 프로젝트 access/refresh token 전송을 막는다. issuer 문자열만으로 사용자 인증하지 않으며 실제 Auth 검증은 서버가 한다.
+- 알림 gateway에도 같은 schema opt-in을 준비. 이전용 SQL의 scheduler secret 검사는 의도적으로 항상 false다. 원본 credential hash/cron을 복사하지 않는다. 새 secret 설정/구독 재등록/중복 방지 실검수 후 별도 활성화가 필요하다.
+- PGlite 테스트는 실제 PostgreSQL 함수/RLS/transaction을 실행하지만 hosted Supabase·실제 Google·휴대폰 로그인 검수와 다르다. 모바일 runtime 검사는 native 저장소를 모의하고 실제 Supabase SDK의 REST/RPC 요청과 프로젝트별 key를 검사한다.
+
+## Google 주소 충돌의 이력 보존 작업안 — 미실행
+
+1. 정확한 기존 점유 Auth UUID와 deleted Profile, 상태이력/감사 참조, provider/email 미인증을 다시 읽기 검증하고 백업한다. 실제 Google identity가 있거나 상태가 바뀌었으면 중단한다.
+2. 별도 승인 후 공식 Auth Admin updateUserById로 **점유 행의 이메일만** 충돌하지 않는 예약 주소로 변경하는 안을 우선 검수한다. Auth UUID/Profile deleted/역할/이력 참조는 보존하며 계정 삭제·복구·합병을 하지 않는다. 주소는 unique하고 수신 불가능한 예약 도메인을 사용한다. 원래 이메일은 제한된 작업 기록에 남기고 공개 repo에는 기록하지 않는다.
+3. 기존 활성 태장 계정으로 로그인한 상태에서 사용자가 Google 연결을 눌러 본인 Google 인증. 연결 후 Auth UUID·활성 Profile·직원 연결·역할·이력 불변을 재확인한다. 단순히 Google 신규 로그인해서 새 계정을 만들지 않는다.
+4. 연결 전 실패하면 동일 UUID에 원래 이메일을 복원 가능한지 확인한다. 이미 Google가 활성 계정에 연결된 뒤에는 이메일 점유를 다시 만들지 않으며 자동 unlink/복구를 하지 않는다. 관리자와 사용자의 실검수 후 수동 복구한다.
+
+태장 CI의 `google-email-release-auth-integration.mjs`는 **localhost:54321 + 지정 disposable Docker DB만** 허용하고 합성 계정으로 공식 Admin API 이메일 변경 후 UUID/deleted Profile/이력/감사/다른 계정 보존을 확인한다. 실제 계정 변경 도구나 운영 실행 스크립트가 아니다. 이 시험은 Google OAuth 성공의 증거가 아니다.
+
+현재 운영 변경은 여전히 0건. 위 단계 실행 및 실제 일정 표시 검수는 별도 승인과 사용자 Google 인증이 필요하다.

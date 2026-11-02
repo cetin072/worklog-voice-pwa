@@ -129,9 +129,12 @@ Deno.serve(async (req: Request) => {
   const secretKey = defaultSecretKey();
   if (!supabaseUrl || !secretKey) return json(503, { error: "SERVER_AUTH_NOT_CONFIGURED" });
 
+  const dataSchema = String(Deno.env.get("WORKLOG_DATA_SCHEMA") || "public").trim();
+  if (!["public","worklog"].includes(dataSchema)) return json(503, {error:"WORKLOG_DATA_SCHEMA_INVALID"});
   const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${rpc.name}`, {
     method: "POST",
     headers: {
+      ...(dataSchema === "worklog" ? {"Content-Profile":"worklog"} : {}),
       apikey: secretKey,
       accept: "application/json",
       "content-type": "application/json",

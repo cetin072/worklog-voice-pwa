@@ -31,7 +31,9 @@
     try { url = new URL(String(value.supabaseUrl || "")); }
     catch { return null; }
     if (url.protocol !== "https:") return null;
+    if (value.dataSchema !== undefined && !['public','worklog'].includes(value.dataSchema)) return null;
     return Object.freeze({
+      ...(value.dataSchema === 'worklog' ? {dataSchema:'worklog'} : {}),
       configured: true,
       supabaseUrl: url.origin,
       publishableKey: key,
@@ -42,7 +44,15 @@
   function readSession() {
     try {
       const value = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-      return value && typeof value.access_token === "string" ? value : null;
+      if (!value || typeof value.access_token !== "string") return null;
+      if (cachedConfig?.dataSchema === "worklog") {
+        // Routing guard only; the Auth server still verifies the user/token.
+        try {
+          const encoded = value.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+          if (JSON.parse(atob(encoded)).iss !== cachedConfig.supabaseUrl + '/auth/v1') return null;
+        } catch { return null; }
+      }
+      return value;
     } catch {
       localStorage.removeItem(SESSION_KEY);
       return null;
@@ -168,6 +178,7 @@
       headers: {
         apikey: config.publishableKey,
         "content-type": "application/json",
+        ...(path.startsWith("/rest/v1/") && config.dataSchema === "worklog" ? {"Accept-Profile":"worklog","Content-Profile":"worklog"} : {}),
         ...(options.headers || {})
       }
     });
@@ -211,6 +222,7 @@
   async function refreshSession() {
     if (sessionRefreshPromise) return sessionRefreshPromise;
     sessionRefreshPromise = (async () => {
+      await getConfig();
       const previous = readSession();
       if (!previous?.refresh_token) throw new Error("다시 로그인해 주세요.");
       const data = await request("/auth/v1/token?grant_type=refresh_token", {
@@ -229,6 +241,7 @@
   }
 
   async function bootstrapPersonalWorkspace() {
+    await getConfig();
     const session = readSession();
     if (!session) throw new Error("로그인 후 개인 업무공간을 준비할 수 있습니다.");
     const data = await request("/rest/v1/rpc/bootstrap_personal_workspace", {
@@ -242,6 +255,7 @@
   }
 
   async function currentUser() {
+    await getConfig();
     let session = readSession();
     if (!session) return null;
     try {
@@ -267,6 +281,7 @@
   }
 
   async function signOut() {
+    await getConfig();
     const session = readSession();
     try {
       if (session) await request("/auth/v1/logout?scope=local", { method: "POST", headers: { authorization: `Bearer ${session.access_token}` } });

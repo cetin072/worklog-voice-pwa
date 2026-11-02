@@ -225,6 +225,7 @@
       method: "POST",
       signal,
       headers: {
+        ...(config.dataSchema === "worklog" ? {"Accept-Profile":"worklog","Content-Profile":"worklog"} : {}),
         apikey: config.publishableKey,
         authorization: `Bearer ${accessToken}`,
         "content-type": "application/json",
