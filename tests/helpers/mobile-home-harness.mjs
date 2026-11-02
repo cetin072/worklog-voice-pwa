@@ -13,7 +13,8 @@ let photoAction;
 function findPhoto(node) { if (ts.isJsxAttribute(node) && node.name.getText(ast) === 'renderPhotoAction') photoAction = node.initializer.expression.getText(ast); ts.forEachChild(node, findPhoto); }
 findPhoto(ast);
 if (!photoAction) throw Error('Home Photo action is missing');
-const compiled = ts.transpileModule(`${declarations}\nfunction renderHome() { return (${home}); }\nreturn { renderHome, TaskRow, renderPhoto: ${photoAction} };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
+const networkConstant = ast.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(ast) === 'NETWORK_CONNECTION_MESSAGE')).map(node => node.getText(ast)).join('\n');
+const compiled = ts.transpileModule(`${networkConstant}\n${declarations}\nfunction renderHome() { return (${home}); }\nreturn { renderHome, TaskRow, renderPhoto: ${photoAction} };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
 export function homeHarness(context) {
  const states = []; let cursor = 0; let back; let cleanup;
  const node = (type, props, ...children) => ({ type, props: { ...props, children } });

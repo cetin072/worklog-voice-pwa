@@ -125,8 +125,12 @@ function formatJournalTime(value?: string) {
   }).format(date);
 }
 
+const NETWORK_CONNECTION_MESSAGE = '서버에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.';
+
 function messageOf(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+  const message = error instanceof Error ? error.message : fallback;
+  if (/UnknownHostException|Unable to resolve host|Network request failed|Failed to fetch|fetch failed|ENOTFOUND|EAI_AGAIN|ERR_NAME_NOT_RESOLVED|SocketTimeoutException|ETIMEDOUT/i.test(message)) return NETWORK_CONNECTION_MESSAGE;
+  return message;
 }
 
 function exactAlarmAccessError(error: unknown) {
@@ -1169,6 +1173,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
 
 
       {message ? <Text style={[styles.message, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}
+      {message === NETWORK_CONNECTION_MESSAGE ? <Button title="연결 다시 확인" disabled={busy} onPress={() => { clearMessage(); void refreshBriefing(); }} /> : null}
     </> : null}
 
     {screen === 'journal' ? <View style={styles.journalScreen}>
