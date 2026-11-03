@@ -89,7 +89,7 @@ test('Mobile CI bundles and runtime-smokes app code changes while retaining manu
 
 test('QA build selector preserves explicit build control and validates the API origin', () => {
   const section = workflow.slice(workflow.indexOf('name: Detect native Android build scope'), workflow.indexOf('- name: Preserve exact PR source'));
-  const script = section.split('run: |')[1].split('\\n').map(line => line.replace(/^          /, '')).join('\\n');
+  const script = section.split('run: |')[1].split('\n').map(line => line.replace(/^          /, '')).join('\n');
   const preview='https://deploy-preview-483--worklog-voice-pwa.netlify.app';
   const production='https://worklog-voice-pwa.netlify.app';
   for (const [event, force, override, expected, api] of [
@@ -102,7 +102,7 @@ test('QA build selector preserves explicit build control and validates the API o
     try {
       const env={...process.env,GITHUB_EVENT_NAME:event,FORCE_ANDROID:force,GITHUB_OUTPUT:output,PR_NUMBER:'483',QA_API_BASE_URL:override};
       execFileSync('bash', ['-c', script], {env});
-      const values=Object.fromEntries(fs.readFileSync(output,'utf8').trim().split('\\n').map(line=>line.split('=')));
+      const values=Object.fromEntries(fs.readFileSync(output,'utf8').trim().split('\n').map(line=>line.split('=')));
       assert.equal(values.android,expected,event+':'+force);assert.equal(values.api_base_url,api);
       for(const invalid of ['https://evil.example',preview+'.evil.example','http://deploy-preview-483--worklog-voice-pwa.netlify.app']) {
         assert.throws(()=>execFileSync('bash',['-c',script],{env:{...env,QA_API_BASE_URL:invalid},stdio:'pipe'}));
