@@ -9,6 +9,15 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-04',
+    title: '태장 ERP 연결 지원',
+    summary: '연결한 태장 계정의 개인 업무와 일정을 ERP에서도 확인할 수 있습니다.',
+    items: [
+      'Google 로그인 연결 후 기존 태장 계정의 개인 기록을 사용합니다.',
+      '다른 프로젝트의 로그인 정보가 섞이지 않도록 연결을 구분합니다.',
+    ],
+  },
+  {
     date: '2026-11-02',
     title: '날짜 저장·연결 오류 안내 개선',
     summary: '선택한 날짜를 정확히 저장하고 제목에 날짜가 붙지 않도록 수정했습니다.',
