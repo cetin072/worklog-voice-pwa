@@ -94,10 +94,19 @@
 
 사용자 본인의 Google identity가 기존 ERP Auth UUID에 연결된 것을 대상 서버에서 확인했다. 기존 active Profile/권한2/person link1 fingerprint와 업무262/일정51이 보존됐다. Google 연결은 완료됐으나 모바일 프로젝트 전환과 새 기록 ERP 반영은 별도 단계다. 공개 문서에 실제 사용자 식별자/원문/토큰을 넣지 않는다.
 
-사용자의 다음 단계 진행 요청에 따라 ERP PR575에 `20261103080116_worklog_personal_write_pilot`을 준비했다. 기존 rehearsal에서 개인 저장·편집·브리핑 RPC26개와 코어 trigger8개만 복제·축소했다. source Auth/데이터 삭제·다른 사용자 이전·scheduler/Push credential·membership 자가 부여는 포함하지 않는다. 운영 적용 여부는 해당 PR 실행 기록이 기준이다.
+사용자의 다음 단계 진행 요청에 따라 ERP PR575에 `20261103081634_worklog_personal_write_pilot`을 준비했다. 기존 rehearsal에서 개인 저장·편집·브리핑 RPC26개와 코어 trigger8개만 복제·축소했다. source Auth/데이터 삭제·다른 사용자 이전·scheduler/Push credential·membership 자가 부여는 포함하지 않는다. 운영 적용 여부는 해당 PR 실행 기록이 기준이다.
 
 모바일 SDK의 worklog opt-in에서 기존 프로젝트 JWT가 새 Auth/DB 서버로 전송되기 전에 issuer routing guard를 추가했다. 이는 서명/권한 인증이 아니며 실제 Supabase 검증을 대신하지 않는다. 기본 public/기존 프로젝트 경로는 유지한다. 기존 프로젝트별 SecureStore 세션/기기 원문은 삭제하지 않는다. 실제 SDK runtime 테스트는 foreign JWT 네트워크 전송0회와 same-project Auth 요청을 확인한다.
 
 설치된 모바일 앱의 API 주소는 아직 원본이다. 이후 검수용 API에 대상 프로젝트/worklog/primary save를 맞추고 본인 기기에서 재로그인해야 한다. Netlify 기존 env key를 도구로 단순 upsert하면 기존 production context까지 바뀔 수 있으므로 컨텍스트별 override 보존을 확인하지 않은 변경을 하지 않는다. 기존 프로젝트의 관리자 credential/Notion/push 전송을 대상 검수환경에 그대로 승계하지 않는다.
 
 실제 전환 직전 source/target 마지막 차이와 로컬 미전송 큐를 보존·검증하고 단일 쓰기 원본을 정한다. source 사용자 UUID와 target UUID가 다르므로 오프라인 소유자를 이메일/이름으로 자동 합치지 않는다. QA APK는 별도 제작 요청 시 누적 후보에서 만들며 이 준비 변경만으로 정식 앱/Play/원본 운영 설정을 바꾸지 않는다.
+
+
+### 저장 서버 및 개발 API 연결
+
+태장에 `20261103081634 / worklog_personal_write_pilot` 적용 완료. 동일 SQL의 적용 전후 공간1/업무262/일정51 내용 hash 불변, imported owner bootstrap/권한·비노출 경계를 서버에서 확인했다. 실제 본인 휴대폰 저장으로 검수한 것은 아니다.
+
+Netlify worklog-voice-pwa의 deploy-preview context에만 SUPABASE_URL/PUBLISHABLE_KEY를 태장으로, WORKLOG_DATA_CORE_PRIMARY_ENABLED=true, WORKLOG_DATA_SCHEMA=worklog로 설정했다. 기존 dev/production/기타 context 값은 보존 후 재대조했다. 이 commit 재배포 후 실제 public config를 검증한다. 기존 관리 secret/Push credential을 이식하지 않았고 사이트/팀의 SUPABASE_SECRET_KEY 부재를 확인했다. core save는 본인 bearer + publishable key와 RLS를 사용한다.
+
+다음 실제 기기 단계는 태장 Redirect allowlist의 `worklog-qa://google-auth` 확인, 본인용 QA API를 포함한 누적 QA 후보 제작 요청, 새 Google 로그인, 미전송 원문 보존/최종 차이 확인 및 새 기록 ID가 ERP에 나타나는지 확인이다. 정식 설치본의 API 주소는 아직 원본이며 QA APK를 자동 생성하지 않았다. source 데이터나 기기 큐를 삭제하지 않는다. 신규 target 쓰기 이후 source로 되돌릴 때에는 신규 기록을 먼저 회수·조정한다.
