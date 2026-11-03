@@ -88,3 +88,16 @@
 태장 PR575의 read-only migration을 실제 적용하고 본인 공간1/업무262/일정51(확정31)/source_refs262/normalizations262 및 부속 기록을 원자적으로 복사했다. 실제 typed JSON 대조를 통과했고 entity ID와 원문·시간을 유지했다. 다른 네 명의 자료는 제외했다. 원본 데이터/모바일 서버 설정을 변경하지 않았다.
 
 전체 RPC rehearsal SQL38개 및 쓰기/트리거 전환은 아직 운영 미적용이다. 실제 태장에는 네 dashboard 테이블 읽기만 부여하며 알림 등록 credential 조회·쓰기·발송은 차단했다. Google provider/manual linking, 이메일 점유 해소, Data API의 worklog expose, 실제 사용자 로그인과 기존 모바일의 쓰기 전환은 여전히 미완료다. 연결된 도구에 Auth Admin/설정 쓰기 및 사용자 관리자 브라우저 연결이 없어, SQL로 Auth를 직접 수정하거나 별도 공개 fallback API로 우회하지 않았다. 상세 실제 상태는 태장 docs/planning/ERP_WORKLOG_SINGLE_PROJECT_V1.md 마지막 체크포인트를 따른다.
+
+
+## Google 연결 이후 모바일 전환 준비 — 2026-11-03 KST
+
+사용자 본인의 Google identity가 기존 ERP Auth UUID에 연결된 것을 대상 서버에서 확인했다. 기존 active Profile/권한2/person link1 fingerprint와 업무262/일정51이 보존됐다. Google 연결은 완료됐으나 모바일 프로젝트 전환과 새 기록 ERP 반영은 별도 단계다. 공개 문서에 실제 사용자 식별자/원문/토큰을 넣지 않는다.
+
+사용자의 다음 단계 진행 요청에 따라 ERP PR575에 `20261103080116_worklog_personal_write_pilot`을 준비했다. 기존 rehearsal에서 개인 저장·편집·브리핑 RPC26개와 코어 trigger8개만 복제·축소했다. source Auth/데이터 삭제·다른 사용자 이전·scheduler/Push credential·membership 자가 부여는 포함하지 않는다. 운영 적용 여부는 해당 PR 실행 기록이 기준이다.
+
+모바일 SDK의 worklog opt-in에서 기존 프로젝트 JWT가 새 Auth/DB 서버로 전송되기 전에 issuer routing guard를 추가했다. 이는 서명/권한 인증이 아니며 실제 Supabase 검증을 대신하지 않는다. 기본 public/기존 프로젝트 경로는 유지한다. 기존 프로젝트별 SecureStore 세션/기기 원문은 삭제하지 않는다. 실제 SDK runtime 테스트는 foreign JWT 네트워크 전송0회와 same-project Auth 요청을 확인한다.
+
+설치된 모바일 앱의 API 주소는 아직 원본이다. 이후 검수용 API에 대상 프로젝트/worklog/primary save를 맞추고 본인 기기에서 재로그인해야 한다. Netlify 기존 env key를 도구로 단순 upsert하면 기존 production context까지 바뀔 수 있으므로 컨텍스트별 override 보존을 확인하지 않은 변경을 하지 않는다. 기존 프로젝트의 관리자 credential/Notion/push 전송을 대상 검수환경에 그대로 승계하지 않는다.
+
+실제 전환 직전 source/target 마지막 차이와 로컬 미전송 큐를 보존·검증하고 단일 쓰기 원본을 정한다. source 사용자 UUID와 target UUID가 다르므로 오프라인 소유자를 이메일/이름으로 자동 합치지 않는다. QA APK는 별도 제작 요청 시 누적 후보에서 만들며 이 준비 변경만으로 정식 앱/Play/원본 운영 설정을 바꾸지 않는다.
