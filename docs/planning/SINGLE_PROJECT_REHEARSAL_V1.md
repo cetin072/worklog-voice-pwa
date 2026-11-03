@@ -110,3 +110,39 @@
 Netlify worklog-voice-pwa의 deploy-preview context에만 SUPABASE_URL/PUBLISHABLE_KEY를 태장으로, WORKLOG_DATA_CORE_PRIMARY_ENABLED=true, WORKLOG_DATA_SCHEMA=worklog로 설정했다. 기존 dev/production/기타 context 값은 보존 후 재대조했다. 이 commit 재배포 후 실제 public config를 검증한다. 기존 관리 secret/Push credential을 이식하지 않았고 사이트/팀의 SUPABASE_SECRET_KEY 부재를 확인했다. core save는 본인 bearer + publishable key와 RLS를 사용한다.
 
 다음 실제 기기 단계는 태장 Redirect allowlist의 `worklog-qa://google-auth` 확인, 본인용 QA API를 포함한 누적 QA 후보 제작 요청, 새 Google 로그인, 미전송 원문 보존/최종 차이 확인 및 새 기록 ID가 ERP에 나타나는지 확인이다. 정식 설치본의 API 주소는 아직 원본이며 QA APK를 자동 생성하지 않았다. source 데이터나 기기 큐를 삭제하지 않는다. 신규 target 쓰기 이후 source로 되돌릴 때에는 신규 기록을 먼저 회수·조정한다.
+
+
+## 실제 모바일 저장·ERP 수용 및 전환 차이 점검 — 2026-11-03 KST
+
+사용자가 QA 앱에서 업무2건을 등록했고, 서버의 기존 ERP UUID 소유권/RLS와 ERP reader 조건으로 조회됨을 확인한 뒤 ERP 화면 확인 완료를 회신했다. 해당 입력으로 일정1건도 생성됐다. 업무264/일정52이며 기존 ERP 계정과 개인 공간을 유지한다. 단순 snapshot 표시를 넘어 **본인 QA 앱의 새 저장→태장→ERP 표시** 수용이 완료됐다. 정식 설치본은 원본 서버이며 전체 통합/정식 출시 완료로 보고하지 않는다.
+
+QA 검수본 source `f519ae60a5bda37dee3ce9c7ecc61ce95b1fbcfe`, 수동 run668 `41605997638`의 5개 job 모두 success. APK artifact13217721326의 ZIP digest/source metadata/실제 bundle Preview483 origin을 대조했다. 대상 allowlist의 `worklog-qa://google-auth` 저장 완료, 기존 ERP callback·Site URL 유지. 검수본 APK SHA256: `d5e390a062db4e6dc22c623955f35e13552e5b68f7e63d03905540d780993d79`.
+
+### 재사용 가능한 비파괴 core 대조
+
+`scripts/consolidation/personal-cutover-audit.mjs`는 SQL 실행/이전/복구 도구가 아니다. 승인된 본인 UUID와 public/worklog schema로 **SELECT fingerprint query만 생성**하며 core4 테이블(개인 공간·owner membership·업무·일정)의 명시 Auth FK만 대응 표식으로 정규화한다. 원문/metadata/시간은 비교 대상에 남긴다. 승인되지 않은 계정 FK를 숨기거나 이메일로 합치지 않는다. 출력에는 원문·토큰·push credential이 없다.
+
+각 SQL 결과의 `snapshot`을 `comparePersonalCutover(sourceSnapshot,targetSnapshot)`에 전달한다. 같은 ID/다른 내용, 원본에만 있는 ID, 대상에만 있는 ID를 따로 보고한다. 중복 ID·누락 테이블·불완전 fingerprint·owner 공간 불일치는 중단한다. MD5는 PG JSONB의 내용 차이 점검용이며 인증/서명 수단이 아니다. 일치하더라도 기기 미저장 자료·첨부·알림이 확인된 것으로 보지 않으며 `productionReady=false`를 유지한다. 양방향 동기화/수정시각 우선 덮어쓰기/자동 삭제/승자 선택 없음.
+
+본인 실제 core 대조 결과:
+
+| 항목 | 원본 | 태장 | 공통 내용 일치 | 원본에만 | 태장에만 | 동일 ID 변경 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 개인 공간 | 1 | 1 | 1 | 0 | 0 | 0 |
+| 본인 owner membership | 1 | 1 | 1 | 0 | 0 | 0 |
+| 업무 | 262 | 264 | 259 | 0 | 2 | 3 |
+| 일정 | 51 | 52 | 51 | 0 | 1 | 0 |
+
+업무3건의 차이는 `status / updated_at / completed_at`에만 있으며 태장에서 completed로 바뀌었다. 새로운2업무/1일정과 완료3건을 원본 snapshot으로 덮으면 사용자 변경이 유실된다. 현재 core에서 원본에만 남은 행은0이나, 이것이 전체14테이블·첨부·기기 원본 이전 완료를 뜻하지 않는다. 실제 개인 식별자/제목/행 fingerprint는 공개 문서·fixture에 넣지 않았다.
+
+실제 PostgreSQL(PGlite)로 UUID 매핑, 다른 개인 공간 제외, 동일 건수의 내용 수정 탐지, metadata 안의 사용자ID를 임의 치환하지 않는 경계, owner membership 부재를 검사했다. 전체 로컬 테스트1060/1060 통과. 이번 변경은 오프라인 감사 코드/테스트/문서이며 모바일 제품 코드가 바뀌지 않아 APK를 다시 만들지 않는다.
+
+### 다음 전환 순서와 중단 조건
+
+1. 사용자 확인: 기존 정식 앱의 미저장 녹음·작성 중인 글·사진 입력은 **없음**이라고 회신했다. 사용자 확인 기록이며 에이전트가 휴대폰 저장소를 직접 검사한 것은 아니다. 기존 기기 자료·세션·앱 데이터는 삭제하지 않는다. 캡처 inbox/음성 draft는 기존 사용자 범위에 보존되며 source→target UUID를 자동 재귀속하지 않는다.
+2. 본인 기록은 현재 검수된 QA 앱에서 태장에 저장된다. 원본 정식 앱과 QA 앱을 같은 개인 기록의 병행 작성처로 사용하지 않는다. 재전환/롤백 전 차이 검사를 다시 실행하고 태장 추가·수정분을 보존한다.
+3. 정식 앱과 공용 API 주소를 일괄 변경하면 기존 업무수첩의 다른4명에게도 영향을 줄 수 있다. 이들의 Auth/개인 공간 이전은 승인 범위가 아니다. 본인 전환 범위를 지키며 정식 배포 대상을 확정하기 전 global production config 변경을 하지 않는다. 계정 전환을 위한 다중 프로젝트 자동 fallback도 추가하지 않는다.
+4. 정식 variant callback은 `worklog://google-auth`이며 이번에 저장한 QA callback과 다르다. 정식 후보를 준비할 때 실제 variant/서명/대상 API/allowlist를 함께 검증한다. 현재 정식 callback 설정 완료로 추정하지 않는다.
+5. 모바일 로컬 알림과 서버 push/scheduler를 구분한다. 서버 credential·cron은 비활성 상태를 유지하고 재사용하지 않는다. 실제 전환 후보에서 중복·누락 알림을 검수하기 전 전체 알림 이전 완료로 표시하지 않는다.
+6. 새 사용자 provisioning/다른 사용자 이전/main 병합/Production·Play 배포/원본 프로젝트 삭제는 이번 실행에서 하지 않았다. 원본 데이터 쓰기 잠금이나 target→source 역복사도 하지 않았다.
+
