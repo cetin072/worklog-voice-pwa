@@ -84,7 +84,8 @@ test("concurrent session refresh callers share one Supabase refresh request", as
 
   const first = auth.refreshSession();
   const second = auth.refreshSession();
-  await Promise.resolve();
+  // Configuration must resolve before any refresh token crosses the network.
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(refreshCalls, 1, "refresh token must not be consumed by parallel callers");
 
   releaseRefresh();

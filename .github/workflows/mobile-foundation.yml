@@ -48,6 +48,11 @@ on:
         required: false
         default: true
         type: boolean
+      qa_api_base_url:
+        description: 'Optional QA API origin; only this site production or deploy-preview URL'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: mobile-app-${{ github.ref }}
@@ -63,6 +68,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       android: ${{ steps.scope.outputs.android }}
+      api_base_url: ${{ steps.scope.outputs.api_base_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,9 +96,25 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           FORCE_ANDROID: ${{ inputs.build_android }}
+          QA_API_BASE_URL: ${{ inputs.qa_api_base_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         shell: bash
         run: |
           set -euo pipefail
+
+          qa_api_url="${QA_API_BASE_URL:-}"
+          if [[ -z "$qa_api_url" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+              qa_api_url="https://deploy-preview-${PR_NUMBER}--worklog-voice-pwa.netlify.app"
+            else
+              qa_api_url='https://worklog-voice-pwa.netlify.app'
+            fi
+          fi
+          if [[ "$qa_api_url" != 'https://worklog-voice-pwa.netlify.app' && ! "$qa_api_url" =~ ^https://deploy-preview-[0-9]+--worklog-voice-pwa\.netlify\.app$ ]]; then
+            echo 'Refusing an API origin outside the existing Worklog site.' >&2
+            exit 1
+          fi
+          echo "api_base_url=$qa_api_url" >> "$GITHUB_OUTPUT"
 
           # User policy: never build installable QA/emulator APKs per patch.
           # Explicit QA requests dispatch this workflow with build_android=true.
@@ -169,6 +191,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_PUBLIC_WORKLOG_APP_VARIANT: qa
+      EXPO_PUBLIC_API_BASE_URL: ${{ needs.changes.outputs.api_base_url }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -195,17 +218,20 @@ jobs:
         working-directory: mobile/android
         env:
           NODE_ENV: production
-          # PR Human QA must exercise the same PR backend contract, not production main.
-          # Main/dispatch builds continue to use the production API.
-          EXPO_PUBLIC_API_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--worklog-voice-pwa.netlify.app', github.event.pull_request.number) || 'https://worklog-voice-pwa.netlify.app' }}
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
       - name: Ensure non-Play APK cannot impersonate Play app
         run: bash mobile/scripts/verify-qa-apk.sh mobile/android/app/build/outputs/apk/release/app-release.apk
+      - name: Record exact QA source and API origin
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node -e 'console.log(JSON.stringify({sourceSha:process.env.SOURCE_SHA,apiBaseUrl:process.env.EXPO_PUBLIC_API_BASE_URL,packageName:"com.cetin072.worklog.qa",callback:"worklog-qa://google-auth"},null,2))' > qa-build-info.json
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
           name: worklog-mobile-auth-ux-arm64-apk
-          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            qa-build-info.json
           if-no-files-found: error
           retention-days: 7
       - name: Publish exact-main APK evidence
@@ -235,6 +261,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_PUBLIC_WORKLOG_APP_VARIANT: qa
+      EXPO_PUBLIC_API_BASE_URL: ${{ needs.changes.outputs.api_base_url }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -288,6 +315,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_PUBLIC_WORKLOG_APP_VARIANT: qa
+      EXPO_PUBLIC_API_BASE_URL: ${{ needs.changes.outputs.api_base_url }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

@@ -1,3 +1,4 @@
+import {worklogDataSchema,dataSchemaHeaders} from "./data-schema.mjs";
 function clientError(code, message, metadata = {}) {
   const error = new Error(message);
   error.code = code;
@@ -15,8 +16,9 @@ function httpsOrigin(value) {
   }
 }
 
-export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, accessToken, fetchImpl = fetch } = {}) {
+export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, accessToken, dataSchema = worklogDataSchema(), fetchImpl = fetch } = {}) {
   const origin = httpsOrigin(supabaseUrl);
+  const profile = dataSchemaHeaders(dataSchema);
   const key = String(publishableKey || "").trim();
   const token = String(accessToken || "").trim();
   if (!key) throw clientError("SUPABASE_DATA_CORE_PUBLISHABLE_KEY_REQUIRED", "Supabase publishable key가 필요합니다.");
@@ -33,7 +35,7 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
       try {
         response = await fetchImpl(`${origin}/rest/v1/rpc/${safeFunction}`, {
           method: "POST",
-          headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json" },
+          headers: { ...profile, apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json" },
           body: JSON.stringify(body),
         });
       } catch (causeValue) {
@@ -76,7 +78,7 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
       }
       const response = await fetchImpl(`${origin}/rest/v1/${safeTable}?${params.toString()}`, {
         method: "PATCH",
-        headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json", prefer: "return=representation" },
+        headers: { ...profile, apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json", prefer: "return=representation" },
         body: JSON.stringify(row),
       });
       const data = await response.json().catch(() => ({}));
@@ -98,7 +100,7 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
       }
       const response = await fetchImpl(`${origin}/rest/v1/${safeTable}?${params.toString()}`, {
         method: "GET",
-        headers: { apikey: key, authorization: `Bearer ${token}` },
+        headers: { ...profile, apikey: key, authorization: `Bearer ${token}` },
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw clientError("SUPABASE_DATA_CORE_SELECT_FAILED", String(data?.message || data?.hint || "Data Core 조회에 실패했습니다."));
@@ -111,6 +113,7 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
       const response = await fetchImpl(`${origin}/rest/v1/${safeTable}`, {
         method: "POST",
         headers: {
+          ...profile,
           apikey: key,
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
@@ -135,7 +138,7 @@ export function createSupabaseDataCoreRestClient({ supabaseUrl, publishableKey, 
       }
       const response = await fetchImpl(`${origin}/rest/v1/${safeTable}?on_conflict=${encodeURIComponent(columns.join(","))}`, {
         method: "POST",
-        headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json", prefer: "resolution=merge-duplicates,return=representation" },
+        headers: { ...profile, apikey: key, authorization: `Bearer ${token}`, "content-type": "application/json", prefer: "resolution=merge-duplicates,return=representation" },
         body: JSON.stringify(row),
       });
       const data = await response.json().catch(() => ({}));

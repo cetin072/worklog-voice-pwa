@@ -6,6 +6,7 @@ export type PublicPlatformConfig = {
   supabaseUrl: string;
   publishableKey: string;
   dataCorePrimaryEnabled: boolean;
+  dataSchema?: 'public' | 'worklog';
 };
 
 function normalizeApiBaseUrl(value: string) {
@@ -38,7 +39,9 @@ export async function loadPublicPlatformConfig(fetchImpl: typeof fetch = fetch):
     throw new Error('Platform 로그인 설정이 아직 준비되지 않았습니다.');
   }
 
+  if (body.dataSchema !== undefined && !['public','worklog'].includes(body.dataSchema)) throw new Error('Platform 데이터 영역 설정이 올바르지 않습니다.');
   return {
+    ...(body.dataSchema === 'worklog' ? {dataSchema:'worklog' as const} : {}),
     configured: true,
     supabaseUrl: body.supabaseUrl,
     publishableKey: body.publishableKey,
