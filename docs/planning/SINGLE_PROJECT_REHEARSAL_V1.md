@@ -146,3 +146,29 @@ QA 검수본 source `f519ae60a5bda37dee3ce9c7ecc61ce95b1fbcfe`, 수동 run668 `4
 5. 모바일 로컬 알림과 서버 push/scheduler를 구분한다. 서버 credential·cron은 비활성 상태를 유지하고 재사용하지 않는다. 실제 전환 후보에서 중복·누락 알림을 검수하기 전 전체 알림 이전 완료로 표시하지 않는다.
 6. 새 사용자 provisioning/다른 사용자 이전/main 병합/Production·Play 배포/원본 프로젝트 삭제는 이번 실행에서 하지 않았다. 원본 데이터 쓰기 잠금이나 target→source 역복사도 하지 않았다.
 
+
+
+## 알림 실기기 수용·정식 전환 준비 및 추가 차이 반영 — 2026-11-03 KST
+
+사용자가 태장 연결 QA 앱에서 3분 뒤 일정을 만들고 실제 휴대폰 알림 수신을 확인했다. QA 앱의 Google 로그인·새 기록 저장·ERP 표시·로컬 일정 알림까지 사용자 수용 완료다. 서버 push/scheduler가 활성화됐다는 의미는 아니다.
+
+사용자가 원본의 나머지4계정은 테스트·미사용 계정이라고 확인했다. 해당 Auth 행과 다른 계정의 업무18건은 원본에 보존하며 삭제/이전하지 않는다. 기존 정식 앱 미저장 자료 없음 확인도 유지한다.
+
+### 원본 새 기록4건 추가 보존
+
+전환 직전 재조회에서 원본 본인 업무가262→266건으로 늘어난 것을 발견했다. 대상은 QA 새 기록 포함265업무/53일정이었다. 본인 원본에만 있던4업무·source_refs4·normalizations4를 비공개 delta 백업 후, 기존 read-only+write pilot migration을 사용한 실제 PostgreSQL(PGlite) 복원에서 검증했다. ID·원문·시간·JSON typed 내용 동일, 기존 completed 보존 및 재실행 차단을 통과했다.
+
+대상에는 SERIALIZABLE 단일 transaction으로 존재하지 않는 ID만 insert했다. 기존 개인 공간/owner membership/활성 Profile을 확인하고 중복 ID가 있으면 중단했다. 입력으로 자동 생성된 해당4건의 normalization만 동일 transaction 안에서 원본 보존본으로 대체했으며, 미리 존재한 normalization을 삭제하지 않았다. 3개 영향 테이블의 기존 행 전체 fingerprint가 전후 동일하고 추가12행 typed JSON이 원본의 명시 Auth FK 매핑 결과와 일치해야 commit하도록 했다. Auth/기존 자료/일정/알림 발송/원본 데이터에는 쓰지 않았다.
+
+실제 적용 뒤 본인 RLS로4업무 조회, 완료3건 유지, 업무269/일정53을 확인했다. core4 대조상 원본에만 남은 행0, 태장에만 있는 업무3/일정2, 기존3업무 completed 변경이다. 원본의 다른 계정4·업무18은 보존됐다. 추가 SQL은 migration이 아니며 공개 저장소에 실제 행/사용자 UUID/원문을 넣지 않았다. 적용 SQL SHA256 `ea5ada4e71b602885897b37e99ec24ddb6848b06bf6b26c89d5ed19f492f924b`. 추가 백업은 `taejang-worklog-delta-before-cutover-20261103.json`으로 별도 비공개 보관했다.
+
+### 정식 후보와 아직 하지 않은 일
+
+- 병합된 Worklog main `1a3b6226f2396e87c8bb05455c082394daa3a0b5`의 mobile/netlify/public 제품 코드가 사용자 검수 APK source `f519ae6`와 동일함을 git diff로 확인했다. 이후 감사/문서 변경만으로 새 QA APK를 만들지 않았다.
+- 대상 Auth allowlist에 정식 앱의 `worklog://google-auth`를 추가·저장했다. 기존 QA/ERP callback과 Site URL은 그대로다. Calendar 재연결은 별도 `?purpose=calendar` callback 허용 여부와 실제 기기 수용이 필요하다.
+- Worklog Netlify production은 현재 원본 Supabase/public/Data Core primary=true다. deploy-preview만 태장/worklog이다. production 변경안은 기존 `SUPABASE_URL`과 publishable key를 검수한 target으로 교체하고, `WORKLOG_DATA_SCHEMA=worklog`를 production/functions context에도 추가하며 primary=true를 유지하는 것이다. 기존 secret flag/scopes/다른 context·Notion·scheduler credential은 유지한다. service-role 키를 새로 넣지 않는다.
+- 정식 API를 전환하면 이전 설치본이 새 schema를 이해하지 못할 수 있으므로, Console 최고 code 확인→기존 AAB workflow/업로드 서명 검증→기존 비공개 Alpha 갱신 준비→기존 수동 production-release 절차/실제 공개 config 대조와 함께 전환한다. 준비 전 production env부터 바꾸지 않는다. 이미 작성한 태장 신규/완료 자료를 원본으로 자동 되돌리지 않는다.
+- Play Console 접근 요청은 browser 자동 승인 검토에서 `play.google.com` 대신 다른 `google.play` 목적지로 판단돼 차단됐다. 우회/다른 브라우저/비공식 API로 접근하지 않았다. 최고 uploaded versionCode는 미확인이며 과거 code5 또는 QA12로 추정하지 않는다. 새 AAB 빌드·Play 제출·Production env 변경·발송 활성화는 수행하지 않았다.
+- 공식 Console 주소/최고 versionCode 확인이 가능해지면 source_ref를 검수한 정확한 main SHA로 고정하고 기존 `play-android-aab.yml`를 사용한다. Firebase quota 예외는 기존 사용자 승인 범위와 실제 기기 대체 근거를 확인해 기록하며 PASS로 위장하지 않는다. 공개 Production Play 트랙으로 확대하지 않는다.
+- 현재 최신 main/ERP 배포는 동시 작업으로 변할 수 있으므로 다음 실행 시 다시 확인한다. ERP qa-preview/다른 작업자의 브랜치를 임의로 바꾸지 않는다. 정식 업데이트 전까지 본인 새 기록은 검수한 QA 앱을 사용하며 원본 앱과 병행 작성하지 않도록 안내한다.
+- 대상 Supabase dashboard는 지난 billing cycle의 사용량 초과와 2026-11-24부터 제한 가능 경고를 표시했다. 결제/요금제 변경은 하지 않았으며 정식 전환 운영 점검에 이 상태를 포함한다.
