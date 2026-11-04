@@ -94,7 +94,7 @@ test('token absence and API rejection fail closed without retries or token outpu
 });
 
 test('Worklog manual-only release gate stays unchanged and bridge has no privileged deployment secrets', () => {
-  const policy = JSON.parse(readFileSync(new URL('../deployment/release-policy.json', import.meta.url)));
+  const policy = JSON.parse(readFileSync(new URL('../scripts/release-policy.json', import.meta.url)));
   assert.equal(policy.schedule_enabled, false);
   assert.equal(policy.schedule_interval_hours, 48);
   assert.equal(policy.schedule_window_hours, 24);
