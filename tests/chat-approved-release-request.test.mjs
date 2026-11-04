@@ -100,7 +100,7 @@ test('Worklog manual-only release gate stays unchanged and bridge has no privile
   assert.equal(policy.schedule_window_hours, 24);
   const target = readFileSync(new URL('../.github/workflows/production-release.yml', import.meta.url), 'utf8');
   assert.match(target, /workflow_dispatch:/);
-  assert.match(target, /schedule:/);
+  assert.doesNotMatch(target, /^\\s+schedule:/m, 'Worklog scheduling remains disabled');
   assert.match(target, /action: 'deploy-now'|action == 'deploy-now'/);
   assert.match(target, /group: worklog-production-release/);
   const bridge = readFileSync(new URL('../.github/workflows/chat-approved-production-release.yml', import.meta.url), 'utf8');
