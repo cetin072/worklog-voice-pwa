@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     concurrency:
-      group: taejang-chat-release-request
+      group: worklog-chat-release-request
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
