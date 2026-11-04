@@ -1,0 +1,45 @@
+name: Chat-approved Worklog Production release request
+
+# Only the fixed owner-created control issue is allowed to request the
+# EXISTING production-release.yml. No Netlify credentials are available here.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch-guarded-release:
+    if: >-
+      github.repository == 'cetin072/worklog-voice-pwa' &&
+      github.event.issue.number == 485 &&
+      github.event.issue.id == 6200792630 &&
+      github.event.issue.state == 'open' &&
+      !github.event.issue.pull_request &&
+      github.event.issue.user.login == 'cetin072' &&
+      github.event.comment.user.login == 'cetin072' &&
+      github.event.sender.login == 'cetin072' &&
+      github.event.comment.author_association == 'OWNER' &&
+      (github.event.comment.body == '/worklog deploy-now' ||
+       github.event.comment.body == '/worklog deploy-check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    concurrency:
+      group: taejang-chat-release-request
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify the release request authorization boundary
+        run: node --test tests/chat-approved-release-request.test.mjs
+      - name: Dispatch the existing verified Production workflow once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/chat-approved-release-request.mjs
