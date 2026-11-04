@@ -52,6 +52,7 @@ type DirectSaveFeedback = Readonly<{
   scheduleCreated: boolean;
   scheduleId: string;
   dueStart: string;
+  scheduleWarning: string;
 }>;
 
 function emptyManualWorkInput(): ManualWorkInputValue {
@@ -585,7 +586,15 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         dueTime: manualInput.dueTime,
         ...(manualInput.dueTime ? { type: '회의·통화' } : {}),
       });
+      const expectedDue = manualInput.dueDate && manualInput.dueTime
+        ? `${manualInput.dueDate}T${manualInput.dueTime}:00+09:00` : manualInput.dueDate;
+      const dueMatches = !expectedDue || (manualInput.dueTime
+        ? Date.parse(saved.dueStart || '') === Date.parse(expectedDue) && Boolean(saved.scheduleCreated && saved.scheduleId?.trim())
+        : saved.dueStart === expectedDue);
+      const scheduleWarning = dueMatches ? ''
+        : `업무만 저장되었습니다. 선택한 ${manualInput.dueDate}${manualInput.dueTime ? ` ${manualInput.dueTime}` : ''}의 ${manualInput.dueTime ? '일정' : '기한'} 저장을 확인하지 못했습니다. 다시 등록하지 말고 저장된 항목의 연필 버튼에서 날짜와 시간을 확인해주세요.`;
       const feedback = {
+        scheduleWarning,
         transcript: saved.cleanTranscript?.trim() || original,
         scheduleDetected: Boolean(saved.scheduleDetected),
         scheduleCreated: Boolean(saved.scheduleCreated),
@@ -603,9 +612,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       setLastDirectSave(feedback);
       if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
       const dueLabel = formatSavedDue(feedback.dueStart);
-      showMessage(feedback.scheduleCreated
+      showMessage(scheduleWarning || (feedback.scheduleCreated
         ? `업무 저장 완료 · 일정 생성됨${dueLabel ? ` · ${dueLabel}` : ''}${reminderWarning ? ` · ${reminderWarning}` : ''}`
-        : '업무 저장 완료 · 브리핑에 반영했습니다.', 'success');
+        : '업무 저장 완료 · 브리핑에 반영했습니다.'), scheduleWarning ? 'error' : 'success');
       setScreen('home');
       await refreshBriefing();
     });
@@ -1098,9 +1107,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
-        <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>✅ 업무 저장 완료</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
+        <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>{lastDirectSave.scheduleWarning ? '⚠️ 날짜·시간 확인 필요' : '✅ 업무 저장 완료'}</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
         <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
-        {lastDirectSave.scheduleCreated ? <Text style={styles.saveFeedbackSchedule}>📅 일정 생성 완료{formatSavedDue(lastDirectSave.dueStart) ? ` · ${formatSavedDue(lastDirectSave.dueStart)}` : ''}</Text> : <Text style={styles.saveFeedbackMeta}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
+        {lastDirectSave.scheduleWarning ? <Text style={styles.errorText}>{lastDirectSave.scheduleWarning}</Text> : lastDirectSave.scheduleCreated ? <Text style={styles.saveFeedbackSchedule}>📅 일정 생성 완료{formatSavedDue(lastDirectSave.dueStart) ? ` · ${formatSavedDue(lastDirectSave.dueStart)}` : ''}</Text> : <Text style={styles.saveFeedbackMeta}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
       </View> : null}
 
       <View style={styles.card}>

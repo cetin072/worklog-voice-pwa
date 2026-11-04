@@ -10,6 +10,16 @@ export type PatchNoteEntry = {
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
     date: '2026-11-04',
+    title: '직접 입력 일정의 저장 결과 확인',
+    summary: '선택한 날짜·시간의 저장이 확인되지 않으면 완료로 안내하지 않습니다.',
+    items: [
+      '일정 생성 결과와 선택한 날짜·시간을 함께 확인합니다.',
+      '업무만 저장된 경우 결과 안내에 선택값을 남기고 기존 항목 수정을 안내합니다.',
+      '중복 등록을 막기 위해 같은 내용을 자동으로 다시 저장하지 않습니다.',
+    ],
+  },
+  {
+    date: '2026-11-04',
     title: '태장 ERP 연결 지원',
     summary: '연결한 태장 계정의 개인 업무와 일정을 ERP에서도 확인할 수 있습니다.',
     items: [
