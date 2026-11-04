@@ -8,6 +8,9 @@ on:
       - 'scripts/release-policy.json'
       - 'netlify.toml'
       - '.github/workflows/production-release.yml'
+      - '.github/workflows/chat-approved-production-release.yml'
+      - 'scripts/chat-approved-release-request.mjs'
+      - 'tests/chat-approved-release-request.test.mjs'
       - '.github/workflows/scheduled-release-checks.yml'
   workflow_dispatch:
 permissions:
@@ -20,4 +23,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test tests/scheduled-netlify-release.test.mjs
+      - run: node --test tests/scheduled-netlify-release.test.mjs tests/chat-approved-release-request.test.mjs
