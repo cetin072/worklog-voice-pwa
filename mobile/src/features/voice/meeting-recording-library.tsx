@@ -1,6 +1,7 @@
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   deleteMeetingRecording,
@@ -9,6 +10,8 @@ import {
   type MeetingRecordingEntry,
 } from './meeting-recordings';
 import { mobileTheme } from '@/src/ui/theme';
+import { formatMeetingMinutesForShare, type MeetingMinutesDocumentV1 } from './meeting-minutes-document';
+import { loadMeetingMinutes, saveMeetingMinutes } from './meeting-minutes-storage';
 
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -82,12 +85,123 @@ function MeetingRecordingPlayer({ recording }: { recording: MeetingRecordingEntr
   </View>;
 }
 
+function MeetingMinutesEditor({ recording, onClose }: {
+  recording: MeetingRecordingEntry;
+  onClose(): void;
+}) {
+  const [transcriptText, setTranscriptText] = useState('');
+  const [minutesText, setMinutesText] = useState('');
+  const [saved, setSaved] = useState<MeetingMinutesDocumentV1 | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    try {
+      const document = loadMeetingMinutes(recording.id);
+      setSaved(document);
+      setTranscriptText(document?.transcriptText ?? '');
+      setMinutesText(document?.minutesText ?? '');
+    } catch (nextError) {
+      setLoadFailed(true);
+      setError(nextError instanceof Error ? nextError.message : '회의록을 읽지 못했습니다.');
+    }
+  }, [recording.id]);
+
+  const dirty = transcriptText !== (saved?.transcriptText ?? '') ||
+    minutesText !== (saved?.minutesText ?? '');
+
+  function requestClose() {
+    if (!dirty) { onClose(); return; }
+    Alert.alert('저장하지 않은 변경', '작성 중인 내용이 저장되지 않았습니다.', [
+      { text: '돌아가기', style: 'cancel' },
+      { text: '변경 버리기', style: 'destructive', onPress: onClose },
+    ]);
+  }
+
+  function saveDraft() {
+    if (loadFailed) return;
+    setError('');
+    setNotice('');
+    try {
+      const document = saveMeetingMinutes({ recordingId: recording.id, transcriptText, minutesText });
+      setSaved(document);
+      setTranscriptText(document.transcriptText);
+      setMinutesText(document.minutesText);
+      setNotice('회의록을 이 기기에 저장했습니다.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : '회의록을 저장하지 못했습니다.');
+    }
+  }
+
+  async function shareSavedDraft() {
+    if (!saved || dirty || loadFailed) {
+      setError('내용을 먼저 저장한 뒤 공유해주세요.');
+      return;
+    }
+    setError('');
+    try {
+      await Share.share({
+        title: '업무수첩 회의록',
+        message: formatMeetingMinutesForShare({
+          document: saved,
+          title: recording.title || '회의 녹음',
+          recordedAt: recording.createdAt,
+        }),
+      });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : '공유 화면을 열지 못했습니다.');
+    }
+  }
+
+  return <Modal visible animationType="slide" onRequestClose={requestClose}>
+    <SafeAreaView style={styles.minutesModal}>
+      <View style={styles.minutesHeader}>
+        <Text style={styles.minutesHeading}>회의록</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="회의록 닫기" onPress={requestClose} style={styles.minutesClose}><Text style={styles.renameActionText}>닫기</Text></Pressable>
+      </View>
+      <ScrollView contentContainerStyle={styles.minutesContent} keyboardShouldPersistTaps="handled">
+        <Text style={styles.recordingTitle}>{recording.title || `회의 녹음 · ${formatRecordedAt(recording.createdAt)}`}</Text>
+        <Text style={styles.recordingMeta}>{formatDuration(recording.durationMs)} · 이 기기에 저장된 녹음</Text>
+        <MeetingRecordingPlayer recording={recording} />
+        <Text style={styles.minutesHelp}>자동 전사는 아직 연결 전입니다. 녹음을 들으며 직접 입력하거나 전사된 글을 붙여넣을 수 있습니다.</Text>
+        <Text style={styles.minutesLabel}>녹취문 (선택)</Text>
+        <TextInput accessibilityLabel="회의 녹취문 직접 입력" style={styles.minutesInput} multiline textAlignVertical="top"
+          value={transcriptText} maxLength={120000} editable={!loadFailed}
+          placeholder="녹음에서 들은 내용을 입력하거나 붙여넣으세요."
+          onChangeText={value => { setTranscriptText(value); setNotice(''); }} />
+        <Text style={styles.minutesLabel}>회의록 (수정 가능)</Text>
+        <TextInput accessibilityLabel="회의록 내용" style={styles.minutesInput} multiline textAlignVertical="top"
+          value={minutesText} maxLength={120000} editable={!loadFailed}
+          placeholder="회의 내용·결정사항·후속 할 일을 직접 정리하세요."
+          onChangeText={value => { setMinutesText(value); setNotice(''); }} />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {notice ? <Text style={styles.minutesSuccess}>{notice}</Text> : null}
+        <View style={styles.minutesActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="회의록 저장" disabled={loadFailed}
+            style={[styles.renamePrimary, loadFailed ? styles.minutesDisabled : null]} onPress={saveDraft}>
+            <Text style={styles.renamePrimaryText}>저장</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="회의록 공유"
+            disabled={!saved || dirty || loadFailed}
+            style={[styles.renameSecondary, (!saved || dirty || loadFailed) ? styles.minutesDisabled : null]}
+            onPress={() => void shareSavedDraft()}>
+            <Text style={styles.renameSecondaryText}>공유</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.minutesFootnote}>녹음 원본은 변경하지 않습니다. 공유는 직접 누를 때만 실행됩니다.</Text>
+      </ScrollView>
+    </SafeAreaView>
+  </Modal>;
+}
+
 export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: number }) {
   const [items, setItems] = useState<readonly MeetingRecordingEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
+  const [minutesRecording, setMinutesRecording] = useState<MeetingRecordingEntry | null>(null);
 
   function reload() {
     try {
@@ -199,6 +313,9 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
             <Pressable accessibilityRole="button" style={styles.renamePrimary} onPress={saveRename}><Text style={styles.renamePrimaryText}>이름 저장</Text></Pressable>
           </View>
         </View> : <View style={styles.rowActions}>
+          <Pressable accessibilityRole="button" style={styles.renameAction} onPress={() => setMinutesRecording(recording)}>
+            <Text style={styles.renameActionText}>회의록</Text>
+          </Pressable>
           <Pressable accessibilityRole="button" style={styles.renameAction} onPress={() => beginRename(recording)}>
             <Text style={styles.renameActionText}>이름 바꾸기</Text>
           </Pressable>
@@ -208,10 +325,23 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
         </View>}
       </View>;
     })}
+    {minutesRecording ? <MeetingMinutesEditor recording={minutesRecording} onClose={() => setMinutesRecording(null)} /> : null}
   </View>;
 }
 
 const styles = StyleSheet.create({
+  minutesModal: { flex: 1, backgroundColor: mobileTheme.colors.surface },
+  minutesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: mobileTheme.colors.border },
+  minutesHeading: { fontSize: 20, fontWeight: '800', color: mobileTheme.colors.text },
+  minutesClose: { minHeight: 40, paddingHorizontal: 12, justifyContent: 'center' },
+  minutesContent: { gap: 12, padding: 16, paddingBottom: 36 },
+  minutesHelp: { fontSize: 13, color: mobileTheme.colors.textSecondary, lineHeight: 19 },
+  minutesLabel: { fontSize: 14, fontWeight: '800', color: mobileTheme.colors.text },
+  minutesInput: { minHeight: 140, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.compact, backgroundColor: mobileTheme.colors.neutralBackground, color: mobileTheme.colors.text, padding: 12, lineHeight: 20 },
+  minutesActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  minutesDisabled: { opacity: 0.45 },
+  minutesSuccess: { fontSize: 13, color: mobileTheme.colors.success },
+  minutesFootnote: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   library: { gap: 10, paddingTop: 8 },
   libraryHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   libraryEyebrow: { fontSize: 11, fontWeight: '800', color: mobileTheme.colors.textMuted, letterSpacing: 0.7 },
