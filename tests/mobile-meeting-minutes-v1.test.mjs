@@ -1,15 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import ts from 'typescript';
-
-const corePath = 'mobile/src/features/voice/meeting-minutes-document.ts';
-const source = readFileSync(corePath, 'utf8');
-// Exercise the real TypeScript document model in Node without a native Expo runtime.
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const core = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
+// Node 24 strips type-only syntax from this dependency-free TypeScript model.
+// The actual exported functions run, without npm packages or native Expo modules.
+const core = await import('../mobile/src/features/voice/meeting-minutes-document.ts');
 const { assertMeetingRecordingId, createMeetingMinutesDocument, parseMeetingMinutesDocument, formatMeetingMinutesForShare } = core;
 const id = 'meeting-20261105123000-recording.m4a';
 const when = new Date('2026-11-05T03:30:00Z');
