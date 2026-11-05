@@ -1,17 +1,30 @@
 name: Batched Production Release
-run-name: "Production release | ${{ (github.event_name == 'schedule' || inputs.action == 'deploy-now') && 'live' || 'read-only dry-run' }}"
+run-name: "Production release | ${{ (github.event_name == 'schedule' || (inputs.action == 'deploy-now' || inputs.action == 'redeploy-config')) && 'live' || 'read-only dry-run' }}"
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy-now = 즉시 배포 (최신 main), dry-run = 읽기 전용 확인'
+        description: 'deploy-now = 소스 배포, redeploy-config = 승인된 동일 SHA 설정 재배포, dry-run = 읽기 전용'
         type: choice
         required: true
         default: dry-run
         options:
           - dry-run
           - deploy-now
+          - redeploy-config
+      expected_deploy_id:
+        description: 'Config-only: exact current published deployment ID'
+        type: string
+        default: ''
+      expected_source_sha:
+        description: 'Config-only: exact published SHA, which must also be current main'
+        type: string
+        default: ''
+      config_change_ref:
+        description: 'Config-only: approved change/rollback reference (8-120 safe characters, no secrets)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -29,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.action == 'deploy-now' && 'main' || github.ref }}
+          ref: ${{ (inputs.action == 'deploy-now' || inputs.action == 'redeploy-config') && 'main' || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -40,8 +53,11 @@ jobs:
       - name: Check main and request one scheduled or explicitly requested Git build
         env:
           RELEASE_ACTION: ${{ inputs.action }}
+          EXPECTED_DEPLOY_ID: ${{ inputs.expected_deploy_id }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          CONFIG_CHANGE_REF: ${{ inputs.config_change_ref }}
           GH_TOKEN: ${{ github.token }}
-          NETLIFY_PRODUCTION_BUILD_HOOK: ${{ (github.event_name == 'schedule' || (inputs.action == 'deploy-now' && github.ref == 'refs/heads/main')) && secrets.NETLIFY_PRODUCTION_BUILD_HOOK || '' }}
+          NETLIFY_PRODUCTION_BUILD_HOOK: ${{ (github.event_name == 'schedule' || ((inputs.action == 'deploy-now' || inputs.action == 'redeploy-config') && github.ref == 'refs/heads/main')) && secrets.NETLIFY_PRODUCTION_BUILD_HOOK || '' }}
           RELEASE_RESULT_PATH: ${{ runner.temp }}/production-release-result.json
         run: node scripts/scheduled-netlify-release.mjs check scripts/release-policy.json
       - name: Retain check result
@@ -54,4 +70,4 @@ jobs:
           retention-days: 14
       - name: Record failure
         if: failure()
-        run: echo 'Release check failed. See this run. Previous published Production remains authoritative; use a new explicit manual run.' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'Release check failed. See this run. Publication may be uncertain. Inspect live deployment and config before a new run; no automatic retry or rollback.' >> "$GITHUB_STEP_SUMMARY"
