@@ -7,6 +7,17 @@ import { pathToFileURL } from 'node:url';
 
 const HOUR = 3600000;
 const SHA = /^[a-f0-9]{40}$/;
+const DEPLOY_ID = /^[a-f0-9]{24}$/;
+const CONFIG_RECEIPT = '/.well-known/config-release.json';
+function configIntent(value) {
+  if (!DEPLOY_ID.test(value.expected_deploy_id || '') || !SHA.test(value.expected_sha || '')
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,119}$/.test(value.change_ref || '')) throw new Error('CONFIG_INTENT_INVALID');
+  return { expected_deploy_id: value.expected_deploy_id, expected_sha: value.expected_sha, change_ref: value.change_ref };
+}
+function checkConfigBaseline(intent, published, sha) {
+  if (published.id !== intent.expected_deploy_id || published.commit_ref !== intent.expected_sha) throw new Error('CONFIG_BASELINE_CHANGED');
+  if (sha !== intent.expected_sha) throw new Error('CONFIG_SOURCE_CHANGED');
+}
 export const HOOK_TITLE = '48-hour approved main';
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 export function calendarSlot(config, at) {
@@ -60,9 +71,16 @@ export function validateHook(config, env, now) {
   if (!payload || typeof payload !== 'object') throw new Error('SCHEDULED_HOOK_REQUIRED');
   const age = new Date(now) - new Date(payload.issued_at);
   if (env.BRANCH !== 'main' || env.INCOMING_HOOK_TITLE !== HOOK_TITLE
-    || ![1, 3].includes(payload.version) || payload.repository !== config.repository || payload.site_id !== config.site_id
+    || ![1, 3, 4].includes(payload.version) || payload.repository !== config.repository || payload.site_id !== config.site_id
     || !SHA.test(payload.source_main_sha || '') || payload.source_main_sha !== env.COMMIT_REF
     || !/^\d+$/.test(String(payload.run_id)) || !Number.isFinite(age) || age < 0 || age > 90 * 60000) throw new Error('HOOK_SOURCE_OR_TIME_INVALID');
+  if (payload.version === 4) {
+    configIntent(payload);
+    if (payload.mode !== 'CONFIG_ONLY' || payload.source_main_sha !== payload.expected_sha
+      || !Number.isFinite(Date.parse(payload.run_created_at))
+      || Date.parse(payload.run_created_at) > Date.parse(payload.issued_at)) throw new Error('CONFIG_HOOK_INVALID');
+    return payload;
+  }
   if (payload.version === 3) {
     if (payload.mode !== 'MANUAL_MAIN' || !Number.isFinite(Date.parse(payload.run_created_at))
       || Date.parse(payload.run_created_at) > Date.parse(payload.issued_at)) throw new Error('MANUAL_HOOK_INVALID');
@@ -78,11 +96,30 @@ async function publicSite(config, fetcher) {
   if (!response.ok) throw new Error('PUBLIC_PRODUCTION_HTTP_' + response.status);
   return response.json();
 }
-export async function observe(config, sha, fetcher, wait, attempts = 40) {
+export async function observe(config, sha, fetcher, wait, attempts = 40, configPayload = null) {
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 40) throw new Error('OBSERVATION_LIMIT_INVALID');
   for (let i = 0; i < attempts; i++) {
     try {
       const d = publishedDeploy(await publicSite(config, fetcher), config.site_id);
-      if (d.commit_ref === sha) return { status: 'PUBLISHED', source_main_sha: sha, published_at: d.published_at };
+      if (d.commit_ref === sha) {
+        if (configPayload) {
+          if (!DEPLOY_ID.test(d.id || '') || d.id === configPayload.expected_deploy_id
+            || Date.parse(d.published_at) < Date.parse(configPayload.issued_at)) throw new Error('CONFIG_PUBLICATION_PENDING');
+          const origin = new URL(d.deploy_ssl_url);
+          if (origin.protocol !== 'https:' || origin.username || origin.password || origin.port
+            || origin.hostname !== `${d.id}--worklog-voice-pwa.netlify.app`) throw new Error('CONFIG_DEPLOY_URL_INVALID');
+          const response = await fetcher(new URL(CONFIG_RECEIPT, origin.origin).href,
+            { signal: AbortSignal.timeout(30000), cache: 'no-store', redirect: 'error' });
+          if (!response.ok) throw new Error('CONFIG_RECEIPT_UNAVAILABLE');
+          const receipt = await response.json();
+          if (receipt.deploy_id !== d.id || receipt.run_id !== configPayload.run_id
+            || receipt.expected_deploy_id !== configPayload.expected_deploy_id
+            || receipt.source_main_sha !== sha || receipt.change_ref !== configPayload.change_ref) throw new Error('CONFIG_RECEIPT_MISMATCH');
+          const latest = publishedDeploy(await publicSite(config, fetcher), config.site_id);
+          if (latest.id !== d.id || latest.commit_ref !== sha) throw new Error('CONFIG_PUBLICATION_CHANGED');
+        }
+        return { status: 'PUBLISHED', source_main_sha: sha, deployment_id: d.id, published_at: d.published_at };
+      }
     } catch { /* Observation errors cannot trigger another build. */ }
     if (i + 1 < attempts) await wait(15000);
   }
@@ -90,6 +127,7 @@ export async function observe(config, sha, fetcher, wait, attempts = 40) {
 }
 export async function trigger(config, payload, hookUrl, { fetcher = fetch, wait = ms => new Promise(r => setTimeout(r, ms)), attempts } = {}) {
   if (!/^https:\/\/api\.netlify\.com\/build_hooks\/[a-f0-9]{24}$/.test(hookUrl || '')) throw new Error('BUILD_HOOK_NOT_CONFIGURED');
+  if (attempts !== undefined && (!Number.isInteger(attempts) || attempts < 1 || attempts > 40)) throw new Error('OBSERVATION_LIMIT_INVALID');
   // Never echo hook URL, response body, or raw fetch errors (they may contain secrets).
   let acknowledged = false;
   try {
@@ -97,11 +135,15 @@ export async function trigger(config, payload, hookUrl, { fetcher = fetch, wait 
       body: JSON.stringify(payload), signal: AbortSignal.timeout(30000), redirect: 'error' });
     acknowledged = response.ok;
   } catch { /* Ambiguous acknowledgement: observe without another POST. */ }
-  try { return await observe(config, payload.source_main_sha, fetcher, wait, attempts); }
+  try { return await observe(config, payload.source_main_sha, fetcher, wait, attempts, payload.version === 4 ? payload : null); }
   catch { throw new Error(acknowledged ? 'PUBLICATION_NOT_CONFIRMED' : 'HOOK_ACK_OR_PUBLICATION_FAILED'); }
 }
 export async function runCycle({ config, env, api, snapshot, head, files, preflight, refresh, post, now = () => new Date() }) {
-  const manual = env.GITHUB_EVENT_NAME === 'workflow_dispatch' && env.RELEASE_ACTION === 'deploy-now';
+  const configOnly = env.RELEASE_ACTION === 'redeploy-config';
+  if (configOnly && env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw new Error('MAIN_MANUAL_REQUIRED');
+  const intent = configOnly ? configIntent({ expected_deploy_id: env.EXPECTED_DEPLOY_ID,
+    expected_sha: env.EXPECTED_SOURCE_SHA, change_ref: env.CONFIG_CHANGE_REF }) : null;
+  const manual = env.GITHUB_EVENT_NAME === 'workflow_dispatch' && (env.RELEASE_ACTION === 'deploy-now' || configOnly);
   const dryRun = env.GITHUB_EVENT_NAME !== 'schedule' && !manual;
   let schedule = calendarSlot(config, now()), run;
   if (manual) {
@@ -122,7 +164,9 @@ export async function runCycle({ config, env, api, snapshot, head, files, prefli
   }
   const published = publishedDeploy(await snapshot(), config.site_id);
   const sha = await head();
-  const plan = { ...decide(config, published, sha, await files(published.commit_ref, sha), now(), { manual }),
+  if (configOnly) checkConfigBaseline(intent, published, sha);
+  const plan = { ...(configOnly ? { status: 'READY', source_main_sha: sha, changes: [], ...intent }
+    : decide(config, published, sha, await files(published.commit_ref, sha), now(), { manual })),
     next_check_utc: config.schedule_enabled === false ? null : schedule.next_check_utc };
   if (plan.status !== 'READY') return plan;
   const ready = await preflight(published.commit_ref, sha);
@@ -133,8 +177,8 @@ export async function runCycle({ config, env, api, snapshot, head, files, prefli
   if (await refresh() !== sha) return { ...plan, status: 'MAIN_MOVED' };
   const latest = publishedDeploy(await snapshot(), config.site_id);
   if (latest.id !== published.id || latest.commit_ref !== published.commit_ref) return { ...plan, status: 'PUBLICATION_CHANGED' };
-  if (decide(config, latest, sha, plan.changes, now(), { manual }).status !== 'READY') return { ...plan, status: 'WAITING_WINDOW' };
-  return { ...plan, ...await post({ version: manual ? 3 : 1, ...(manual ? { mode: 'MANUAL_MAIN' } : {}), repository: config.repository, site_id: config.site_id,
+  if (!configOnly && decide(config, latest, sha, plan.changes, now(), { manual }).status !== 'READY') return { ...plan, status: 'WAITING_WINDOW' };
+  return { ...plan, ...await post({ version: configOnly ? 4 : manual ? 3 : 1, ...(configOnly ? { mode: 'CONFIG_ONLY', ...intent } : manual ? { mode: 'MANUAL_MAIN' } : {}), repository: config.repository, site_id: config.site_id,
     source_main_sha: sha, run_id: String(run.id), run_created_at: run.created_at,
     ...(manual ? {} : { slot_index: schedule.slot.index }), issued_at: now().toISOString() }) };
 }
@@ -142,9 +186,18 @@ export async function guard(config, env = process.env, { fetcher = fetch, now = 
   const payload = validateHook(config, env, now);
   if (!payload) return { status: 'PREVIEW_ALLOWED' };
   const published = publishedDeploy(await publicSite(config, fetcher), config.site_id);
-  if (published.commit_ref === payload.source_main_sha) throw new Error('ALREADY_PUBLISHED');
+  if (payload.version === 4) {
+    checkConfigBaseline(payload, published, env.COMMIT_REF);
+    if (!DEPLOY_ID.test(env.DEPLOY_ID || '') || env.DEPLOY_ID === published.id) throw new Error('CONFIG_DEPLOY_ID_INVALID');
+  } else if (published.commit_ref === payload.source_main_sha) throw new Error('ALREADY_PUBLISHED');
   if (new Date(now) < new Date(published.published_at)) throw new Error('INVALID_PUBLICATION_TIME');
-  if (payload.version !== 3 && new Date(now) - new Date(published.published_at) < 48 * HOUR) throw new Error('WAITING_WINDOW');
+  if (![3, 4].includes(payload.version) && new Date(now) - new Date(published.published_at) < 48 * HOUR) throw new Error('WAITING_WINDOW');
+  if (payload.version === 4) {
+    const receiptPath = resolve('public' + CONFIG_RECEIPT);
+    mkdirSync(dirname(receiptPath), { recursive: true });
+    writeFileSync(receiptPath, JSON.stringify({ deploy_id: env.DEPLOY_ID, run_id: payload.run_id,
+      expected_deploy_id: payload.expected_deploy_id, source_main_sha: payload.source_main_sha, change_ref: payload.change_ref }) + '\n');
+  }
   if (config.marker_path) {
     const markerPath = resolve(config.marker_path);
     let previous = {};
@@ -154,7 +207,7 @@ export async function guard(config, env = process.env, { fetcher = fetch, now = 
       released_at_utc: now.toISOString(), released_on_kst: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(now),
       interval_days: 2, release_attempt: (previous.release_attempt || 0) + 1, release_run_id: payload.run_id }, null, 2) + '\n');
   }
-  return { status: payload.version === 3 ? 'MANUAL_PRODUCTION_ALLOWED' : 'SCHEDULED_PRODUCTION_ALLOWED', source_main_sha: payload.source_main_sha };
+  return { status: payload.version === 4 ? 'CONFIG_PRODUCTION_ALLOWED' : payload.version === 3 ? 'MANUAL_PRODUCTION_ALLOWED' : 'SCHEDULED_PRODUCTION_ALLOWED', source_main_sha: payload.source_main_sha };
 }
 async function cli() {
   const [mode, configPath] = process.argv.slice(2);
@@ -188,7 +241,7 @@ async function cli() {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try { await cli(); } catch (error) {
     const message = /^[A-Z][A-Z0-9_]+$/.test(error.message || '') ? error.message : 'RELEASE_CHECK_FAILED';
-    if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, 'Production check failed: ' + message + '\nPrevious public deployment remains authoritative. Use a new explicit manual run.\n');
+    if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, 'Production check failed: ' + message + '\nPublication may be uncertain. Inspect the live deployment and config before any new run; no automatic retry or rollback.\n');
     if (process.env.RELEASE_RESULT_PATH) writeFileSync(process.env.RELEASE_RESULT_PATH, JSON.stringify({ status: 'FAILED', reason: message }) + '\n');
     console.error(message); process.exitCode = 1;
   }

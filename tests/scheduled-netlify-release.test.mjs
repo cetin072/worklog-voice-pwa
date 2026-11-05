@@ -159,7 +159,7 @@ test('web Production has no recurring trigger while read-only manual inspection 
   const workflow = readFileSync(new URL('../.github/workflows/production-release.yml', import.meta.url), 'utf8');
   assert.doesNotMatch(workflow, /^  schedule:|cron:/m);
   assert.match(workflow, /^  workflow_dispatch:/m);
-  assert.match(workflow, /inputs.action == 'deploy-now' && github.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /inputs.action == 'redeploy-config'\) && github.ref == 'refs\/heads\/main'/);
 });
 
 // Explicit manual intent reuses the same concurrency group and one-shot hook.
@@ -204,4 +204,139 @@ test('queued duplicate manual clicks publish once and manual history never consu
   assert.equal((await cycle(options)).status, 'NO_CHANGES');
   assert.equal(posts, 1);
   assert.equal(evaluateSchedule(config, run, [{ ...manualRun, id: 99 }], due).status, 'DUE');
+});
+
+// Config-only release is deliberately separate from normal manual/source releases.
+const oldId = '1'.repeat(24), newId = '2'.repeat(24);
+const configPublished = { ...published, id: oldId };
+const configSnapshot = { ...snapshot, published_deploy: configPublished };
+const configRun = { ...run, event: 'workflow_dispatch' };
+const configEnv = { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch', RELEASE_ACTION: 'redeploy-config',
+  EXPECTED_DEPLOY_ID: oldId, EXPECTED_SOURCE_SHA: a, CONFIG_CHANGE_REF: 'worklog-cutover-20261104' };
+const configPayload = { ...payload, version: 4, mode: 'CONFIG_ONLY', source_main_sha: a,
+  expected_deploy_id: oldId, expected_sha: a, change_ref: configEnv.CONFIG_CHANGE_REF };
+const configHookEnv = { ...hookEnv, COMMIT_REF: a, DEPLOY_ID: newId, INCOMING_HOOK_BODY: JSON.stringify(configPayload) };
+const configCycle = overrides => cycle({ env: configEnv, api: async () => configRun,
+  snapshot: async () => configSnapshot, head: async () => a, refresh: async () => a,
+  files: forbidden, ...overrides });
+
+test('explicit config mode posts once with unchanged main and exact deployment baseline', async () => {
+  let posts = 0;
+  const result = await configCycle({ post: async body => {
+    posts++; assert.equal(body.version, 4); assert.equal(body.mode, 'CONFIG_ONLY');
+    assert.equal(body.source_main_sha, a); assert.equal(body.expected_sha, a);
+    assert.equal(body.expected_deploy_id, oldId); assert.equal(body.change_ref, configEnv.CONFIG_CHANGE_REF);
+    return { status: 'PUBLISHED', deployment_id: newId };
+  } });
+  assert.equal(result.deployment_id, newId); assert.equal(posts, 1);
+});
+
+test('config mode rejects missing intent, unsafe references, non-main/scheduled calls and stale source/baseline', async () => {
+  for (const patch of [{ EXPECTED_DEPLOY_ID: '' }, { EXPECTED_SOURCE_SHA: '' }, { CONFIG_CHANGE_REF: '' },
+    { CONFIG_CHANGE_REF: 'secret token with spaces' }, { CONFIG_CHANGE_REF: 'x'.repeat(121) }]) {
+    await assert.rejects(configCycle({ env: { ...configEnv, ...patch }, post: forbidden }), /CONFIG_INTENT_INVALID/);
+  }
+  for (const patch of [{ GITHUB_EVENT_NAME: 'schedule' }, { GITHUB_REF: 'refs/heads/other' }, { GITHUB_REPOSITORY: 'wrong/repo' }]) {
+    await assert.rejects(configCycle({ env: { ...configEnv, ...patch }, post: forbidden }), /MAIN_MANUAL_REQUIRED/);
+  }
+  await assert.rejects(configCycle({ head: async () => b, post: forbidden }), /CONFIG_SOURCE_CHANGED/);
+  for (const patch of [{ id: newId }, { commit_ref: b }]) {
+    await assert.rejects(configCycle({ snapshot: async () => ({ ...configSnapshot, published_deploy: { ...configPublished, ...patch } }), post: forbidden }), /CONFIG_BASELINE_CHANGED/);
+  }
+  assert.equal((await configCycle({ api: async () => ({ ...configRun, run_attempt: 2 }), post: forbidden })).status, 'RUN_ALREADY_CHECKED');
+  assert.equal((await configCycle({ refresh: async () => b, post: forbidden })).status, 'MAIN_MOVED');
+  assert.equal((await configCycle({ preflight: async () => ({ status: 'DB_NOT_READY' }), post: forbidden })).status, 'DB_NOT_READY');
+  let reads = 0;
+  assert.equal((await configCycle({ snapshot: async () => ++reads === 1 ? configSnapshot : { ...configSnapshot, published_deploy: { ...configPublished, id: newId } }, post: forbidden })).status, 'PUBLICATION_CHANGED');
+});
+
+test('config build requires fresh exact baseline and writes receipt only after successful checks', async () => {
+  const cwd = process.cwd(), temp = mkdtempSync(join(tmpdir(), 'config-release-'));
+  process.chdir(temp);
+  try {
+    const options = { now: due, fetcher: async () => ({ ok: true, json: async () => configSnapshot }) };
+    for (const patch of [{ mode: 'MANUAL_MAIN' }, { expected_sha: b }, { expected_deploy_id: '' },
+      { change_ref: '' }, { run_created_at: 'invalid' }, { issued_at: '2026-10-20T08:20:00Z' }]) {
+      assert.throws(() => validateHook(config, { ...configHookEnv, INCOMING_HOOK_BODY: JSON.stringify({ ...configPayload, ...patch }) }, due));
+    }
+    await assert.rejects(guard(config, { ...configHookEnv, DEPLOY_ID: oldId }, options), /CONFIG_DEPLOY_ID_INVALID/);
+    await assert.rejects(guard(config, configHookEnv, { ...options, fetcher: async () => ({ ok: true, json: async () => ({ ...configSnapshot, published_deploy: { ...configPublished, id: newId } }) }) }), /CONFIG_BASELINE_CHANGED/);
+    assert.throws(() => readFileSync('public/.well-known/config-release.json'), /ENOENT/);
+    assert.equal((await guard(config, configHookEnv, options)).status, 'CONFIG_PRODUCTION_ALLOWED');
+    assert.deepEqual(JSON.parse(readFileSync('public/.well-known/config-release.json')), {
+      deploy_id: newId, run_id: '100', expected_deploy_id: oldId, source_main_sha: a, change_ref: configEnv.CONFIG_CHANGE_REF
+    });
+  } finally { process.chdir(cwd); rmSync(temp, { recursive: true, force: true }); }
+});
+
+function observationFixture({ lost = false, deployPatch = {}, receiptPatch = {}, stayOld = false } = {}) {
+  let posts = 0, reads = 0, receipts = 0, waits = 0;
+  const receipt = { deploy_id: newId, run_id: '100', expected_deploy_id: oldId, source_main_sha: a,
+    change_ref: configEnv.CONFIG_CHANGE_REF, ...receiptPatch };
+  return {
+    counts: () => ({ posts, reads, receipts, waits }),
+    options: { attempts: 2, wait: async () => { waits++; }, fetcher: async (url, options) => {
+      if (options.method === 'POST') { posts++; if (lost) throw new Error('sensitive upstream failure'); return { ok: true }; }
+      if (url.endsWith('/.well-known/config-release.json')) { receipts++; return { ok: true, json: async () => receipt }; }
+      reads++;
+      return { ok: true, json: async () => ({ ...configSnapshot, published_deploy: reads === 1 || stayOld ? configPublished : {
+        ...configPublished, id: newId, published_at: due.toISOString(),
+        deploy_ssl_url: `https://${newId}--worklog-voice-pwa.netlify.app`, ...deployPatch
+      } }) };
+    } }
+  };
+}
+const configTrigger = options => trigger(config, configPayload, 'https://api.netlify.com/build_hooks/' + 'a'.repeat(24), options);
+
+test('same-SHA old ready deploy never confirms; new deploy must have this run receipt even with lost acknowledgement', async () => {
+  for (const lost of [false, true]) {
+    const fixture = observationFixture({ lost });
+    const result = await configTrigger(fixture.options);
+    assert.equal(result.deployment_id, newId);
+    assert.deepEqual(fixture.counts(), { posts: 1, reads: 3, receipts: 1, waits: 1 });
+  }
+  const fixture = observationFixture({ stayOld: true });
+  await assert.rejects(configTrigger(fixture.options), /^Error: PUBLICATION_NOT_CONFIRMED$/);
+  assert.deepEqual(fixture.counts(), { posts: 1, reads: 2, receipts: 0, waits: 1 });
+});
+
+test('wrong source/context/state/time/receipt or concurrent deployment fails bounded without retry or rollback', async () => {
+  for (const patches of [
+    { deployPatch: { commit_ref: b } }, { deployPatch: { context: 'deploy-preview' } },
+    { deployPatch: { state: 'error' } }, { deployPatch: { published_at: published.published_at } },
+    { deployPatch: { deploy_ssl_url: 'https://attacker.example' } },
+    ...['deploy_id', 'run_id', 'expected_deploy_id', 'source_main_sha', 'change_ref'].map(key => ({ receiptPatch: { [key]: 'wrong' } }))
+  ]) {
+    const fixture = observationFixture(patches);
+    await assert.rejects(configTrigger(fixture.options), /^Error: PUBLICATION_NOT_CONFIRMED$/);
+    assert.equal(fixture.counts().posts, 1); assert.equal(fixture.counts().reads, 2);
+  }
+  const lost = observationFixture({ lost: true, stayOld: true });
+  await assert.rejects(configTrigger(lost.options), /^Error: HOOK_ACK_OR_PUBLICATION_FAILED$/);
+  assert.equal(lost.counts().posts, 1);
+});
+
+test('queued second config request with original baseline refuses and rollback requires a fresh explicit baseline', async () => {
+  await configCycle({ post: async () => ({ status: 'PUBLISHED', deployment_id: newId }) });
+  const current = { ...configSnapshot, published_deploy: { ...configPublished, id: newId } };
+  await assert.rejects(configCycle({ snapshot: async () => current, post: forbidden }), /CONFIG_BASELINE_CHANGED/);
+  let posts = 0;
+  await configCycle({ env: { ...configEnv, EXPECTED_DEPLOY_ID: newId, CONFIG_CHANGE_REF: 'worklog-rollback-20261104' },
+    snapshot: async () => current, post: async body => { posts++; assert.equal(body.expected_deploy_id, newId); return { status: 'PUBLISHED' }; } });
+  assert.equal(posts, 1);
+});
+
+
+test('invalid observation bound refuses before any POST and publication drift during receipt read cannot pass', async () => {
+  for (const attempts of [0, -1, 41, NaN, 1.5]) {
+    await assert.rejects(configTrigger({ attempts, fetcher: forbidden }), /OBSERVATION_LIMIT_INVALID/);
+  }
+  const fixture = observationFixture();
+  const fetcher = fixture.options.fetcher;
+  let siteReads = 0;
+  await assert.rejects(configTrigger({ ...fixture.options, fetcher: async (url, options) => {
+    if (url.includes('/api/v1/sites/') && ++siteReads === 3) return { ok: true, json: async () => configSnapshot };
+    return fetcher(url, options);
+  } }), /PUBLICATION_NOT_CONFIRMED/);
+  assert.equal(fixture.counts().posts, 1);
 });
