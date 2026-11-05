@@ -105,10 +105,10 @@ export async function observe(config, sha, fetcher, wait, attempts = 40, configP
         if (configPayload) {
           if (!DEPLOY_ID.test(d.id || '') || d.id === configPayload.expected_deploy_id
             || Date.parse(d.published_at) < Date.parse(configPayload.issued_at)) throw new Error('CONFIG_PUBLICATION_PENDING');
-          const origin = new URL(d.deploy_ssl_url);
-          if (origin.protocol !== 'https:' || origin.username || origin.password || origin.port
-            || origin.hostname !== `${d.id}--worklog-voice-pwa.netlify.app`) throw new Error('CONFIG_DEPLOY_URL_INVALID');
-          const response = await fetcher(new URL(CONFIG_RECEIPT, origin.origin).href,
+          // Netlify may return main-- or another branch alias in deploy_ssl_url.
+          // Never consume that field: the ID is validated above; this site is fixed.
+          const receiptUrl = `https://${d.id}--worklog-voice-pwa.netlify.app${CONFIG_RECEIPT}`;
+          const response = await fetcher(receiptUrl,
             { signal: AbortSignal.timeout(30000), cache: 'no-store', redirect: 'error' });
           if (!response.ok) throw new Error('CONFIG_RECEIPT_UNAVAILABLE');
           const receipt = await response.json();

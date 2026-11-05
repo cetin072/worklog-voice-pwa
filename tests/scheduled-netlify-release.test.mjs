@@ -304,7 +304,7 @@ test('wrong source/context/state/time/receipt or concurrent deployment fails bou
   for (const patches of [
     { deployPatch: { commit_ref: b } }, { deployPatch: { context: 'deploy-preview' } },
     { deployPatch: { state: 'error' } }, { deployPatch: { published_at: published.published_at } },
-    { deployPatch: { deploy_ssl_url: 'https://attacker.example' } },
+    { deployPatch: { id: 'https://attacker.example' } },
     ...['deploy_id', 'run_id', 'expected_deploy_id', 'source_main_sha', 'change_ref'].map(key => ({ receiptPatch: { [key]: 'wrong' } }))
   ]) {
     const fixture = observationFixture(patches);
@@ -339,4 +339,35 @@ test('invalid observation bound refuses before any POST and publication drift du
     return fetcher(url, options);
   } }), /PUBLICATION_NOT_CONFIRMED/);
   assert.equal(fixture.counts().posts, 1);
+});
+
+
+test('config receipt URL ignores observed main/branch aliases, absent or malicious metadata URLs', async () => {
+  for (const deploy_ssl_url of [
+    'https://main--worklog-voice-pwa.netlify.app',
+    'https://other-branch--worklog-voice-pwa.netlify.app', null, undefined,
+    'not a URL', 'https://attacker.example/private',
+    'https://user:password@attacker.example', 'http://127.0.0.1:8080',
+    `https://${oldId}--worklog-voice-pwa.netlify.app`
+  ]) {
+    const fixture = observationFixture({ deployPatch: { deploy_ssl_url } });
+    const fetcher = fixture.options.fetcher, urls = [];
+    const result = await configTrigger({ ...fixture.options, fetcher: async (url, options) => {
+      urls.push(url); return fetcher(url, options);
+    } });
+    assert.equal(result.deployment_id, newId);
+    assert.deepEqual(urls.filter(url => url.endsWith('/.well-known/config-release.json')),
+      [`https://${newId}--worklog-voice-pwa.netlify.app/.well-known/config-release.json`]);
+    assert.equal(urls.some(url => /attacker|127\.0\.0\.1|other-branch|main--/.test(url)), false);
+  }
+});
+
+test('malformed deployment IDs cannot inject a receipt host or cause any receipt request', async () => {
+  for (const id of ['', null, '../escape', 'a'.repeat(23), 'a'.repeat(25), 'A'.repeat(24),
+    'a'.repeat(24) + '.attacker.example', 'user@attacker.example', 'a'.repeat(24) + '/path']) {
+    const fixture = observationFixture({ deployPatch: { id } });
+    await assert.rejects(configTrigger(fixture.options), /PUBLICATION_NOT_CONFIRMED/);
+    assert.equal(fixture.counts().receipts, 0);
+    assert.equal(fixture.counts().posts, 1);
+  }
 });
