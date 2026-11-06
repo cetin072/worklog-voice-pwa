@@ -8,13 +8,18 @@ let failNextMove = false;
 const Paths = { document: 'file:///worklog' };
 class File {
   constructor(...parts) { this.uri = parts.join('/'); }
+  get name() { return this.uri.split('/').at(-1) || ''; }
+  get creationTime() { return this.exists ? Date.parse('2026-11-06T07:00:00Z') : null; }
+  get modificationTime() { return this.creationTime; }
   get exists() { return files.has(this.uri); }
   get size() { return this.exists ? Buffer.byteLength(files.get(this.uri)) : 0; }
   create() {
     if (this.exists) throw new Error('file exists');
     files.set(this.uri, '');
   }
-  write(value) { files.set(this.uri, String(value)); }
+  // Expo's File.write is asynchronous; an ignored Promise must not commit a draft.
+  write(value) { return Promise.resolve().then(() => files.set(this.uri, String(value))); }
+  writeSync(value) { files.set(this.uri, String(value)); }
   textSync() {
     if (!this.exists) throw new Error('missing file');
     return files.get(this.uri);
@@ -28,7 +33,15 @@ class File {
   }
   delete() { files.delete(this.uri); }
 }
-globalThis.__meetingFileMock = { File, Paths };
+class Directory {
+  constructor(...parts) { this.uri = parts.join('/'); }
+  list() {
+    return [...files.keys()]
+      .filter((uri) => uri.startsWith(this.uri + '/') && !uri.slice(this.uri.length + 1).includes('/'))
+      .map((uri) => new File(uri));
+  }
+}
+globalThis.__meetingFileMock = { File, Directory, Paths };
 const model = await import('../mobile/src/features/voice/meeting-minutes-document.ts');
 globalThis.__meetingModel = model;
 
@@ -45,8 +58,8 @@ async function loadActualTypeScript(path, replacements) {
   const js = stripTypeScriptTypes(source, { mode: 'strip' });
   return import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
 }
-const expoStub = ["import { File, Paths } from 'expo-file-system';",
-  "const { File, Paths } = globalThis.__meetingFileMock;"];
+const expoStub = [/import \{ (?:Directory, )?File, Paths \} from 'expo-file-system';/,
+  "const { File, Directory, Paths } = globalThis.__meetingFileMock;"];
 const recordings = await loadActualTypeScript('mobile/src/features/voice/meeting-recordings.ts', [
   expoStub,
 ]);
@@ -170,4 +183,40 @@ test('UI keeps month grouping, explicit search and 20-row page without reading f
   assert.match(source, /expectedPrevious: saved/);
   assert.match(source, /!loaded \|\| loadFailed/);
   assert.match(source, /isMeetingRecordingFileAvailable\(recording\)/);
+});
+
+test('new or existing QA orphan M4A files are recovered into the list without touching audio', () => {
+  reset();
+  const names = [
+    'recording-63a1bd1e-dded-4bef-b324-bad46eb04bfc.m4a',
+    'recording-6d7f280c-e101-460f-834d-dca3f77540ed.m4a',
+  ];
+  for (const name of names) files.set('file:///worklog/' + name, 'PRESERVED-ORIGINAL-AUDIO');
+  assert.equal(files.has(indexUri), false);
+  const saved = recordings.listMeetingRecordings();
+  assert.equal(saved.length, 2);
+  assert.ok(saved.every((entry) => entry.durationMs === 0));
+  assert.ok(saved.every((entry) => entry.id.startsWith('meeting-')));
+  assert.deepEqual(new Set(saved.map((entry) => entry.fileName)), new Set(names));
+  assert.equal(recordings.listMeetingRecordings().length, 2, 'recovery is idempotent after app restart');
+  for (const name of names) assert.equal(files.get('file:///worklog/' + name), 'PRESERVED-ORIGINAL-AUDIO');
+});
+
+test('a damaged index never gets overwritten during M4A recovery', () => {
+  reset();
+  files.set('file:///worklog/recording-63a1bd1e-dded-4bef-b324-bad46eb04bfc.m4a', 'M4A');
+  files.set(indexUri, '{original-broken-metadata');
+  assert.throws(() => recordings.listMeetingRecordings(), /기존 목록 파일/);
+  assert.equal(files.get(indexUri), '{original-broken-metadata');
+});
+
+test('index and meeting minutes writes use synchronous file operations before readback', () => {
+  const indexSource = readFileSync('mobile/src/features/voice/meeting-recordings.ts', 'utf8');
+  const draftSource = readFileSync('mobile/src/features/voice/meeting-minutes-storage.ts', 'utf8');
+  assert.match(indexSource, /pending\.writeSync\(text\)/);
+  assert.match(draftSource, /temporary\.writeSync\(payload\)/);
+  assert.doesNotMatch(indexSource, /pending\.write\(text\)/);
+  assert.doesNotMatch(draftSource, /temporary\.write\(payload\)/);
+  assert.match(indexSource, /const committed = readIndexRaw\(\)/);
+  assert.match(indexSource, /if \(!readIndexRaw\(\)\.some/);
 });
