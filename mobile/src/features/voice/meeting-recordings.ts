@@ -64,7 +64,7 @@ function writeIndex(entries: readonly MeetingRecordingEntry[]) {
   try {
     const text = JSON.stringify({ version: 1, items: entries });
     pending.create();
-    pending.writeSync(text);
+    pending.write(text);
     const verified = JSON.parse(pending.textSync()) as { version: number; items: unknown[] };
     if (verified.version !== 1 || !Array.isArray(verified.items) ||
         verified.items.length !== entries.length) {

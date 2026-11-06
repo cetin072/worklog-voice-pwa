@@ -17,9 +17,8 @@ class File {
     if (this.exists) throw new Error('file exists');
     files.set(this.uri, '');
   }
-  // Expo's File.write is asynchronous; an ignored Promise must not commit a draft.
-  write(value) { return Promise.resolve().then(() => files.set(this.uri, String(value))); }
-  writeSync(value) { files.set(this.uri, String(value)); }
+  // Expo 57 File.write is synchronous. Expo 58 changed this API.
+  write(value) { files.set(this.uri, String(value)); }
   textSync() {
     if (!this.exists) throw new Error('missing file');
     return files.get(this.uri);
@@ -212,13 +211,15 @@ test('a damaged index never gets overwritten during M4A recovery', () => {
   assert.equal(files.get(indexUri), '{original-broken-metadata');
 });
 
-test('index and meeting minutes writes use synchronous file operations before readback', () => {
+test('Expo 57 writes index and minutes synchronously, verifies moved files and prevents final-file cleanup', () => {
   const indexSource = readFileSync('mobile/src/features/voice/meeting-recordings.ts', 'utf8');
   const draftSource = readFileSync('mobile/src/features/voice/meeting-minutes-storage.ts', 'utf8');
-  assert.match(indexSource, /pending\.writeSync\(text\)/);
-  assert.match(draftSource, /temporary\.writeSync\(payload\)/);
-  assert.doesNotMatch(indexSource, /pending\.write\(text\)/);
-  assert.doesNotMatch(draftSource, /temporary\.write\(payload\)/);
+  assert.match(indexSource, /pending\.write\(text\)/);
+  assert.match(draftSource, /temporary\.write\(payload\)/);
+  assert.match(indexSource, /movedToTarget = true/);
+  assert.match(draftSource, /movedToTarget = true/);
+  assert.match(indexSource, /if \(!movedToTarget && pending\.exists\)/);
+  assert.match(draftSource, /if \(!movedToTarget && temporary\.exists\)/);
   assert.match(indexSource, /const committed = readIndexRaw\(\)/);
   assert.match(indexSource, /if \(!readIndexRaw\(\)\.some/);
 });

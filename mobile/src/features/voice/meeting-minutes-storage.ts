@@ -56,7 +56,7 @@ export function saveMeetingMinutes(input: {
   try {
     temporary.create();
     const payload = JSON.stringify(document);
-    temporary.writeSync(payload);
+    temporary.write(payload);
     const check = parseMeetingMinutesDocument(JSON.parse(temporary.textSync()), input.recordingId);
     if (check.transcriptText !== document.transcriptText || check.minutesText !== document.minutesText) {
       throw new Error('회의록 임시 저장 검증 실패');
