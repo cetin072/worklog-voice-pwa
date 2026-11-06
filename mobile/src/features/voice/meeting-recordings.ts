@@ -3,7 +3,7 @@ import { File, Paths } from 'expo-file-system';
 import type { MobileRecordingAudioInput } from './audio-input';
 
 const INDEX_FILE_NAME = 'meeting-recordings-v1.json';
-const MAX_RECORDINGS = 200;
+
 
 export type MeetingRecordingEntry = Readonly<{
   id: string;
@@ -55,25 +55,45 @@ function normalizedEntry(value: unknown): MeetingRecordingEntry | null {
 }
 
 function writeIndex(entries: readonly MeetingRecordingEntry[]) {
-  const file = indexFile();
-  if (!file.exists) file.create({ overwrite: true });
-  file.write(JSON.stringify({ version: 1, items: entries.slice(0, MAX_RECORDINGS) }));
+  // Validate a new index before replacing the old one. Never truncate older records.
+  const target = indexFile();
+  const pending = new File(Paths.document,
+    `meeting-recordings-v1.${Date.now()}.${Math.floor(Math.random() * 1_000_000_000)}.pending`);
+  try {
+    const text = JSON.stringify({ version: 1, items: entries });
+    pending.create();
+    pending.write(text);
+    const verified = JSON.parse(pending.textSync()) as { version: number; items: unknown[] };
+    if (verified.version !== 1 || !Array.isArray(verified.items) ||
+        verified.items.length !== entries.length) {
+      throw new Error('INDEX_VERIFICATION_FAILED');
+    }
+    pending.moveSync(target, { overwrite: true });
+  } catch {
+    throw new Error('회의 녹음 목록을 저장하지 못했습니다. 기존 기록을 확인해주세요.');
+  } finally {
+    if (pending.exists) {
+      try { pending.delete(); } catch { /* A failed temp cleanup never deletes a recording. */ }
+    }
+  }
 }
 
 function readIndexRaw(): MeetingRecordingEntry[] {
   const file = indexFile();
   if (!file.exists) return [];
-
   try {
-    const parsed = JSON.parse(file.textSync()) as { items?: unknown[] };
-    return Array.isArray(parsed?.items)
-      ? parsed.items.flatMap((item) => {
-          const entry = normalizedEntry(item);
-          return entry ? [entry] : [];
-        })
-      : [];
+    const parsed = JSON.parse(file.textSync()) as { version?: unknown; items?: unknown[] };
+    if (parsed?.version !== 1 || !Array.isArray(parsed.items)) {
+      throw new Error('INVALID_MEETING_INDEX');
+    }
+    const entries = parsed.items.map((item) => normalizedEntry(item));
+    if (entries.some((entry) => entry === null)) {
+      throw new Error('INVALID_MEETING_INDEX_ROW');
+    }
+    return entries as MeetingRecordingEntry[];
   } catch {
-    return [];
+    // Corrupt or unfamiliar data is not an empty list. Do not silently overwrite it.
+    throw new Error('회의 녹음 목록을 읽지 못했습니다. 기존 목록 파일은 그대로 보존했습니다.');
   }
 }
 
@@ -101,11 +121,13 @@ function entryId(recording: MobileRecordingAudioInput) {
 }
 
 export function listMeetingRecordings() {
-  const stored = readIndexRaw();
-  const live = stored.filter((entry) => fileExists(entry.uri));
-  const sorted = live.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-  if (live.length !== stored.length) writeIndex(sorted);
-  return Object.freeze(sorted);
+  // A temporarily unavailable audio file must not erase its title or linked minutes.
+  return Object.freeze(readIndexRaw().sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt)));
+}
+
+export function isMeetingRecordingFileAvailable(recording: MeetingRecordingEntry): boolean {
+  return fileExists(recording.uri);
 }
 
 export function rememberMeetingRecording(recording: MobileRecordingAudioInput) {
@@ -126,9 +148,7 @@ export function rememberMeetingRecording(recording: MobileRecordingAudioInput) {
 
   const existing = readIndexRaw().filter((entry) => entry.uri !== next.uri && entry.id !== next.id);
   const merged = [next, ...existing]
-    .filter((entry) => fileExists(entry.uri))
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, MAX_RECORDINGS);
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   writeIndex(merged);
   return next;
 }
@@ -148,7 +168,7 @@ export function deleteMeetingRecording(recordingId: string) {
     }
   }
 
-  const remaining = stored.filter((entry) => entry.id !== id && fileExists(entry.uri));
+  const remaining = stored.filter((entry) => entry.id !== id);
   writeIndex(remaining);
   return Boolean(target);
 }
@@ -172,4 +192,20 @@ export function renameMeetingRecording(recordingId: string, title: string) {
     : entry);
   writeIndex(updated);
   return updated.find((entry) => entry.id === id) || null;
+}
+
+/** Lightweight title/date search: only recording metadata, never full transcript files. */
+export function searchMeetingRecordings(
+  entries: readonly MeetingRecordingEntry[],
+  query: string,
+): readonly MeetingRecordingEntry[] {
+  const term = query.trim().toLocaleLowerCase('ko-KR');
+  if (!term) return entries;
+  return entries.filter((entry) => {
+    const localDate = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(entry.createdAt));
+    return [entry.title, entry.fileName, localDate, localDate.replace(/[^0-9]/g, '')]
+      .some((value) => value.toLocaleLowerCase('ko-KR').includes(term));
+  });
 }

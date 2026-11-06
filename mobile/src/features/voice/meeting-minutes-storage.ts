@@ -26,14 +26,26 @@ export function loadMeetingMinutes(recordingId: string): MeetingMinutesDocumentV
   }
 }
 
+/** One caller-owned snapshot prevents stale editors from silently overwriting a newer draft. */
 export function saveMeetingMinutes(input: {
   recordingId: string;
   transcriptText: string;
   minutesText: string;
+  expectedPrevious: MeetingMinutesDocumentV1 | null;
 }): MeetingMinutesDocumentV1 {
   // Read/validate the previous version before any write. A damaged draft
   // cannot be silently reset or overwritten.
   const previous = loadMeetingMinutes(input.recordingId);
+  const expected = input.expectedPrevious;
+  const unchanged = previous === null || expected === null
+    ? previous === expected
+    : previous.createdAt === expected.createdAt &&
+      previous.updatedAt === expected.updatedAt &&
+      previous.transcriptText === expected.transcriptText &&
+      previous.minutesText === expected.minutesText;
+  if (!unchanged) {
+    throw new Error('회의록이 다른 화면에서 변경됐습니다. 입력을 보존했으니 다시 열어 확인해주세요.');
+  }
   const document = createMeetingMinutesDocument({ ...input, previous });
   const target = meetingMinutesFile(input.recordingId);
   const temporary = new File(
@@ -64,4 +76,9 @@ export function saveMeetingMinutes(input: {
       try { temporary.delete(); } catch { /* Leave failed temp in private app storage. */ }
     }
   }
+}
+
+/** Check only private draft metadata; full text loads only when the editor opens. */
+export function hasMeetingMinutes(recordingId: string): boolean {
+  return meetingMinutesFile(recordingId).exists;
 }
