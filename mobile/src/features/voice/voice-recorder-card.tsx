@@ -568,10 +568,10 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPh
     {!meetingActive ? <Button title="녹음 시작" onPress={() => void meeting.start()} /> : null}
     {meeting.phase === 'recording' ? <Button title="일시정지" onPress={meeting.pause} /> : null}
     {meeting.phase === 'paused' ? <Button title="녹음 재개" onPress={meeting.resume} /> : null}
-    {meetingActive ? <Button title={meeting.phase === 'stopping' ? '저장 중...' : '녹음 종료'} disabled={meeting.phase === 'stopping'} onPress={() => void meeting.stop()} /> : null}
+    {meetingActive ? <Button title={meeting.phase === 'stopping' ? '저장 중...' : '녹음 종료 · 저장'} disabled={meeting.phase === 'stopping'} onPress={() => void meeting.stop()} /> : null}
     {meetingActive ? <Text style={styles.notice}>Android에서는 녹음 중 시스템의 지속 알림이 표시됩니다. 홈으로 돌아가도 녹음 상태를 확인할 수 있습니다.</Text> : null}
     {meeting.error ? <Text style={styles.errorText}>{meeting.error}</Text> : null}
-    {meeting.completed ? <View style={styles.result}><Text style={styles.resultTitle}>✅ 회의 녹음 파일 저장 완료</Text><Text style={styles.meta}>파일: {meeting.completed.fileName}</Text><Text style={styles.meta}>길이: {formatDuration(meeting.completed.durationMs)}</Text><Text style={styles.meta}>형식: {meeting.completed.mimeType}</Text><Text style={styles.notice}>회의 녹음 파일은 기기에 보존됐습니다. 아래 목록에서 바로 재생할 수 있습니다.</Text></View> : null}
+    {meeting.completed ? <View style={styles.result}><Text style={styles.resultTitle}>✅ 회의 녹음 파일 저장 완료</Text><Text style={styles.meta}>파일: {meeting.completed.fileName}</Text><Text style={styles.meta}>길이: {formatDuration(meeting.completed.durationMs)}</Text><Text style={styles.meta}>형식: {meeting.completed.mimeType}</Text><Text style={styles.notice}>녹음 파일과 목록 등록까지 확인했습니다. 아래 목록에서 재생하거나 ‘회의록’을 작성할 수 있습니다.</Text></View> : null}
     <MeetingRecordingLibrary refreshToken={meeting.libraryVersion} />
   </View>;
 }
