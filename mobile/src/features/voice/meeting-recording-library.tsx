@@ -6,12 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   deleteMeetingRecording,
   listMeetingRecordings,
+  isMeetingRecordingFileAvailable,
+  searchMeetingRecordings,
   renameMeetingRecording,
   type MeetingRecordingEntry,
 } from './meeting-recordings';
 import { mobileTheme } from '@/src/ui/theme';
 import { formatMeetingMinutesForShare, type MeetingMinutesDocumentV1 } from './meeting-minutes-document';
-import { loadMeetingMinutes, saveMeetingMinutes } from './meeting-minutes-storage';
+import { hasMeetingMinutes, loadMeetingMinutes, saveMeetingMinutes } from './meeting-minutes-storage';
 
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -26,6 +28,12 @@ function formatRecordedAt(value: string) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date);
+}
+
+function formatRecordingMonth(value: string) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: 'long',
+  }).format(new Date(value));
 }
 
 function formatBytes(bytes: number | null) {
@@ -92,16 +100,20 @@ function MeetingMinutesEditor({ recording, onClose }: {
   const [transcriptText, setTranscriptText] = useState('');
   const [minutesText, setMinutesText] = useState('');
   const [saved, setSaved] = useState<MeetingMinutesDocumentV1 | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    setLoaded(false);
+    setLoadFailed(false);
     try {
       const document = loadMeetingMinutes(recording.id);
       setSaved(document);
       setTranscriptText(document?.transcriptText ?? '');
       setMinutesText(document?.minutesText ?? '');
+      setLoaded(true);
     } catch (nextError) {
       setLoadFailed(true);
       setError(nextError instanceof Error ? nextError.message : '회의록을 읽지 못했습니다.');
@@ -120,11 +132,11 @@ function MeetingMinutesEditor({ recording, onClose }: {
   }
 
   function saveDraft() {
-    if (loadFailed) return;
+    if (!loaded || loadFailed) return;
     setError('');
     setNotice('');
     try {
-      const document = saveMeetingMinutes({ recordingId: recording.id, transcriptText, minutesText });
+      const document = saveMeetingMinutes({ recordingId: recording.id, transcriptText, minutesText, expectedPrevious: saved });
       setSaved(document);
       setTranscriptText(document.transcriptText);
       setMinutesText(document.minutesText);
@@ -135,12 +147,18 @@ function MeetingMinutesEditor({ recording, onClose }: {
   }
 
   async function shareSavedDraft() {
-    if (!saved || dirty || loadFailed) {
+    if (!saved || dirty || !loaded || loadFailed) {
       setError('내용을 먼저 저장한 뒤 공유해주세요.');
       return;
     }
     setError('');
     try {
+      const latest = loadMeetingMinutes(recording.id);
+      if (!latest || latest.updatedAt !== saved.updatedAt ||
+          latest.transcriptText !== saved.transcriptText ||
+          latest.minutesText !== saved.minutesText) {
+        throw new Error('최신 회의록과 변경 내용이 다릅니다. 다시 열어 확인해주세요.');
+      }
       await Share.share({
         title: '업무수첩 회의록',
         message: formatMeetingMinutesForShare({
@@ -175,16 +193,17 @@ function MeetingMinutesEditor({ recording, onClose }: {
           value={minutesText} maxLength={120000} editable={!loadFailed}
           placeholder="회의 내용·결정사항·후속 할 일을 직접 정리하세요."
           onChangeText={value => { setMinutesText(value); setNotice(''); }} />
+        {!loaded && !loadFailed ? <Text style={styles.recordingMeta}>기존 회의록을 확인하는 중입니다.</Text> : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         {notice ? <Text style={styles.minutesSuccess}>{notice}</Text> : null}
         <View style={styles.minutesActions}>
-          <Pressable accessibilityRole="button" accessibilityLabel="회의록 저장" disabled={loadFailed}
-            style={[styles.renamePrimary, loadFailed ? styles.minutesDisabled : null]} onPress={saveDraft}>
+          <Pressable accessibilityRole="button" accessibilityLabel="회의록 저장" disabled={!loaded || loadFailed}
+            style={[styles.renamePrimary, !loaded || loadFailed ? styles.minutesDisabled : null]} onPress={saveDraft}>
             <Text style={styles.renamePrimaryText}>저장</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="회의록 공유"
-            disabled={!saved || dirty || loadFailed}
-            style={[styles.renameSecondary, (!saved || dirty || loadFailed) ? styles.minutesDisabled : null]}
+            disabled={!saved || dirty || !loaded || loadFailed}
+            style={[styles.renameSecondary, (!saved || dirty || !loaded || loadFailed) ? styles.minutesDisabled : null]}
             onPress={() => void shareSavedDraft()}>
             <Text style={styles.renameSecondaryText}>공유</Text>
           </Pressable>
@@ -202,6 +221,8 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
   const [minutesRecording, setMinutesRecording] = useState<MeetingRecordingEntry | null>(null);
+  const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(20);
 
   function reload() {
     try {
@@ -218,6 +239,9 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
     () => items.find((item) => item.id === selectedId) || null,
     [items, selectedId],
   );
+  const matchingItems = useMemo(() => searchMeetingRecordings(items, search), [items, search]);
+  const visibleItems = useMemo(() => matchingItems.slice(0, visibleCount),
+    [matchingItems, visibleCount]);
 
   function beginRename(recording: MeetingRecordingEntry) {
     setRenameId(recording.id);
@@ -246,7 +270,7 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
   function confirmDelete(recording: MeetingRecordingEntry) {
     Alert.alert(
       '회의 녹음 삭제',
-      `${formatRecordedAt(recording.createdAt)} 녹음 파일을 이 기기에서 삭제할까요?`,
+      `${formatRecordedAt(recording.createdAt)} 녹음 파일을 삭제할까요? 연결된 회의록 문서는 유지됩니다.`,
       [
         { text: '취소', style: 'cancel' },
         {
@@ -277,12 +301,28 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
       </Pressable>
     </View>
 
+    <TextInput
+      accessibilityLabel="회의 기록 검색"
+      placeholder="회의명·날짜 검색"
+      style={styles.recordingSearch}
+      value={search}
+      onChangeText={(value) => { setSearch(value); setVisibleCount(20); }}
+    />
     {error ? <Text style={styles.errorText}>{error}</Text> : null}
-    {!items.length ? <Text style={styles.emptyText}>아직 저장된 회의 녹음이 없습니다.</Text> : null}
+    {!items.length && !error ? <Text style={styles.emptyText}>아직 저장된 회의 녹음이 없습니다.</Text> : null}
+    {items.length > 0 ? <Text style={styles.recordingCount}>전체 {items.length}건 · 검색 결과 {matchingItems.length}건</Text> : null}
+    {items.length > 0 && matchingItems.length === 0
+      ? <Text style={styles.emptyText}>해당 회의명이나 날짜의 기록이 없습니다.</Text> : null}
 
-    {items.slice(0, 20).map((recording) => {
+    {visibleItems.map((recording, index) => {
       const active = recording.id === selectedId;
-      return <View key={recording.id} style={styles.recordingRow}>
+      const available = isMeetingRecordingFileAvailable(recording);
+      const hasMinutes = hasMeetingMinutes(recording.id);
+      const firstInMonth = index === 0 ||
+        formatRecordingMonth(recording.createdAt) !== formatRecordingMonth(visibleItems[index - 1].createdAt);
+      return <View key={recording.id} style={styles.recordingGroup}>
+        {firstInMonth ? <Text style={styles.monthHeading}>{formatRecordingMonth(recording.createdAt)}</Text> : null}
+        <View style={styles.recordingRow}>
         <Pressable
           accessibilityRole="button"
           style={styles.recordingMain}
@@ -291,13 +331,15 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
           <View style={styles.recordingIcon}><Text style={styles.recordingIconText}>🎙</Text></View>
           <View style={styles.recordingCopy}>
             <Text style={styles.recordingTitle}>{recording.title || `회의 녹음 · ${formatRecordedAt(recording.createdAt)}`}</Text>
-            <Text style={styles.recordingMeta}>{formatDuration(recording.durationMs)} · {formatBytes(recording.sizeBytes)} · {recording.mimeType}</Text>
+            <Text style={styles.recordingMeta}>{formatRecordedAt(recording.createdAt)} · {formatDuration(recording.durationMs)} · {formatBytes(recording.sizeBytes)}</Text>
+            <Text style={styles.recordingMeta}>{hasMinutes ? '회의록 있음' : '녹음만 있음'}{!available ? ' · 녹음 파일 없음' : ''}</Text>
             <Text style={styles.recordingFile} numberOfLines={1}>{recording.fileName}</Text>
           </View>
           <Text style={styles.expandText}>{active ? '접기' : '듣기'}</Text>
         </Pressable>
 
-        {active && selected ? <MeetingRecordingPlayer recording={selected} /> : null}
+        {active && selected && available ? <MeetingRecordingPlayer recording={selected} /> : null}
+        {active && !available ? <Text style={styles.errorText}>녹음 파일을 확인할 수 없습니다. 회의록 문서는 계속 열 수 있습니다.</Text> : null}
 
         {renameId === recording.id ? <View style={styles.renameEditor}>
           <TextInput
@@ -320,11 +362,17 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
             <Text style={styles.renameActionText}>이름 바꾸기</Text>
           </Pressable>
           <Pressable accessibilityRole="button" style={styles.deleteAction} onPress={() => confirmDelete(recording)}>
-            <Text style={styles.deleteText}>삭제</Text>
+            <Text style={styles.deleteText}>녹음 삭제</Text>
           </Pressable>
         </View>}
+        </View>
       </View>;
     })}
+    {matchingItems.length > visibleCount
+      ? <Pressable accessibilityRole="button" style={styles.moreRecordings} onPress={() => setVisibleCount((count) => count + 20)}>
+          <Text style={styles.reloadText}>20건 더 보기 ({matchingItems.length - visibleCount}건 남음)</Text>
+        </Pressable>
+      : null}
     {minutesRecording ? <MeetingMinutesEditor recording={minutesRecording} onClose={() => setMinutesRecording(null)} /> : null}
   </View>;
 }
@@ -343,6 +391,11 @@ const styles = StyleSheet.create({
   minutesSuccess: { fontSize: 13, color: mobileTheme.colors.success },
   minutesFootnote: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   library: { gap: 10, paddingTop: 8 },
+  recordingSearch: { minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.compact, color: mobileTheme.colors.text, backgroundColor: mobileTheme.colors.surface },
+  recordingCount: { fontSize: 12, color: mobileTheme.colors.textSecondary },
+  recordingGroup: { gap: 6 },
+  monthHeading: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.textSecondary, marginTop: 12 },
+  moreRecordings: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: mobileTheme.radius.compact, borderWidth: 1, borderColor: mobileTheme.colors.border },
   libraryHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   libraryEyebrow: { fontSize: 11, fontWeight: '800', color: mobileTheme.colors.textMuted, letterSpacing: 0.7 },
   libraryTitle: { fontSize: 17, fontWeight: '800', color: mobileTheme.colors.text, marginTop: 2 },

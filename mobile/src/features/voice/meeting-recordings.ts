@@ -38,7 +38,8 @@ function normalizedEntry(value: unknown): MeetingRecordingEntry | null {
   const sizeBytes = row.sizeBytes === null || row.sizeBytes === undefined ? null : Number(row.sizeBytes);
   const title = typeof row.title === 'string' ? row.title.trim().slice(0, 120) : '';
 
-  if (!id || !uri || !fileName || !mimeType || !createdAt || !Number.isFinite(durationMs) || durationMs < 0) {
+  if (!/^meeting-[A-Za-z0-9._-]{1,130}$/.test(id) || !uri || !fileName || !mimeType ||
+      !createdAt || !Number.isFinite(durationMs) || durationMs < 0) {
     return null;
   }
 
@@ -168,7 +169,9 @@ export function deleteMeetingRecording(recordingId: string) {
     }
   }
 
-  const remaining = stored.filter((entry) => entry.id !== id);
+  // Keep a discoverable entry when a separate, user-authored minutes file exists.
+  const keepLinkedMinutes = target ? new File(Paths.document, `meeting-minutes-${target.id}.json`).exists : false;
+  const remaining = stored.filter((entry) => entry.id !== id || keepLinkedMinutes);
   writeIndex(remaining);
   return Boolean(target);
 }
