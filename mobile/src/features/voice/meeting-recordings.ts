@@ -60,6 +60,7 @@ function writeIndex(entries: readonly MeetingRecordingEntry[]) {
   const target = indexFile();
   const pending = new File(Paths.document,
     `meeting-recordings-v1.${Date.now()}.${Math.floor(Math.random() * 1_000_000_000)}.pending`);
+  let movedToTarget = false;
   try {
     const text = JSON.stringify({ version: 1, items: entries });
     pending.create();
@@ -70,6 +71,9 @@ function writeIndex(entries: readonly MeetingRecordingEntry[]) {
       throw new Error('INDEX_VERIFICATION_FAILED');
     }
     pending.moveSync(target, { overwrite: true });
+    // Expo File.moveSync mutates pending.uri to the destination.
+    // It is no longer a disposable temporary file after this point.
+    movedToTarget = true;
     const committed = readIndexRaw();
     if (committed.length !== entries.length || entries.some((row) =>
       !committed.some((saved) => saved.id === row.id && saved.uri === row.uri && saved.title === row.title))) {
@@ -78,8 +82,8 @@ function writeIndex(entries: readonly MeetingRecordingEntry[]) {
   } catch {
     throw new Error('회의 녹음 목록을 저장하지 못했습니다. 기존 기록을 확인해주세요.');
   } finally {
-    if (pending.exists) {
-      try { pending.delete(); } catch { /* A failed temp cleanup never deletes a recording. */ }
+    if (!movedToTarget && pending.exists) {
+      try { pending.delete(); } catch { /* Only an unmoved scratch file is safe to delete. */ }
     }
   }
 }

@@ -30,6 +30,8 @@ class File {
     if (destination.exists && !options.overwrite) throw new Error('destination exists');
     files.set(destination.uri, files.get(this.uri));
     files.delete(this.uri);
+    // Expo File.moveSync updates the source object's URI to its new location.
+    this.uri = destination.uri;
   }
   delete() { files.delete(this.uri); }
 }
@@ -219,4 +221,17 @@ test('index and meeting minutes writes use synchronous file operations before re
   assert.doesNotMatch(draftSource, /temporary\.write\(payload\)/);
   assert.match(indexSource, /const committed = readIndexRaw\(\)/);
   assert.match(indexSource, /if \(!readIndexRaw\(\)\.some/);
+});
+
+test('moving a temporary file never deletes the final saved index or meeting minutes', () => {
+  reset();
+  const row = recordings.rememberMeetingRecording(recording(12));
+  assert.equal(files.has(indexUri), true, 'index must survive temporary cleanup');
+  const doc = minutes.saveMeetingMinutes({
+    recordingId: row.id, transcriptText: '실제 전사', minutesText: '회의록 보존', expectedPrevious: null,
+  });
+  assert.equal(minutes.loadMeetingMinutes(row.id).minutesText, '회의록 보존');
+  assert.equal(files.has('file:///worklog/meeting-minutes-' + row.id + '.json'), true);
+  assert.equal(recordings.listMeetingRecordings().length, 1);
+  assert.ok(doc.updatedAt);
 });

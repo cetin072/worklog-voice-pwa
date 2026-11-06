@@ -52,6 +52,7 @@ export function saveMeetingMinutes(input: {
     Paths.document,
     `meeting-minutes-${input.recordingId}.${Date.now()}.${Math.floor(Math.random() * 1_000_000_000)}.pending`,
   );
+  let movedToTarget = false;
   try {
     temporary.create();
     const payload = JSON.stringify(document);
@@ -62,6 +63,8 @@ export function saveMeetingMinutes(input: {
     }
     // Same document storage, move only AFTER the new document was read back.
     temporary.moveSync(target, { overwrite: true });
+    // moveSync changes temporary.uri to the final document path.
+    movedToTarget = true;
     const saved = loadMeetingMinutes(input.recordingId);
     if (!saved || saved.updatedAt !== document.updatedAt ||
         saved.transcriptText !== document.transcriptText || saved.minutesText !== document.minutesText) {
@@ -72,7 +75,7 @@ export function saveMeetingMinutes(input: {
     throw new Error('회의록 저장을 확인하지 못했습니다. 입력은 현재 화면에 그대로 남아 있습니다.');
   } finally {
     // Never delete or modify the original M4A; only clean up our temp draft.
-    if (temporary.exists) {
+    if (!movedToTarget && temporary.exists) {
       try { temporary.delete(); } catch { /* Leave failed temp in private app storage. */ }
     }
   }
