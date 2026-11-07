@@ -1,0 +1,141 @@
+name: Meeting STT PR493 existing QA app update
+on:
+  push:
+    branches:
+      - qa/meeting-stt-493-20261107
+    paths:
+      - .github/workflows/meeting-stt-493-20261107.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: meeting-stt-qa493-one-shot
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PR_SOURCE: b11104eef5d809addf8db4292cc6a6b20c10f5fb
+  EXPO_PUBLIC_WORKLOG_APP_VARIANT: qa
+  # Existing accepted unified ERP pilot backend, not the production Worklog server.
+  EXPO_PUBLIC_API_BASE_URL: https://deploy-preview-483--worklog-voice-pwa.netlify.app
+
+jobs:
+  qa-apk:
+    if: github.repository == 'cetin072/worklog-voice-pwa' && github.ref == 'refs/heads/qa/meeting-stt-493-20261107'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify one-shot QA source is exact PR493 plus this workflow
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PR_SOURCE"
+          test "$(git diff --name-only "$EXPECTED_PR_SOURCE" HEAD)" = '.github/workflows/meeting-stt-493-20261107.yml'
+          test "$(git rev-parse HEAD:mobile/modules/worklog-meeting-audio/android/src/main/java/expo/modules/worklogmeetingaudio/WorklogMeetingAudioModule.kt)" = "$(git rev-parse "$EXPECTED_PR_SOURCE":mobile/modules/worklog-meeting-audio/android/src/main/java/expo/modules/worklogmeetingaudio/WorklogMeetingAudioModule.kt)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify the existing QA integration backend (do not change it)
+        run: |
+          node --input-type=module <<'NODE'
+          const url = process.env.EXPO_PUBLIC_API_BASE_URL + '/api/supabase-auth-config';
+          const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+          if (!r.ok) throw Error('Existing QA backend unavailable: HTTP ' + r.status);
+          const c = await r.json();
+          if (c.configured !== true || c.dataSchema !== 'worklog' || c.dataCorePrimaryEnabled !== true) {
+            throw Error('Existing QA backend does not expose the accepted unified worklog schema');
+          }
+          if (!c.supabaseUrl || !c.publishableKey) throw Error('Existing QA Auth config incomplete');
+          console.log('Existing accepted QA integration origin, schema, Auth configuration: verified');
+          NODE
+      - name: Install locked mobile dependencies
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+      - name: Verify exact QA source with TypeScript and Android Metro
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: |
+          set -euo pipefail
+          EXPO_OFFLINE=1 npx expo install --check
+          npm run typecheck
+          npx expo export --platform android --output-dir /tmp/meeting-qa-export --clear
+      - name: Run meeting STT and local checkpoint regressions
+        run: node --test tests/mobile-meeting*.test.mjs tests/mobile-audio-preprocessor.test.mjs
+      - name: Generate Android project using existing Expo config
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+      - name: Build installable QA ARM64 APK
+        working-directory: mobile/android
+        env:
+          NODE_ENV: production
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+      - name: Confirm new meeting audio module was built with the existing QA app
+        run: |
+          set -euo pipefail
+          test -s mobile/android/app/build/outputs/apk/release/app-release.apk
+          test -s mobile/modules/worklog-meeting-audio/android/src/main/java/expo/modules/worklogmeetingaudio/WorklogMeetingAudioModule.kt
+          echo "Native decoder included in compiled Release APK build."
+      - name: Verify isolated QA identity
+        run: bash mobile/scripts/verify-qa-apk.sh mobile/android/app/build/outputs/apk/release/app-release.apk
+      - name: Compare signing certificate to existing accepted QA APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/prior-qa"
+          gh run download 41605997638 -R cetin072/worklog-voice-pwa -n worklog-mobile-auth-ux-arm64-apk -D "$RUNNER_TEMP/prior-qa"
+          prior="$(find "$RUNNER_TEMP/prior-qa" -name '*.apk' -type f | head -n 1)"
+          current=mobile/android/app/build/outputs/apk/release/app-release.apk
+          test -n "$prior" && test -s "$prior" && test -s "$current"
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -n 1)"
+          test -n "$signer"
+          old_cert="$("$signer" verify --print-certs "$prior" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          new_cert="$("$signer" verify --print-certs "$current" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          test -n "$old_cert" && test "$old_cert" = "$new_cert"
+          echo "QA update signing certificate matches accepted QA run 41605997638"
+          echo "QA_SIGNER_SHA256=$new_cert" >> "$GITHUB_ENV"
+      - name: Write exact-head QA build receipt
+        run: |
+          set -euo pipefail
+          sha256sum mobile/android/app/build/outputs/apk/release/app-release.apk > qa-apk-sha256.txt
+          node --input-type=module <<'NODE'
+          import { writeFileSync, readFileSync } from 'node:fs';
+          const receipt = {
+            requestedPr: 493,
+            productSourceSha: process.env.EXPECTED_PR_SOURCE,
+            ciWorkflowSha: process.env.GITHUB_SHA,
+            apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
+            appPackage: 'com.cetin072.worklog.qa',
+            callback: 'worklog-qa://google-auth',
+            matchingPreviousQaSigningCertificate: true,
+            signerSha256: process.env.QA_SIGNER_SHA256,
+            apkSha256: readFileSync('qa-apk-sha256.txt', 'utf8').split(/\s+/)[0],
+            approval: 'user requested QA build; no production or Play submission'
+          };
+          writeFileSync('qa-build-info.json', JSON.stringify(receipt, null, 2) + '\n');
+          console.log('QA build receipt source and identity pinned');
+          NODE
+      - name: Publish direct user-installable QA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: worklog-meeting-stt-pr493-qa-arm64-apk
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            qa-build-info.json
+            qa-apk-sha256.txt
+          if-no-files-found: error
+          retention-days: 14
+
