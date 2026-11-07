@@ -16,7 +16,8 @@ test('Android module builds inside the existing Expo app, with no new decoding d
   assert.match(kotlin, /AsyncFunction\("prepareM4a"\)/);
   assert.match(kotlin, /MediaExtractor\(\)/);
   assert.match(kotlin, /MediaCodec\.createDecoderByType/);
-  assert.doesNotMatch(kotlin, /FFmpeg|AudioBuffer|ByteArray\(source\.length|readBytes\(\)/);
+  const executable = kotlin.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.doesNotMatch(executable, /FFmpeg|AudioBuffer|ByteArray\(source\.length|readBytes\(\)/);
   const gradle = fs.readFileSync(base + '/android/build.gradle', 'utf8');
   assert.match(gradle, /expo-module-gradle-plugin/);
   assert.doesNotMatch(gradle, /dependencies\s*\{/);
