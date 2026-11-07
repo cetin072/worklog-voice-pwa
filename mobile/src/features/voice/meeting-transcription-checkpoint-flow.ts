@@ -46,7 +46,16 @@ export async function ensureMeetingTranscript(input: {
   if (existing) return Object.freeze({ checkpoint: existing, reused: true });
 
   const converted = await transcribeMeetingRecording(input);
-  const saved = saveMeetingTranscript(input.recording, converted.transcript);
+  // The temporary PCM WAV will be removed after a verified save. Retained
+  // raw transcript evidence must instead refer to the immutable source M4A.
+  const sourceAudioRef = Object.freeze({ localRef: input.recording.uri });
+  const durableTranscript = Object.freeze({
+    ...converted.transcript,
+    sourceAudioRef,
+    segments: Object.freeze(converted.transcript.segments.map((segment) =>
+      Object.freeze({ ...segment, sourceAudioRef }))),
+  });
+  const saved = saveMeetingTranscript(input.recording, durableTranscript);
   removeSavedMeetingWav(converted.checkpoint.preparedUri, input.recording.uri);
   return Object.freeze({ checkpoint: saved, reused: false, timings: converted.timings });
 }
