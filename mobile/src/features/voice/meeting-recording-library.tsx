@@ -319,7 +319,7 @@ function MeetingMinutesEditor({ recording, onClose }: {
               </Text>
               <Pressable accessibilityRole="button" accessibilityLabel="전사문 녹취문으로 가져오기"
                 disabled={!loaded || loadFailed || transcriptionBusy}
-                style={[styles.renameSecondary, !loaded || loadFailed || transcriptionBusy ? styles.minutesDisabled : null]}
+                style={[styles.transcriptionSecondaryAction, !loaded || loadFailed || transcriptionBusy ? styles.minutesDisabled : null]}
                 onPress={importRawTranscript}>
                 <Text style={styles.renameSecondaryText}>녹취문 입력칸으로 가져오기</Text>
               </Pressable>
@@ -327,7 +327,7 @@ function MeetingMinutesEditor({ recording, onClose }: {
             : hasNativeTranscription && !checkpointDamaged && isMeetingRecordingFileAvailable(recording)
               ? <Pressable accessibilityRole="button" accessibilityLabel="회의 자동 전사 시작 QA"
                 disabled={!loaded || loadFailed || transcriptionBusy}
-                style={[styles.renamePrimary, !loaded || loadFailed || transcriptionBusy ? styles.minutesDisabled : null]}
+                style={[styles.transcriptionPrimaryAction, !loaded || loadFailed || transcriptionBusy ? styles.minutesDisabled : null]}
                 onPress={() => void startQaTranscription()}>
                 <Text style={styles.renamePrimaryText}>{transcriptionBusy ? '전사 준비·진행 중' : '자동 전사 시작 · QA'}</Text>
               </Pressable>
@@ -558,6 +558,8 @@ const styles = StyleSheet.create({
   minutesContent: { gap: 12, padding: 16, paddingBottom: 36 },
   minutesHelp: { fontSize: 13, color: mobileTheme.colors.textSecondary, lineHeight: 19 },
   transcriptionQaPanel: { gap: 10, padding: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.compact, backgroundColor: mobileTheme.colors.neutralBackground },
+  transcriptionPrimaryAction: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: mobileTheme.radius.compact, paddingHorizontal: 12, backgroundColor: mobileTheme.colors.primary },
+  transcriptionSecondaryAction: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: mobileTheme.radius.compact, borderWidth: 1, borderColor: mobileTheme.colors.border, paddingHorizontal: 12, backgroundColor: mobileTheme.colors.surface },
   transcriptPreview: { fontSize: 13, color: mobileTheme.colors.text, lineHeight: 20 },
   minutesLabel: { fontSize: 14, fontWeight: '800', color: mobileTheme.colors.text },
   minutesInput: { minHeight: 140, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.compact, backgroundColor: mobileTheme.colors.neutralBackground, color: mobileTheme.colors.text, padding: 12, lineHeight: 20 },
