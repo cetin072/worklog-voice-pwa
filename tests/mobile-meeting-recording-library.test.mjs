@@ -69,3 +69,28 @@ test('Meeting playback restores speaker playback mode after recording', () => {
   assert.match(library, /shouldRouteThroughEarpiece:\s*false/);
   assert.match(library, /playsInSilentMode:\s*true/);
 });
+
+test('Meeting minutes editor keeps keyboard-visible text fields and save/share actions accessible', () => {
+  const editor = library.split('function MeetingMinutesEditor(')[1]?.split('export function MeetingRecordingLibrary(')[0];
+  assert.ok(editor, 'meeting editor component must be present');
+  assert.match(editor, /<KeyboardAvoidingView[^>]+behavior="padding"/);
+  assert.match(editor, /style=\{styles\.minutesScroll\}/);
+  assert.match(editor, /keyboardShouldPersistTaps="handled"/);
+  assert.match(editor, /keyboardDismissMode="on-drag"/);
+  assert.match(editor, /Keyboard\.addListener\('keyboardDidShow'/);
+  assert.match(editor, /onFocus=\{\(\) => \{/);
+  assert.match(editor, /inputPositions\.current\.transcript/);
+  assert.match(editor, /inputPositions\.current\.minutes/);
+  assert.match(editor, /placeholderTextColor=\{mobileTheme\.colors\.textMuted\}/);
+  const scrollerEnd = editor.indexOf('</ScrollView>');
+  const footerStart = editor.indexOf('<View style={styles.minutesFooter}>');
+  assert.ok(scrollerEnd > 0 && footerStart > scrollerEnd,
+    'Save and share controls must remain outside the scrollable fields and above the IME');
+  assert.match(editor.slice(footerStart), /accessibilityLabel="회의록 저장"/);
+  assert.match(editor.slice(footerStart), /accessibilityLabel="회의록 공유"/);
+  assert.match(library, /minutesKeyboard: \{ flex: 1/);
+  assert.match(library, /minutesScroll: \{ flex: 1/);
+  assert.match(library, /minutesFooter: \{/);
+  const expo = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
+  assert.equal(expo.expo.android.softwareKeyboardLayoutMode, 'resize');
+});

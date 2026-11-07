@@ -1,9 +1,9 @@
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 
 import type { MobileRecordingAudioInput } from './audio-input';
 
 const INDEX_FILE_NAME = 'meeting-recordings-v1.json';
-const MAX_RECORDINGS = 200;
+
 
 export type MeetingRecordingEntry = Readonly<{
   id: string;
@@ -38,7 +38,8 @@ function normalizedEntry(value: unknown): MeetingRecordingEntry | null {
   const sizeBytes = row.sizeBytes === null || row.sizeBytes === undefined ? null : Number(row.sizeBytes);
   const title = typeof row.title === 'string' ? row.title.trim().slice(0, 120) : '';
 
-  if (!id || !uri || !fileName || !mimeType || !createdAt || !Number.isFinite(durationMs) || durationMs < 0) {
+  if (!/^meeting-[A-Za-z0-9._-]{1,130}$/.test(id) || !uri || !fileName || !mimeType ||
+      !createdAt || !Number.isFinite(durationMs) || durationMs < 0) {
     return null;
   }
 
@@ -55,25 +56,54 @@ function normalizedEntry(value: unknown): MeetingRecordingEntry | null {
 }
 
 function writeIndex(entries: readonly MeetingRecordingEntry[]) {
-  const file = indexFile();
-  if (!file.exists) file.create({ overwrite: true });
-  file.write(JSON.stringify({ version: 1, items: entries.slice(0, MAX_RECORDINGS) }));
+  // Validate a new index before replacing the old one. Never truncate older records.
+  const target = indexFile();
+  const pending = new File(Paths.document,
+    `meeting-recordings-v1.${Date.now()}.${Math.floor(Math.random() * 1_000_000_000)}.pending`);
+  let movedToTarget = false;
+  try {
+    const text = JSON.stringify({ version: 1, items: entries });
+    pending.create();
+    pending.write(text);
+    const verified = JSON.parse(pending.textSync()) as { version: number; items: unknown[] };
+    if (verified.version !== 1 || !Array.isArray(verified.items) ||
+        verified.items.length !== entries.length) {
+      throw new Error('INDEX_VERIFICATION_FAILED');
+    }
+    pending.moveSync(target, { overwrite: true });
+    // Expo File.moveSync mutates pending.uri to the destination.
+    // It is no longer a disposable temporary file after this point.
+    movedToTarget = true;
+    const committed = readIndexRaw();
+    if (committed.length !== entries.length || entries.some((row) =>
+      !committed.some((saved) => saved.id === row.id && saved.uri === row.uri && saved.title === row.title))) {
+      throw new Error('INDEX_COMMIT_VERIFICATION_FAILED');
+    }
+  } catch {
+    throw new Error('회의 녹음 목록을 저장하지 못했습니다. 기존 기록을 확인해주세요.');
+  } finally {
+    if (!movedToTarget && pending.exists) {
+      try { pending.delete(); } catch { /* Only an unmoved scratch file is safe to delete. */ }
+    }
+  }
 }
 
 function readIndexRaw(): MeetingRecordingEntry[] {
   const file = indexFile();
   if (!file.exists) return [];
-
   try {
-    const parsed = JSON.parse(file.textSync()) as { items?: unknown[] };
-    return Array.isArray(parsed?.items)
-      ? parsed.items.flatMap((item) => {
-          const entry = normalizedEntry(item);
-          return entry ? [entry] : [];
-        })
-      : [];
+    const parsed = JSON.parse(file.textSync()) as { version?: unknown; items?: unknown[] };
+    if (parsed?.version !== 1 || !Array.isArray(parsed.items)) {
+      throw new Error('INVALID_MEETING_INDEX');
+    }
+    const entries = parsed.items.map((item) => normalizedEntry(item));
+    if (entries.some((entry) => entry === null)) {
+      throw new Error('INVALID_MEETING_INDEX_ROW');
+    }
+    return entries as MeetingRecordingEntry[];
   } catch {
-    return [];
+    // Corrupt or unfamiliar data is not an empty list. Do not silently overwrite it.
+    throw new Error('회의 녹음 목록을 읽지 못했습니다. 기존 목록 파일은 그대로 보존했습니다.');
   }
 }
 
@@ -100,12 +130,42 @@ function entryId(recording: MobileRecordingAudioInput) {
   return `meeting-${stamp}-${safeFile}`;
 }
 
+/** Recover only Expo's own M4A recordings from the app documents directory.
+ * This never changes audio content and never overwrites an invalid index.
+ * File creation/modification time is used for sorting; recovered duration is unknown.
+ */
+function findUnindexedMeetingAudio(existing: readonly MeetingRecordingEntry[]): MeetingRecordingEntry[] {
+  const known = new Set(existing.map((row) => row.uri));
+  const found: MeetingRecordingEntry[] = [];
+  const dir = new Directory(Paths.document);
+  for (const entry of dir.list()) {
+    if (!(entry instanceof File) || !/^recording-[0-9a-f-]{36}\.m4a$/i.test(entry.name) ||
+        !entry.exists || known.has(entry.uri)) continue;
+    const time = entry.creationTime ?? entry.modificationTime;
+    if (typeof time !== 'number' || !Number.isFinite(time) || time <= 0) continue;
+    const createdAt = new Date(time).toISOString();
+    const id = entryId({ createdAt, fileName: entry.name } as MobileRecordingAudioInput);
+    if (existing.some((row) => row.id === id) || found.some((row) => row.uri === entry.uri)) continue;
+    found.push(Object.freeze({
+      id, uri: entry.uri, fileName: entry.name, mimeType: 'audio/mp4',
+      durationMs: 0, createdAt, sizeBytes: entry.size, title: '',
+    }));
+    known.add(entry.uri);
+  }
+  return found;
+}
+
 export function listMeetingRecordings() {
+  // An invalid index is an error; never treat it as a fresh empty history.
   const stored = readIndexRaw();
-  const live = stored.filter((entry) => fileExists(entry.uri));
-  const sorted = live.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-  if (live.length !== stored.length) writeIndex(sorted);
-  return Object.freeze(sorted);
+  const recovered = findUnindexedMeetingAudio(stored);
+  if (recovered.length > 0) writeIndex([...stored, ...recovered]);
+  return Object.freeze((recovered.length > 0 ? readIndexRaw() : stored).sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt)));
+}
+
+export function isMeetingRecordingFileAvailable(recording: MeetingRecordingEntry): boolean {
+  return fileExists(recording.uri);
 }
 
 export function rememberMeetingRecording(recording: MobileRecordingAudioInput) {
@@ -126,10 +186,11 @@ export function rememberMeetingRecording(recording: MobileRecordingAudioInput) {
 
   const existing = readIndexRaw().filter((entry) => entry.uri !== next.uri && entry.id !== next.id);
   const merged = [next, ...existing]
-    .filter((entry) => fileExists(entry.uri))
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, MAX_RECORDINGS);
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   writeIndex(merged);
+  if (!readIndexRaw().some((entry) => entry.id === next.id && entry.uri === next.uri)) {
+    throw new Error('녹음 목록 저장을 확인하지 못했습니다. 원본 녹음 파일은 보존합니다.');
+  }
   return next;
 }
 
@@ -148,7 +209,9 @@ export function deleteMeetingRecording(recordingId: string) {
     }
   }
 
-  const remaining = stored.filter((entry) => entry.id !== id && fileExists(entry.uri));
+  // Keep a discoverable entry when a separate, user-authored minutes file exists.
+  const keepLinkedMinutes = target ? new File(Paths.document, `meeting-minutes-${target.id}.json`).exists : false;
+  const remaining = stored.filter((entry) => entry.id !== id || keepLinkedMinutes);
   writeIndex(remaining);
   return Boolean(target);
 }
@@ -172,4 +235,20 @@ export function renameMeetingRecording(recordingId: string, title: string) {
     : entry);
   writeIndex(updated);
   return updated.find((entry) => entry.id === id) || null;
+}
+
+/** Lightweight title/date search: only recording metadata, never full transcript files. */
+export function searchMeetingRecordings(
+  entries: readonly MeetingRecordingEntry[],
+  query: string,
+): readonly MeetingRecordingEntry[] {
+  const term = query.trim().toLocaleLowerCase('ko-KR');
+  if (!term) return entries;
+  return entries.filter((entry) => {
+    const localDate = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(entry.createdAt));
+    return [entry.title, entry.fileName, localDate, localDate.replace(/[^0-9]/g, '')]
+      .some((value) => value.toLocaleLowerCase('ko-KR').includes(term));
+  });
 }
