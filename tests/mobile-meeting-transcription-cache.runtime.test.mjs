@@ -21,7 +21,12 @@ globalThis.__meetingCacheTest = {
     async transcribeMeetingRecording() {
       calls++;
       return {
-        transcript: { text: '회의 전사 원문' },
+        transcript: {
+          text: '회의 전사 원문',
+          sourceAudioRef: { localRef: preparedUri },
+          segments: [{ index: 0, text: '회의 전사 원문',
+            sourceAudioRef: { localRef: preparedUri } }],
+        },
         checkpoint: { preparedUri },
         timings: { preprocessMs: 14, transcribeMs: 200 },
       };
@@ -29,9 +34,9 @@ globalThis.__meetingCacheTest = {
   },
   storage: {
     loadMeetingTranscript() { return persisted; },
-    saveMeetingTranscript() {
+    saveMeetingTranscript(_recording, transcript) {
       if (saveFailure) throw Error('simulated checkpoint failure');
-      persisted = { transcript: { text: '회의 전사 원문' } };
+      persisted = { transcript };
       return persisted;
     },
   },
@@ -67,6 +72,8 @@ test('successful transcript checkpoint reuses original M4A and removes only owne
   const result = await implementation.ensureMeetingTranscript({ recording, preprocessor: {}, provider: {} });
   assert.equal(result.reused, false);
   assert.equal(result.checkpoint.transcript.text, '회의 전사 원문');
+  assert.equal(result.checkpoint.transcript.sourceAudioRef.localRef, recording.uri);
+  assert.equal(result.checkpoint.transcript.segments[0].sourceAudioRef.localRef, recording.uri);
   assert.equal(cache.has(preparedUri), false);
   assert.equal(cache.get(recording.uri), 'ORIGINAL_M4A_BYTES');
   assert.equal(calls, 1);
