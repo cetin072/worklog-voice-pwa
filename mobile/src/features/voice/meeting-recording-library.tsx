@@ -113,6 +113,7 @@ function MeetingMinutesEditor({ recording, onClose }: {
   const [notice, setNotice] = useState('');
   const [rawTranscript, setRawTranscript] = useState<MeetingTranscriptCheckpointV1 | null>(null);
   const [transcriptionError, setTranscriptionError] = useState('');
+  const [checkpointDamaged, setCheckpointDamaged] = useState(false);
   const [transcriptionBusy, setTranscriptionBusy] = useState(false);
   const [transcriptionStatus, setTranscriptionStatus] = useState('');
   const transcriptionInFlight = useRef(false);
@@ -156,11 +157,13 @@ function MeetingMinutesEditor({ recording, onClose }: {
   useEffect(() => {
     setRawTranscript(null);
     setTranscriptionError('');
+    setCheckpointDamaged(false);
     try {
       // A damaged raw-transcript checkpoint is not a blank record. Never
       // auto-overwrite or rerun STT while it cannot be read safely.
       setRawTranscript(readSavedMeetingTranscript(recording));
     } catch (nextError) {
+      setCheckpointDamaged(true);
       setTranscriptionError(nextError instanceof Error
         ? nextError.message : '저장된 전사문을 확인할 수 없습니다.');
     }
@@ -224,7 +227,7 @@ function MeetingMinutesEditor({ recording, onClose }: {
 
   async function startQaTranscription() {
     if (transcriptionInFlight.current || !hasNativeTranscription ||
-        !loaded || loadFailed || transcriptionError || rawTranscript ||
+        !loaded || loadFailed || checkpointDamaged || rawTranscript ||
         !isMeetingRecordingFileAvailable(recording)) return;
     Keyboard.dismiss();
     transcriptionInFlight.current = true;
@@ -321,7 +324,7 @@ function MeetingMinutesEditor({ recording, onClose }: {
                 <Text style={styles.renameSecondaryText}>녹취문 입력칸으로 가져오기</Text>
               </Pressable>
             </>
-            : hasNativeTranscription && !transcriptionError && isMeetingRecordingFileAvailable(recording)
+            : hasNativeTranscription && !checkpointDamaged && isMeetingRecordingFileAvailable(recording)
               ? <Pressable accessibilityRole="button" accessibilityLabel="회의 자동 전사 시작 QA"
                 disabled={!loaded || loadFailed || transcriptionBusy}
                 style={[styles.renamePrimary, !loaded || loadFailed || transcriptionBusy ? styles.minutesDisabled : null]}
