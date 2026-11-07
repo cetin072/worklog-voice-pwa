@@ -1,0 +1,53 @@
+name: Worklog Meeting M4A native compile gate (no APK)
+on:
+  push:
+    branches: [qa/meeting-m4a-kotlin-compile-20261107]
+    paths:
+      - .github/workflows/meeting-m4a-kotlin-compile-20261107.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worklog-m4a-kotlin-no-apk-20261107
+  cancel-in-progress: false
+
+jobs:
+  compile:
+    if: github.repository == 'cetin072/worklog-voice-pwa' && github.ref == 'refs/heads/qa/meeting-m4a-kotlin-compile-20261107'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Assert product source and one-shot workflow-only change
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = 'f7c2c8a182d44be21ab429e66c6375bf2a119fbd'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/meeting-m4a-kotlin-compile-20261107.yml'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install existing pinned Expo dependencies (no package upgrades)
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+      - name: Generate Android project with existing Expo module autolinking
+        working-directory: mobile
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+      - name: Compile new Android streaming audio module only
+        working-directory: mobile/android
+        run: ./gradlew :worklog-meeting-audio:compileReleaseKotlin --no-daemon
+      - name: Report native compile checkpoint
+        run: |
+          echo "Android MediaExtractor/MediaCodec Kotlin module compiled."
+          echo "This run did not build an installable QA APK, AAB, or touch Production."
