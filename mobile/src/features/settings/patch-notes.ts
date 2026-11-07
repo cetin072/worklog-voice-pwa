@@ -9,6 +9,17 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-07',
+    title: '회의 녹음 목록·회의록 편집 개선',
+    summary: '녹음 목록과 회의록 보존을 보강하고 키보드가 입력 화면을 가리지 않도록 개선했습니다.',
+    items: [
+      '녹음 목록의 저장 확인 및 기존 M4A 파일 검색·목록 복구를 보강했습니다.',
+      '회의록과 녹취문을 기기에 저장하고 다시 열어 편집·공유할 수 있습니다.',
+      '회의명·날짜 검색, 월별 구분과 더 보기로 누적 기록을 찾기 쉽게 했습니다.',
+      '회의록 작성 중 키보드가 열려도 저장·공유 버튼에 접근하도록 수정했습니다.',
+    ],
+  },
+  {
     date: '2026-11-04',
     title: '직접 입력 일정의 저장 결과 확인',
     summary: '선택한 날짜·시간의 저장이 확인되지 않으면 완료로 안내하지 않습니다.',
