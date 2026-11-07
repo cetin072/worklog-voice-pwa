@@ -1,6 +1,6 @@
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -104,6 +104,20 @@ function MeetingMinutesEditor({ recording, onClose }: {
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const scrollRef = useRef<ScrollView>(null);
+  const focusedInput = useRef<'transcript' | 'minutes' | null>(null);
+  const inputPositions = useRef({ transcript: 0, minutes: 0 });
+
+  // A Modal owns a separate native window: scroll again after the keyboard appears.
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      const field = focusedInput.current;
+      if (field) scrollRef.current?.scrollTo({
+        y: Math.max(0, inputPositions.current[field] - 16), animated: true,
+      });
+    });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     setLoaded(false);
@@ -173,12 +187,19 @@ function MeetingMinutesEditor({ recording, onClose }: {
   }
 
   return <Modal visible animationType="slide" onRequestClose={requestClose}>
-    <SafeAreaView style={styles.minutesModal}>
+    <KeyboardAvoidingView style={styles.minutesKeyboard} behavior="padding">
+      <SafeAreaView style={styles.minutesModal}>
       <View style={styles.minutesHeader}>
         <Text style={styles.minutesHeading}>회의록</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="회의록 닫기" onPress={requestClose} style={styles.minutesClose}><Text style={styles.renameActionText}>닫기</Text></Pressable>
       </View>
-      <ScrollView contentContainerStyle={styles.minutesContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        style={styles.minutesScroll}
+        contentContainerStyle={styles.minutesContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         <Text style={styles.recordingTitle}>{recording.title || `회의 녹음 · ${formatRecordedAt(recording.createdAt)}`}</Text>
         <Text style={styles.recordingMeta}>{formatDuration(recording.durationMs)} · 이 기기에 저장된 녹음</Text>
         <MeetingRecordingPlayer recording={recording} />
@@ -187,12 +208,27 @@ function MeetingMinutesEditor({ recording, onClose }: {
         <TextInput accessibilityLabel="회의 녹취문 직접 입력" style={styles.minutesInput} multiline textAlignVertical="top"
           value={transcriptText} maxLength={120000} editable={!loadFailed}
           placeholder="녹음에서 들은 내용을 입력하거나 붙여넣으세요."
+          placeholderTextColor={mobileTheme.colors.textMuted}
+          onLayout={event => { inputPositions.current.transcript = event.nativeEvent.layout.y; }}
+          onFocus={() => {
+            focusedInput.current = 'transcript';
+            scrollRef.current?.scrollTo({ y: Math.max(0, inputPositions.current.transcript - 16), animated: true });
+          }}
           onChangeText={value => { setTranscriptText(value); setNotice(''); }} />
         <Text style={styles.minutesLabel}>회의록 (수정 가능)</Text>
         <TextInput accessibilityLabel="회의록 내용" style={styles.minutesInput} multiline textAlignVertical="top"
           value={minutesText} maxLength={120000} editable={!loadFailed}
           placeholder="회의 내용·결정사항·후속 할 일을 직접 정리하세요."
+          placeholderTextColor={mobileTheme.colors.textMuted}
+          onLayout={event => { inputPositions.current.minutes = event.nativeEvent.layout.y; }}
+          onFocus={() => {
+            focusedInput.current = 'minutes';
+            scrollRef.current?.scrollTo({ y: Math.max(0, inputPositions.current.minutes - 16), animated: true });
+          }}
           onChangeText={value => { setMinutesText(value); setNotice(''); }} />
+        <Text style={styles.minutesFootnote}>녹음 원본은 변경하지 않습니다. 공유는 직접 누를 때만 실행됩니다.</Text>
+      </ScrollView>
+      <View style={styles.minutesFooter}>
         {!loaded && !loadFailed ? <Text style={styles.recordingMeta}>기존 회의록을 확인하는 중입니다.</Text> : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         {notice ? <Text style={styles.minutesSuccess}>{notice}</Text> : null}
@@ -208,9 +244,9 @@ function MeetingMinutesEditor({ recording, onClose }: {
             <Text style={styles.renameSecondaryText}>공유</Text>
           </Pressable>
         </View>
-        <Text style={styles.minutesFootnote}>녹음 원본은 변경하지 않습니다. 공유는 직접 누를 때만 실행됩니다.</Text>
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   </Modal>;
 }
 
@@ -378,7 +414,10 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
 }
 
 const styles = StyleSheet.create({
+  minutesKeyboard: { flex: 1, backgroundColor: mobileTheme.colors.surface },
   minutesModal: { flex: 1, backgroundColor: mobileTheme.colors.surface },
+  minutesScroll: { flex: 1 },
+  minutesFooter: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderTopColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface, gap: 6 },
   minutesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: mobileTheme.colors.border },
   minutesHeading: { fontSize: 20, fontWeight: '800', color: mobileTheme.colors.text },
   minutesClose: { minHeight: 40, paddingHorizontal: 12, justifyContent: 'center' },
