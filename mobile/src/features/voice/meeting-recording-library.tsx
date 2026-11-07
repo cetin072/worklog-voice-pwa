@@ -14,6 +14,13 @@ import {
 import { mobileTheme } from '@/src/ui/theme';
 import { formatMeetingMinutesForShare, type MeetingMinutesDocumentV1 } from './meeting-minutes-document';
 import { hasMeetingMinutes, loadMeetingMinutes, saveMeetingMinutes } from './meeting-minutes-storage';
+import type { MeetingTranscriptCheckpointV1 } from './meeting-transcript-checkpoint';
+import {
+  MEETING_TRANSCRIPTION_QA_ONLY,
+  canStartMeetingTranscription,
+  readSavedMeetingTranscript,
+  transcribeMeetingForQa,
+} from './meeting-transcription-ui';
 
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -104,9 +111,21 @@ function MeetingMinutesEditor({ recording, onClose }: {
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [rawTranscript, setRawTranscript] = useState<MeetingTranscriptCheckpointV1 | null>(null);
+  const [transcriptionError, setTranscriptionError] = useState('');
+  const [transcriptionBusy, setTranscriptionBusy] = useState(false);
+  const [transcriptionStatus, setTranscriptionStatus] = useState('');
+  const transcriptionInFlight = useRef(false);
+  const editorMounted = useRef(true);
+  const hasNativeTranscription = useMemo(() => canStartMeetingTranscription(), []);
   const scrollRef = useRef<ScrollView>(null);
   const focusedInput = useRef<'transcript' | 'minutes' | null>(null);
   const inputPositions = useRef({ transcript: 0, minutes: 0 });
+
+  useEffect(() => {
+    editorMounted.current = true;
+    return () => { editorMounted.current = false; };
+  }, []);
 
   // A Modal owns a separate native window: scroll again after the keyboard appears.
   useEffect(() => {
@@ -134,10 +153,27 @@ function MeetingMinutesEditor({ recording, onClose }: {
     }
   }, [recording.id]);
 
+  useEffect(() => {
+    setRawTranscript(null);
+    setTranscriptionError('');
+    try {
+      // A damaged raw-transcript checkpoint is not a blank record. Never
+      // auto-overwrite or rerun STT while it cannot be read safely.
+      setRawTranscript(readSavedMeetingTranscript(recording));
+    } catch (nextError) {
+      setTranscriptionError(nextError instanceof Error
+        ? nextError.message : '저장된 전사문을 확인할 수 없습니다.');
+    }
+  }, [recording.id]);
+
   const dirty = transcriptText !== (saved?.transcriptText ?? '') ||
     minutesText !== (saved?.minutesText ?? '');
 
   function requestClose() {
+    if (transcriptionInFlight.current) {
+      Alert.alert('회의 자동 전사 진행 중', '기기에서 전사 중입니다. 완료된 뒤 닫아주세요.');
+      return;
+    }
     if (!dirty) { onClose(); return; }
     Alert.alert('저장하지 않은 변경', '작성 중인 내용이 저장되지 않았습니다.', [
       { text: '돌아가기', style: 'cancel' },
@@ -186,6 +222,69 @@ function MeetingMinutesEditor({ recording, onClose }: {
     }
   }
 
+  async function startQaTranscription() {
+    if (transcriptionInFlight.current || !hasNativeTranscription ||
+        !loaded || loadFailed || transcriptionError || rawTranscript ||
+        !isMeetingRecordingFileAvailable(recording)) return;
+    Keyboard.dismiss();
+    transcriptionInFlight.current = true;
+    setTranscriptionBusy(true);
+    setTranscriptionError('');
+    setTranscriptionStatus('음성 모델 준비·전사 진행 중입니다. 기기에 저장된 원본은 유지됩니다.');
+    try {
+      const result = await transcribeMeetingForQa({
+        recording,
+        onModelDownload(writtenBytes, totalBytes) {
+          if (!editorMounted.current) return;
+          const percent = totalBytes && totalBytes > 0
+            ? Math.min(100, Math.floor(100 * writtenBytes / totalBytes))
+            : null;
+          setTranscriptionStatus(percent === null
+            ? '기존 Whisper 모델을 준비하고 있습니다.'
+            : 'Whisper 모델 준비 ' + percent + '% · 완료되면 기기 내에서 전사합니다.');
+        },
+      });
+      if (!editorMounted.current) return;
+      setRawTranscript(result.checkpoint);
+      setTranscriptionStatus('');
+      setNotice(result.reused
+        ? '기기에 보관된 전사문을 불러왔습니다.'
+        : '자동 전사문이 이 기기에 저장됐습니다. 내용을 확인한 뒤 가져오세요.');
+    } catch (nextError) {
+      if (editorMounted.current) {
+        setTranscriptionError(nextError instanceof Error
+          ? nextError.message : '자동 전사에 실패했습니다. 녹음 원본은 보존됩니다.');
+      }
+    } finally {
+      transcriptionInFlight.current = false;
+      if (editorMounted.current) setTranscriptionBusy(false);
+    }
+  }
+
+  function importRawTranscript() {
+    const text = rawTranscript?.transcript.text ?? '';
+    if (!text || !loaded || loadFailed || transcriptionBusy) return;
+    if (text.length > 120000) {
+      setTranscriptionError('녹취문 입력 한도를 초과합니다. 원문을 자르거나 덮어쓰지 않았습니다.');
+      return;
+    }
+    const apply = () => {
+      setTranscriptText(text);
+      setNotice('자동 전사문을 편집칸에 가져왔습니다. 검토 후 저장을 눌러주세요.');
+      setError('');
+      focusedInput.current = 'transcript';
+      scrollRef.current?.scrollTo({ y: Math.max(0, inputPositions.current.transcript - 16), animated: true });
+    };
+    if (transcriptText.trim() && transcriptText !== text) {
+      Alert.alert('기존 녹취문 입력', '현재 입력 중인 녹취문이 있습니다. 교체해도 이전 저장본은 저장을 누르기 전까지 변경되지 않습니다.', [
+        { text: '취소', style: 'cancel' },
+        { text: '입력칸에 가져오기', onPress: apply },
+      ]);
+    } else {
+      apply();
+    }
+  }
+
   return <Modal visible animationType="slide" onRequestClose={requestClose}>
     <KeyboardAvoidingView style={styles.minutesKeyboard} behavior="padding">
       <SafeAreaView style={styles.minutesModal}>
@@ -203,7 +302,39 @@ function MeetingMinutesEditor({ recording, onClose }: {
         <Text style={styles.recordingTitle}>{recording.title || `회의 녹음 · ${formatRecordedAt(recording.createdAt)}`}</Text>
         <Text style={styles.recordingMeta}>{formatDuration(recording.durationMs)} · 이 기기에 저장된 녹음</Text>
         <MeetingRecordingPlayer recording={recording} />
-        <Text style={styles.minutesHelp}>자동 전사는 아직 연결 전입니다. 녹음을 들으며 직접 입력하거나 전사된 글을 붙여넣을 수 있습니다.</Text>
+        {MEETING_TRANSCRIPTION_QA_ONLY ? <View style={styles.transcriptionQaPanel}>
+          <Text style={styles.minutesLabel}>자동 전사 실험 · QA 전용</Text>
+          <Text style={styles.minutesHelp}>
+            Whisper 모델이 기기에 없으면 최초 약 148MB 다운로드가 필요할 수 있습니다. 음성은 서버로 전송하지 않습니다.
+          </Text>
+          {rawTranscript
+            ? <>
+              <Text style={styles.recordingMeta}>원시 전사문 저장됨 · {rawTranscript.transcript.text.length}자 · 회의록과 별도 보관</Text>
+              <Text style={styles.transcriptPreview} selectable>
+                {rawTranscript.transcript.text.slice(0, 1200)}
+                {rawTranscript.transcript.text.length > 1200 ? ' … (이하 생략, 원문은 기기 저장소에 보존)' : ''}
+              </Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="전사문 녹취문으로 가져오기"
+                disabled={!loaded || loadFailed || transcriptionBusy}
+                style={[styles.renameSecondary, !loaded || loadFailed || transcriptionBusy ? styles.minutesDisabled : null]}
+                onPress={importRawTranscript}>
+                <Text style={styles.renameSecondaryText}>녹취문 입력칸으로 가져오기</Text>
+              </Pressable>
+            </>
+            : hasNativeTranscription && !transcriptionError && isMeetingRecordingFileAvailable(recording)
+              ? <Pressable accessibilityRole="button" accessibilityLabel="회의 자동 전사 시작 QA"
+                disabled={!loaded || loadFailed || transcriptionBusy}
+                style={[styles.renamePrimary, !loaded || loadFailed || transcriptionBusy ? styles.minutesDisabled : null]}
+                onPress={() => void startQaTranscription()}>
+                <Text style={styles.renamePrimaryText}>{transcriptionBusy ? '전사 준비·진행 중' : '자동 전사 시작 · QA'}</Text>
+              </Pressable>
+              : <Text style={styles.recordingMeta}>
+                {hasNativeTranscription ? '원본 녹음이 없거나 기존 전사문을 확인해야 합니다.' : '현재 QA 앱에는 검증 전 전사 모듈이 없습니다.'}
+              </Text>}
+          {transcriptionStatus ? <Text style={styles.recordingMeta}>{transcriptionStatus}</Text> : null}
+          {transcriptionError ? <Text style={styles.errorText}>{transcriptionError}</Text> : null}
+        </View>
+        : <Text style={styles.minutesHelp}>자동 전사는 아직 연결 전입니다. 녹음을 들으며 직접 입력하거나 전사된 글을 붙여넣을 수 있습니다.</Text>}
         <Text style={styles.minutesLabel}>녹취문 (선택)</Text>
         <TextInput accessibilityLabel="회의 녹취문 직접 입력" style={styles.minutesInput} multiline textAlignVertical="top"
           value={transcriptText} maxLength={120000} editable={!loadFailed}
@@ -423,6 +554,8 @@ const styles = StyleSheet.create({
   minutesClose: { minHeight: 40, paddingHorizontal: 12, justifyContent: 'center' },
   minutesContent: { gap: 12, padding: 16, paddingBottom: 36 },
   minutesHelp: { fontSize: 13, color: mobileTheme.colors.textSecondary, lineHeight: 19 },
+  transcriptionQaPanel: { gap: 10, padding: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.compact, backgroundColor: mobileTheme.colors.neutralBackground },
+  transcriptPreview: { fontSize: 13, color: mobileTheme.colors.text, lineHeight: 20 },
   minutesLabel: { fontSize: 14, fontWeight: '800', color: mobileTheme.colors.text },
   minutesInput: { minHeight: 140, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.compact, backgroundColor: mobileTheme.colors.neutralBackground, color: mobileTheme.colors.text, padding: 12, lineHeight: 20 },
   minutesActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
