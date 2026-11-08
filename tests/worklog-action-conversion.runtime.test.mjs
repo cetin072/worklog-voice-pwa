@@ -171,7 +171,7 @@ test("Search edit sheet uses the same action kind conversion contract",()=>{
   assert.match(search,/editActionConversionAllowed/);
   assert.match(search,/actionKind: editActionKind/);
   assert.match(search,/actionKind=\{editActionKind\}/);
-  assert.match(search,/onActionKind=\{setEditActionKind\}/);
+  assert.match(search,/onActionKind=\{\(value\) => \{ editDirty.current.kind = true; setEditActionKind\(value\); \}\}/);
   assert.match(search,/메모 · 참고로 변경했습니다/);
   assert.match(search,/할 일로 변경했습니다/);
 });
