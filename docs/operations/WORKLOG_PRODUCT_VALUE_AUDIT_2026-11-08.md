@@ -294,6 +294,17 @@
 - 사용자는 **현재 카카오 브리핑 기능을 사용하지 않으며 그대로 두고 다음 검사 진행**을 명시했다. 자동 전송 ON/OFF 운영 설정·Netlify Cron·카카오 계정 연결·UI 제거 또는 기능 개선을 실행하지 않는다.
 - 과거 T11은 Web Push와 카카오가 별도 채널이라는 코드 사실을 기록한 것이며, 이 사용자 판단 이후 카카오 개선은 **PAUSE / 그대로 보존** 상태다. 사용자 지시 없는 재검사·이전 기능 변경·자동 알림 재활성화도 실시하지 않는다.
 
+### T02·T03 재검수: 불완전 HTTP 성공 응답과 캡처 일정 안내 (PR #512, 2026-11-08)
+
+**판정: FIX(기록 ID 없는 2xx 거짓 성공/캡처 일정 ID 없는 성공 문구) / 휴대폰 HUMAN·시간절감 MEASURED 미실시.**
+
+- **기존 CODE 흐름:** `ManualWorkInput→persistDraft→createManualWorkSaveSession→saveWorklog→/api/worklog`은 구조화된 날짜/시간을 전달하며 idempotent requestId를 보존한다. 서버는 `worklogSchedule()`로 Picker 입력을 우선 처리하고 `classifyWorklogAction`을 통해 WorkRecord·Schedule 결과를 반환한다. 캡처는 `captureScheduleInput→processCapture→saveWorklog` 뒤 owner-scoped WorkRecord 상태 재조회·설정된 일정의 알림 결과를 확인한다.
+- **확인된 CODE 결함:** `parseSavedWorklog`는 HTTP 2xx 본문을 `SavedWorklog`로 곧바로 캐스팅해 WorkRecord ID가 없어도 성공 객체를 반환할 수 있었다. 직접 입력이 이 응답으로 원문/중복방지 세션을 지우거나 캡처 UI가 이미 저장한 것처럼 오인할 위험이 있었다. 캡처 화면도 `scheduleCreated:true`만 보고 ID 없는 일정을 '일정을 저장했습니다'로 표시할 수 있었다.
+- **조치:** [PR #512](https://github.com/cetin072/worklog-voice-pwa/pull/512) squash 병합 `190f7e6`. 실제 `dataCoreWorkRecordId` 또는 legacy `pageId`가 없거나 응답 본문에 `ok:false`이면 WorkRecord 저장을 확인하지 못한 오류로 처리. UI 원문/저장 요청 ID를 유지해 같은 요청으로 재확인하도록 한다. 캡처 완료 안내는 `scheduleCreated`와 실제 `scheduleId`가 모두 있을 때만 일정 생성 완료로 표시. 서버 WorkRecord 재조회가 미확인(`CAPTURE_RECORD_UNCONFIRMED`)인 경우 OCR 실패가 아닌 저장 영수증 확인 부족으로 안내.
+- **자동검증:** 실제 `persistDraft()`→HTTP `saveWorklog()` 합성 런타임으로 '기록 ID 없는 HTTP 200 → 원문 유지/성공 미표시 → 동일 requestId로 재시도 → 확인된 ID 성공' 검증. `ok:false` 200 거부, legacy Notion pageId 수용, 기존 캡처 리뷰/저장/수정/동일 이미지 중복방지 테스트. CI Mobile typecheck + Web User Acceptance Ready GREEN 확인 후 main 병합. *Android 실제 버튼/서버·기기 알림 성공 증거는 아님.*
+- **UI/업무 효율:** 입력·편집 버튼과 서버/DB/RLS, OCR 엔진/캡처 인박스, 일정·알림 정책, PWA/운영 배포 **변경 없음**. 오류 회복 때 불필요한 재입력/중복 등록 위험을 줄이나, 실제 날짜 있는 직접 입력 1건/카카오 캡처 2건의 최종 Schedule 표시·알림·총시간은 아직 미검증. ① 날짜+시간 직접 입력 ② 명시 날짜 카카오 캡처 ③ '오늘'만 있는 날짜 불확실 캡처를 같은 최신 QA 앱에서 확인해야 함.
+- **T02 남은 코드/기획 판단:** 직접입력 `dueTime`이 있으면 기존 `회의·통화` 명시 유형 힌트를 보내 시간 있는 일반 업무도 Schedule로 생성하도록 하는 임시 호환 구조가 있다. 일정 생성 신뢰성과 분류 의미가 엮여 있으므로 별도 Core 변경을 즉흥 적용하지 않는다. '세금 납부'같은 일반 기한 업무와 '거래처 방문' 약속을 휴대폰에서 구별 검증한 뒤 계약을 조정한다.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
