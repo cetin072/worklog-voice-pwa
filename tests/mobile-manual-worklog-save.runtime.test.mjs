@@ -6,6 +6,7 @@ const blobs = `const store={get:async()=>null,setJSON:async()=>{}};export const 
 register('./helpers/mobile-ts-loader.mjs', import.meta.url, { data: { mocks: {
   '@netlify/blobs': `data:text/javascript,${encodeURIComponent(blobs)}`,
 } } });
+const { createManualWorkSaveSession } = await import('../mobile/src/features/work/manual-work-save.ts');
 const { saveWorklog } = await import('../mobile/src/platform/worklog-api.ts');
 const { default: handler } = await import('../netlify/functions/worklog.mts');
 const ts = createRequire(new URL('../mobile/package.json', import.meta.url))('typescript');
@@ -21,6 +22,8 @@ function ui(input, saver) {
   const state = { messages: [], cleared: 0, calls: 0 };
   const scope = {
     session: { access_token: 'synthetic-token' }, client: null, busy: false, manualInput: input,
+    manualSaveSession: { current: createManualWorkSaveSession() }, manualSaveInFlight: { current: false },
+    reminderFailureMessage: () => '알림 확인 필요',
     saveWorklog: (...args) => { state.calls++; return saver(...args); },
     run: fn => fn(), reminderSessionEpoch: { capture: () => () => true },
     synchronizeSavedScheduleReminders: async () => [], savedReminderMessage: () => '',
@@ -30,7 +33,7 @@ function ui(input, saver) {
     setNotificationScheduleId() {}, setScheduleFocusReason() {}, formatSavedDue: value => value,
     showMessage: (value, tone) => state.messages.push({ value, tone }), setScreen() {}, refreshBriefing: async () => {},
   };
-  return { state, save: directSave(scope) };
+  return { state, scope, save: directSave(scope) };
 }
 
 test('actual direct-save UI → mobile HTTP → handler → RPC keeps picker date/time and creates schedule for short titles', async () => {
@@ -95,4 +98,37 @@ test('date-only deadline and equivalent UTC schedule time are accepted; undated 
     const { state, save } = ui({ transcript: '합성 기록', dueDate, dueTime }, async () => saved);
     await save(); assert.equal(state.feedback.scheduleWarning, ''); assert.equal(state.messages[0].tone, 'success');
   }
+});
+
+test('actual Home save preserves the request after a lost response and blocks rapid duplicate taps', async () => {
+  const calls = [];
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const { state, save } = ui({ transcript: '서류 확인', dueDate: '2026-11-12', dueTime: '15:00' }, async (token, text, options) => {
+    calls.push({ token, text, ...options });
+    if (calls.length === 1) { await gate; throw new Error('response lost after save'); }
+    return { pageId: 'saved', dueStart: '2026-11-12T15:00:00+09:00', scheduleCreated: true, scheduleId: 'schedule' };
+  });
+  const first = save();
+  await save();
+  release();
+  await assert.rejects(first, /response lost/);
+  assert.equal(calls.length, 1); assert.equal(state.cleared, 0);
+  await save();
+  assert.deepEqual(calls[1], calls[0]);
+  assert.equal(state.cleared, 1); assert.equal(state.feedback.scheduleCreated, true);
+});
+
+test('actual Home keeps save success and clears input when post-save permission guidance throws', async () => {
+  const { state, scope, save } = ui({ transcript: '서류 확인', dueDate: '2026-11-12', dueTime: '15:00' }, async () => ({
+    pageId: 'saved', dueStart: '2026-11-12T15:00:00+09:00', scheduleCreated: true, scheduleId: 'schedule',
+  }));
+  scope.maybeGuideExactAlarmPermission = async () => { throw new Error('permission storage failed'); };
+  scope.setSavedReminder = value => { state.reminder = value; };
+  await save();
+  assert.equal(state.calls, 1); assert.equal(state.cleared, 1);
+  assert.equal(state.feedback.scheduleCreated, true);
+  assert.equal(state.messages[0].tone, 'success');
+  assert.match(state.messages[0].value, /알림 확인 필요/);
+  assert.equal(state.reminder.message, '알림 확인 필요');
 });

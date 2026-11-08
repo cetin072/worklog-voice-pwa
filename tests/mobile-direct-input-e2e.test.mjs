@@ -9,12 +9,11 @@ const worklog = fs.readFileSync('netlify/functions/worklog.mts', 'utf8');
 test('Direct input reuses the canonical save and only clears after success', () => {
   assert.match(home, /async function persistDraft\(\)/);
   assert.match(home, /const original = manualInput\.transcript\.trim\(\)/);
-  assert.match(home, /dueTime: manualInput\.dueTime/);
-  assert.match(home, /await saveWorklog\(session\.access_token, original, \{/);
-  assert.match(home, /dueDate: manualInput\.dueDate/);
+  assert.match(home, /await manualSaveSession\.current\.save\(manualInput/);
+  assert.match(home, /\(text, options\) => saveWorklog\(session\.access_token, text, options\)/);
   assert.doesNotMatch(home.slice(home.indexOf('async function persistDraft()'), home.indexOf('async function changeTaskStatus')), /institutionSource|manualInput\.status|manualInput\.type|manualInput\.amount|manualInput\.assignee|manualInput\.followUp/);
   assert.ok(
-    home.indexOf('setManualInput(emptyManualWorkInput())') > home.indexOf('await saveWorklog(session.access_token, original, {'),
+    home.indexOf('setManualInput(emptyManualWorkInput())') > home.indexOf('await manualSaveSession.current.save(manualInput'),
     'manual input is only cleared after canonical save succeeds',
   );
 });
