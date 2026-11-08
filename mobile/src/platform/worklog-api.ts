@@ -490,6 +490,11 @@ export async function readWorklogDetails(accessToken: string, pageId: string): P
       body: JSON.stringify({ action: 'read', pageId }),
   });
   const body = await readJson(response);
+  // A 200 response without this exact owner-scoped record is NOT a safe edit
+  // seed. Otherwise the editor can overwrite dates using empty stale fields.
+  if (body.ok === false || body.pageId !== pageId.trim()) {
+    throw new Error('현재 업무 정보를 확인하지 못했습니다. 기록을 다시 불러와주세요.');
+  }
   return {
     title: typeof body.title === 'string' ? body.title : '',
     dueDate: typeof body.dueDate === 'string' ? body.dueDate : '',
@@ -522,6 +527,12 @@ export async function updateWorklogDetails(
     }),
   });
   const body = await readJson(response);
+  // Do not mistake a partial HTTP 200 for a committed mutation. Server edit
+  // contracts (Data Core and legacy Notion) both return the exact pageId.
+  // A missing/mismatched receipt must not trigger Schedule/Android follow-ups.
+  if (body.ok === false || body.pageId !== input.pageId.trim()) {
+    throw new Error('수정 결과를 확인하지 못했습니다. 이미 수정됐을 수 있으니 목록에서 기록을 다시 확인해주세요.');
+  }
   return { ...body, schedule: parseConfirmedSchedule(body.schedule) } as WorklogUpdateResult;
 }
 
