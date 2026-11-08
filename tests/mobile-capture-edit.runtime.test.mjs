@@ -8,8 +8,8 @@ const source = readFileSync('mobile/app/capture.tsx', 'utf8');
 const ast = ts.createSourceFile('capture.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const functions = [], handlers = {};
 function walk(node) {
-  if (ts.isFunctionDeclaration(node) && ['openEditor', 'saveEdit', 'registerAgain'].includes(node.name?.text)) functions.push(node.getText(ast));
-  if (ts.isJsxAttribute(node) && ['onTitle', 'onDate', 'onTime', 'onCancel'].includes(node.name.getText(ast))) handlers[node.name.getText(ast)] = node.initializer.expression.getText(ast);
+  if (ts.isFunctionDeclaration(node) && ['loadEditorDetails', 'openEditor', 'saveEdit', 'registerAgain'].includes(node.name?.text)) functions.push(node.getText(ast));
+  if (ts.isJsxAttribute(node) && ['onTitle', 'onDate', 'onTime', 'onCancel', 'onRetry'].includes(node.name.getText(ast))) handlers[node.name.getText(ast)] = node.initializer.expression.getText(ast);
   ts.forEachChild(node, walk);
 }
 walk(ast);
@@ -38,23 +38,38 @@ function harness(seed = details) {
 
 test('first capture edit opens from saved details before a slow read and preserves typed fields', async () => {
   const h = harness(), read = h.api.openEditor();
-  assert.equal(h.state.setEditing, true); assert.equal(h.state.setEditLoading, false); assert.equal(h.state.setEditReady, true);
+  assert.equal(h.state.setEditing, true); assert.equal(h.state.setEditLoading, true); assert.equal(h.state.setEditReady, false);
   assert.equal(h.state.setTitle, details.title); assert.equal(h.state.setDate, details.dueDate); assert.equal(h.state.setTime, details.dueTime);
   h.api.onTitle('내 수정'); h.api.onDate('2031-01-01'); h.api.onTime('16:30');
   await tick(); h.pending[0].resolve({ title: '늦은 응답', dueDate: '2032-01-01', dueTime: '09:00' }); await read;
   assert.equal(h.state.setTitle, '내 수정'); assert.equal(h.state.setDate, '2031-01-01'); assert.equal(h.state.setTime, '16:30');
 });
 
-test('only missing details block editing; a known absent time stays editable when refresh is offline', async () => {
+test('even a complete capture seed is read-only after server failure; retry preserves user-entered fields',async () => {
   const h = harness(null), read = h.api.openEditor();
   assert.equal(h.state.setEditLoading, true); assert.equal(h.state.setEditReady, false);
   await tick(); h.pending[0].resolve(details); await read; assert.equal(h.state.setEditReady, true);
-  const offline = harness({ ...details, dueTime: '' }), refresh = offline.api.openEditor();
-  assert.equal(offline.state.setEditLoading, false); assert.equal(offline.state.setEditReady, true); assert.equal(offline.state.setTime, '');
-  await tick(); offline.pending[0].reject(Error('offline')); await refresh;
-  assert.equal(offline.state.setEditReady, true); assert.equal(offline.state.setTitle, details.title);
-});
 
+  const offline = harness({ ...details, dueTime: '' }), refresh = offline.api.openEditor();
+  assert.equal(offline.state.setEditLoading, true); assert.equal(offline.state.setEditReady, false);
+  assert.equal(offline.state.setTime, '', 'a blank known time remains a visual seed');
+  await tick(); offline.pending[0].reject(Error('offline')); await refresh;
+  assert.equal(offline.state.setEditReady, false, 'stale seed must not authorize a write');
+  assert.equal(offline.state.setEditLoading, false);
+  assert.match(offline.state.setEditError, /다시 불러와/);
+  offline.api.onTitle('사용자 입력을 유지');
+  offline.api.onDate('2031-01-02');
+  offline.api.onRetry();
+  await tick();
+  assert.equal(offline.state.setEditLoading, true);
+  assert.equal(offline.state.setEditReady, false);
+  offline.pending[1].resolve({ title: '새 서버 제목', dueDate: '2032-01-01', dueTime: '11:15' });
+  await tick();
+  assert.equal(offline.state.setTitle, '사용자 입력을 유지');
+  assert.equal(offline.state.setDate, '2031-01-02');
+  assert.equal(offline.state.setTime, '11:15');
+  assert.equal(offline.state.setEditReady, true);
+});
 test('rapid record changes and cancel reject stale detail responses', async () => {
   const h = harness(), a = h.api.openEditor(); await tick();
   h.scope.id = 'record-b'; h.scope.visible = { ...h.scope.visible, hash: 'b', details: { ...details, title: '다른 일정' } };
@@ -64,25 +79,29 @@ test('rapid record changes and cancel reject stale detail responses', async () =
   assert.equal(h.state.setEditing, false); assert.equal(h.state.setTitle, '다른 일정');
 });
 
-test('saving keeps its loading state and invalidates an older background read', async () => {
-  const h = harness(), read = h.api.openEditor(); await tick(); h.api.onTime('17:30');
-  const saving = h.api.saveEdit(); assert.equal(h.state.setBusy, true); assert.equal(h.save().input.dueTime, '17:30');
-  h.pending[0].resolve({ ...details, title: '저장 중 늦은 응답' }); await read;
-  assert.equal(h.state.setTitle, details.title); assert.equal(h.state.setTime, '17:30');
+test('saving is blocked until confirmed detail read and keeps corrected capture fields',async () => {
+  const h = harness(), read = h.api.openEditor(); await tick();
+  await h.api.saveEdit();
+  assert.equal(h.save(), undefined, 'a seeded but unconfirmed editor cannot write');
+  h.pending[0].resolve({ ...details, title: '서버 확인 제목' }); await read;
+  assert.equal(h.state.setEditReady, true);
+  h.api.onTime('17:30');
+  const saving = h.api.saveEdit();
+  assert.equal(h.state.setBusy, true);
+  assert.equal(h.save().input.dueTime, '17:30');
   h.save().resolve({entry:{...h.scope.visible,details:{...details,dueTime:'17:30'},saved:{scheduleCreated:true,scheduleId:'canonical-schedule'}}}); await saving;
-  assert.equal(h.state.setEntry.details.dueTime, '17:30'); assert.equal(h.state.setBusy, false); assert.equal(h.state.setEditing, false);
+  assert.equal(h.state.setEntry.details.dueTime, '17:30');
+  assert.equal(h.state.setBusy, false); assert.equal(h.state.setEditing, false);
   assert.equal(h.state.setEntry.saved.scheduleCreated,true);assert.equal(h.state.setEntry.saved.scheduleId,'canonical-schedule');
 });
-
-
 test('alarm warning after a committed edit closes the editor and shows the saved receipt',async()=>{
- const h=harness();void h.api.openEditor();h.api.onDate('2030-11-04');const saving=h.api.saveEdit();
+ const h=harness(),opened=h.api.openEditor();await tick();h.pending[0].resolve(details);await opened;h.api.onDate('2030-11-04');const saving=h.api.saveEdit();
  const entry={...h.scope.visible,details:{...details,dueDate:'2030-11-04'},reminderWarning:'수정은 저장됐지만 알림 예약은 확인이 필요합니다.'};
  h.save().resolve({entry});await saving;
  assert.equal(h.state.setEditing,false);assert.equal(h.state.setEntry,entry);assert.equal(h.state.setEditError,'');
 });
 test('server edit error retains user input and editor, and displays the actual safe API reason',async()=>{
- const h=harness();void h.api.openEditor();h.api.onTitle('유지할 제목');const saving=h.api.saveEdit();
+ const h=harness(),opened=h.api.openEditor();await tick();h.pending[0].resolve(details);await opened;h.api.onTitle('유지할 제목');const saving=h.api.saveEdit();
  h.save().reject(Error('개인 업무공간을 찾지 못했습니다.'));await saving;
  assert.equal(h.state.setEditing,true);assert.equal(h.state.setTitle,'유지할 제목');assert.equal(h.state.setEntry,undefined);
  assert.equal(h.state.setEditError,'개인 업무공간을 찾지 못했습니다.');assert.equal(h.state.setBusy,false);
