@@ -26,7 +26,7 @@ type QuickVoiceProps = Readonly<{
 }>;
 type VoiceRecorderCardProps = {
   mode?: 'quick';
-  onOpenWorklogInput?: () => void;
+  onOpenWorklogInput?: (recognizedText?: string) => void;
   renderPhotoAction?: (disabled: boolean) => ReactNode;
   quickVoice?: QuickVoiceProps;
   navigationGuard?: { current: boolean };
@@ -37,7 +37,7 @@ type VoiceRecorderCardProps = {
 } | {
   mode: 'meeting';
   renderPhotoAction?: never;
-  onOpenWorklogInput?: () => void;
+  onOpenWorklogInput?: (recognizedText?: string) => void;
   quickVoice?: QuickVoiceProps;
   navigationGuard?: { current: boolean };
   onQuickVoicePhaseChange?: never;
@@ -462,6 +462,9 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPh
 
   function openDirectInputFallback() {
     if (!onOpenWorklogInput || inFlight.current) return;
+    // On fatal Android recognition, pass recovered words into an empty manual
+    // draft so the user can correct them instead of speaking everything again.
+    const recoveredText = quickPhase === 'transcript_error' && !quickAudio ? speechPreview.trim() : '';
     void clearQuickVoiceDraft();
     clientRequestId.current = null; saveAttempt.current = null;
     speechSession.current?.cancel(); speechSession.current?.dispose(); speechSession.current = null;
@@ -469,7 +472,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPh
     setError(null); setSpeechPreview(''); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setFlowTimings(null);
     if (navigationGuard) navigationGuard.current = false;
     applyQuickPhase('idle');
-    onOpenWorklogInput();
+    onOpenWorklogInput(recoveredText || undefined);
   }
 
   async function retryBriefing() {
@@ -553,7 +556,12 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPh
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>{formatQuickVoicePcmDuration(quickAudio)} · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
-      {quickPhase === 'transcript_error' && !quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성 인식 경로를 다시 시작할 수 없습니다.</Text><Button title="Whisper로 다시 녹음" onPress={() => void retryWhisperFallback()} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
+      {quickPhase === 'transcript_error' && !quickAudio ? <View style={styles.quickResult}>
+        <Text style={styles.quickResultTitle}>{speechPreview.trim() ? '인식된 내용을 보존했습니다.' : '음성 인식 경로를 다시 시작할 수 없습니다.'}</Text>
+        {speechPreview.trim() ? <Text selectable style={styles.transcript}>{speechPreview}</Text> : null}
+        <Button title="Whisper로 다시 녹음" onPress={() => void retryWhisperFallback()} />
+        {onOpenWorklogInput ? <Button title={speechPreview.trim() ? '인식된 내용으로 직접 입력' : '업무 직접 입력'} onPress={openDirectInputFallback} /> : null}
+      </View> : null}
       {quickPhase === 'transcript_error' ? <Button title="녹음 버리기" onPress={discardQuickVoice} /> : null}
       {quickPhase === 'save_error' && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 브리핑 카드의 ✏️에서 바로 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
       {quickPhase === 'refresh_error' ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>✅ 저장 완료 · 브리핑 갱신 실패</Text><Button title="브리핑만 다시 불러오기" onPress={() => void retryBriefing()} /></View> : null}
