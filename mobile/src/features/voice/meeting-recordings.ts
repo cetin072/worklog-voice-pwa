@@ -157,7 +157,7 @@ export function rememberMeetingRecording(recording: MobileRecordingAudioInput, o
     durationMs: recording.durationMs,
     createdAt: recording.createdAt,
     sizeBytes: fileSize(recording.uri),
-    title: '',
+    title: readIndexRaw(owner).find(entry => entry.uri === recording.uri)?.title || '',
   } satisfies MeetingRecordingEntry);
 
   const existing = readIndexRaw(owner).filter((entry) => entry.uri !== next.uri && entry.id !== next.id);
