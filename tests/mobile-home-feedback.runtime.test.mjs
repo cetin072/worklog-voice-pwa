@@ -49,7 +49,7 @@ test('closing an edit sheet invalidates a late detail response before another re
  function walk(n) { if (ts.isFunctionDeclaration(n) && names.includes(n.name?.text)) found.push(n.getText(ast)); ts.forEachChild(n, walk); }
  walk(ast); assert.equal(found.length, 2);
  const code = found.join('\n'); let release; let titles = [];
- const scope = { session: {}, client: {}, editBusy: false, editLoading: false, editReadEpoch: { current: 0 }, editDirty: { current: {} }, editDetailsCache: { current: new Map() },
+ const scope = { session: {}, client: {}, editBusy: false, recordMutationInFlight: { current: false }, editLoading: false, editReadEpoch: { current: 0 }, editDirty: { current: {} }, editDetailsCache: { current: new Map() },
    getFreshAccessToken: async () => 'synthetic', readWorklogDetails: () => new Promise(resolve => { release = resolve; }), messageOf: (_e, fallback) => fallback };
  for (const name of new Set(code.match(/setEdit[A-Za-z]+/g))) scope[name] = () => {};
  scope.setEditTitle = title => titles.push(title);
