@@ -101,7 +101,7 @@ test('native reminder cleanup failure after a fresh list is separate from list r
 test('completion and undo keep their confirmed server result when list retrieval fails; only reads are retried', async () => {
   const h = harness(); const mutations = []; const messages = [];
   const scope = {
-    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, undoTask: null, refreshBriefing: h.refreshBriefing,
+    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, recordMutationInFlight: { current: false }, undoTask: null, refreshBriefing: h.refreshBriefing,
     getFreshAccessToken: async () => 'synthetic', clearMessage() {},
     setTaskBusyId: value => { scope.taskBusyId = value; },
     setUndoTask: value => { scope.undoTask = value; },
@@ -125,7 +125,7 @@ test('two rapid taps on the same task create only one completed-status write', a
   const barrier = new Promise(resolve => { release = resolve; });
   const calls = [];
   const scope = {
-    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, undoTask: null,
+    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, recordMutationInFlight: { current: false }, undoTask: null,
     getFreshAccessToken: async () => 'fresh',
     updateWorklogStatus: async (_token, id, status) => { calls.push({ id, status }); await barrier; },
     setTaskBusyId() {}, setUndoTask(value) { scope.undoTask = value; }, clearMessage() {},
@@ -149,7 +149,7 @@ test('rapid Undo taps write one restoration and failed writes release the lock f
   const calls = [];
   const target = { pageId: 'task-2', title: '합성 업무', status: '진행중', previousAttentionAt: null };
   const scope = {
-    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, undoTask: target,
+    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, recordMutationInFlight: { current: false }, undoTask: target,
     getFreshAccessToken: async () => 'fresh',
     updateWorklogStatus: async (_token, id, status) => { calls.push({ id, status }); await barrier; },
     setTaskBusyId() {}, setUndoTask(value) { scope.undoTask = value; }, clearMessage() {},
