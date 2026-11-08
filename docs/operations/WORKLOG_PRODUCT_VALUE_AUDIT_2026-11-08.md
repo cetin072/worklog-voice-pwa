@@ -367,6 +367,17 @@
 - 화면 재배치·메뉴 이동·삭제/숨김 기능 전면 변경, 서버 Read Model·DB/Notion/ERP/Google Calendar/OS 알림·사용자 기록 변경 없음. 일정/메모까지 이동을 줄이는 **가설**이나 사용자의 실제 스크롤 횟수/절약 시간은 미측정.
 - QA APK/Play/수동 Production 배포 미실행.
 
+### M21: 기존 업데이트 안내·패치노트·앱 구분 전수검수 (2026-11-08)
+
+**판정: KEEP(선택형 Play 업데이트 기존 안전 경계) + SIMPLIFY(앱 버전/패치노트 표시) / CODE+CI, HUMAN·MEASURED 미수행.**
+
+- **업데이트 코드 확인:** `mobile/modules/worklog-play-update` 공식 Google Play `AppUpdateManagerFactory`는 `com.cetin072.worklog`이 아닌 QA 패키지/개발 앱에서 `false`. 업데이트가 `UPDATE_AVAILABLE`인 Play용 설치본만 앱 선택형 팝업 표시. `createUpdateSession`은 JS runtime당 확인 1회(5초 timeout 포함), '나중에'/뒤로가기/스토어 이동 뒤 같은 실행에서 재표시하지 않으며 새 앱 실행에서만 재확인. `market://`→HTTPS 스토어 링크 폴백. 로그인·화면 사용은 업데이트 확인/스토어 오류로 막지 않는 기존 정책 유지. CI 모의 테스트는 실제 Play 계정/스토어 설치 확인을 대체하지 않는다.
+- **발견한 UI 불편:** 설정의 '앱 정보'에는 Play용 vs 별도 QA APK 구분 및 버전 안내가 없고 개발자용 `Data Core primary ON/OFF`만 노출됐다. 같은 휴대폰에 두 앱을 설치했을 때 왜 한쪽은 업데이트 안내가 없는지 설명할 방법이 부족했다. 수십 개의 사용자-facing 패치노트도 처음부터 모두 보여줘 최신 항목만 찾는 데 스크롤 부담이 있다.
+- **국소 수정:** [PR #520](https://github.com/cetin072/worklog-voice-pwa/pull/520) squash merged `377b903`. 번들 Expo app config의 패키지와 `version`을 조회해 **QA / Play용 / 확인 필요** 및 '설정 버전'으로 표시하고, QA의 정식 스토어 안내 제외 이유를 설명. 실제 설치본 versionCode나 Play 트랙을 `app.json` 기본 코드로 **추측하지 않음**(실제 CI/Play versionCode 별도). 패치노트 화면은 최근 3개 먼저 렌더, 나머지는 '이전 업데이트 N건 더 보기/접기'. 모든 이전 변경사항 열람은 계속 가능하고 새 메뉴·알림 팝업·서버 의존성 추가 없음.
+- **검증:** QA/Play/미확인 표시를 실제 helper 실행 테스트로 확인, 기존 `AppUpdatePrompt`의 상태 전환/실패/재실행·스토어 폴백 회귀, `mobile/app.config.js`의 QA 패키지와 native 모듈의 정식 패키지 제한 검사. Mobile typecheck SUCCESS, npm 전체 regression/역할 UI 검증/preview runtime PASS. 처음 UAR 대표 Chrome smoke는 runner의 `UPower` DBus/timeout으로 실패했으나 **동일 SHA 재실행 UAR 최종 SUCCESS**. 실제 APK 또는 Play 스토어 Human 결과는 아님.
+- **실사용:** 앱 설정에서 종류·설정 버전을 확인하기 쉬워졌지만, 실제 설치 Android 빌드 번호(코드8 등)의 정확한 조회는 별도 `expo-application` 또는 native 계약이 필요하고, 이 변경의 목적상 새 native dependency를 넣지 않음. QA/Play 두 앱 설치 후 화면·알림/업데이트 표시 및 TalkBack/스토어 이동은 HUMAN QA가 남음. 단순 업데이트 유지 기능은 직접 업무시간 절감으로 계산하지 않고, 패치노트 내 스크롤·탭의 총 소요시간은 MEASURED 없음.
+- **경계:** `main` 병합 및 정적 패치노트 갱신만. QA APK·Play AAB 업로드/운영 Netlify 수동 배포·비공개 계정·DB·기기 알림 정책·실제 사용자 기록 미변경.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
