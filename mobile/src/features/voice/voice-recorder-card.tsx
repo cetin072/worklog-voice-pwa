@@ -558,7 +558,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPh
       {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>{formatQuickVoicePcmDuration(quickAudio)} · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
       {quickPhase === 'transcript_error' && !quickAudio ? <View style={styles.quickResult}>
         <Text style={styles.quickResultTitle}>{speechPreview.trim() ? '인식된 내용을 보존했습니다.' : '음성 인식 경로를 다시 시작할 수 없습니다.'}</Text>
-        {speechPreview.trim() ? <Text selectable style={styles.transcript}>{speechPreview}</Text> : null}
+        {speechPreview.trim() ? <Text selectable numberOfLines={3} ellipsizeMode="tail" style={styles.transcript}>{speechPreview}</Text> : null}
         <Button title="Whisper로 다시 녹음" onPress={() => void retryWhisperFallback()} />
         {onOpenWorklogInput ? <Button title={speechPreview.trim() ? '인식된 내용으로 직접 입력' : '업무 직접 입력'} onPress={openDirectInputFallback} /> : null}
       </View> : null}
