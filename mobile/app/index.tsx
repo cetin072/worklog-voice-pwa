@@ -384,6 +384,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
   // React state can lag behind rapid taps; block overlapping status writes immediately.
   const taskStatusInFlight = useRef(false);
+  // Edit and soft-delete share a synchronous lock. React busy state alone
+  // cannot prevent two writes before the first render completes.
+  const recordMutationInFlight = useRef(false);
   // Use a synchronous lock: React busy state may not update before a second tap.
   const reminderMutationInFlight = useRef(false);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string; previousAttentionAt: string | null } | null>(null);
@@ -655,7 +658,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function completeTaskInline(task: BriefingTask) {
-    if (!session || !client || !task.pageId || taskBusyId || taskStatusInFlight.current) return;
+    if (!session || !client || !task.pageId || taskBusyId || taskStatusInFlight.current || recordMutationInFlight.current) return;
     taskStatusInFlight.current = true;
     const previousStatus: WorkStatus = task.status === '대기' || task.status === '확인필요' || task.status === '진행중' ? task.status : '진행중';
     setTaskBusyId(task.pageId);
@@ -686,7 +689,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function deleteBriefingRecord(recordId: string, title: string, kind: 'task' | 'note') {
-    if (!session || !client || !recordId || taskBusyId || noteBusyId) return;
+    if (!session || !client || !recordId || taskBusyId || noteBusyId || taskStatusInFlight.current || recordMutationInFlight.current) return;
+    recordMutationInFlight.current = true;
     if (kind === 'note') setNoteBusyId(recordId); else setTaskBusyId(recordId);
     clearMessage();
     let cleanupWarning = '';
@@ -710,6 +714,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     } catch (nextError) {
       showMessage(messageOf(nextError, kind === 'note' ? '메모를 삭제하지 못했습니다.' : '업무를 삭제하지 못했습니다.'), 'error');
     } finally {
+      recordMutationInFlight.current = false;
       if (kind === 'note') setNoteBusyId(null); else setTaskBusyId(null);
     }
   }
@@ -987,7 +992,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function saveTaskEditor() {
-    if (!session || !client || !editTaskId || editBusy || editLoading || !editReady) return;
+    if (!session || !client || !editTaskId || editBusy || editLoading || !editReady || recordMutationInFlight.current || taskStatusInFlight.current) return;
     const recordId = editTaskId;
     const nextTitle = editTitle.replace(/\s+/g, ' ').trim();
     if (!nextTitle) {
@@ -1006,6 +1011,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       return;
     }
     editReadEpoch.current += 1; // A background read must not change fields once saving begins.
+    recordMutationInFlight.current = true;
     setEditBusy(true);
     setEditStatus('');
     setEditStatusTone('neutral');
@@ -1046,7 +1052,6 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       }
       if (result.actionKindChanged) removeVisibleRecordForConversion(recordId);
       else updateVisibleTaskTitle(recordId, visibleTitle);
-      setEditBusy(false);
       setEditReady(false);
       setEditStatus(result.actionKindChanged
         ? result.actionKind === 'note'
@@ -1060,7 +1065,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       setEditStatusTone(reminderWarning ? 'error' : result.unchanged && !result.actionKindChanged ? 'neutral' : 'success');
       // The editor closes quickly: keep device notification status visible on the home screen.
       showMessage(`업무 수정 저장 · ${reminderFeedback}`, reminderWarning ? 'info' : 'success');
-      await new Promise((resolve) => setTimeout(resolve, 420));
+      // Do not leave a committed edit pending behind a fixed delay: a
+      // delayed close could dismiss another record's editor.
       setEditTaskId(null);
       setEditStatus('');
       setEditStatusTone('neutral');
@@ -1069,6 +1075,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       setEditStatus(messageOf(nextError, '업무 수정에 실패했습니다.'));
       setEditStatusTone('error');
     } finally {
+      recordMutationInFlight.current = false;
       setEditBusy(false);
     }
   }
