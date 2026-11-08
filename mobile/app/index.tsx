@@ -14,7 +14,7 @@ import { reminderFailureMessage, savedReminderMessage } from '@/src/features/sch
 import { reminderSessionEpoch, reminderSyncEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,8 @@ import { createExpoSpeechRecognitionAdapter } from '@/src/features/voice/provide
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
 import { createManualWorkSaveSession } from '@/src/features/work/manual-work-save';
+import { createManualWorkDraftStorage } from '@/src/features/work/manual-work-draft';
+import { secureSessionStorage } from '@/src/platform/secure-storage';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
 import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeBriefingScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder, synchronizeEditedWorklogReminder } from '@/src/features/schedule/schedule-reminder-post-save';
@@ -345,6 +347,42 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   // HomeScreenApp is keyed by user ID: retries never cross an account boundary.
   const manualSaveSession = useRef(createManualWorkSaveSession<Awaited<ReturnType<typeof saveWorklog>>>());
   const manualSaveInFlight = useRef(false);
+  const manualDraftEdited = useRef(false);
+  const [manualDraftLoaded, setManualDraftLoaded] = useState(false);
+  const [manualDraftNotice, setManualDraftNotice] = useState('');
+  const manualVault = useMemo(() => session?.user.id
+    ? createManualWorkDraftStorage(secureSessionStorage, session.user.id) : null, [session?.user.id]);
+
+  // Read the encrypted, owner-scoped draft before enabling edits. Never replace
+  // keystrokes with a slower recovery response or treat a corrupt blob as empty.
+  useEffect(() => {
+    let alive = true;
+    if (!manualVault) { setManualDraftLoaded(true); return; }
+    setManualDraftLoaded(false);
+    void manualVault.load().then((saved) => {
+      if (!alive || manualDraftEdited.current || !saved) return;
+      manualSaveSession.current.restore(saved.attempt);
+      setManualInput(saved.draft);
+      if (saved.draft.transcript.trim()) setManualDraftNotice('이전에 작성하던 직접 입력을 복구했습니다.');
+    }).catch(() => {
+      if (alive) setManualDraftNotice('기기 임시 초안을 읽지 못했습니다. 기존 초안은 보존했으며 새 저장 전 확인이 필요합니다.');
+    }).finally(() => { if (alive) setManualDraftLoaded(true); });
+    return () => { alive = false; };
+  }, [manualVault]);
+
+  // Debounced local-only draft backup; flush once on app backgrounding.
+  // Durable storage serializes updates with the pre-POST request checkpoint.
+  useEffect(() => {
+    if (!manualDraftLoaded || !manualVault || manualSaveInFlight.current) return;
+    const keep = () => manualVault.saveDraft(manualInput).catch(() => {
+      setManualDraftNotice('기기 임시 초안을 저장하지 못했습니다. 내용은 현재 화면에 보존됩니다.');
+    });
+    const timer = setTimeout(() => { void keep(); }, 350);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background' && !manualSaveInFlight.current) void keep();
+    });
+    return () => { clearTimeout(timer); subscription.remove(); };
+  }, [manualDraftLoaded, manualInput, manualVault]);
   const [briefingNow, setBriefingNow] = useState(Date.now());
   useEffect(() => {
     const updateClock = () => setBriefingNow(Date.now());
@@ -594,13 +632,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function persistDraft() {
-    if (!session || !client || !manualInput.transcript.trim() || busy || manualSaveInFlight.current) return;
+    if (!session || !client || !manualDraftLoaded || !manualInput.transcript.trim() || busy || manualSaveInFlight.current) return;
     manualSaveInFlight.current = true;
     const original = manualInput.transcript.trim();
     try { await run(async () => {
       const reminderGuard = reminderSessionEpoch.capture();
       const saved = await manualSaveSession.current.save(manualInput,
-        async (text, options) => saveWorklog(await getFreshAccessToken(client), text, options));
+        async (text, options) => saveWorklog(await getFreshAccessToken(client), text, options),
+        manualVault ? (checkpoint) => manualVault.prepareSave(manualInput, checkpoint) : undefined);
       const expectedDue = manualInput.dueDate && manualInput.dueTime
         ? `${manualInput.dueDate}T${manualInput.dueTime}:00+09:00` : manualInput.dueDate;
       const dueMatches = !expectedDue || (manualInput.dueTime
@@ -630,8 +669,15 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         setSavedReminder({ target: { recordId: feedback.recordId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning });
       }
       if (!reminderGuard()) return;
+      // Clearing the local checkpoint is separate from the committed server
+      // write. Keep success truthful even if native cleanup needs a retry.
+      let localCleanupWarning = '';
+      try { await manualVault?.clear(); } catch {
+        localCleanupWarning = '기기 임시 초안 정리는 확인되지 않았습니다.';
+      }
       setManualInput(emptyManualWorkInput());
       manualSaveSession.current.reset();
+      setManualDraftNotice(localCleanupWarning);
       setLastDirectSave(feedback);
       if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
       const dueLabel = formatSavedDue(feedback.dueStart);
@@ -1249,7 +1295,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
 
     {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><Button title="알림 설정" onPress={() => setReminderTarget({ recordId: selectedTask.task.pageId, title: selectedTask.task.title || '업무' })} /><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
-    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
+    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy || !manualDraftLoaded} onChange={(value) => { manualDraftEdited.current = true; setManualInput(value); setManualDraftNotice(''); }} onSave={() => void persistDraft()} />{!manualDraftLoaded ? <Text style={styles.meta}>작성 중이던 기기 초안을 확인하는 중입니다.</Text> : null}{manualDraftNotice ? <Text style={styles.meta}>{manualDraftNotice}</Text> : null}{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
     {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>기록</Text><SettingsMenuItem eyebrow="기록" title="업무일지" accessibilityLabel="업무일지 열기" description="날짜별 일정과 업무·메모를 확인합니다." onPress={openJournal} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><CalendarSettings /><Text style={styles.settingsGroupTitle}>알림</Text><SettingsMenuItem eyebrow="NOTIFICATIONS" title="알림·리마인더" description="앱 알림 권한과 예약된 일정 알림을 확인합니다." onPress={() => setScreen('reminderSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="업무수첩에 반영된 최근 변경사항을 확인합니다." onPress={() => setScreen('patchNotes')} /><SettingsMenuItem eyebrow="PRIVACY" title="개인정보처리방침" description="업무수첩의 개인정보 처리 방침을 확인합니다." onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/privacy.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} /><SettingsMenuItem eyebrow="ACCOUNT" title="계정 및 데이터 삭제 요청" description="계정과 서비스 데이터의 삭제를 요청합니다." onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/account-deletion.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} /><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 업무수첩 계정 세션을 종료합니다." destructive onPress={confirmSignOut} /></View></View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
