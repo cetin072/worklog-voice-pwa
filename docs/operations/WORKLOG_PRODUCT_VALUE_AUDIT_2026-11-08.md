@@ -346,6 +346,27 @@
 - **외부 캘린더:** 기존 Google Calendar 수동 내보내기 이벤트를 업무수첩 수정·삭제가 자동 반영하는지는 별도 계약/실기기 검증이 필요하다. 자동 외부 이벤트 삭제/대량 동기화는 구현하지 않는다.
 - **배포/데이터:** `main` 코드·패치노트만 병합, 실제 WorkRecord/Note/Schedule/알림/Notion·ERP DB, QA APK/Play/Production/환경설정 무변경. 사용자가 한 기록을 찾고 수정·확인·재시도하는 총시간은 **미측정**이므로 편의성 향상 수치 주장 금지.
 
+### M05: 업무·메모·일정 자동 분류 — 명확한 회계 기한과 날짜·시간 정책 분리 (2026-11-08)
+
+**판정: CORE 의미변경 DRAFT / 명확한 지시·마감 검증 CODE+UAR PASS, 설치 Android HUMAN·총시간 MEASURED 미실시.**
+
+- 기존 `mobile/src/features/work/manual-work-save.ts`는 수동 날짜·시간 Picker에 시간이 있으면 `type:'회의·통화'`를 넣는다. 이 값이 서버 `action-engine-v1`의 `meetingType`과 `worklog-data-core-adapter`의 `recordType:'meeting_call'`에 영향을 미치고 Schedule 생성까지 결정한다. **일정을 등록하지 못했던 과거 오류에 대한 호환 구조**이므로 무작정 제거하지 않는다.
+- 기존 `DEADLINE_RE`는 견적서 제출 등을 Task로 처리하지만 '오후 3시까지 세금 납부/부가세 신고/입금/결제/송금/지급'의 명확한 기한을 인식하지 못했다. '회의비 결제'에서는 '회의' 단어가 Calendar 이벤트 신호가 될 수도 있다.
+- [Draft PR #518](https://github.com/cetin072/worklog-voice-pwa/pull/518)에 정확한 `...까지` 회계 마감 동사 및 명시적 '납부하기/결제하기/신고하기' Task 명령을 기존 정규식에만 추가하고 '회의비'를 회의 이벤트로 잘못 읽지 않도록 했다. **기존 모바일 직접입력 강제 유형·서버 API/DB/기기 알림/오래된 기록은 변경하지 않은 상태**다.
+- 실제 `classifyWorklogAction` + `worklogSchedule` + `quickWorklogSchedule`의 런타임 테스트에서 7개 명확한 회계 마감, 3개 회계 명령, 거래처 방문/회의의 기존 약속 2개와 Picker의 날짜·시각 보존이 PASS. GitHub User Acceptance Ready PASS. 다만 Mobile typecheck와 실제 Android 분류/일정 알림 전달은 이 Draft에서 별도 확정하지 않았다.
+- **정책상 남은 차이:** 직접입력 시간 지정의 기본 `회의·통화` 힌트와 '마감업무 Task'의 실제 의미가 충돌할 수 있다. 현재 Core는 Task와 Calendar Schedule을 별도 원본으로 관리하며, 일반 기한 업무도 자동으로 Calendar를 만들어야 하는지 실제 사용자 분류 결과가 없다. 날짜·시간 Picker→Schedule 성공을 우선 보존하기 위해 Draft 유지, 사용자/실기기 증거 없는 의미 변경 main 병합 금지. 별도 새 스키마/AI 분류/유료 서비스·과잉 구조 구현 없음.
+- 실기기 시나리오: '오후 3시에 거래처 방문'과 '오후 3시까지 세금 납부'를 같은 날짜로 등록→Home의 WorkRecord/일정 표시·Android 알림 예약 확인→정정 필요 여부·완료시간 실측. 사용자의 명시 의도 없이 기존 완료 기록 일괄 재분류 금지.
+
+### M06: 홈 브리핑 메모·일정만 있는 날의 빈 업무 탭 제거 (2026-11-08)
+
+**판정: SIMPLIFY(작은 UI) / CODE+Mobile typecheck+UAR PASS, Android 실제 스크롤/시간 MEASURED 없음.**
+
+- 원인: 기존 `homeOverview.empty`는 Task/Note/Schedule 중 하나라도 있으면 false인데, Home은 이를 **업무 필터와 업무 목록 표시 조건에도 사용**했다. 메모만 있거나 일정만 있으면 실제 업무 0건인데도 업무 필터 4개와 '오늘 기한인 업무가 없습니다' 카드가 나타나 실제 메모/일정 확인까지 화면을 불필요하게 늘렸다.
+- [PR #519](https://github.com/cetin072/worklog-voice-pwa/pull/519) `57afac4` main 병합. 기존 순수 UI `homeOverview`에 `hasTasks=total>0`만 추가하여 **업무 필터·업무 섹션 조건**에 한정 사용한다. 메모/일정은 `empty` 기존 의미대로 노출. 업무가 있으면 사용자가 직접 고른 필터와 기본 첫 유효 그룹/작업 완료 동선 불변.
+- 실제 `homeOverview`에 memo-only, schedule-only, mixed fixture를 넣어 콘텐츠/업무 유무와 Home 연결을 검증. Mobile typecheck + 전체 Web UAR 성공 후 squash 병합.
+- 화면 재배치·메뉴 이동·삭제/숨김 기능 전면 변경, 서버 Read Model·DB/Notion/ERP/Google Calendar/OS 알림·사용자 기록 변경 없음. 일정/메모까지 이동을 줄이는 **가설**이나 사용자의 실제 스크롤 횟수/절약 시간은 미측정.
+- QA APK/Play/수동 Production 배포 미실행.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
