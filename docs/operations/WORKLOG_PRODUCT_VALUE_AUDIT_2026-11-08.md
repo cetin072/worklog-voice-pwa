@@ -256,6 +256,26 @@
 - 서버 API 성공·Google event GET 확인이 실제 사용자 시간절약 증거가 아니다. 정확한 비용은 같은 가상 일정 1건을 ① Google 직접 입력 ② 업무수첩 수기/음성 등록 후 Google 내보내기 순시간(입력·권한·종료시각·재조회·정정까지)으로 비교해야 한다.
 - 원본 불변·사용자 명시적 한 건만 전송·중복 방지 정책은 유지. 무승인 자동 동기화/유료 공급자 추가/외부 일정 대량 이동 금지.
 
+### T11: PWA·Android·카카오 알림 중복 — 발송 채널의 실제 책임 경계 (2026-11-08)
+
+**판정: KEEP(Android 알림) / RETIRED 확인(PWA Web Push) / VERIFY(카카오 자동 브리핑) / 실제 중복수신·업무시간 MEASURED 없음.**
+
+- **W03 Web Push:** 구형 모바일 웹의 `morning-push`·`afternoon-push` 함수는 204 no-op이며, 테스트/구독/알림 기본설정 경로는 `WEB_PUSH_RETIRED` HTTP 410을 반환한다. `public/sw.js`는 정적 자산/오프라인 앱 셸을 제공하지만 `push`·`notificationclick` listener가 없다. `public/index.html`·`settings.html`이 현재 로드하는 JS에는 브라우저 푸시 구독·직접 알림 호출이 없다. 기존 기능과 기록을 섣불리 삭제하거나 다시 푸시를 끌 필요가 없다.
+- **M10 Android:** `mobile/src/features/schedule/local-notifications.ts`는 Expo 기기 알림으로 서버 확정 Schedule의 시작 시각을 예약한다. PWA Web Push/카카오 자동브리핑과 다른 알림 채널. 이미 검증된 예약/취소/복구 경계는 재작성하지 않았다.
+- **W02 카카오톡:** `kakao-briefing-morning/afternoon`와 각 `-retry` **4개** Netlify cron 함수가 남아 있다(서버 코드상 한국 시간 오전 8:15·8:30/8:45, 오후 14:15·14:30/14:45). `sendCurrentBriefing`은 `automatic:true`, 계정 `autoSend`, `KAKAO_AUTO_SEND_ENABLED` 환경설정으로 발송을 제어하고 `sent:한국날짜:slot`로 중복 전송을 방지한다. 단, `KAKAO_AUTO_SEND_ENABLED` 값이 없는 경우 코드 기본값은 **true**이고, 연결 시 토큰의 `autoSend`도 true다. 실제 운영 환경변수·연결 상태·수신 시각·계정은 조회하지 않았으므로 발송 중이라고 단정하지 않는다.
+- **카카오 관리 UX 위험:** 현재 `public/index.html`에는 `public/kakao.js` 스크립트·관리 UI 요소가 연결돼 있지 않다. 따라서 예전 연결 사용자에게 서버 예약 메시지가 남아도 현재 PWA 화면에서 쉽게 자동 전송을 확인·끄는 동선은 없다. 실제 사용 중인지 먼저 확인해야 한다. 운영 카카오 자동전송 중단·변경은 사용자 승인과 해당 설정의 현 상태 검증이 필요하다. 현재 알림을 임의로 중단/재가동하지 않는다.
+- **회귀 보호:** [PR #510](https://github.com/cetin072/worklog-voice-pwa/pull/510) `10b30c7` main 병합. 기존 테스트가 검사하던 **8개 구형 푸시 함수**뿐 아니라 전체 `netlify/functions/*.mts`를 순회해 새 Web Push 전송 경로·예상 외 Cron을 검출한다. 실제 웹 진입/설정 화면이 로드하는 JS에서 브라우저 알림을 다시 등록하는 경로를 차단하고, 카카오 별도 자동전송·slot dedup 계약을 검증한다. User Acceptance Ready PASS. 프로덕션/배포/env/DB/개인 정보와 UI는 변경 없음.
+- **실제 업무 효율:** 웹 푸시와 Android 알림을 이중 확인하는 기존 경로는 코드상 제거됐지만, 카카오톡 2회 자동 요약 + Android 시작 알림 + 앱 홈 브리핑을 사용자가 실제로 중복 읽는지·단축되는지 **MEASURED 없음**. 사용 중인 PWA를 완전히 폐기하거나 카카오 알림을 삭제하기 전에 최근 발송 횟수와 필요한 회신 행동을 검증한다.
+
+### T12: ERP·업무수첩·Notion 중복 조회/데이터 원본 — 1차 읽기 전용 검사 (2026-11-08)
+
+**판정: KEEP(읽기 전용 통합 요약) / VERIFY(실제 연결·데이터 일치) / 두 저장소 수정 없음.**
+
+- 태장 ERP 현재 `app/assets/personal-worklog.js`는 '내 업무수첩' 월간 캘린더·오늘 일정·미완료 업무를 **읽기 전용**으로 보여준다. `netlify/functions/personal-worklog.mjs`로 GET 조회할 뿐 업무·일정 추가/수정/삭제를 제공하지 않는다.
+- ERP API는 별도 업무수첩 access token을 요구하거나 복사한 클라이언트 자료를 믿지 않는다. 현재 태장 세션의 사용자 ID와 활성 계정·owner personal workspace·worklog schema를 확인하고, `WORKLOG_UNIFIED_READ_ENABLED==='true'`인 경우에만 읽는다. 읽기는 500건 제한, 계정/권한 미확인 시 fail closed, 응답 `Cache-Control:private,no-store`다. 동일 원본을 한 화면에서 보는 **조회 중복 절감 가설**에 부합한다.
+- **중요한 배포·데이터 게이트:** 이 코드가 있다는 사실은 ERP·업무수첩의 현재 운영 Supabase 프로젝트가 실제 하나로 통합되었다거나, 양쪽에 작성한 데이터가 실시간으로 완전히 일치한다는 증거가 아니다. ERP read flag의 운영 값, 양쪽 사용자 Auth ID, 기존 기록 실제 개수/최신 revision, 실사용 조회 비교는 **HUMAN/MEASURED 없음**. 계정/데이터 migration이나 2중 쓰기 경로 변경은 보안·원본 보존 승인이 선행돼야 한다.
+- 따라서 별도 대시보드 복제/ERP 내 업무 등록 추가를 먼저 만들지 않는다. 현재 read-only 요약 화면이 업무수첩·노션을 따로 열 필요를 얼마나 줄였는지 1~2개 실제 업무(가상 제목)로 비교 검증한다. 두 저장소의 production/DB/Auth/RLS는 건드리지 않았다.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
