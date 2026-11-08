@@ -47,6 +47,7 @@ type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
 type AuthMode = 'signIn' | 'signUp';
 type DirectSaveFeedback = Readonly<{
+  recordId: string;
   transcript: string;
   scheduleDetected: boolean;
   scheduleCreated: boolean;
@@ -594,6 +595,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       const scheduleWarning = dueMatches ? ''
         : `업무만 저장되었습니다. 선택한 ${manualInput.dueDate}${manualInput.dueTime ? ` ${manualInput.dueTime}` : ''}의 ${manualInput.dueTime ? '일정' : '기한'} 저장을 확인하지 못했습니다. 다시 등록하지 말고 저장된 항목의 연필 버튼에서 날짜와 시간을 확인해주세요.`;
       const feedback = {
+        recordId: saved.dataCoreWorkRecordId || saved.pageId || '',
         scheduleWarning,
         transcript: saved.cleanTranscript?.trim() || original,
         scheduleDetected: Boolean(saved.scheduleDetected),
@@ -606,7 +608,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); }
       catch (nextError) { reminderWarning = reminderFailureMessage(nextError); }
       if (!reminderGuard()) return;
-      setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning || reminderMessage });
+      setSavedReminder({ target: { recordId: feedback.recordId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning || reminderMessage });
       await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId));
       setManualInput(emptyManualWorkInput());
       setLastDirectSave(feedback);
@@ -1101,15 +1103,25 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const visibleNotes = notesExpanded ? notes : notes.slice(0, 3);
   const extraNotes = Math.max(0, notes.length - 3);
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
+  // Match feedback by the saved record, not by whichever notice happens to be
+  // latest: Quick Voice and edited tasks must never be hidden by an old draft.
+  const matchingDirectReminder = lastDirectSave?.recordId &&
+    savedReminder?.target.recordId === lastDirectSave.recordId ? savedReminder : null;
 
   return <HomeReminderStatus client={client} briefing={briefing} scope={`${session.user.id}:${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
-    {savedReminder ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
+    {savedReminder && !(screen === 'home' && matchingDirectReminder) ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
-        <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>{lastDirectSave.scheduleWarning ? '⚠️ 날짜·시간 확인 필요' : '✅ 업무 저장 완료'}</Text></View><Pressable accessibilityRole="button" onPress={() => setLastDirectSave(null)}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
+        <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>{lastDirectSave.scheduleWarning ? '⚠️ 날짜·시간 확인 필요' : '✅ 업무 저장 완료'}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="직접 입력 저장 결과 닫기" onPress={() => { if (matchingDirectReminder) setSavedReminder(null); setLastDirectSave(null); }}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
         <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
         {lastDirectSave.scheduleWarning ? <Text style={styles.errorText}>{lastDirectSave.scheduleWarning}</Text> : lastDirectSave.scheduleCreated ? <Text style={styles.saveFeedbackSchedule}>📅 일정 생성 완료{formatSavedDue(lastDirectSave.dueStart) ? ` · ${formatSavedDue(lastDirectSave.dueStart)}` : ''}</Text> : <Text style={styles.saveFeedbackMeta}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
+        {matchingDirectReminder ? <View style={styles.saveFeedbackReminder}>
+          <Text accessibilityLiveRegion="polite" style={styles.saveFeedbackMeta}>{matchingDirectReminder.message}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="방금 저장한 기록 알림 확인" style={styles.saveFeedbackReminderAction} onPress={() => setReminderTarget(matchingDirectReminder.target)}>
+            <Text style={styles.saveFeedbackReminderActionText}>알림 확인</Text>
+          </Pressable>
+        </View> : null}
       </View> : null}
 
       <View style={styles.card}>
@@ -1288,6 +1300,9 @@ const styles = StyleSheet.create({
   saveFeedbackText: { fontSize: 14, lineHeight: 20, color: mobileTheme.colors.text },
   saveFeedbackSchedule: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.link, lineHeight: 19 },
   saveFeedbackMeta: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
+  saveFeedbackReminder: { gap: 6, borderTopWidth: 1, borderTopColor: '#bbdfc2', paddingTop: 8 },
+  saveFeedbackReminderAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#9fc6ae' },
+  saveFeedbackReminderActionText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.link },
   errorText: { color: mobileTheme.colors.danger, lineHeight: 20 },
   successText: { color: mobileTheme.colors.success, lineHeight: 20, backgroundColor: '#eaf4ea', padding: 10, borderRadius: mobileTheme.radius.compact },
   infoText: { color: mobileTheme.colors.textSecondary, lineHeight: 20, backgroundColor: mobileTheme.colors.neutralBackground, padding: 10, borderRadius: mobileTheme.radius.compact },
