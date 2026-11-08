@@ -202,7 +202,9 @@ function MeetingMinutesEditor({ recording, onClose }: {
       >
         <Text style={styles.recordingTitle}>{recording.title || `회의 녹음 · ${formatRecordedAt(recording.createdAt)}`}</Text>
         <Text style={styles.recordingMeta}>{formatDuration(recording.durationMs)} · 이 기기에 저장된 녹음</Text>
-        <MeetingRecordingPlayer recording={recording} />
+        {isMeetingRecordingFileAvailable(recording)
+          ? <MeetingRecordingPlayer recording={recording} />
+          : <Text style={styles.errorText}>이 기기에 녹음 파일이 없습니다. 저장된 회의록은 그대로 열어 수정·공유할 수 있습니다.</Text>}
         <Text style={styles.minutesHelp}>자동 전사는 아직 연결 전입니다. 녹음을 들으며 직접 입력하거나 전사된 글을 붙여넣을 수 있습니다.</Text>
         <Text style={styles.minutesLabel}>녹취문 (선택)</Text>
         <TextInput accessibilityLabel="회의 녹취문 직접 입력" style={styles.minutesInput} multiline textAlignVertical="top"
@@ -371,7 +373,7 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
             <Text style={styles.recordingMeta}>{hasMinutes ? '회의록 있음' : '녹음만 있음'}{!available ? ' · 녹음 파일 없음' : ''}</Text>
             <Text style={styles.recordingFile} numberOfLines={1}>{recording.fileName}</Text>
           </View>
-          <Text style={styles.expandText}>{active ? '접기' : '듣기'}</Text>
+          <Text style={styles.expandText}>{active ? '접기' : available ? '듣기' : '상세'}</Text>
         </Pressable>
 
         {active && selected && available ? <MeetingRecordingPlayer recording={selected} /> : null}

@@ -5,6 +5,7 @@ import { stripTypeScriptTypes } from 'node:module';
 
 const files = new Map();
 let failNextMove = false;
+let failDirectoryScan = false;
 const Paths = { document: 'file:///worklog' };
 class File {
   constructor(...parts) { this.uri = parts.join('/'); }
@@ -37,6 +38,7 @@ class File {
 class Directory {
   constructor(...parts) { this.uri = parts.join('/'); }
   list() {
+    if (failDirectoryScan) throw new Error('temporary directory read error');
     return [...files.keys()]
       .filter((uri) => uri.startsWith(this.uri + '/') && !uri.slice(this.uri.length + 1).includes('/'))
       .map((uri) => new File(uri));
@@ -70,7 +72,7 @@ const minutes = await loadActualTypeScript('mobile/src/features/voice/meeting-mi
    'const { assertMeetingRecordingId, createMeetingMinutesDocument, parseMeetingMinutesDocument } = globalThis.__meetingModel;'],
 ]);
 
-function reset() { files.clear(); failNextMove = false; }
+function reset() { files.clear(); failNextMove = false; failDirectoryScan = false; }
 function recording(index) {
   const uri = `file:///recordings/recording-${String(index).padStart(4, '0')}.m4a`;
   files.set(uri, 'M4A');
@@ -235,4 +237,19 @@ test('moving a temporary file never deletes the final saved index or meeting min
   assert.equal(files.has('file:///worklog/meeting-minutes-' + row.id + '.json'), true);
   assert.equal(recordings.listMeetingRecordings().length, 1);
   assert.ok(doc.updatedAt);
+});
+
+test('temporary orphan-scan failure still displays all indexed meeting recordings and preserves index', () => {
+  reset();
+  const row = recordings.rememberMeetingRecording(recording(77));
+  recordings.renameMeetingRecording(row.id, '복구해야 할 회의');
+  const indexBefore = files.get(indexUri);
+  failDirectoryScan = true;
+  const visible = recordings.listMeetingRecordings();
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].title, '복구해야 할 회의');
+  assert.equal(files.get(indexUri), indexBefore);
+  assert.equal(files.has(row.uri), true);
+  failDirectoryScan = false;
+  assert.equal(recordings.listMeetingRecordings().length, 1);
 });

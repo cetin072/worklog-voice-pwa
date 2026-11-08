@@ -94,3 +94,14 @@ test('Meeting minutes editor keeps keyboard-visible text fields and save/share a
   const expo = JSON.parse(fs.readFileSync('mobile/app.json', 'utf8'));
   assert.equal(expo.expo.android.softwareKeyboardLayoutMode, 'resize');
 });
+
+
+test('missing local audio never mounts native player inside an otherwise usable saved minutes editor', () => {
+  const editor = library.split('function MeetingMinutesEditor(')[1]?.split('export function MeetingRecordingLibrary(')[0] || '';
+  assert.match(editor, /isMeetingRecordingFileAvailable\(recording\)\s*\?\s*<MeetingRecordingPlayer recording=\{recording\}/);
+  assert.match(editor, /녹음 파일이 없습니다\. 저장된 회의록은 그대로 열어 수정·공유/);
+  assert.match(editor, /loadMeetingMinutes\(recording\.id\)/);
+  assert.match(editor, /saveMeetingMinutes\(/);
+  assert.match(editor, /Share\.share\(/);
+  assert.match(library, /available \? '듣기' : '상세'/);
+});
