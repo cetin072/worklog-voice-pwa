@@ -384,6 +384,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
   // React state can lag behind rapid taps; block overlapping status writes immediately.
   const taskStatusInFlight = useRef(false);
+  // Use a synchronous lock: React busy state may not update before a second tap.
+  const reminderMutationInFlight = useRef(false);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string; previousAttentionAt: string | null } | null>(null);
   const [reminderBusyId, setReminderBusyId] = useState<string | null>(null);
   const [undoPostpone, setUndoPostpone] = useState<{ pageId: string; title: string } | null>(null);
@@ -748,7 +750,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
 
   async function postponeSelectedTask(date: string) {
     const task = selectedTask?.task;
-    if (!session || !client || !task?.pageId || reminderBusyId) return;
+    if (!session || !client || !task?.pageId || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
     setReminderBusyId(task.pageId);
     clearMessage();
     try {
@@ -763,13 +766,15 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     } catch (nextError) {
       showMessage(messageOf(nextError, '업무를 미루지 못했습니다.'), 'error');
     } finally {
+      reminderMutationInFlight.current = false;
       setReminderBusyId(null);
     }
   }
 
   async function remindSelectedTask(date: string | null) {
     const task = selectedTask?.task;
-    if (!session || !client || !task?.pageId || reminderBusyId) return;
+    if (!session || !client || !task?.pageId || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
     setReminderBusyId(task.pageId);
     clearMessage();
     try {
@@ -788,12 +793,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     } catch (nextError) {
       showMessage(messageOf(nextError, '다시 확인을 변경하지 못했습니다.'), 'error');
     } finally {
+      reminderMutationInFlight.current = false;
       setReminderBusyId(null);
     }
   }
 
   async function undoPostponedTask() {
-    if (!session || !client || !undoPostpone || reminderBusyId) return;
+    if (!session || !client || !undoPostpone || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
     const target = undoPostpone;
     setReminderBusyId(target.pageId);
     clearMessage();
@@ -806,12 +813,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     } catch (nextError) {
       showMessage(messageOf(nextError, '미루기를 되돌리지 못했습니다.'), 'error');
     } finally {
+      reminderMutationInFlight.current = false;
       setReminderBusyId(null);
     }
   }
 
   async function undoTaskAttention() {
-    if (!session || !client || !undoAttention || reminderBusyId) return;
+    if (!session || !client || !undoAttention || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
     const target = undoAttention;
     setReminderBusyId(target.pageId);
     clearMessage();
@@ -824,6 +833,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     } catch (nextError) {
       showMessage(messageOf(nextError, '다시 확인을 되돌리지 못했습니다.'), 'error');
     } finally {
+      reminderMutationInFlight.current = false;
       setReminderBusyId(null);
     }
   }
