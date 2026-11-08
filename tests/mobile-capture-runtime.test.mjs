@@ -190,3 +190,20 @@ test('production fresh inbox recognizes a QA-cancelled server receipt and preser
  const next=await h.api.processCapture(await h.api.restartCapture(h.client,replay),h.client,'alice');
  assert.equal(h.remote.size,2);assert.notEqual(next.saved.pageId,replay.saved.pageId);assert.equal(next.details.dueTime,'13:00');
 });
+
+
+test('capture save receipt cannot announce an appointment without the canonical schedule ID', () => {
+  const screen = readFileSync('mobile/app/capture.tsx', 'utf8');
+  assert.match(screen, /const confirmedSchedule = Boolean\(visible\?\.saved\?\.scheduleCreated && visible\?\.saved\?\.scheduleId\?\.trim\(\)\)/);
+  assert.match(screen, /confirmedSchedule \? '일정을 저장했습니다\.' : '확인 필요 기록으로 저장했습니다\.'/);
+  assert.match(screen, /!confirmedSchedule \? <Text>/);
+});
+
+test('capture distinguishes an uncertain server receipt from an image/OCR failure without requesting another insertion', () => {
+  const screen = readFileSync('mobile/app/capture.tsx', 'utf8');
+  assert.match(screen, /e\.message === 'CAPTURE_RECORD_UNCONFIRMED'/);
+  assert.match(screen, /저장 응답은 받았지만 서버 기록을 확인하지 못했습니다/);
+  assert.match(screen, /e\.message\.includes\('업무 저장 결과를 확인하지 못했습니다'\)/);
+  assert.match(screen, /같은 캡처에서 다시 시도하면 기존 요청으로 확인합니다/);
+  assert.match(screen, /action=\{\(\) => void receive\(\)\}/);
+});

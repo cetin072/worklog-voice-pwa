@@ -43,12 +43,17 @@ export default function CaptureScreen() {
         ? '이미지를 가져오지 못했습니다. 이미지 한 장을 다시 공유하거나 직접 입력해주세요.'
         : e instanceof Error && e.message === 'CAPTURE_NO_TEXT'
           ? '글자를 읽지 못했습니다. 다시 공유하거나 직접 입력해주세요.'
+          : e instanceof Error && e.message === 'CAPTURE_RECORD_UNCONFIRMED'
+            ? '저장 응답은 받았지만 서버 기록을 확인하지 못했습니다. 같은 캡처에서 다시 시도해 조회를 확인해주세요.'
+          : e instanceof Error && e.message.includes('업무 저장 결과를 확인하지 못했습니다')
+            ? '서버의 저장 결과가 불완전합니다. 같은 캡처에서 다시 시도하면 기존 요청으로 확인합니다.'
           : '자동 저장을 마치지 못했습니다. 로그인·네트워크를 확인하고 다시 시도해주세요.');
     } finally { if (current === epoch.current) setBusy(false); }
   }, [hash, owner, client, incomingError]);
   useEffect(() => { setEntry(null);setEditing(false);void receive();return () => { epoch.current++; }; }, [receive]);
   const visible = entry && entry.owner === owner && (!hash || entry.hash === hash) ? entry : null;
   const id = visible?.saved?.dataCoreWorkRecordId || visible?.saved?.pageId;
+  const confirmedSchedule = Boolean(visible?.saved?.scheduleCreated && visible?.saved?.scheduleId?.trim());
   async function loadEditorDetails(recordId: string) {
     if (!client || busy) return;
     const current = ++epoch.current;
@@ -113,10 +118,10 @@ export default function CaptureScreen() {
     {busy ? <View style={styles.card}><ActivityIndicator /><Text>이미지 확인·저장 중…</Text></View> : null}
     {!owner ? <View style={styles.card}><Text>이미지는 이 기기에 보관했습니다. 로그인하면 자동으로 저장합니다.</Text><Button label="로그인하기" action={() => router.replace('/')} /></View> : null}
     {visible?.saved ? <View style={styles.card}>
-      <Text accessibilityLiveRegion="polite" style={styles.title}>{visible.undone ? '등록을 취소했습니다.' : visible.saved.scheduleCreated ? '일정을 저장했습니다.' : '확인 필요 기록으로 저장했습니다.'}</Text>
+      <Text accessibilityLiveRegion="polite" style={styles.title}>{visible.undone ? '등록을 취소했습니다.' : confirmedSchedule ? '일정을 저장했습니다.' : '확인 필요 기록으로 저장했습니다.'}</Text>
       {visible.undone ? <><Text>{visible.details?.title || visible.decision?.title}</Text><Text>같은 캡처를 다시 등록할 수 있습니다.</Text><Button label="다시 등록" action={() => void registerAgain()} /></> : null}
       {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{visible.details?.dueDate || visible.decision?.date || '날짜 확인 필요'} {visible.details?.dueTime || visible.decision?.time || ''}</Text>{visible.decision?.description && visible.decision.description !== (visible.details?.title || visible.decision.title) ? <Text>{visible.decision.description}</Text> : null}
-        {!visible.saved.scheduleCreated ? <Text>{visible.details?.dueDate ? '업무의 날짜를 저장했습니다. 일정과 알림 상태는 홈에서 확인할 수 있습니다.' : '날짜·시간을 확정하지 못해 일정은 만들지 않았습니다. 홈의 ‘기한 없음’에서 확인하거나 여기서 날짜·시간을 수정해주세요.'}</Text> : null}
+        {!confirmedSchedule ? <Text>{visible.details?.dueDate ? '업무의 날짜를 저장했습니다. 일정과 알림 상태는 홈에서 확인할 수 있습니다.' : '날짜·시간을 확정하지 못해 일정은 만들지 않았습니다. 홈의 ‘기한 없음’에서 확인하거나 여기서 날짜·시간을 수정해주세요.'}</Text> : null}
         <Button label="수정" action={() => void openEditor()} /><Button label="실행 취소" action={() => void undo()} /></> : null}
       {visible.reminderWarning ? <Text accessibilityLiveRegion="polite">{visible.reminderWarning}</Text> : null}
     </View> : null}

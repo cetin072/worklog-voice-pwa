@@ -236,6 +236,14 @@ function parseConfirmedSchedule(value: unknown): ConfirmedScheduleSnapshot | nul
 }
 
 function parseSavedWorklog(body: Record<string, unknown>): SavedWorklog {
+  // HTTP 200 alone does not prove that a WorkRecord was committed. All save
+  // callers require an exact record ID for follow-up edits, reminders and
+  // safe retries. Never clear the user's draft on an incomplete receipt.
+  const recordId = typeof body.dataCoreWorkRecordId === 'string' ? body.dataCoreWorkRecordId.trim() : '';
+  const legacyId = typeof body.pageId === 'string' ? body.pageId.trim() : '';
+  if (body.ok === false || (!recordId && !legacyId)) {
+    throw new Error('업무 저장 결과를 확인하지 못했습니다. 입력을 유지하고 같은 저장 버튼으로 다시 확인해주세요.');
+  }
   const schedule = parseConfirmedSchedule(body.schedule);
   const schedules = Array.isArray(body.schedules)
     ? body.schedules.map(parseConfirmedSchedule).filter((value): value is ConfirmedScheduleSnapshot => value !== null)
