@@ -158,7 +158,14 @@ function findUnindexedMeetingAudio(existing: readonly MeetingRecordingEntry[]): 
 export function listMeetingRecordings() {
   // An invalid index is an error; never treat it as a fresh empty history.
   const stored = readIndexRaw();
-  const recovered = findUnindexedMeetingAudio(stored);
+  let recovered: MeetingRecordingEntry[] = [];
+  try {
+    recovered = findUnindexedMeetingAudio(stored);
+  } catch {
+    // Filesystem enumeration is optional recovery. A transient scan failure
+    // must never hide the already verified recording index or rewrite it.
+    return Object.freeze(stored.sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
+  }
   if (recovered.length > 0) writeIndex([...stored, ...recovered]);
   return Object.freeze((recovered.length > 0 ? readIndexRaw() : stored).sort((left, right) =>
     right.createdAt.localeCompare(left.createdAt)));
