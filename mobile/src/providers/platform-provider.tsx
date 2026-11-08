@@ -163,7 +163,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl && isGoogleAuthCallbackUrl(initialUrl)) {
           try {
-            await completeGoogleOAuthFromUrl(nextClient, initialUrl);
+            await completeGoogleOAuthFromUrl(nextClient, initialUrl, clearDeviceRemindersForAccountExit);
             if (alive) setAuthError('');
           } catch (nextError) {
             if (alive) setAuthError(authErrorMessage(nextError));
@@ -204,7 +204,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
         linkingSubscription = Linking.addEventListener('url', ({ url }) => {
           if (!isGoogleAuthCallbackUrl(url)) return;
-          void completeGoogleOAuthFromUrl(nextClient, url)
+          void completeGoogleOAuthFromUrl(nextClient, url, clearDeviceRemindersForAccountExit)
             .then(() => {
               if (alive) setAuthError('');
             })
@@ -272,7 +272,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
         if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');
         setAuthError('');
         await clearDeviceRemindersForAccountExit();
-        const result = await beginGoogleOAuth(client);
+        const result = await beginGoogleOAuth(client, clearDeviceRemindersForAccountExit);
         if (result === 'cancelled') setAuthError('Google 로그인을 취소했습니다. 다른 방법으로 로그인할 수 있습니다.');
       },
       signOut: async () => {
