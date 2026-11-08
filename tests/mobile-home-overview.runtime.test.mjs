@@ -60,5 +60,5 @@ test('Home defaults to a non-empty task group without changing explicitly select
   assert.equal(firstNonEmptyTaskBucket(todayAndOverdue.structure), 'today');
   assert.equal(firstNonEmptyTaskBucket(homeOverview({}).structure), 'today');
   // The app uses this only if the user has not selected a filter.
-  assert.match(readFileSync('mobile/app/index.tsx', 'utf8'), /taskFilter \\|\\| firstNonEmptyTaskBucket\\(structure\\)/);
+  assert.match(readFileSync('mobile/app/index.tsx', 'utf8'), /taskFilter \|\| firstNonEmptyTaskBucket\(structure\)/);
 });
