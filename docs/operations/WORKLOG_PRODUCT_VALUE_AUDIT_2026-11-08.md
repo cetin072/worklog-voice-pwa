@@ -391,6 +391,17 @@
 - **UI/업무 효율:** 기존 Google/이메일 로그인, 설정→로그아웃, 인증 오류 안내를 유지하며 계정 전환 편의를 해치는 추가 단계를 즉흥 생성하지 않았다. 기기 보안 안전 확보가 우선, 실제 A→B 전환 전체 탭·소요시간/알림·파일 접근/업무시간 절감은 **미측정**.
 - **남은 HUMAN:** 동일 Android 앱 계정 A/B/C 전환에서 예약된 다른 사용자 OS 알림 0개, 신규 로그인 후 본인 알림 복구, 구버전 설치본 orphan 알림, OAuth cold/warm 중단·오류, 녹음·회의록 owner-old 접근 0건, A 원본 보존. 현재 QA APK/Play/Production/DB/운영 사용자 데이터 변경 없음.
 
+### M20: Data Core · Notion 보조 저장 · 태장 ERP 개인 조회 교차 감사 (2026-11-08)
+
+**판정: KEEP(Data Core 단일 원본, ERP 읽기 전용) / FIX 후보(Draft ERP PR #611) / 외부 Notion 재시도 P1 후보 / 운영 실제 일치·업무시간 MEASURED 없음.**
+
+- **데이터·권한 흐름 확인:** 업무수첩은 Data Core의 WorkRecord/Schedule을 원본으로 기록한다. 태장 ERP `netlify/functions/personal-worklog.mjs`는 현재 태장 사용자 JWT를 같은 프로젝트 `/auth/v1/user`와 `get_my_access_context`로 검증하고, 활성 계정·역할 시뮬레이션 비활성·personal workspace owner·owner membership을 확인한 뒤 `worklog` schema에서 본인 `created_by_user_id`를 사용해 **GET만** 수행한다. 클라이언트가 전달한 workspace/다른 앱 JWT/별도 동일 이메일에 의존하지 않으며 기본 설정 스위치 `WORKLOG_UNIFIED_READ_ENABLED`가 OFF면 차단한다. API는 캐시 금지 및 501개 조회 후 최대 500개 노출·일부 표시를 알려준다. 기존 API 테스트는 본인/다른 사용자·비활성 계정·권한/역할 시뮬레이션·잘못된 project/schema/임의 workspace 파라미터를 다룬다.
+- **발견한 코드 불일치:** 업무수첩의 날짜별 `get_my_work_journal_day` SQL은 `metadata.actionEngine.kind='schedule'`인 WorkRecord를 open Task에서 제외한다. 반면 ERP 개인 조회는 `action_kind null/task`만 검사해, **Schedule을 만들 때 함께 기록된 actionKind null의 원본 WorkRecord**가 ERP의 '미완료 업무'에 중복 나타날 가능성이 있었다. 한 일정이 '오늘 일정'과 '미완료 업무'에 중복될 수 있는 표시/업무 판단 오류지만 실제 Production 발생은 미재현.
+- **국소 개선:** 태장 [Draft PR #611](https://github.com/cetin072/taejang_homepage/pull/611)에서 ERP API의 `work_records` GET을 서버측 PostgREST `and(or(action_kind...),or(metadata->actionEngine->>kind...))` 조건으로 좁혀 Schedule 분류 원본만 제외하고, 분류 metadata가 없는 레거시 업무를 보존했다. 제목/원문/metadata를 응답에 새로 노출하지 않으며 조회 한도·본인 소유권·Auth/RLS·대시보드 배치·원본 DB 기록 불변. 기존 합성 핸들러 쿼리 계약 검증에 더해 로컬 폐기 가능 Supabase/PostgREST에서 schedule-kind 원본 제외/legacy task 유지/다른 사용자 차단을 실제 확인하는 통합 검사를 추가했다. **태장 저장소의 병합 승인 경계로 Draft 유지, 운영 데이터·배포 미변경.** CI의 관련 작업·로컬 DB 통합 실행 여부는 결과로 재확인해야 한다.
+- **Notion은 원본이 아닌 선택 미러:** `worklog-primary-save.mjs`는 Data Core를 먼저 확정하고 Notion 연결이 있으면 `notion-worklog-adapter`의 `POST /v1/pages`로 보조 생성한다. 미러 실패는 원본 저장 실패가 아니며 `notionSync=pending`으로 구분한다. 다만 Notion POST 성공 뒤 HTTP 응답/Blob 저장 진행 기록이 유실되면 후속 동일 requestId 재시도 때 **두 번째 Notion 페이지가 생성될 여지**가 있다. 실제 중복은 미확인. [기존 Issue #133](https://github.com/cetin072/worklog-voice-pwa/issues/133)에 확인된 실패 구간과 중복 재현·멱등성 수용 조건을 추가했다. 타 서비스 원본을 자동 삭제/병합·재귀속하지 않는다.
+- **운영 일치 게이트:** 단일 Supabase 프로젝트의 운영 이전 스위치/현실 적용 환경, 앱·ERP의 실제 user UUID, 개인 workspace/작성자, 저장 직후 WorkRecord ID/Schedule ID/최신 revision과 ERP GET 결과가 같은지 **실사용 읽기 전용**으로 확인할 근거가 아직 없다. 연결된 계정 없이 별도 토큰/동일 이메일/관리자 키로 우회하지 않는다. 일부 500건 제한 및 오래된 owner 미확인 Schedule linked source도 별도 확인이 남아 있다. Notion 원본 페이지/ERP 운영 데이터 Migration은 실시하지 않는다.
+- **제품 3축:** Code → 조회 계약과 P1 후보를 구분; UI → 중복 할 일 표시 가능성만 작은 서버 조회 필터로 정리, 다중 화면/버튼 새로 생성 금지; 실제 시간 → 업무수첩에서 가상 일정 1건 저장→ERP 월간 캘린더/오늘 일정·미완료 목록 읽기까지 검색·클릭·전체 소요시간은 **미측정**. 검증 전 절감률/운영 일치 주장 금지. QA APK·Play AAB·태장/업무수첩 Production·DB/Notion 서비스 원본 변경 없음.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
