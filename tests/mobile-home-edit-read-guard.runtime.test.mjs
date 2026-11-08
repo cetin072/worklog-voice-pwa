@@ -81,3 +81,18 @@ test('Home enables editing only after a successful fresh owner detail read', asy
   assert.equal(h.state.conversionAllowed, true);
   assert.equal(h.state.tone, 'neutral');
 });
+
+test('seeded Home editor visibly waits for fresh details before Save is enabled', async () => {
+  const h = harness();
+  let finish;
+  h.scope.readWorklogDetails = () => new Promise(resolve => { finish = resolve; });
+  const pending = h.load('record-1', '목록 제목', '2026-11-10', '09:00');
+  assert.equal(h.state.loading, true, 'even a seeded editor must display the current fetch');
+  assert.equal(h.state.ready, false, 'Save stays locked while the current read is pending');
+  await Promise.resolve();
+  finish({ title: '현재 서버 제목', dueDate: '2026-11-13', dueTime: '11:30',
+    actionKind: 'task', actionConversionAllowed: false });
+  await pending;
+  assert.equal(h.state.loading, false);
+  assert.equal(h.state.ready, true);
+});
