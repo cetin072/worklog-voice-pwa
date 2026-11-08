@@ -102,3 +102,9 @@ test('Platform exits and interactive login paths call native cleanup before auth
   assert.match(home, /예약된 업무수첩 일정 알림은 해제되지만/);
   assert.doesNotMatch(provider, /cancelAllScheduledNotificationsAsync/);
 });
+
+test('untracked ownerless legacy schedule blocks account publication without erasing unknown OS data', async()=>{
+ const h=harness();h.os.set('legacy-untracked',{identifier:'legacy-untracked',content:{data:{target:'schedule',scheduleId:SID,offsetMinutes:0}}});
+ await assert.rejects(h.service.clearForAccountExit(),/LEGACY_ACCOUNT_REMINDER_UNVERIFIED/);
+ assert.equal(h.os.has('legacy-untracked'),true);
+});

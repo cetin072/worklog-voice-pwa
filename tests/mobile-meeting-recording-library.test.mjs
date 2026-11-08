@@ -13,7 +13,7 @@ test('Meeting recording completion persists an index and survives app re-entry',
   assert.match(provider, /rememberMeetingRecording/);
   assert.match(recorder, /MeetingRecordingLibrary/);
   assert.match(repository, /Paths\.document/);
-  assert.match(repository, /meeting-recordings-v1\.json/);
+  assert.match(repository, /meeting-recordings-owned-/);
   assert.match(repository, /listMeetingRecordings/);
   assert.match(repository, /fileExists/);
   assert.match(repository, /createdAt/);

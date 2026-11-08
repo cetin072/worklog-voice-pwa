@@ -26,6 +26,7 @@ function harness({ audioResetFails = false, indexFails = false } = {}) {
   };
   const scope = {
     phase: 'recording',
+    stopping: { current: false }, recordingOwner: { current: 'account-a' },
     recorder: {
       uri: recorded.uri,
       async stop() { calls.push('stop'); },

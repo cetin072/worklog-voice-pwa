@@ -266,6 +266,12 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     }
     const remaining = await deps.driver.list();
     const final = await read();
+    // Legacy untracked reservations cannot be attributed to an account. Block
+    // account publication rather than showing B data while an A alert may fire.
+    // Foreign owner tags are preserved; never erase unrelated OS notifications.
+    if (remaining.some(request => !request.content.data?.owner
+      && request.content.data?.target === 'schedule'
+      && id(request.content.data?.scheduleId))) throw new ReminderStateError('LEGACY_ACCOUNT_REMINDER_UNVERIFIED');
     if (remaining.some(isOwned)
       || Object.keys(final.intents).length
       || Object.values(final.reminders).some((entries) => Object.keys(entries).length)

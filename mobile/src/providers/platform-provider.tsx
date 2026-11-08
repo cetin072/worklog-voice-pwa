@@ -1,3 +1,5 @@
+import { selectMeetingOwner } from '@/src/features/voice/meeting-owner';
+import { createLocalAccountGate } from '@/src/platform/local-account-gate';
 import type { Session } from '@supabase/supabase-js';
 import { resetCalendarConnection, selectCalendarOwner, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
@@ -79,6 +81,7 @@ function createAndroidTouchSmokeClient() {
         console.info('[android-touch-smoke] platform-session-restored', { restored: Boolean(session) });
         return { data: { session }, error: null };
       },
+      async getUser() { const { data } = await this.getSession(); return { data: { user: data.session?.user || null }, error: null }; },
       onAuthStateChange(callback: (event: string, session: Session | null) => void) {
         listener = callback;
         return { data: { subscription: { unsubscribe() { listener = null; } } } };
@@ -137,8 +140,10 @@ export function PlatformProvider({ children }: PropsWithChildren) {
     let activeClient: PlatformSupabaseClient | null = null;
     let authSubscription: { unsubscribe: () => void } | null = null;
     let appStateSubscription: { remove: () => void } | null = null;
+    let localGate: ReturnType<typeof createLocalAccountGate<Session>> | null = null;
     let linkingSubscription: { remove: () => void } | null = null;
 
+    selectMeetingOwner(null);
     setPhase('loading');
     setError('');
 
@@ -176,7 +181,17 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
         setConfig(nextConfig);
         setClient(nextClient);
-        setSession(data.session);
+        localGate = createLocalAccountGate<Session>({
+          clear: clearDeviceRemindersForAccountExit,
+          verify: async id => {
+            const verified = await nextClient.auth.getUser();
+            return !verified.error && verified.data.user?.id === id;
+          },
+          owner: selectMeetingOwner,
+          publish: value => { if (alive) setSession(value); },
+          failed: () => { if (alive) setAuthError('계정 확인 또는 이전 기기 알림 정리가 남았습니다. 새로고침으로 다시 확인해주세요.'); },
+        });
+        await localGate.transition(data.session);
         if (data.session?.user.email) {
           setRememberedEmail(data.session.user.email);
           void saveRememberedLoginEmail(data.session.user.email).catch(() => undefined);
@@ -186,15 +201,9 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
         const { data: authData } = nextClient.auth.onAuthStateChange((_event, nextSession) => {
           if (!alive) return;
-          if (_event === 'SIGNED_OUT') {
-            resetCalendarConnection();
-            // Also covers an external/expired session leaving without the
-            // explicit settings logout action. Login preflight retries cleanup.
-            void clearDeviceRemindersForAccountExit().catch(() => {
-              if (alive) setAuthError('이전 계정의 기기 알림 정리가 남았습니다. 다음 로그인 전에 다시 확인해주세요.');
-            });
-          }
-          setSession(nextSession);
+          if (_event === 'SIGNED_OUT') resetCalendarConnection();
+          if (localGate?.current() === nextSession?.user.id) setSession(nextSession);
+          else void localGate?.transition(nextSession);
           if (nextSession?.user.email) {
             setRememberedEmail(nextSession.user.email);
             void saveRememberedLoginEmail(nextSession.user.email).catch(() => undefined);
@@ -227,6 +236,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
     return () => {
       alive = false;
+      localGate?.dispose();
       authSubscription?.unsubscribe();
       appStateSubscription?.remove();
       linkingSubscription?.remove();
