@@ -18,14 +18,51 @@ const coordinator = createScheduleReminderCoordinator({
 type SavedScheduleResult = Readonly<{
   schedule?: ConfirmedSchedule | null;
   schedules?: readonly ConfirmedSchedule[];
+  scheduleId?: string;
+  scheduleIds?: readonly string[];
 }>;
 
-/** The only post-save boundary shared by Direct Entry and Quick Voice. */
-export function synchronizeSavedScheduleReminders(result: SavedScheduleResult, responseIsCurrent: ReminderSyncGuard) {
+/** A receipt must include the full, committed Schedule before touching native alarms. */
+function completeScheduleSnapshot(value: ConfirmedSchedule | null | undefined): value is ConfirmedSchedule {
+  return Boolean(value?.id && value.title?.trim() && value.startsAt &&
+    Number.isFinite(Date.parse(value.startsAt)) && value.status);
+}
+
+/**
+ * Existing fast save sometimes falls back from v2 to a legacy RPC that only
+ * returns the confirmed Schedule ID. Read that *one* owned canonical Schedule
+ * before reserving an Android alarm; never trust a guessed time or account.
+ * Full snapshots keep the existing zero-extra-request fast path.
+ */
+export async function synchronizeSavedScheduleReminders(
+  result: SavedScheduleResult,
+  responseIsCurrent: ReminderSyncGuard,
+  client?: PlatformSupabaseClient | null,
+) {
   assertReminderSyncCurrent(responseIsCurrent);
   const isCurrent = reminderSyncEpoch.begin();
-  const schedules = result.schedules?.length ? result.schedules : [result.schedule];
-  return coordinator.synchronizeMany(schedules, isCurrent);
+  const current = () => responseIsCurrent() && isCurrent();
+  const payload = result.schedules?.length ? result.schedules : [result.schedule];
+  const ready = payload.filter(completeScheduleSnapshot);
+  const ids = [...new Set([
+    ...(result.scheduleIds || []), ...(result.scheduleId ? [result.scheduleId] : []),
+  ])];
+  const known = new Set(ready.map(schedule => schedule.id));
+  const missing = ids.filter(id => !known.has(id));
+
+  if (missing.length && client) {
+    // A missing snapshot must not silently become a cancelled or unlinked
+    // reminder. Read-only RLS and explicit owner check live in this helper.
+    const verified = await readOwnedReminderSnapshots(client, missing, current);
+    assertReminderSyncCurrent(current);
+    if (verified.unresolvedIds.length) throw new Error('INCOMPLETE_REMINDER_SNAPSHOT');
+    ready.push(...verified.rows);
+  } else if (missing.length) {
+    // Without an authenticated owner-scoped reader we cannot infer success.
+    // The caller displays a distinct "reservation unconfirmed" status.
+    return coordinator.synchronizeMany(ready, current);
+  }
+  return coordinator.synchronizeMany(ready, current);
 }
 
 export function synchronizeUpdatedScheduleReminder(schedule: ConfirmedSchedule | null | undefined, responseIsCurrent: ReminderSyncGuard) {
