@@ -2,7 +2,7 @@ import { CalendarSettings } from '@/src/features/settings/calendar-settings';
 import { CalendarExportPreview } from '@/src/features/calendar/calendar-export-preview';
 import { CaptureImportButton } from '@/src/features/capture/capture-import-button';
 import { captureChanges } from '@/src/features/capture/capture-runtime';
-import { homeOverview } from '@/src/features/home/home-overview';
+import { firstNonEmptyTaskBucket, homeOverview } from '@/src/features/home/home-overview';
 import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
 import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
 import { notificationResponseHandler } from '@/src/features/startup/notification-response-gate';
@@ -1117,7 +1117,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const journalIsFuture = journalTarget > journalToday;
   const overview = homeOverview(briefing!);
   const structure = overview.structure;
-  const activeFilter = taskFilter || (structure.today.length ? 'today' : structure.overdue.length ? 'overdue' : 'today');
+  const activeFilter = taskFilter || firstNonEmptyTaskBucket(structure);
   const notes = briefing?.notes || [];
   const visibleNotes = notesExpanded ? notes : notes.slice(0, 3);
   const extraNotes = Math.max(0, notes.length - 3);

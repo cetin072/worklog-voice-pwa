@@ -1,5 +1,11 @@
 import type { MobileBriefing, BriefingTask } from '@/src/platform/worklog-api';
 type Bucket = 'today' | 'overdue' | 'upcoming' | 'undated';
+
+/** Default only: a deliberate user-selected filter always wins in Home. */
+export function firstNonEmptyTaskBucket(structure: Record<Bucket, BriefingTask[]>): Bucket {
+  return (['today', 'overdue', 'upcoming', 'undated'] as const)
+    .find((bucket) => structure[bucket].length > 0) || 'today';
+}
 /** Presentation only: never merge Task and Schedule identities or mutate source records. */
 export function homeOverview(briefing: MobileBriefing) {
   const structure: Record<Bucket, BriefingTask[]> = { today: [], overdue: [], upcoming: [], undated: [] };
