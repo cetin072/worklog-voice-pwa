@@ -304,14 +304,19 @@ export function parseWorkJournalDay(body: Record<string, unknown>): WorkJournalD
 export async function loadWorkJournalDay(accessToken: string, date: string): Promise<WorkJournalDay> {
   const target = date.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(target)) throw new Error('업무일지 날짜가 올바르지 않습니다.');
-  const response = await fetch(`${getApiBaseUrl()}/api/work-journal?date=${encodeURIComponent(target)}`, {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-      authorization: `Bearer ${accessToken}`,
-    },
+  // Match the existing Home briefing deadline so a stalled connection
+  // cannot leave the journal loading forever. This is read-only.
+  return withRequestDeadline(async (signal) => {
+    const response = await fetch(`${getApiBaseUrl()}/api/work-journal?date=${encodeURIComponent(target)}`, {
+      signal,
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    return parseWorkJournalDay(await readJson(response));
   });
-  return parseWorkJournalDay(await readJson(response));
 }
 
 export async function saveWorklog(

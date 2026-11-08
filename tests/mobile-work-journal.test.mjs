@@ -56,7 +56,7 @@ test("journal is view-first and does not add a separate daily writing workflow",
 
 test("journal date changes clear stale content and retry forces a fresh load",()=>{
   assert.match(home,/setJournal\(null\);[\s\S]*setJournalBusy\(true\)/);
-  assert.match(home,/\[screen, journalDate, journalReloadKey, session\?\.access_token\]/);
+  assert.match(home,/\[screen, journalDate, journalReloadKey, client, session\?\.access_token\]/);
   assert.match(home,/setJournalReloadKey\(\(value\) => value \+ 1\)/);
 });
 
@@ -66,4 +66,11 @@ test("journal row presentation is read-only and reuses compact work typography",
   assert.match(home,/function JournalScheduleRows/);
   assert.match(home,/styles\.taskTitle/);
   assert.match(home,/styles\.taskMeta/);
+});
+
+test("journal refreshes Auth and bounds slow HTTP reads before showing stale data",()=>{
+  assert.match(home,/freshHomeAccessToken\(client\)/);
+  assert.match(home,/\.then\(\(token\) => loadHomeJournal\(token, journalDate\)\)/);
+  assert.match(api,/return withRequestDeadline\(async \(signal\) => \{/);
+  assert.match(api,/api\/work-journal\?date=[^\n]+\n\s+signal,/);
 });
