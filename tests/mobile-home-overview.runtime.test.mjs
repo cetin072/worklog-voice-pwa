@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
+import { readFileSync } from 'node:fs';
 register('./helpers/mobile-ts-loader.mjs', import.meta.url);
-const { homeOverview } = await import('../mobile/src/features/home/home-overview.ts');
+const { firstNonEmptyTaskBucket, homeOverview } = await import('../mobile/src/features/home/home-overview.ts');
 const { reminderLabel } = await import('../mobile/src/features/home/reminder-label.ts');
 const task = { pageId: 'synthetic-task', title: '검수용 업무', dueKey: '2026-10-25' };
 test('empty, overdue-only, schedules-only and mixed data retain separate identities and accurate displayed counts', () => {
@@ -36,4 +37,28 @@ test('unknown, blocked, unset, stored-only, pending and native confirmed reserva
  assert.match(reminderLabel('s', { ...evidence, stored, scheduled }, Date.now(), '2030-01-02T10:30:00Z'), /예약 확인 필요/);
  assert.match(reminderLabel('other-account-schedule', { ...evidence, stored, scheduled }), /예약 확인 필요/);
  assert.match(reminderLabel('s', { ...evidence, stored, scheduled }, Date.parse('2031-01-01')), /예약 확인 필요/);
+});
+
+test('Home defaults to a non-empty task group without changing explicitly selected filters', () => {
+  const futureOnly = homeOverview({ today: '2026-11-08', structure: {
+    upcoming: [{ pageId: 'future', title: '서류 확인', dueKey: '2026-11-12' }],
+  } });
+  const undatedOnly = homeOverview({ structure: {
+    undated: [{ pageId: 'undated', title: '검토' }],
+  } });
+  const overdueAndFuture = homeOverview({ structure: {
+    overdue: [{ pageId: 'late', title: '지난 업무' }],
+    upcoming: [{ pageId: 'next', title: '다음 업무' }],
+  } });
+  const todayAndOverdue = homeOverview({ structure: {
+    today: [{ pageId: 'today', title: '오늘 업무' }],
+    overdue: [{ pageId: 'late', title: '지난 업무' }],
+  } });
+  assert.equal(firstNonEmptyTaskBucket(futureOnly.structure), 'upcoming');
+  assert.equal(firstNonEmptyTaskBucket(undatedOnly.structure), 'undated');
+  assert.equal(firstNonEmptyTaskBucket(overdueAndFuture.structure), 'overdue');
+  assert.equal(firstNonEmptyTaskBucket(todayAndOverdue.structure), 'today');
+  assert.equal(firstNonEmptyTaskBucket(homeOverview({}).structure), 'today');
+  // The app uses this only if the user has not selected a filter.
+  assert.match(readFileSync('mobile/app/index.tsx', 'utf8'), /taskFilter \\|\\| firstNonEmptyTaskBucket\\(structure\\)/);
 });
