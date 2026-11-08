@@ -110,10 +110,16 @@ export function MeetingRecordingProvider({ children }: PropsWithChildren) {
       setLibraryVersion((value) => value + 1);
       setStartedAt(null);
       setPhase('idle');
-      await setAudioModeAsync({
-        allowsRecording: false,
-        allowsBackgroundRecording: false,
-      });
+      // M4A and its verified index are already committed. A follow-up audio
+      // mode reset failure must not be reported as a failed recording save.
+      try {
+        await setAudioModeAsync({
+          allowsRecording: false,
+          allowsBackgroundRecording: false,
+        });
+      } catch {
+        setError('회의 녹음은 기기에 저장됐습니다. 재생할 때 오디오 설정을 다시 확인해주세요.');
+      }
     } catch (nextError) {
       setPhase('idle');
       setError(messageOf(nextError, '녹음을 종료하지 못했습니다.'));
