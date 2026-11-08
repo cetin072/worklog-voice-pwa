@@ -334,6 +334,18 @@
 - **안전 보류:** 앱 강제종료·배경 저장 시 실제 Android SecureStore 동작, 계정 A→B→A 전환의 초안 노출 0건, 저장 응답 유실 후 재실행, 원본/동일 request ID 보존, 오래된 사용자의 pending 저장/세션 전환, 사용자 입력 속도 비용은 아직 실기기 증거가 없다. 계정별 데이터·기기 암호화 저장 경계라 사용자 승인/기기 QA 없이 `main` 병합하거나 APK/Play 배포하지 않는다. 실제 시간 절약도 미측정.
 - Quick Voice/직접 입력 서버 canonical WorkRecord, Notion/ERP, Calendar/알림, 카카오 자동 브리핑(미사용 유지), 실제 녹음/기록은 변경하지 않았다.
 
+### M08: 기존 기록 수정·삭제/과거 검색 수정 — 실수·중복 요청 방지 (2026-11-08)
+
+**판정: FIX(CODE/CI) / Android·Google Calendar HUMAN 미실시 / 실제 작업시간 MEASURED 미확보.**
+
+- **코드 오류 1 — 불완전 수정 영수증:** 기존 `readWorklogDetails`와 `updateWorklogDetails`는 HTTP 200 body를 ID 확인 없이 읽기/수정 성공으로 반환할 수 있었다. 서버 `netlify/functions/worklog-edit.mts`의 Data Core/Notion 정상 read/update는 모두 `ok:true,pageId`를 반환한다. [PR #516](https://github.com/cetin072/worklog-voice-pwa/pull/516) `14a7d5f` 병합: 현재 read/edit 대상과 서버 반환 ID의 **정확한 일치** 및 `ok:false` 거절. 미확인 수정은 사용자에게 목록 재조회로 확인하도록 안내하며, 확정되지 않은 편집 결과로 OS 일정 알림 후속 작업을 진행하지 않는다. 삭제 RPC는 기존처럼 본인 소유 `record_id`와 `status_value:'cancelled'`을 확인하고 Soft Delete를 유지한다.
+- **코드 오류 2 — 빠른 연속 탭/동시 삭제:** Home의 `saveTaskEditor` / `deleteBriefingRecord`, 과거 전체 검색의 `saveEditor`는 React busy state만 확인해 같은 렌더 내 2회 쓰기/수정과 삭제 경합에 약했다. 기존 완료/미루기에서 검증한 `useRef` 동기 잠금을 국소 재사용했다. Home은 수정·삭제 동일 잠금 + 완료/Undo 충돌 차단, 검색 편집은 별도 잠금 + 닫기 보호, 모든 쓰기에서 성공/오류 `finally` 잠금 해제.
+- **UI/조작:** Home 수정 성공 후 420ms 고정 대기를 제거해, 이전 수정의 늦은 닫기 타이머가 새 편집창을 닫을 수 있는 위험을 없앴다. 기존 삭제 확인, 확인 중 버튼 비활성화, 알림 취소 실패 시 **서버 삭제 성공 유지 + 기기 정리 확인 필요 안내**는 그대로. 화면 재배치/버튼 숨김/삭제 정책 변경 없음.
+- **자동검사:** 새 `tests/mobile-edit-delete-integrity.runtime.test.mjs`에서 실제 Home 수정/삭제 핸들러 추출 실행(이중 탭, 서로 다른 변경 충돌, 알림 취소 실패, 원본 보존·재시도) 및 실제 모바일 HTTP read/edit 영수증 누락/불일치/명시적 거절, Soft Delete 확인. 과거 검색의 실제 `saveEditor` 연타/실패 재시도 테스트 포함. 첫 CI에서 새 잠금 변수를 모의하지 않은 이전 테스트 fixture/문구 검사가 실패하여 검증 기준을 갱신한 뒤 **최종 HEAD Mobile typecheck SUCCESS, Web UAR SUCCESS** 재실행. PR #516 merge `14a7d5f`.
+- **남은 P1:** [Issue #517](https://github.com/cetin072/worklog-voice-pwa/issues/517) — 과거 검색의 `saveEditor`는 수정 서버 성공 뒤 목록 `search(true)`만 다시 읽고, Home의 `synchronizeEditedWorklogReminder`를 호출하지 않는다. 과거 목록에서 일정/시간 변경·해제 시 이미 예약된 Android OS 알림의 즉시 교체/취소 여부가 확인되지 않는다. Native 소유권/기존 알림 취소 경계라 별도 PR·기기 QA 없이 무단 코드 합치기 금지.
+- **외부 캘린더:** 기존 Google Calendar 수동 내보내기 이벤트를 업무수첩 수정·삭제가 자동 반영하는지는 별도 계약/실기기 검증이 필요하다. 자동 외부 이벤트 삭제/대량 동기화는 구현하지 않는다.
+- **배포/데이터:** `main` 코드·패치노트만 병합, 실제 WorkRecord/Note/Schedule/알림/Notion·ERP DB, QA APK/Play/Production/환경설정 무변경. 사용자가 한 기록을 찾고 수정·확인·재시도하는 총시간은 **미측정**이므로 편의성 향상 수치 주장 금지.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
