@@ -34,7 +34,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const searchEpoch = useRef(0);
-  const searchInFlightKey = useRef<string | null>(null);
+  const searchInFlightKey = useRef<{ key: string; epoch: number } | null>(null);
   const [message, setMessage] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -61,9 +61,9 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     const offset = reset ? 0 : nextOffset;
     const requestKey = JSON.stringify([normalizedQuery, statuses, offset]);
     // Drop repeated taps but allow a new query to supersede a slow old one.
-    if (searchInFlightKey.current === requestKey) return;
+    if (searchInFlightKey.current?.key === requestKey && searchInFlightKey.current.epoch === searchEpoch.current) return;
     const request = ++searchEpoch.current;
-    searchInFlightKey.current = requestKey;
+    searchInFlightKey.current = { key: requestKey, epoch: request };
     setBusy(true);
     setMessage('');
     try {
@@ -76,7 +76,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     } catch (error) {
       if (request === searchEpoch.current) setMessage(error instanceof Error ? error.message : '과거 업무 검색에 실패했습니다.');
     } finally {
-      if (searchInFlightKey.current === requestKey) searchInFlightKey.current = null;
+      if (searchInFlightKey.current?.epoch === request) searchInFlightKey.current = null;
       if (request === searchEpoch.current) setBusy(false);
     }
   }
