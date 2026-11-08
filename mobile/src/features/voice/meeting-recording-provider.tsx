@@ -57,6 +57,8 @@ export function MeetingRecordingProvider({ children }: PropsWithChildren) {
     setError('');
     try {
       const owner = requireMeetingOwner(session?.user.id);
+      setCompleted(null);
+      recordingOwner.current = owner;
       const permission = await AudioModule.requestRecordingPermissionsAsync();
       if (!permission.granted) {
         throw new Error('마이크 권한이 필요합니다. Android 설정에서 업무수첩의 마이크 권한을 허용해주세요.');
