@@ -9,7 +9,9 @@ test('Mobile settings opens user-facing release notes from the shared completed-
   assert.match(appShellSource, /MOBILE_PATCH_NOTES/);
   assert.match(appShellSource, /업데이트·패치노트/);
   assert.match(appShellSource, /screen === 'patchNotes'/);
-  assert.match(appShellSource, /MOBILE_PATCH_NOTES\.map/);
+  assert.match(appShellSource, /MOBILE_PATCH_NOTES\.slice\(0, patchNotesExpanded \? undefined : 3\)\.map/);
+  assert.match(appShellSource, /이전 업데이트.*건 더 보기/);
+  assert.match(appShellSource, /setPatchNotesExpanded\(value => !value\)/);
   assert.match(patchNotesSource, /already merged to main/);
   assert.match(patchNotesSource, /Development-only notes live in \.patch-notes/);
 });
