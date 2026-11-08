@@ -523,7 +523,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPh
         {isRecording ? <Pressable accessibilityRole="button" accessibilityLabel="녹음 취소" style={[styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft]} onPress={() => void cancelQuickVoice()}>
           <Text style={[styles.quickSideIcon, styles.quickCancelIcon]}>✕</Text>
           <Text style={[styles.quickSideLabel, styles.quickCancelLabel]}>취소</Text>
-        </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft, quickActive ? styles.quickSideActionDisabled : null]} onPress={onOpenWorklogInput}>
+        </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft, quickActive ? styles.quickSideActionDisabled : null]} onPress={() => onOpenWorklogInput?.()}>
           <Text style={styles.quickSideIcon}>✏️</Text>
           <Text style={styles.quickSideLabel}>메모</Text>
         </Pressable>}
