@@ -84,6 +84,18 @@ test('silence only never becomes a canonical transcript and fatal errors do not 
   assert.equal(value.snapshot().committedText, '');
 });
 
+test('fatal Android recognizer error retains committed and interim Korean text for direct correction', async () => {
+  const { fake, value, updates, fatals } = await session();
+  fake.result('내일 오전', true);
+  fake.result('내일 오전 10시 서류 확인', false);
+  fake.error('not-allowed', 'microphone denied');
+  assert.equal(fatals.length, 1);
+  assert.equal(value.snapshot().active, false);
+  assert.equal(value.snapshot().committedText, '내일 오전 10시 서류 확인');
+  assert.equal(value.snapshot().interimText, '');
+  assert.equal(updates.at(-1).committedText, '내일 오전 10시 서류 확인');
+});
+
 test('unavailable recognition fails before start so Quick Voice can use its existing Whisper fallback boundary', async () => {
   const fake = createPort({ available: false });
   const value = speech.createQuickVoiceRecognitionSession(fake.port);
