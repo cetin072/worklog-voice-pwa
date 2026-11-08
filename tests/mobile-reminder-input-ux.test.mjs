@@ -22,7 +22,7 @@ test('settings explain why notification permission alone does not imply reservat
 });
 
 test('voice and direct entry retain automatic post-save start alarm synchronization', () => {
-  assert.match(home, /synchronizeSavedScheduleReminders\(saved, reminderGuard\)/);
+  assert.match(home, /synchronizeSavedScheduleReminders\(saved, reminderGuard, client\)/);
   assert.match(coordinator, /offsetMinutes: 0/);
 });
 
