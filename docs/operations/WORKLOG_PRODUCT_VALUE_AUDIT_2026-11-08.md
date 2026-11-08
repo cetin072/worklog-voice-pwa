@@ -403,6 +403,17 @@
 - **운영 일치 게이트:** 단일 Supabase 프로젝트의 운영 이전 스위치/현실 적용 환경, 앱·ERP의 실제 user UUID, 개인 workspace/작성자, 저장 직후 WorkRecord ID/Schedule ID/최신 revision과 ERP GET 결과가 같은지 **실사용 읽기 전용**으로 확인할 근거가 아직 없다. 연결된 계정 없이 별도 토큰/동일 이메일/관리자 키로 우회하지 않는다. 일부 500건 제한 및 오래된 owner 미확인 Schedule linked source도 별도 확인이 남아 있다. Notion 원본 페이지/ERP 운영 데이터 Migration은 실시하지 않는다.
 - **제품 3축:** Code → 조회 계약과 P1 후보를 구분; UI → 중복 할 일 표시 가능성만 작은 서버 조회 필터로 정리, 다중 화면/버튼 새로 생성 금지; 실제 시간 → 업무수첩에서 가상 일정 1건 저장→ERP 월간 캘린더/오늘 일정·미완료 목록 읽기까지 검색·클릭·전체 소요시간은 **미측정**. 검증 전 절감률/운영 일치 주장 금지. QA APK·Play AAB·태장/업무수첩 Production·DB/Notion 서비스 원본 변경 없음.
 
+### M20 #522: 빠른 홈 브리핑의 일정 원본 ↔ 업무 분류 정합성 보강 (2026-11-08)
+
+**상태: 코드 보강 / 두 저장소 Draft / Worklog UAR·실제 PGlite 검증 PASS / 태장 pgTAP·실기기·운영 데이터·시간 MEASURED 별도.**
+
+- **원인:** 업무수첩 `/api/briefing-fast`는 `get_my_briefing_source()` RPC를 우선 실행한다. 기존 함수의 task_rows는 `action_kind != note`만 검사해 Schedule 생성 시 함께 저장된 `actionEngine.kind='schedule'` 원본 WorkRecord가 '미완료 업무'에도 나올 수 있다. 날짜별 `get_my_work_journal_day`는 이런 원본과 `schedules.metadata.workRecordId`로 연결된 미취소 Schedule을 Task에서 제외하므로 서로 표시 기준이 달랐다. 실제 본인 기기/운영 중복 발생은 미확인.
+- **public 스키마 Fix 후보:** [업무수첩 Draft PR #523](https://github.com/cetin072/worklog-voice-pwa/pull/523), HEAD `a0b5ad4`. `public.get_my_briefing_source`의 기존 RLS/owner workspace/SECURITY INVOKER·반환 5열·Task500/Note100/Schedule100 LIMIT을 보존하고, **LIMIT 이전**에 `actionEngine.kind='schedule'` 및 활성 연결 Schedule의 원본을 제외하는 새 조회 함수 migration을 준비했다. 구형/미설치 RPC fallback REST와 500건 도달 확인 probe는 공통 PostgREST JSON 필터를 사용해 새 분류 소스가 조회되기 전에 제외되도록 변경. 단, REST에는 linked Schedule을 반대 조인하는 기존 계약이 없어 **legacy linked source의 완전한 일치성은 RPC와 별도 검수 게이트**로 둔다. 원본 데이터/메모/알림 수정·전환 없음.
+- **검증:** 기존 PGlite 패키지로 폐기 가능한 PostgreSQL 인스턴스에서 **실제 public SQL 함수+RLS** 실행. 사용자 A/B 2개 공간, 정규 Task/Note, 회의 Schedule source, 구형 linked active/cancelled Schedule source, 최신 일정 source 501건에서도 진짜 Task 누락 0건, Schedule·Notes 기존 표시 유지. 실제 테스트 3개 및 전체 GitHub Web User Acceptance Ready 최종 HEAD PASS. Hosted Supabase/실제 Android QA 실행 또는 Production migration 성공 증거는 아님.
+- **통합 worklog 스키마 Fix 후보:** [태장 Draft PR #613](https://github.com/cetin072/taejang_homepage/pull/613), HEAD `fd57b13`. 태장 통합용 `worklog.get_my_briefing_source`에 같은 분류·연결 기준을 별도의 **query-only schema migration**으로 준비하고 pgTAP 권한/owner/filter/LIMIT 검증을 추가했다. 기존 스키마의 함수/역할·5열 반환/Task500/Note100/Schedule100/기존 운영 기록은 변경하지 않는다. 태장 스테이징/정식 DB 적용·`main` 병합은 승인 게이트 대기.
+- **태장 ERP 별도 목록:** [Draft #611](https://github.com/cetin072/taejang_homepage/pull/611)은 ERP 개인 GET이 Schedule source를 Task에도 표시하는 오류 후보를 좁게 보완한다. 홈 RPC 두 경로와 ERP 조회가 **하나의 같은 조건으로 실제 화면에 반영됐는지** 검증되지 않았다. DB/Auth/원본이나 ERP 쓰기를 하나로 합치거나 양방향 동기화하지 않는다.
+- **제품가치:** 코드·RLS 안전 검수(P1)로 중복 행동/기한 오판 위험을 줄일 수 있으나, 실제 홈·업무일지·ERP 같은 기록 비교 및 스크롤/확인/정정 총시간 측정 없음. 데이터 중요 작업의 손실 위험이 더 크므로 staging+실기기 Gate 후 반영. 미사용 카카오 브리핑·Notion 원본·Meeting AI 신규 개발 건드리지 않음.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
