@@ -47,6 +47,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const editReadEpoch = useRef(0);
+  const editWriteInFlight = useRef(false); // Block rapid duplicate saves before React rerenders.
   const editDirty = useRef({ title: false, date: false, time: false, kind: false });
   const [editReady, setEditReady] = useState(false);
   const [editStatus, setEditStatus] = useState('');
@@ -128,7 +129,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   }
 
   async function openEditor(item: WorkRecordSearchResult) {
-    if (editBusy) return;
+    if (editBusy || editWriteInFlight.current) return;
     editDirty.current = { title: false, date: false, time: false, kind: false };
     setSelectedId(item.workRecordId);
     setEditId(item.workRecordId);
@@ -150,7 +151,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   }
 
   async function saveEditor() {
-    if (!editId || editBusy || editLoading || !editReady) return;
+    if (!editId || editBusy || editLoading || !editReady || editWriteInFlight.current) return;
     const recordId = editId;
     const title = editTitle.replace(/\s+/g, ' ').trim();
     if (!title) {
@@ -169,6 +170,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       return;
     }
 
+    editWriteInFlight.current = true;
     setEditBusy(true);
     setEditStatus('');
     setEditStatusTone('neutral');
@@ -184,7 +186,6 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       });
       const visibleTitle = result.title?.trim() || title;
       setItems((current) => current.map((item) => item.workRecordId === recordId ? { ...item, title: visibleTitle } : item));
-      setEditBusy(false);
       setEditReady(false);
       setEditStatus(result.actionKindChanged
         ? result.actionKind === 'note'
@@ -202,12 +203,13 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       setEditStatus(error instanceof Error ? error.message : '업무 수정에 실패했습니다.');
       setEditStatusTone('error');
     } finally {
+      editWriteInFlight.current = false;
       setEditBusy(false);
     }
   }
 
   function cancelEditor() {
-    if (editBusy) return;
+    if (editBusy || editWriteInFlight.current) return;
     editReadEpoch.current += 1;
     setEditLoading(false);
     setEditId(null);

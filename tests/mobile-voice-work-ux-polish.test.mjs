@@ -65,8 +65,8 @@ test('Briefing and search expose large one-tap edit actions and immediate post-s
 
 test('Edit sheets remain dismissible while loading and block close only while saving', () => {
   assert.match(sheet, /if \(saving\) return/);
-  assert.match(home, /function closeTaskEditor\(\)[\s\S]*if \(editBusy\) return/);
-  assert.match(search, /function cancelEditor\(\)[\s\S]*if \(editBusy\) return/);
+  assert.match(home, /function closeTaskEditor\(\)[\s\S]*if \(editBusy \|\| recordMutationInFlight\.current\) return/);
+  assert.match(search, /function cancelEditor\(\)[\s\S]*if \(editBusy \|\| editWriteInFlight\.current\) return/);
   assert.doesNotMatch(home, /function closeTaskEditor\(\)[\s\S]{0,120}editLoading/);
   assert.doesNotMatch(search, /function cancelEditor\(\)[\s\S]{0,120}editLoading/);
 });

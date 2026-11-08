@@ -59,7 +59,7 @@ test('Home cannot save stale seeded fields after owner detail read fails; retry 
   await h.load('record-1', h.state.title, h.state.date);
   assert.equal(h.state.ready, false);
   assert.equal(h.state.title, '사용자가 입력 중인 새 제목', 'retry keeps draft despite cached seed');
-  assert.match(source, /editBusy \|\| editLoading \|\| !editReady\) return;/);
+  assert.match(source, /editBusy \|\| editLoading \|\| !editReady \|\| recordMutationInFlight\.current \|\| taskStatusInFlight\.current\) return;/);
 });
 
 test('Home enables editing only after a successful fresh owner detail read', async () => {

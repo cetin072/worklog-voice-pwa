@@ -90,7 +90,7 @@ function makeEditor() {
   const state = { title: '사용자 제목', date: '', time: '', ready: false, loading: false, status: '' };
   const pending = [];
   const scope = {
-    client: {}, editBusy: false, editLoading: false, editId: 'A',
+    client: {}, editBusy: false, editWriteInFlight: { current: false }, editLoading: false, editId: 'A',
     editReadEpoch: { current: 0 }, editDirty: { current: { title: true, date: false, time: false, kind: false } },
     getFreshAccessToken: async () => 'fresh-token',
     readWorklogDetails(token, id) { return new Promise(resolve => pending.push({ token, id, resolve })); },
@@ -126,4 +126,64 @@ test('owner-scoped fresh editor read does not overwrite title already typed by u
   assert.equal(h.state.title, '사용자 제목');
   assert.equal(h.state.date, '2030-01-03');
   assert.equal(h.state.ready, true);
+});
+
+
+test('historical editor rejects rapid duplicate saves and stays locked until refreshed list', async () => {
+  const calls = [], state = { updates: [], busy: [], messages: [], closed: [] };
+  let release;
+  const barrier = new Promise(resolve => { release = resolve; });
+  const scope = {
+    client: {}, editId: 'record-a', editBusy: false, editLoading: false, editReady: true,
+    editWriteInFlight: { current: false },
+    editTitle: '수정한 거래처 회신', editDate: '2030-01-05', editTime: '11:00',
+    editActionConversionAllowed: false, editActionKind: 'task', editOriginalActionKind: 'task',
+    getFreshAccessToken: async () => 'fresh-token',
+    updateWorklogDetails: async (_token, payload) => {
+      calls.push(payload);
+      await barrier;
+      return { pageId: payload.pageId, title: payload.title, mode: 'data_core' };
+    },
+    setEditBusy: value => state.busy.push(value),
+    setEditReady() {}, setEditStatus(value) { state.messages.push(value); },
+    setEditStatusTone() {}, setEditId(value) { state.closed.push(value); },
+    setItems(update) { state.updates.push(update([{ workRecordId:'record-a', title:'옛 제목' }])); },
+    search: async () => { state.refreshed = true; },
+  };
+  const save = compile(['saveEditor'], scope).saveEditor;
+  const first = save();
+  await save(); // React state has not been updated yet
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(calls.length, 1);
+  assert.equal(scope.editWriteInFlight.current, true);
+  release(); await first;
+  assert.deepEqual(state.updates[0].map(x=>x.title), ['수정한 거래처 회신']);
+  assert.deepEqual(state.closed, [null]);
+  assert.equal(state.refreshed, true);
+  assert.equal(scope.editWriteInFlight.current, false);
+});
+
+test('historical editor unlocks after a failed server write and preserves the input for retry', async () => {
+  let attempts = 0;
+  const state = { errors: [], closed: [] };
+  const scope = {
+    client: {}, editId: 'record-a', editBusy: false, editLoading: false, editReady: true,
+    editWriteInFlight: { current: false },
+    editTitle: '입력 중인 새 제목', editDate: '', editTime: '',
+    editActionConversionAllowed: false, editActionKind: 'task', editOriginalActionKind: 'task',
+    getFreshAccessToken: async () => 'fresh-token',
+    updateWorklogDetails: async () => { attempts++; throw Error('synthetic offline'); },
+    setEditBusy() {}, setEditReady() {}, setEditStatus(value) { state.errors.push(value); },
+    setEditStatusTone() {}, setEditId(value) { state.closed.push(value); },
+    setItems() {}, search: async () => {},
+  };
+  const save = compile(['saveEditor'], scope).saveEditor;
+  await save();
+  assert.equal(scope.editWriteInFlight.current, false);
+  assert.deepEqual(state.closed, []);
+  assert.equal(scope.editTitle, '입력 중인 새 제목');
+  assert.match(state.errors.at(-1), /offline/);
+  await save();
+  assert.equal(attempts, 2);
+  assert.equal(scope.editWriteInFlight.current, false);
 });
