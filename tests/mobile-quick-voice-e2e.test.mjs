@@ -145,7 +145,7 @@ test('Whisper fallback exposes original to processed PCM duration in the UI and 
 test('Quick Voice fallback can leave the guarded voice flow only after explicitly clearing it', () => {
   assert.match(card, /function openDirectInputFallback\(\)/);
   assert.match(card, /navigationGuard\.current = false/);
-  assert.match(card, /onOpenWorklogInput\(\)/);
+  assert.match(card, /onOpenWorklogInput\(recoveredText \|\| undefined\)/);
   assert.match(card, /title="업무 직접 입력" onPress=\{openDirectInputFallback\}/);
   assert.doesNotMatch(card, /save_error[^\n]*업무 직접 입력/s);
 });
