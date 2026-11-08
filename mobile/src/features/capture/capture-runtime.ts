@@ -174,9 +174,22 @@ export async function undoCapture(client: PlatformSupabaseClient, entry: Capture
   if (!recordId) throw new Error('CAPTURE_SAVE_UNCONFIRMED');
   await captureToken(client, entry.owner);
   const result = await deleteWorklog(client, recordId);
+  // The server cancellation is already committed. Persist that truth before
+  // attempting OS alarm cleanup, which may fail due to device permissions.
+  const undone: CaptureEntry = { ...entry, undone: true, reminderWarning: undefined };
+  let warning = '';
+  try { await captureInbox.put(undone); }
+  catch { warning = '기록은 취소됐지만 기기 표시 저장을 확인하지 못했습니다. 홈에서 확인해주세요.'; }
   captureChanges.publish({ owner: entry.owner!, recordId, dueDate: '', cancelled: true });
-  await cancelSavedScheduleReminders(result.cancelledScheduleIds, guard);
-  const undone = { ...entry, undone: true }; await captureInbox.put(undone); return undone;
+  try { await cancelSavedScheduleReminders(result.cancelledScheduleIds, guard); }
+  catch {
+    warning = [warning, '기록은 취소됐지만 기기 알림 정리는 확인이 필요합니다. 알림 설정에서 확인해주세요.']
+      .filter(Boolean).join(' ');
+  }
+  if (!warning) return undone;
+  const outcome: CaptureEntry = { ...undone, reminderWarning: warning };
+  try { await captureInbox.put(outcome); } catch { /* Server cancellation still wins. */ }
+  return outcome;
 }
 export async function restartCapture(client: PlatformSupabaseClient, entry: CaptureEntry) {
   await captureToken(client, entry.owner);
