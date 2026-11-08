@@ -76,6 +76,15 @@ export function WorklogReminderSheet({ client, target, onClose }: { client: Plat
 
   async function reserve(offsetMinutes: 0 | 30 | 1440) {
     if (gate.current || !ready) return;
+    // A past preset is a read-only validation failure. Keep already verified
+    // alarms visible instead of clearing every status before this simple check.
+    try {
+      const previewStart = schedule?.startsAt || confirmedSeoulInstant(date.trim(), time.trim());
+      if (Date.parse(previewStart) - offsetMinutes * 60000 <= Date.now()) throw new Error('TIME_INVALID');
+    } catch (error) {
+      setMessage(reminderFailureMessage(error));
+      return;
+    }
     gate.current = true; setBusy(true); setEvidence(null);
     const epoch = reminderSyncEpoch.begin();
     const current = () => alive.current && guard.current() && epoch();

@@ -244,11 +244,25 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     }),
     getScheduleReminderStatus: () => serial(async () => {
       const state = await read();
-      const scheduled = Object.values(state.reminders).reduce((total, entries) => total + Object.keys(entries).length, 0);
+      // SecureStore mappings are recovery evidence, NOT proof the OS still has
+      // a reservation. Compare the native queue without scheduling or cancelling.
+      const osRequests = await deps.driver.list();
+      let scheduled = 0;
+      let unverified = 0;
+      for (const [scheduleId, entries] of Object.entries(state.reminders)) {
+        for (const item of Object.values(entries)) {
+          const found = osRequests.some((request) =>
+            matches(request, scheduleId, item)
+            && request.content.data?.triggerAt === item.triggerAt
+            && new Date(item.triggerAt).getTime() > now());
+          if (found) scheduled += 1;
+          else unverified += 1;
+        }
+      }
       const pending = Object.values(state.intents).filter((intent) => intent.desired !== null).length;
       const cleanupPending = Object.values(state.intents).filter((intent) => intent.desired === null).length
         + Object.values(state.legacyCleanup).reduce((total, ids) => total + ids.length, 0);
-      return { scheduled, pending, cleanupPending };
+      return { scheduled, pending, cleanupPending, unverified };
     }),
     cancelScheduleReminder: (sid: string, minutes: number) => serial(() => cancel(sid, minutes)),
     cancelAllScheduleReminders: (sid: string, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, async () => {

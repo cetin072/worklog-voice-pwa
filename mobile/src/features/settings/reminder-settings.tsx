@@ -11,17 +11,19 @@ import {
 import { mobileTheme } from '@/src/ui/theme';
 
 type PermissionState = 'checking' | 'allowed' | 'not-allowed' | 'error';
-type ReminderStatus = { scheduled: number; pending: number; cleanupPending: number };
+type ReminderStatus = { scheduled: number; pending: number; cleanupPending: number; unverified: number };
 
 export function ReminderSettings() {
   const [permission, setPermission] = useState<PermissionState>('checking');
   const [permissionDetail, setPermissionDetail] = useState('알림 권한을 확인하고 있습니다.');
   const [reminders, setReminders] = useState<ReminderStatus | null>(null);
+  const [reminderError, setReminderError] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
     setPermission('checking');
     setPermissionDetail('알림 권한을 확인하고 있습니다.');
+    setReminderError(false);
 
     const [permissionResult, reminderResult] = await Promise.allSettled([
       Notifications.getPermissionsAsync(),
@@ -44,6 +46,7 @@ export function ReminderSettings() {
     }
 
     setReminders(reminderResult.status === 'fulfilled' ? reminderResult.value : null);
+    setReminderError(reminderResult.status === 'rejected');
   }
 
   useEffect(() => {
@@ -55,6 +58,9 @@ export function ReminderSettings() {
     try {
       await requestScheduleNotificationPermission();
       await refresh();
+    } catch {
+      setPermission('error');
+      setPermissionDetail('알림 권한 요청을 마치지 못했습니다. 휴대폰 설정에서 확인하거나 다시 시도해주세요.');
     } finally {
       setBusy(false);
     }
@@ -66,6 +72,8 @@ export function ReminderSettings() {
       await openExactAlarmPermissionSettings();
       await reconcileScheduleReminders().catch(() => undefined);
       await refresh();
+    } catch {
+      setPermissionDetail('알람 설정 화면을 열지 못했습니다. 휴대폰 설정에서 확인해주세요.');
     } finally {
       setBusy(false);
     }
@@ -73,7 +81,9 @@ export function ReminderSettings() {
 
   const scheduled = reminders?.scheduled ?? null;
   const pending = reminders?.pending ?? 0;
-  const needsExactAlarmAccess = Platform.OS === 'android' && Number(Platform.Version) >= 31 && pending > 0;
+  const unverified = reminders?.unverified ?? 0;
+  const cleanupPending = reminders?.cleanupPending ?? 0;
+  const needsExactAlarmAccess = Platform.OS === 'android' && Number(Platform.Version) >= 31 && permission === 'allowed' && pending > 0;
 
   return <View style={styles.root}>
     <View style={styles.section}>
@@ -94,12 +104,15 @@ export function ReminderSettings() {
       <Text style={styles.heading}>일정 알림</Text>
       <Text style={styles.detail}>시간이 있는 일정은 시작 시각에 한 번 알려드립니다.</Text>
       <Text style={styles.status}>
-        {scheduled === null ? '예약 상태 확인 중' : scheduled ? `예약된 일정 알림 ${scheduled}개` : pending ? `예약 대기 중 ${pending}개` : '예약된 일정 알림 없음'}
+        {reminderError ? '알림 예약 상태를 확인하지 못했습니다' : scheduled === null ? '예약 상태 확인 중' : scheduled ? `휴대폰 예약 확인 ${scheduled}개` : pending ? `예약 대기 중 ${pending}개` : unverified ? `알림 확인 필요 ${unverified}개` : '예약된 일정 알림 없음'}
       </Text>
-      {scheduled === 0 && pending === 0 ? <Text style={styles.detail}>날짜와 시작 시각이 확정된 미래 일정이 저장되면 자동으로 시작 알림을 예약합니다. 기록만 저장하거나 시간이 빠진 경우에는 알림이 생성되지 않습니다.</Text> : null}
+      {scheduled === 0 && pending === 0 && unverified === 0 && cleanupPending === 0 ? <Text style={styles.detail}>날짜와 시작 시각이 확정된 미래 일정이 저장되면 자동으로 시작 알림을 예약합니다. 기록만 저장하거나 시간이 빠진 경우에는 알림이 생성되지 않습니다.</Text> : null}
+      {scheduled !== null && scheduled > 0 && pending > 0 ? <Text style={styles.detail}>추가 알림 {pending}개는 아직 예약 대기 중입니다.</Text> : null}
+      {unverified > 0 ? <Text style={styles.warningTitle}>저장된 알림 {unverified}개는 휴대폰 예약이 확인되지 않았습니다. 앱을 다시 열어 알림 복구를 확인해주세요.</Text> : null}
+      {cleanupPending > 0 ? <Text style={styles.detail}>취소한 일정의 알림 정리 {cleanupPending}개가 대기 중입니다. 앱을 다시 열면 정리를 다시 시도합니다.</Text> : null}
       {needsExactAlarmAccess ? <View style={styles.warning}>
-        <Text style={styles.warningTitle}>정확한 일정 알림 권한이 필요합니다.</Text>
-        <Text style={styles.detail}>Android의 ‘알람 및 리마인더’에서 업무수첩을 허용하면 대기 중인 일정 알림을 다시 예약합니다.</Text>
+        <Text style={styles.warningTitle}>정확한 일정 알림 권한 확인</Text>
+        <Text style={styles.detail}>예약 대기 중인 알림이 있습니다. Android의 ‘알람 및 리마인더’ 권한을 확인한 뒤 상태를 다시 확인해주세요.</Text>
         <Pressable accessibilityRole="button" disabled={busy} style={styles.action} onPress={() => void openExactAlarmAccess()}>
           <Text style={styles.actionText}>정확한 일정 알림 허용</Text>
         </Pressable>
