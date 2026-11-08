@@ -279,3 +279,8 @@ test('recording started by A can be finalized to A after logout without attribut
   assert.equal(recordings.listMeetingRecordings().length,0);
   owner.selectMeetingOwner('account-a');assert.equal(recordings.listMeetingRecordings()[0].durationMs,90000);
 });
+
+test('finalizing an in-progress owned recording preserves a title edited during capture',()=>{
+ reset();const input=recording(103);const row=recordings.rememberMeetingRecording(input);recordings.renameMeetingRecording(row.id,'진행 중 붙인 제목');
+ recordings.rememberMeetingRecording({...input,durationMs:120000});assert.equal(recordings.listMeetingRecordings()[0].title,'진행 중 붙인 제목');
+});

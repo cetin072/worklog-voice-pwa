@@ -44,7 +44,7 @@ test('Meeting recording files stay local-first and are removable from the device
 test('Meeting recording session survives route-level screen changes and stays visible from Home', () => {
   assert.match(rootLayout, /MeetingRecordingProvider/);
   assert.match(provider, /MeetingRecordingSession/);
-  assert.match(provider, /active: phase === 'recording'/);
+  assert.match(provider, /active: visibleToCurrentOwner && \(phase === 'recording'/);
   assert.match(recorder, /useMeetingRecordingSession/);
   assert.match(banner, /meeting\.active/);
   assert.match(banner, /meeting\.durationMs/);
@@ -55,7 +55,7 @@ test('Meeting recording session survives route-level screen changes and stays vi
 test('Meeting recording library can rename saved recordings for later identification', () => {
   assert.match(repository, /renameMeetingRecording/);
   assert.match(repository, /title: string/);
-  assert.match(repository, /title: ''/);
+  assert.match(repository, /title: readIndexRaw\(owner\)/);
   assert.match(library, /이름 바꾸기/);
   assert.match(library, /회의 녹음 이름/);
   assert.match(library, /이름 저장/);
