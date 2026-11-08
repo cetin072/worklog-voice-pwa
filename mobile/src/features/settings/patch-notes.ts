@@ -9,6 +9,16 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-08',
+    title: '직접 입력 결과·알림 안내 통합',
+    summary: '같은 기록의 저장 결과와 알림 상태를 한 카드에서 확인하도록 정리했습니다.',
+    items: [
+      '업무·일정 저장 성공과 기기 알림 예약 확인은 계속 구분합니다.',
+      '같은 기록에서 중복 표시되던 알림 안내를 저장 결과 안으로 모았습니다.',
+      '알림 확인 버튼을 유지하고, 다른 기록의 알림 안내는 숨기지 않습니다.',
+    ],
+  },
+  {
     date: '2026-11-07',
     title: '회의 녹음 목록·회의록 편집 개선',
     summary: '녹음 목록과 회의록 보존을 보강하고 키보드가 입력 화면을 가리지 않도록 개선했습니다.',
