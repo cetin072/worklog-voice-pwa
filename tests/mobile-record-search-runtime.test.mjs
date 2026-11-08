@@ -86,7 +86,6 @@ function makeEditor() {
     setEditStatusTone() {}, setEditActionKind() {}, setEditOriginalActionKind() {},
     setEditActionConversionAllowed() {}, setEditId() {},
   };
-  for(const name of ['setEditActionKind', 'setEditOriginalActionKind', 'setEditActionConversionAllowed']){}
   return { scope, state, pending, api: compile(['loadEditorDetails', 'cancelEditor'], scope) };
 }
 
@@ -99,7 +98,7 @@ test('closing search editor invalidates a late detail reply and keeps an in-prog
   assert.equal(h.state.ready, false);
   h.pending[0].resolve({ title: '지연된 비공개 제목', dueDate: '2030-01-03', dueTime: '12:00' });
   await opening;
-  assert.equal(h.state.title, '사용자 제목');
+  assert.equal(h.state.title, '', 'closed sheet must stay cleared despite late response');
   assert.equal(h.state.loading, false);
 });
 
