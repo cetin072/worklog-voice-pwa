@@ -20,7 +20,7 @@ function directSave(scope) {
 function ui(input, saver) {
   const state = { messages: [], cleared: 0, calls: 0 };
   const scope = {
-    session: { access_token: 'synthetic-token' }, busy: false, manualInput: input,
+    session: { access_token: 'synthetic-token' }, client: null, busy: false, manualInput: input,
     saveWorklog: (...args) => { state.calls++; return saver(...args); },
     run: fn => fn(), reminderSessionEpoch: { capture: () => () => true },
     synchronizeSavedScheduleReminders: async () => [], savedReminderMessage: () => '',
