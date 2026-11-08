@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { ActivityIndicator, Button, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
@@ -32,6 +33,8 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [nextOffset, setNextOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
+  const searchEpoch = useRef(0);
+  const searchInFlightKey = useRef<string | null>(null);
   const [message, setMessage] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -43,65 +46,90 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
   const [editActionConversionAllowed, setEditActionConversionAllowed] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+  const editReadEpoch = useRef(0);
+  const editDirty = useRef({ title: false, date: false, time: false, kind: false });
   const [editReady, setEditReady] = useState(false);
   const [editStatus, setEditStatus] = useState('');
   const [editStatusTone, setEditStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
 
   async function search(reset: boolean) {
     const normalizedQuery = query.trim();
-    if (!normalizedQuery || busy) {
-      if (!normalizedQuery) setMessage('검색어를 입력해 주세요.');
+    if (!normalizedQuery) {
+      setMessage('검색어를 입력해 주세요.');
       return;
     }
-
+    const offset = reset ? 0 : nextOffset;
+    const requestKey = JSON.stringify([normalizedQuery, statuses, offset]);
+    // Drop repeated taps but allow a new query to supersede a slow old one.
+    if (searchInFlightKey.current === requestKey) return;
+    const request = ++searchEpoch.current;
+    searchInFlightKey.current = requestKey;
     setBusy(true);
     setMessage('');
     try {
       const page = await searchMyWorkRecords(client, normalizedQuery, reset ? 0 : nextOffset, statuses);
+      if (request !== searchEpoch.current) return;
       setItems((current) => reset ? page.items : [...current, ...page.items]);
       setNextOffset(page.nextOffset);
       setHasMore(page.hasMore);
       if (page.items.length === 0) setMessage(page.hasMore ? '이 조건의 결과가 다음 페이지에 있을 수 있습니다. 더 보기를 눌러 계속 검색하세요.' : '검색 결과가 없습니다.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '과거 업무 검색에 실패했습니다.');
+      if (request === searchEpoch.current) setMessage(error instanceof Error ? error.message : '과거 업무 검색에 실패했습니다.');
     } finally {
-      setBusy(false);
+      if (searchInFlightKey.current === requestKey) searchInFlightKey.current = null;
+      if (request === searchEpoch.current) setBusy(false);
     }
   }
 
+  function changeQuery(next: string) {
+    searchEpoch.current += 1;
+    setQuery(next);
+    setItems([]);
+    setNextOffset(0);
+    setHasMore(false);
+    setMessage('');
+    setBusy(false);
+  }
+
   function toggleStatus(status: string) {
+    searchEpoch.current += 1;
     setStatuses((current) => current.includes(status) ? current.filter((value) => value !== status) : [...current, status]);
     setItems([]);
     setNextOffset(0);
     setHasMore(false);
+    setBusy(false);
     setMessage('상태 조건을 바꿨습니다. 검색을 다시 눌러 적용하세요.');
   }
 
   async function loadEditorDetails(recordId: string, fallbackTitle = '') {
-    if (editBusy || editLoading) return;
+    if (editBusy) return;
+    const epoch = ++editReadEpoch.current;
     setEditLoading(true);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
     try {
-      const details = await readWorklogDetails(accessToken, recordId);
-      setEditTitle(details.title || fallbackTitle);
-      setEditDate(details.dueDate || '');
-      setEditTime(details.dueTime || '');
-      setEditActionKind(details.actionKind);
+      const details = await readWorklogDetails(await getFreshAccessToken(client), recordId);
+      if (epoch !== editReadEpoch.current) return;
+      if (!editDirty.current.title) setEditTitle(details.title || fallbackTitle);
+      if (!editDirty.current.date) setEditDate(details.dueDate || '');
+      if (!editDirty.current.time) setEditTime(details.dueTime || '');
+      if (!editDirty.current.kind) setEditActionKind(details.actionKind);
       setEditOriginalActionKind(details.actionKind);
       setEditActionConversionAllowed(details.actionConversionAllowed === true);
       setEditReady(true);
     } catch (error) {
+      if (epoch !== editReadEpoch.current) return;
       setEditStatus(error instanceof Error ? error.message : '업무 상세를 불러오지 못했습니다.');
       setEditStatusTone('error');
     } finally {
-      setEditLoading(false);
+      if (epoch === editReadEpoch.current) setEditLoading(false);
     }
   }
 
   async function openEditor(item: WorkRecordSearchResult) {
-    if (editBusy || editLoading) return;
+    if (editBusy) return;
+    editDirty.current = { title: false, date: false, time: false, kind: false };
     setSelectedId(item.workRecordId);
     setEditId(item.workRecordId);
     setEditTitle(item.title);
@@ -145,7 +173,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditStatus('');
     setEditStatusTone('neutral');
     try {
-      const result = await updateWorklogDetails(accessToken, {
+      const result = await updateWorklogDetails(await getFreshAccessToken(client), {
         pageId: recordId,
         title,
         dueDate: editDate.trim(),
@@ -166,7 +194,6 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
           ? '변경된 내용이 없습니다.'
           : '✓ 업무를 수정했습니다.');
       setEditStatusTone(result.unchanged && !result.actionKindChanged ? 'neutral' : 'success');
-      await new Promise((resolve) => setTimeout(resolve, 420));
       setEditId(null);
       setEditStatus('');
       setEditStatusTone('neutral');
@@ -181,6 +208,8 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
 
   function cancelEditor() {
     if (editBusy) return;
+    editReadEpoch.current += 1;
+    setEditLoading(false);
     setEditId(null);
     setEditTitle('');
     setEditDate('');
@@ -195,7 +224,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
 
   return <View style={styles.root}>
     <Text style={styles.help}>현재 업무뿐 아니라 과거·완료 업무의 업무명, 기관, 후속조치, 원문까지 검색합니다.</Text>
-    <TextInput accessibilityLabel="전체 업무 검색" placeholder="예: 계약서, 태장, 회신 확인" style={styles.input} value={query} onChangeText={setQuery} returnKeyType="search" onSubmitEditing={() => void search(true)} />
+    <TextInput accessibilityLabel="전체 업무 검색" placeholder="예: 계약서, 태장, 회신 확인" style={styles.input} value={query} onChangeText={changeQuery} returnKeyType="search" onSubmitEditing={() => void search(true)} />
     <View style={styles.filters}>{STATUS_FILTERS.map((filter) => <Pressable key={filter.value} accessibilityRole="button" accessibilityLabel={`${filter.label} 상태 ${statuses.includes(filter.value) ? '해제' : '선택'}`} style={[styles.filter, statuses.includes(filter.value) ? styles.filterActive : null]} disabled={busy} onPress={() => toggleStatus(filter.value)}><Text style={[styles.filterText, statuses.includes(filter.value) ? styles.filterTextActive : null]}>{statuses.includes(filter.value) ? '✓ ' : ''}{filter.label}</Text></Pressable>)}</View>
     <Button title={busy ? '전체 기록 검색 중...' : '전체 기록 검색'} disabled={busy || !query.trim()} onPress={() => void search(true)} />
     {busy ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.meta}>검색 중입니다.</Text></View> : null}
@@ -218,6 +247,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     {message ? <Text style={styles.message}>{message}</Text> : null}
     <WorkRecordEditSheet
       visible={Boolean(editId)}
+      allowTitleWhileLoading
       title={editTitle}
       date={editDate}
       time={editTime}
@@ -228,10 +258,10 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       actionConversionAllowed={editActionConversionAllowed}
       statusText={editStatus}
       statusTone={editStatusTone}
-      onTitle={setEditTitle}
-      onDate={setEditDate}
-      onTime={setEditTime}
-      onActionKind={setEditActionKind}
+      onTitle={(value) => { editDirty.current.title = true; setEditTitle(value); }}
+      onDate={(value) => { editDirty.current.date = true; setEditDate(value); }}
+      onTime={(value) => { editDirty.current.time = true; setEditTime(value); }}
+      onActionKind={(value) => { editDirty.current.kind = true; setEditActionKind(value); }}
       onSave={() => void saveEditor()}
       onCancel={cancelEditor}
       onRetry={() => void retryEditor()}
