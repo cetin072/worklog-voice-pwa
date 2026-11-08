@@ -378,6 +378,19 @@
 - **실사용:** 앱 설정에서 종류·설정 버전을 확인하기 쉬워졌지만, 실제 설치 Android 빌드 번호(코드8 등)의 정확한 조회는 별도 `expo-application` 또는 native 계약이 필요하고, 이 변경의 목적상 새 native dependency를 넣지 않음. QA/Play 두 앱 설치 후 화면·알림/업데이트 표시 및 TalkBack/스토어 이동은 HUMAN QA가 남음. 단순 업데이트 유지 기능은 직접 업무시간 절감으로 계산하지 않고, 패치노트 내 스크롤·탭의 총 소요시간은 MEASURED 없음.
 - **경계:** `main` 병합 및 정적 패치노트 갱신만. QA APK·Play AAB 업로드/운영 Netlify 수동 배포·비공개 계정·DB·기기 알림 정책·실제 사용자 기록 미변경.
 
+### M19: 로그인·계정 전환·로컬 데이터 소유권 검수 (2026-11-08)
+
+**판정: KEEP(Supabase 로그인/본인 WorkRecord 접근) + FIX(기기 알림 콜백 경계 Draft #507) + 보안 P1 미해결(로컬 회의 녹음 #521). HUMAN·MEASURED 미실시.**
+
+- **코드상 보존된 경계:** `HomeScreenApp`은 `key={session?.user.id || 'signed-out'}`로 개인 UI/메모리 재시도를 계정별 재마운트한다. 캡처 인박스 `CaptureEntry.owner`, Quick Voice 초안 `quick_voice_draft_v1_<scope>`, 수기 입력 보존 [Draft #515](https://github.com/cetin072/worklog-voice-pwa/pull/515)은 owner-scoped device key를 사용한다. Calendar 서비스는 `selectCalendarOwner(session?.user.id)`로 계정 전환에 맞춰 기존 연결을 초기화한다. 서버 WorkRecord 수정·삭제 RPC는 기존 owner RLS/creator-scoped API를 유지. 실제 다른 계정 로그인 결과는 기기 HUMAN 테스트 필요.
+- **OS 알림 경계의 기존 P1:** 서버 계정 로그아웃만으로 이미 Android OS에 예약된 이전 사용자 일정 제목이 삭제되는 것은 아니다. [Draft #507](https://github.com/cetin072/worklog-voice-pwa/pull/507)은 앱이 소유권을 증명한 예약 알림만 기존 단일 직렬 큐로 정리하며, 정리 실패 시 수동 로그아웃/로그인 완료로 처리하지 않는 구조다. User-facing 데이터 원본 삭제는 없음.
+- **이번 보강(같은 Draft #507):** 기존 이메일·Google 로그인 버튼의 사전 알림 정리뿐 아니라, 외부 Google OAuth URL이 앱 *최초 실행* 또는 *앱 실행 중* 직접 전달되는 경로에 기존 정리 절차가 누락돼 있었다. `google-auth.ts`의 access/refresh token `setSession`과 PKCE `exchangeCodeForSession` 바로 전에 선택형 `beforeSessionChange` 정리 훅을 호출한다. `PlatformProvider`의 initial URL, warm Linking URL, 상호작용 브라우저 반환 3경로에서 동일 `clearDeviceRemindersForAccountExit`를 넘겨 세션 변경 이전에 완료해야 한다. 불완전/Calendar 목적의 콜백은 개인 OS 알림 정리/로그인 교체를 수행하지 않고, 콜백 다중 진입은 기존 `callbackInFlight` 재사용. 서버 Auth DB/manifest/Native 드라이버 변경 없음.
+- **자동검사:** 새 `tests/mobile-oauth-account-exit.runtime.test.mjs`에서 실제 OAuth 함수 AST 추출 실행. 구형 access-token URL 및 PKCE 코드, 정리 완료 전 세션 적용 금지, 정리 실패 시 교체 없음·재시도, 브라우저/따로 들어온 URL 경합 시 1회 정리·교환, Calendar 콜백 분리. Draft HEAD `dc4f0e1`: Mobile typecheck SUCCESS, 전체 Web UAR SUCCESS. Android standalone/runtime smoke/physical QA 모두 SKIPPED이므로 실기기 보호 효과 미검증, Draft 그대로 main 미병합.
+- **새로 확인한 로컬 녹음 프라이버시 P1:** [Issue #521](https://github.com/cetin072/worklog-voice-pwa/issues/521). `meeting-recordings-v1.json`의 `MeetingRecordingEntry`에는 owner가 없고 `listMeetingRecordings()`/파일 복구/회의록 파일 `loadMeetingMinutes(recording.id)`도 현재 로그인 계정을 확인하지 않는다. `MeetingRecordingProvider`는 루트에 계정별 재마운트 없이 유지돼 진행 중 녹음의 계정 변경도 보호되지 않는다. 이 앱을 같은 기기에서 A→B로 사용하면 이전 사용자의 녹음/회의록을 B가 조회할 *잠재적 코드상 위험*이 있다. 실제 유출 사례 증거는 없음.
+- **기존 자료 보호 정책:** 소유자를 기록하지 않은 이전 M4A/회의록 파일을 현재 사용자에게 자동 귀속·삭제·일괄 암호화·이동하지 않는다. 신규 녹음의 owner 검증, 과거 파일 소유권 확인/안전 이관, 녹음 진행 중 로그아웃 세션 경계를 별도 설계·기기 QA 후 사용자 승인받아 변경한다. 단순 `MeetingRecordingProvider key={userId}`로 바꾸면 미저장 녹음 유실 위험이 있어 금지. 기존 파일/OS 알림/앱 DB/직접 입력은 미변경.
+- **UI/업무 효율:** 기존 Google/이메일 로그인, 설정→로그아웃, 인증 오류 안내를 유지하며 계정 전환 편의를 해치는 추가 단계를 즉흥 생성하지 않았다. 기기 보안 안전 확보가 우선, 실제 A→B 전환 전체 탭·소요시간/알림·파일 접근/업무시간 절감은 **미측정**.
+- **남은 HUMAN:** 동일 Android 앱 계정 A/B/C 전환에서 예약된 다른 사용자 OS 알림 0개, 신규 로그인 후 본인 알림 복구, 구버전 설치본 orphan 알림, OAuth cold/warm 중단·오류, 녹음·회의록 owner-old 접근 0건, A 원본 보존. 현재 QA APK/Play/Production/DB/운영 사용자 데이터 변경 없음.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
