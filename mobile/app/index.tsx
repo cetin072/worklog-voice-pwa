@@ -1087,7 +1087,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   function confirmSignOut() {
     Alert.alert(
       '로그아웃',
-      '이 기기에서 현재 업무수첩 계정 세션을 종료할까요?',
+      '이 기기에서 현재 업무수첩 계정 세션을 종료할까요?\n기기에 예약된 업무수첩 일정 알림은 해제되지만, 저장된 일정 기록은 유지됩니다.',
       [
         { text: '취소', style: 'cancel' },
         { text: '로그아웃', style: 'destructive', onPress: () => { void run(signOut); } },

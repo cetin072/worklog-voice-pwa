@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { classifyWorklogAction, isTimedScheduleIntent } from "../netlify/shared/action-engine-v1.mjs";
 import { extractScheduleFromText } from "../netlify/shared/schedule-extract.mjs";
+import { worklogSchedule } from "../netlify/shared/manual-worklog-schedule.mjs";
+import { quickWorklogSchedule } from "../netlify/shared/worklog-data-core-adapter.mjs";
 
 const RECORDED_AT="2026-09-19T08:00:00.000Z"; // 2026-09-19 17:00 KST
 
@@ -145,4 +147,60 @@ test("relative time without reminder or event signal does not silently become Sc
   const schedule=extractScheduleFromText(transcript,RECORDED_AT);
   const result=classifyWorklogAction({transcript,recordedAt:RECORDED_AT,schedule});
   assert.notEqual(result.kind,"schedule");
+});
+
+test("clear Korean payment/reporting deadlines are Tasks, not meetings or informational notes", () => {
+  const cases = [
+    "내일 오후 3시까지 세금 납부",
+    "내일 오후 3시까지 부가세 신고",
+    "내일 오후 3시까지 거래처 대금 입금",
+    "내일 오후 3시까지 대금 송금",
+    "내일 오후 3시까지 보험료 결제",
+    "내일 오후 3시까지 직원 수당 지급",
+    "내일 오후 3시까지 회의비 결제",
+  ];
+  for (const transcript of cases) {
+    const schedule = extractScheduleFromText(transcript, RECORDED_AT);
+    assert.ok(schedule?.hasTime, transcript);
+    const action = classifyWorklogAction({ transcript, recordedAt: RECORDED_AT, schedule });
+    assert.equal(action.kind, "task", transcript);
+    assert.equal(action.reason, "deadline_action", transcript);
+    assert.equal(action.actionKind, "task", transcript);
+    assert.equal(isTimedScheduleIntent({ source: transcript, dueStart: schedule.dueStart, explicitType: "회의·통화" }), false, transcript);
+  }
+});
+
+test("future appointment, explicit deadline and accounting phrases remain distinct through the structured picker", () => {
+  const cases = [
+    ["오후 3시에 거래처 방문", "schedule", true],
+    ["오후 3시에 담당자 회의", "schedule", true],
+    ["오후 3시까지 세금 납부", "task", false],
+    ["오후 3시까지 회의비 결제", "task", false],
+  ];
+  for (const [transcript, kind, createsSchedule] of cases) {
+    const selected = worklogSchedule(transcript, RECORDED_AT, "2026-09-25", "15:00");
+    const action = classifyWorklogAction({
+      transcript, recordedAt: RECORDED_AT, schedule: selected, explicitType: "회의·통화",
+    });
+    assert.equal(action.kind, kind, transcript);
+    const native = quickWorklogSchedule(
+      { transcript, dueStart: selected.dueStart, type: "회의·통화" },
+      { title: transcript, dueAt: selected.dueStart, recordType: "meeting_call" },
+    );
+    assert.equal(Boolean(native), createsSchedule, transcript);
+    assert.equal(selected.dueStart, "2026-09-25T15:00:00+09:00");
+  }
+});
+
+test("explicit financial task commands do not turn into appointments because of 회의비 wording", () => {
+  const cases = [
+    "내일 오후 2시에 회의비 결제하기",
+    "내일 오후 2시에 세금 납부하기",
+    "내일 오후 2시에 부가세 신고하기",
+  ];
+  for (const transcript of cases) {
+    const schedule = extractScheduleFromText(transcript, RECORDED_AT);
+    assert.equal(classifyWorklogAction({ transcript, recordedAt: RECORDED_AT, schedule }).kind, "task", transcript);
+    assert.equal(isTimedScheduleIntent({ source: transcript, dueStart: schedule.dueStart }), false, transcript);
+  }
 });
