@@ -25,7 +25,7 @@ test('real journal loader aborts a stalled read through the existing deadline', 
     getApiBaseUrl: () => 'https://test.invalid',
     fetch: (input, opts) => { url = input; opts.signal.addEventListener('abort',()=>{aborted=true;}); return new Promise(()=>{}); },
   };
-  const load = compile(declaration(apiAst,'loadWorkJournalDay')+'\nreturn loadWorkJournalDay;',scope);
+  const load = compile(declaration(apiAst,'loadWorkJournalDay').replace(/^export\s+/, '')+'\nreturn loadWorkJournalDay;',scope);
   await assert.rejects(load('synthetic-token','2030-01-05'), /연결이 지연되고/);
   assert.equal(aborted,true); assert.match(url,/work-journal\?date=2030-01-05/);
 });
