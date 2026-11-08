@@ -382,6 +382,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const initialReminderRecovery = useRef<Promise<unknown>>(Promise.resolve());
   const [busy, setBusy] = useState(false);
   const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
+  // React state can lag behind rapid taps; block overlapping status writes immediately.
+  const taskStatusInFlight = useRef(false);
   const [undoTask, setUndoTask] = useState<{ pageId: string; status: WorkStatus; title: string; previousAttentionAt: string | null } | null>(null);
   const [reminderBusyId, setReminderBusyId] = useState<string | null>(null);
   const [undoPostpone, setUndoPostpone] = useState<{ pageId: string; title: string } | null>(null);
@@ -651,7 +653,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function completeTaskInline(task: BriefingTask) {
-    if (!session || !client || !task.pageId || taskBusyId) return;
+    if (!session || !client || !task.pageId || taskBusyId || taskStatusInFlight.current) return;
+    taskStatusInFlight.current = true;
     const previousStatus: WorkStatus = task.status === '대기' || task.status === '확인필요' || task.status === '진행중' ? task.status : '진행중';
     setTaskBusyId(task.pageId);
     clearMessage();
@@ -659,10 +662,12 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       const accessToken = await getFreshAccessToken(client);
       await updateWorklogStatus(accessToken, task.pageId, '완료');
       setUndoTask({ pageId: task.pageId, status: previousStatus, title: task.title || '업무', previousAttentionAt: task.nextAttentionAt || null });
-      await refreshBriefing();
+      // The server mutation is confirmed even if the separate list read fails.
+      if (!await refreshBriefing()) showMessage(`${task.title || '업무'} 완료 처리는 저장됐습니다. 목록만 새로고침해주세요.`, 'info');
     } catch (nextError) {
       showMessage(messageOf(nextError, '업무 완료 처리에 실패했습니다.'), 'error');
     } finally {
+      taskStatusInFlight.current = false;
       setTaskBusyId(null);
     }
   }
@@ -708,7 +713,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function undoCompletedTask() {
-    if (!session || !client || !undoTask || taskBusyId) return;
+    if (!session || !client || !undoTask || taskBusyId || taskStatusInFlight.current) return;
+    taskStatusInFlight.current = true;
     const target = undoTask;
     setTaskBusyId(target.pageId);
     clearMessage();
@@ -728,10 +734,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         attentionError ? `${target.title} 완료는 되돌렸지만 다시 알림은 확인이 필요합니다. ${attentionError}` : `${target.title} 완료 처리를 되돌렸습니다.`,
         attentionError ? 'error' : 'success',
       );
-      await refreshBriefing();
+      if (!await refreshBriefing()) showMessage(
+        attentionError ? `${target.title} 완료는 되돌렸습니다. 다시 알림과 목록을 확인해주세요. ${attentionError}` : `${target.title} 완료는 되돌렸습니다. 목록만 새로고침해주세요.`,
+        attentionError ? 'error' : 'info',
+      );
     } catch (nextError) {
       showMessage(messageOf(nextError, '완료 처리를 되돌리지 못했습니다.'), 'error');
     } finally {
+      taskStatusInFlight.current = false;
       setTaskBusyId(null);
     }
   }
@@ -862,11 +872,11 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function acknowledgeNote(note: BriefingNote) {
-    if (!session || !note.pageId || noteBusyId) return;
+    if (!session || !client || !note.pageId || noteBusyId) return;
     setNoteBusyId(note.pageId);
     clearMessage();
     try {
-      await updateBriefingNoteState(session.access_token, note.pageId, 'acknowledged');
+      await updateBriefingNoteState(await getFreshAccessToken(client), note.pageId, 'acknowledged');
       removeVisibleNote(note.pageId);
       setUndoNote({ pageId: note.pageId, title: note.title || '메모' });
       await refreshBriefing();
@@ -878,12 +888,12 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function undoAcknowledgedNote() {
-    if (!session || !undoNote || noteBusyId) return;
+    if (!session || !client || !undoNote || noteBusyId) return;
     const target = undoNote;
     setNoteBusyId(target.pageId);
     clearMessage();
     try {
-      await updateBriefingNoteState(session.access_token, target.pageId, 'active');
+      await updateBriefingNoteState(await getFreshAccessToken(client), target.pageId, 'active');
       setUndoNote(null);
       await refreshBriefing();
     } catch (nextError) {
