@@ -101,7 +101,7 @@ test('native reminder cleanup failure after a fresh list is separate from list r
 test('completion and undo keep their confirmed server result when list retrieval fails; only reads are retried', async () => {
   const h = harness(); const mutations = []; const messages = [];
   const scope = {
-    session: {}, client: {}, taskBusyId: null, undoTask: null, refreshBriefing: h.refreshBriefing,
+    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, undoTask: null, refreshBriefing: h.refreshBriefing,
     getFreshAccessToken: async () => 'synthetic', clearMessage() {},
     setTaskBusyId: value => { scope.taskBusyId = value; },
     setUndoTask: value => { scope.undoTask = value; },
@@ -116,5 +116,80 @@ test('completion and undo keep their confirmed server result when list retrieval
   await api.undoCompletedTask();
   assert.deepEqual(mutations, [{ id: 'saved', status: '완료' }, { id: 'saved', status: '대기' }]);
   assert.equal(scope.undoTask, null); assert.equal(scope.taskBusyId, null);
-  assert.equal(messages.at(-1).tone, 'success'); assert.equal(h.state.error, 'synthetic offline');
+  assert.equal(messages.at(-1).tone, 'info'); assert.match(messages.at(-1).text, /목록만 새로고침/); assert.equal(h.state.error, 'synthetic offline');
+});
+
+
+test('two rapid taps on the same task create only one completed-status write', async () => {
+  let release;
+  const barrier = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  const scope = {
+    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, undoTask: null,
+    getFreshAccessToken: async () => 'fresh',
+    updateWorklogStatus: async (_token, id, status) => { calls.push({ id, status }); await barrier; },
+    setTaskBusyId() {}, setUndoTask(value) { scope.undoTask = value; }, clearMessage() {},
+    refreshBriefing: async () => true, showMessage() {}, messageOf: e => e.message,
+  };
+  const complete = compile(`${declaration(home, 'completeTaskInline')}\nreturn completeTaskInline;`, scope);
+  const task = { pageId: 'task-1', title: '합성 업무', status: '대기' };
+  const first = complete(task);
+  const second = complete(task); // before a React render updates taskBusyId
+  await Promise.resolve();
+  assert.deepEqual(calls, [{ id: 'task-1', status: '완료' }]);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(scope.taskStatusInFlight.current, false);
+  assert.equal(scope.undoTask.status, '대기');
+});
+
+test('rapid Undo taps write one restoration and failed writes release the lock for retry', async () => {
+  let release;
+  const barrier = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  const target = { pageId: 'task-2', title: '합성 업무', status: '진행중', previousAttentionAt: null };
+  const scope = {
+    session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, undoTask: target,
+    getFreshAccessToken: async () => 'fresh',
+    updateWorklogStatus: async (_token, id, status) => { calls.push({ id, status }); await barrier; },
+    setTaskBusyId() {}, setUndoTask(value) { scope.undoTask = value; }, clearMessage() {},
+    refreshBriefing: async () => true, showMessage() {}, messageOf: e => e.message,
+  };
+  const undo = compile(`${declaration(home, 'undoCompletedTask')}\nreturn undoCompletedTask;`, scope);
+  const first = undo(), second = undo();
+  await Promise.resolve();
+  assert.deepEqual(calls, [{ id: 'task-2', status: '진행중' }]);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(scope.undoTask, null);
+  assert.equal(scope.taskStatusInFlight.current, false);
+
+  let attempts = 0;
+  scope.updateWorklogStatus = async () => { attempts++; if (attempts === 1) throw Error('offline'); };
+  const complete = compile(`${declaration(home, 'completeTaskInline')}\nreturn completeTaskInline;`, scope);
+  await complete({ pageId: 'task-3', title: '합성 업무', status: '대기' });
+  assert.equal(scope.taskStatusInFlight.current, false);
+  await complete({ pageId: 'task-3', title: '합성 업무', status: '대기' });
+  assert.equal(attempts, 2);
+  assert.equal(scope.taskStatusInFlight.current, false);
+});
+
+test('note acknowledge and Undo renew access token instead of reusing an expired session token', async () => {
+  const calls = [];
+  const scope = {
+    session: { access_token: 'expired' }, client: {}, noteBusyId: null, undoNote: null,
+    getFreshAccessToken: async () => 'fresh',
+    updateBriefingNoteState: async (token, id, state) => { calls.push({ token, id, state }); },
+    setNoteBusyId() {}, setUndoNote(value) { scope.undoNote = value; },
+    removeVisibleNote() {}, refreshBriefing: async () => true,
+    clearMessage() {}, showMessage() {}, messageOf: e => e.message,
+  };
+  const api = compile(`${declaration(home, 'acknowledgeNote')}\n${declaration(home, 'undoAcknowledgedNote')}\nreturn { acknowledgeNote, undoAcknowledgedNote };`, scope);
+  await api.acknowledgeNote({ pageId: 'note-1', title: '합성 메모' });
+  assert.equal(scope.undoNote.pageId, 'note-1');
+  await api.undoAcknowledgedNote();
+  assert.deepEqual(calls, [
+    { token: 'fresh', id: 'note-1', state: 'acknowledged' },
+    { token: 'fresh', id: 'note-1', state: 'active' },
+  ]);
 });
