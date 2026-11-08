@@ -457,18 +457,18 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     return () => { alive = false; reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); authChanges.subscription.unsubscribe(); subscription.remove(); };
   }, [androidTouchSmoke, client, session?.access_token]);
   useEffect(() => {
-    if (!session || screen !== 'journal') return;
-    const token = session.access_token;
+    if (!session || !client || screen !== 'journal') return;
     let alive = true;
     setJournal(null);
     setJournalBusy(true);
     setJournalError('');
-    void loadHomeJournal(token, journalDate)
+    void freshHomeAccessToken(client)
+      .then((token) => loadHomeJournal(token, journalDate))
       .then((next) => { if (alive) setJournal(next); })
       .catch((nextError) => { if (alive) setJournalError(messageOf(nextError, '업무일지를 불러오지 못했습니다.')); })
       .finally(() => { if (alive) setJournalBusy(false); });
     return () => { alive = false; };
-  }, [screen, journalDate, journalReloadKey, session?.access_token]);
+  }, [screen, journalDate, journalReloadKey, client, session?.access_token]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
