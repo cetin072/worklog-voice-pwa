@@ -57,6 +57,20 @@ test('typing a new query invalidates an in-flight old response and preserves the
   assert.equal(h.state.busy, false);
 });
 
+test('returning to an older query can search again while its obsolete request is still in flight', async () => {
+  const h = makeSearch();
+  const old = h.api.search(true);
+  h.api.changeQuery('다른 검색');
+  h.api.changeQuery('계약');
+  const current = h.api.search(true);
+  assert.equal(h.pending.length, 2);
+  h.pending[1].resolve({ items: [{ workRecordId: 'NEW' }], nextOffset: 1, hasMore: false });
+  await current;
+  h.pending[0].resolve({ items: [{ workRecordId: 'OLD' }], nextOffset: 1, hasMore: false });
+  await old;
+  assert.deepEqual(h.state.items.map(x => x.workRecordId), ['NEW']);
+});
+
 test('status change invalidates old search and repeated button taps make only one identical RPC', async () => {
   const h = makeSearch();
   const old = h.api.search(true);
