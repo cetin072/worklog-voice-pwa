@@ -27,6 +27,7 @@ import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers
 import { createExpoSpeechRecognitionAdapter } from '@/src/features/voice/providers/expo-speech-recognition-adapter';
 import { WorkRecordSearch } from '@/src/features/search/work-record-search';
 import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/manual-work-input';
+import { createManualWorkSaveSession } from '@/src/features/work/manual-work-save';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
 import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeBriefingScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder, synchronizeEditedWorklogReminder } from '@/src/features/schedule/schedule-reminder-post-save';
@@ -341,6 +342,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const [showPassword, setShowPassword] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('signIn');
   const [manualInput, setManualInput] = useState<ManualWorkInputValue>(() => emptyManualWorkInput());
+  // HomeScreenApp is keyed by user ID: retries never cross an account boundary.
+  const manualSaveSession = useRef(createManualWorkSaveSession<Awaited<ReturnType<typeof saveWorklog>>>());
+  const manualSaveInFlight = useRef(false);
   const [briefingNow, setBriefingNow] = useState(Date.now());
   useEffect(() => {
     const updateClock = () => setBriefingNow(Date.now());
@@ -578,15 +582,13 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function persistDraft() {
-    if (!session || !manualInput.transcript.trim() || busy) return;
+    if (!session || !manualInput.transcript.trim() || busy || manualSaveInFlight.current) return;
+    manualSaveInFlight.current = true;
     const original = manualInput.transcript.trim();
-    await run(async () => {
+    try { await run(async () => {
       const reminderGuard = reminderSessionEpoch.capture();
-      const saved = await saveWorklog(session.access_token, original, {
-        dueDate: manualInput.dueDate,
-        dueTime: manualInput.dueTime,
-        ...(manualInput.dueTime ? { type: '회의·통화' } : {}),
-      });
+      const saved = await manualSaveSession.current.save(manualInput,
+        (text, options) => saveWorklog(session.access_token, text, options));
       const expectedDue = manualInput.dueDate && manualInput.dueTime
         ? `${manualInput.dueDate}T${manualInput.dueTime}:00+09:00` : manualInput.dueDate;
       const dueMatches = !expectedDue || (manualInput.dueTime
@@ -609,8 +611,15 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       catch (nextError) { reminderWarning = reminderFailureMessage(nextError); }
       if (!reminderGuard()) return;
       setSavedReminder({ target: { recordId: feedback.recordId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning || reminderMessage });
-      await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId));
+      // Permission guidance is post-save UI; its failure cannot undo a saved record.
+      try { await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId)); }
+      catch (nextError) {
+        reminderWarning = reminderFailureMessage(nextError);
+        setSavedReminder({ target: { recordId: feedback.recordId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning });
+      }
+      if (!reminderGuard()) return;
       setManualInput(emptyManualWorkInput());
+      manualSaveSession.current.reset();
       setLastDirectSave(feedback);
       if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
       const dueLabel = formatSavedDue(feedback.dueStart);
@@ -619,7 +628,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         : '업무 저장 완료 · 브리핑에 반영했습니다.'), scheduleWarning ? 'error' : 'success');
       setScreen('home');
       await refreshBriefing();
-    });
+    }); } finally { manualSaveInFlight.current = false; }
   }
 
   async function changeTaskStatus(status: '완료' | '진행중' | '대기' | '확인필요') {

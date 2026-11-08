@@ -6,6 +6,7 @@ import { extractScheduleFromText } from '../netlify/shared/schedule-extract.mjs'
 
 const sheet = fs.readFileSync('mobile/src/features/work/manual-work-input.tsx', 'utf8');
 const home = fs.readFileSync('mobile/app/index.tsx', 'utf8');
+const attempt = fs.readFileSync('mobile/src/features/work/manual-work-save.ts', 'utf8');
 
 test('direct entry only exposes input date time and save', () => {
   assert.match(sheet, />입력<\/Text>/);
@@ -19,12 +20,12 @@ test('direct entry only exposes input date time and save', () => {
 
 test('direct entry date and time are separate from canonical save text without exposing legacy metadata controls', () => {
   assert.doesNotMatch(home, /function manualScheduleText/);
-  assert.match(home, /dueDate: manualInput\.dueDate/);
-  assert.match(home, /dueTime: manualInput\.dueTime/);
+  assert.match(attempt, /dueDate: draft\.dueDate/);
+  assert.match(attempt, /dueTime: draft\.dueTime/);
   assert.match(home, /manualInput\.dueTime/);
-  assert.match(home, /saveWorklog\(session\.access_token, original/);
+  assert.match(home, /saveWorklog\(session\.access_token, text, options/);
   const save = home.slice(home.indexOf('async function persistDraft()'), home.indexOf('async function changeTaskStatus'));
-  assert.match(save, /type: '회의·통화'/);
+  assert.match(attempt, /type: '회의·통화'/);
   assert.doesNotMatch(save, /institutionSource|manualInput\.status|manualInput\.type|manualInput\.amount|manualInput\.assignee|manualInput\.followUp/);
 });
 

@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, register } from 'node:module';
+register('./helpers/mobile-ts-loader.mjs', import.meta.url);
+const { createManualWorkSaveSession } = await import('../mobile/src/features/work/manual-work-save.ts');
 const ts = createRequire(new URL('../mobile/package.json', import.meta.url))('typescript');
 const source = readFileSync('mobile/app/index.tsx', 'utf8');
 const ast = ts.createSourceFile('home.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -25,6 +27,7 @@ test('Android DNS and fetch failures become actionable Korean, without exposing 
 test('failed real direct-save handler preserves input and does not retry mutations automatically', async () => {
   let attempts = 0, cleared = 0, refreshed = 0, displayed, busy = false;
   const scope = { session: { access_token: 'synthetic' }, manualInput: { transcript: '합성 입력', dueDate: '', dueTime: '' }, busy: false,
+    manualSaveSession: { current: createManualWorkSaveSession() }, manualSaveInFlight: { current: false },
     manualScheduleText: () => '', reminderSessionEpoch: { capture: () => () => true },
     saveWorklog: async () => { attempts++; throw new Error('Network request failed'); },
     setBusy: value => { busy = value; }, clearMessage: () => {}, messageOf,

@@ -39,7 +39,7 @@ test('Native direct input is limited to input, date, time, and save', () => {
     assert.doesNotMatch(manual, new RegExp(removed));
   }
   assert.match(home, /<ManualWorkInput/);
-  assert.match(home, /dueTime: manualInput\.dueTime/);
+  assert.match(home, /manualSaveSession\.current\.save\(manualInput/);
 });
 
 test('Stage 2 edit sheet adds native polish without losing the shared editing model', () => {
