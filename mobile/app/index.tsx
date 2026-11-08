@@ -824,12 +824,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     const cache = editDetailsCache.current;
     const cached = cache.get(pageId);
     const completeSeed = cached || (typeof seedTime === 'string' ? { title: fallbackTitle, dueDate: fallbackDate, dueTime: seedTime } : null);
+    // Cached/list fields are only a visual seed; a fresh owner-scoped read must
+    // succeed before the edit can be saved (otherwise stale dates can overwrite).
     setEditLoading(!completeSeed);
-    setEditReady(Boolean(completeSeed));
+    setEditReady(false);
     if (completeSeed) {
-      setEditTitle(completeSeed.title);
-      setEditDate(completeSeed.dueDate);
-      setEditTime(completeSeed.dueTime);
+      if (!editDirty.current.title) setEditTitle(completeSeed.title);
+      if (!editDirty.current.date) setEditDate(completeSeed.dueDate);
+      if (!editDirty.current.time) setEditTime(completeSeed.dueTime);
     }
     setEditStatus('');
     setEditStatusTone('neutral');
