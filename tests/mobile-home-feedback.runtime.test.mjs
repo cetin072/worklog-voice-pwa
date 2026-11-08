@@ -73,7 +73,7 @@ test('opening the same record seeds immediately and checks details in the backgr
  scope.editDetailsCache.current = new Map(); await open('synthetic-id'); assert.equal(reads,3);
 });
 
-test('complete edit seed is usable before fetch; late responses preserve dirty fields and newer selections', async () => {
+test('complete edit seed displays while fresh read gates Save; late responses preserve dirty fields', async () => {
  let declaration;
  function walk(n) { if (ts.isFunctionDeclaration(n) && n.name?.text === 'loadTaskEditorDetails') declaration=n.getText(ast); ts.forEachChild(n,walk); } walk(ast);
  const pending=[]; const state={};
@@ -81,14 +81,14 @@ test('complete edit seed is usable before fetch; late responses preserve dirty f
  for(const name of new Set(declaration.match(/setEdit[A-Za-z]+/g)))scope[name]=value=>{state[name]=value;};
  const open=compile(`${declaration}\nreturn loadTaskEditorDetails;`,scope);
  const a=open('a','Visible','2030-01-01','09:30');
- assert.equal(state.setEditReady,true);assert.equal(state.setEditLoading,false);assert.equal(state.setEditTime,'09:30');
+ assert.equal(state.setEditReady,false);assert.equal(state.setEditLoading,true);assert.equal(state.setEditTime,'09:30');
  await new Promise(resolve=>setImmediate(resolve));
  scope.editDirty.current={title:true,date:true,time:true};state.setEditTitle='My draft';state.setEditDate='2031-01-01';
  pending[0].resolve({title:'Server',dueDate:'2032-01-01',dueTime:'11:00'});await a;
- assert.equal(state.setEditTitle,'My draft');assert.equal(state.setEditDate,'2031-01-01');assert.equal(state.setEditTime,'09:30');
+ assert.equal(state.setEditTitle,'My draft');assert.equal(state.setEditDate,'2031-01-01');assert.equal(state.setEditTime,'09:30');assert.equal(state.setEditReady,true);
  scope.editDirty.current={};
  const b=open('b','B','2030-02-01');await new Promise(resolve=>setImmediate(resolve));assert.equal(state.setEditLoading,true);
  const c=open('c','C','2030-03-01','10:00');await new Promise(resolve=>setImmediate(resolve));
  pending[1].resolve({title:'Late B',dueDate:'',dueTime:''});await b;assert.equal(state.setEditTitle,'C');
- pending[2].reject(new Error('offline'));await c;assert.equal(state.setEditTitle,'C');assert.equal(state.setEditReady,true);assert.equal(state.setEditStatus,'offline');
+ pending[2].reject(new Error('offline'));await c;assert.equal(state.setEditTitle,'C');assert.equal(state.setEditReady,false);assert.equal(state.setEditLoading,false);assert.equal(state.setEditStatus,'offline');
 });
