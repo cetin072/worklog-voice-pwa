@@ -146,3 +146,62 @@ test('direct input refreshes a stale token without changing the retained idempot
   assert.equal(calls[0].transcript, '합성 서류 확인');
   assert.ok(calls[0].options.clientRequestId);
 });
+
+
+test('HTTP 200 without any committed WorkRecord ID cannot erase direct input or claim schedule success', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  try {
+    globalThis.fetch = async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      if (requests.length === 1) {
+        // A buggy compatible save endpoint returns an incomplete 200.
+        return Response.json({ ok: true, scheduleCreated: true, scheduleId: 'synthetic-schedule',
+          dueStart: '2026-11-12T15:00:00+09:00' });
+      }
+      return Response.json({ ok: true, dataCoreWorkRecordId: 'synthetic-record',
+        scheduleCreated: true, scheduleId: 'synthetic-schedule',
+        dueStart: '2026-11-12T15:00:00+09:00' });
+    };
+    const { state, save } = ui(
+      { transcript: '합성 검수 일정', dueDate: '2026-11-12', dueTime: '15:00' },
+      saveWorklog,
+    );
+    await assert.rejects(save(), /업무 저장 결과를 확인하지 못했습니다/);
+    assert.equal(state.cleared, 0, 'unverified 200 must not clear draft');
+    assert.equal(state.feedback, undefined, 'unverified 200 must not surface success');
+    await save();
+    assert.equal(state.cleared, 1);
+    assert.equal(state.feedback.recordId, 'synthetic-record');
+    assert.equal(state.feedback.scheduleCreated, true);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].clientRequestId, requests[0].clientRequestId,
+      'same save intent must replay the existing idempotency key');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('an explicitly rejected HTTP 200 is never a completed capture or direct-input receipt', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => Response.json({ ok: false, pageId: 'stale-record' });
+    await assert.rejects(
+      () => saveWorklog('synthetic-token', '확정되지 않은 기록', { clientRequestId: 'synthetic-retry' }),
+      /업무 저장 결과를 확인하지 못했습니다/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('legacy Notion-only save receipt remains compatible when it contains a real page ID', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => Response.json({ ok: true, pageId: 'synthetic-notion-page' });
+    const saved = await saveWorklog('synthetic-token', '기존 호환 기록', { clientRequestId: 'synthetic-legacy' });
+    assert.equal(saved.pageId, 'synthetic-notion-page');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
