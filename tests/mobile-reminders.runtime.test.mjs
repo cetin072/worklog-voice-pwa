@@ -41,6 +41,36 @@ test('first registration persists an intent before OS reservation and returns a 
   assert.deepEqual(await h.service.listScheduleReminders('schedule-A'), [r]);
 });
 
+
+test('settings counts only live OS reservations, not stale SecureStore mappings', async () => {
+  const h = harness();
+  const reserved = await h.service.scheduleReminder(input());
+  assert.deepEqual(await h.service.getScheduleReminderStatus(),
+    { scheduled: 1, pending: 0, cleanupPending: 0, unverified: 0 });
+  const mutations = h.calls.filter(([name]) => name === 'schedule' || name === 'cancel').length;
+  h.os.delete(reserved.identifier); // OS lost an alarm after storage reported success.
+  assert.deepEqual(await h.service.getScheduleReminderStatus(),
+    { scheduled: 0, pending: 0, cleanupPending: 0, unverified: 1 });
+  assert.equal(h.calls.filter(([name]) => name === 'schedule' || name === 'cancel').length, mutations,
+    'status inspection is read-only and must not guess native recovery');
+  await h.service.reconcileScheduleReminders();
+  assert.deepEqual(await h.service.getScheduleReminderStatus(),
+    { scheduled: 1, pending: 0, cleanupPending: 0, unverified: 0 });
+});
+
+test('a mismatched native alarm or an expired mapped trigger cannot be reported as reserved', async () => {
+  const h = harness();
+  const reserved = await h.service.scheduleReminder(input());
+  const request = h.os.get(reserved.identifier);
+  request.content.body = 'wrong appointment';
+  assert.equal((await h.service.getScheduleReminderStatus()).unverified, 1);
+  assert.equal((await h.service.getScheduleReminderStatus()).scheduled, 0);
+  request.content.body = reserved.title;
+  h.clock(Date.parse(reserved.triggerAt) + 1);
+  assert.deepEqual(await h.service.getScheduleReminderStatus(),
+    { scheduled: 0, pending: 0, cleanupPending: 0, unverified: 1 });
+});
+
 test('concurrent edits to 20 schedules retain every mapping and OS reservation', async () => {
   const h = harness();
   await Promise.all(Array.from({ length: 20 }, (_, i) => h.service.scheduleReminder(input(`s-${i}`))));
