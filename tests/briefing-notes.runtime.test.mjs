@@ -155,9 +155,9 @@ test("mobile UX shows at most three Notes, visible 확인했어요, and Undo",()
   assert.match(mobileHome,/📝 메모 · 참고/);
   assert.match(mobileHome,/확인했어요 처리/);
   assert.match(mobileHome,/acknowledging \? '처리 중' : '확인했어요'/);
-  assert.match(mobileHome,/updateBriefingNoteState\(session\.access_token, note\.pageId, 'acknowledged'\)/);
+  assert.match(mobileHome,/updateBriefingNoteState\(await getFreshAccessToken\(client\), note\.pageId, 'acknowledged'\)/);
   assert.match(mobileHome,/removeVisibleNote\(note\.pageId\)/);
   assert.match(mobileHome,/메모를 브리핑에서 내렸습니다\./);
-  assert.match(mobileHome,/updateBriefingNoteState\(session\.access_token, target\.pageId, 'active'\)/);
+  assert.match(mobileHome,/updateBriefingNoteState\(await getFreshAccessToken\(client\), target\.pageId, 'active'\)/);
   assert.match(mobileHome,/실행 취소/);
 });
