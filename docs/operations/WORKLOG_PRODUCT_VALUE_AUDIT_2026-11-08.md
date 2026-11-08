@@ -315,6 +315,25 @@
 - **사용 효율:** 거짓 저장 실패로 인한 재입력 또는 이중 등록을 줄일 가능성은 있으나 실제 14일 밖 날짜 일정 1건 저장→홈 포커스→업무일지 조회까지의 조작 횟수·시간은 아직 실기기 미측정. 홈 전체 일정 캘린더 재설계는 사전 승인 대상.
 - **배포:** 개발 코드 main 병합만; 설치 QA/Play/Production DB/원본 업무 내역 변경 없음.
 
+### M09: 기한 미루기·다시 확인·Undo 연타 중복 요청 방지 (2026-11-08)
+
+**판정: FIX/CODE+CI / 사용시간 MEASURED 없음.**
+
+- Home의 `postponeSelectedTask`, `remindSelectedTask`, `undoPostponedTask`, `undoTaskAttention`는 React state `reminderBusyId`만으로 버튼 중복 실행을 막았다. 같은 렌더 프레임 안에서 빠르게 연타하면 중복 서버 변경/Undo 원복 요청이 동시에 실행될 수 있어 서버·브리핑 재조회와 복구 노동이 늘어난다.
+- [PR #514](https://github.com/cetin072/worklog-voice-pwa/pull/514) squash 병합 `61a00c6`: 기존 `taskStatusInFlight`와 동일한 경량 `useRef` 동기 잠금을 네 동작에 공유하고, 서버 호출 전에 획득·성공/오류 후 `finally`에서 해제한다. 기존 버튼 배치와 서버 API, 연기·리마인드 날짜/시각, Undo 계약·DB/Auth/기기 알림 정책 불변.
+- 실제 Home 함수 4개를 TypeScript AST에서 추출해 실행한 테스트에서 ① 빠른 미루기 연타/경합하는 다시 확인 ② 미루기 Undo 이중 탭 ③ 다시 확인과 Undo 이중 탭 ④ 실패 후 안전 재시도 모두 통과. Mobile typecheck 및 전체 User Acceptance Ready PASS 후 main 병합.
+- 중복 클릭으로 인한 재입력 가능성을 줄이는 조치이나 실제 사용빈도·시간절감/기기 연타 결과는 **미측정**. 새로운 네이티브 QA APK 또는 Play/운영 배포 미실행.
+
+### M04: 직접 입력 초안·저장 재시도 앱 재실행 복구 — Draft PR #515 (2026-11-08)
+
+**판정: FIX 후보 / CI 통과, Android HUMAN 보류·main 미병합.**
+
+- **코드상 기존 한계:** 빠른 음성 입력은 계정별 SecureStore에 전사문·동일 저장 요청 ID를 보존하지만, 직접 입력 원문/날짜/시간 및 `createManualWorkSaveSession`의 요청 ID는 Home 메모리에만 있었다. 입력 중 앱 프로세스가 종료되면 직접 입력 초안이 사라지고, 서버가 저장한 후 응답을 잃으면 새 요청 ID로 재전송해 중복 생성될 위험이 있다.
+- [Draft PR #515](https://github.com/cetin072/worklog-voice-pwa/pull/515): 기존 `secureSessionStorage`의 단일 키 원자적 update/계정 범위를 재사용하는 최소 `manual-work-draft.ts`를 분리해 입력(원문/날짜/시간)과 저장 시도(`clientRequestId`/`recordedAt`/원문)를 한 암호화 기기 기록에 보관. 서버 요청 **전에** checkpoint 성공 확인 후 mutation, 불완전/손상 기록은 초기화하지 않고 오류 반환. 동일 계정 앱 재실행에 저장 시도 복원 및 동일 ID 재시도. 직접 입력은 350ms 지연 자동 임시저장 + 백그라운드 시 쓰기 시도, 늦은 입력 저장이 완료 후 초안을 되살리지 않도록 epoch 사용. 새 서버 API·DB·외부 동기화·백업 생성 없음.
+- 테스트: 서로 다른 계정 초안 분리, 손상 초안 보존·저장 금지, 최초 서버 기록은 됐지만 응답 유실→앱 재시작 시 동일 요청 ID·서버 최종 1건 확인, 변경 입력의 오래된 시도 폐기, 불완전 날짜/식별자 거절, Home 복원·오래된 autosave 방지 연결 검사. CI Mobile typecheck / 전체 UAR PASS. 기존 테스트 두 건이 새 `manualDraftLoaded` mock을 몰라 실패하여 fixture 보강 후 재실행 GREEN.
+- **안전 보류:** 앱 강제종료·배경 저장 시 실제 Android SecureStore 동작, 계정 A→B→A 전환의 초안 노출 0건, 저장 응답 유실 후 재실행, 원본/동일 request ID 보존, 오래된 사용자의 pending 저장/세션 전환, 사용자 입력 속도 비용은 아직 실기기 증거가 없다. 계정별 데이터·기기 암호화 저장 경계라 사용자 승인/기기 QA 없이 `main` 병합하거나 APK/Play 배포하지 않는다. 실제 시간 절약도 미측정.
+- Quick Voice/직접 입력 서버 canonical WorkRecord, Notion/ERP, Calendar/알림, 카카오 자동 브리핑(미사용 유지), 실제 녹음/기록은 변경하지 않았다.
+
 ### 다음 코드/실사용 검수
 
 - **T03 남음:** 실제 카카오 캡처 1건에서 OCR→저장→홈 WorkRecord/Schedule 반영, 불명확한 날짜라면 확인 필요 기록이 어떻게 보이는지 실기기 확인.
