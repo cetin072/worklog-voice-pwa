@@ -13,8 +13,8 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const output = process.argv[2] ? resolve(process.argv[2]) : mkdtempSync(join(tmpdir(), 'worklog-device-mutations-'));
 mkdirSync(output, { recursive: true });
 const cases = [
-  ['reminder-fake-success', 'schedule-reminder-service.ts', 'const actualId = await deps.driver.schedule(next, scheduleId);', 'const actualId = next.identifier;', 'REMINDER_TEST_SOURCE_URL', 'mobile-reminders.runtime.test.mjs', 16],
-  ['reminder-no-operation-queue', 'schedule-reminder-service.ts', 'const task = tail.then(run);', 'const task = Promise.resolve().then(run);', 'REMINDER_TEST_SOURCE_URL', 'mobile-reminders.runtime.test.mjs', 16],
+  ['reminder-fake-success', 'schedule-reminder-service.ts', 'const actualId = await deps.driver.schedule(next, scheduleId);', 'const actualId = next.identifier;', 'REMINDER_TEST_SOURCE_URL', 'mobile-reminders.runtime.test.mjs', 18],
+  ['reminder-no-operation-queue', 'schedule-reminder-service.ts', 'const task = tail.then(run);', 'const task = Promise.resolve().then(run);', 'REMINDER_TEST_SOURCE_URL', 'mobile-reminders.runtime.test.mjs', 18],
 ];
 const results = [];
 for (const [name, file, before, after, variable, testFile, expectedTests] of cases) {
