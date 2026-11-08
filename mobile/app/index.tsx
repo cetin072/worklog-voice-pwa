@@ -1201,8 +1201,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         {upcomingExpanded ? <View style={styles.scheduleGroup}><Text style={styles.detailTitle}>14일 이내</Text><ScheduleRows key={`${briefingNow}:${Boolean(reminderTarget)}`} onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={briefing.schedules?.upcoming?.filter(schedule => schedule.scheduleId !== notificationScheduleId)} empty="다가오는 일정이 없습니다." /></View> : null}
       </View> : null}
 
-      {!overview.empty ? <View style={styles.homeFilters}>{briefingBuckets.map(bucket => <Pressable key={bucket.key} accessibilityRole="button" accessibilityState={{ selected: activeFilter === bucket.key }} style={[styles.homeFilter, activeFilter === bucket.key ? styles.homeFilterActive : null]} onPress={() => setTaskFilter(bucket.key)}><Text>{bucket.label} {structure[bucket.key].length}</Text></Pressable>)}</View> : null}
-      {briefing && !overview.empty ? briefingBuckets.filter(bucket => bucket.key === activeFilter).map((bucket) => {
+      {overview.hasTasks ? <View style={styles.homeFilters}>{briefingBuckets.map(bucket => <Pressable key={bucket.key} accessibilityRole="button" accessibilityState={{ selected: activeFilter === bucket.key }} style={[styles.homeFilter, activeFilter === bucket.key ? styles.homeFilterActive : null]} onPress={() => setTaskFilter(bucket.key)}><Text>{bucket.label} {structure[bucket.key].length}</Text></Pressable>)}</View> : null}
+      {briefing && overview.hasTasks ? briefingBuckets.filter(bucket => bucket.key === activeFilter).map((bucket) => {
         const tasks = structure[bucket.key] || [];
         const expanded = expandedBuckets[bucket.key] === true;
         const visibleTasks = expanded ? tasks : tasks.slice(0, 3);
