@@ -62,3 +62,13 @@ test('Home defaults to a non-empty task group without changing explicitly select
   // The app uses this only if the user has not selected a filter.
   assert.match(readFileSync('mobile/app/index.tsx', 'utf8'), /taskFilter \|\| firstNonEmptyTaskBucket\(structure\)/);
 });
+
+
+test('new schedule focus never calls a 14-day briefing omission a failed save', () => {
+  const source = readFileSync('mobile/app/index.tsx', 'utf8');
+  assert.match(source, /empty=\{scheduleFocusReason === 'created'/);
+  assert.match(source, /이 화면은 오늘과 14일 이내 일정만 보여주므로/);
+  assert.match(source, /표시되지 않는다고 저장이 누락된 것은 아닙니다/);
+  assert.match(source, /목록을 새로고침하거나 해당 날짜의 업무일지에서 확인해주세요/);
+  assert.doesNotMatch(source, /empty="연결된 일정을 찾지 못했습니다\."/);
+});
