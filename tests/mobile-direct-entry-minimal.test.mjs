@@ -23,7 +23,7 @@ test('direct entry date and time are separate from canonical save text without e
   assert.match(attempt, /dueDate: draft\.dueDate/);
   assert.match(attempt, /dueTime: draft\.dueTime/);
   assert.match(home, /manualInput\.dueTime/);
-  assert.match(home, /saveWorklog\(session\.access_token, text, options/);
+  assert.match(home, /saveWorklog\(await getFreshAccessToken\(client\), text, options/);
   const save = home.slice(home.indexOf('async function persistDraft()'), home.indexOf('async function changeTaskStatus'));
   assert.match(attempt, /type: '회의·통화'/);
   assert.doesNotMatch(save, /institutionSource|manualInput\.status|manualInput\.type|manualInput\.amount|manualInput\.assignee|manualInput\.followUp/);

@@ -106,6 +106,9 @@ export function createQuickVoiceRecognitionSession(port: QuickVoiceRecognitionPo
   // same de-duplication logic as normal final callbacks.
   const stoppingText = () => interimText ? mergeRecognitionFinal(committedText, interimText) : committedText;
   const fatal = (message: string) => {
+    // A recognizer failure must not erase speech already visible to the user.
+    // Preserve the final + latest interim tail for manual correction, never auto-save it.
+    committedText = stoppingText();
     active = false;
     starting = false;
     stopping = false;

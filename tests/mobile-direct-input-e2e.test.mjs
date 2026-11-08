@@ -10,7 +10,7 @@ test('Direct input reuses the canonical save and only clears after success', () 
   assert.match(home, /async function persistDraft\(\)/);
   assert.match(home, /const original = manualInput\.transcript\.trim\(\)/);
   assert.match(home, /await manualSaveSession\.current\.save\(manualInput/);
-  assert.match(home, /\(text, options\) => saveWorklog\(session\.access_token, text, options\)/);
+  assert.match(home, /async \(text, options\) => saveWorklog\(await getFreshAccessToken\(client\), text, options\)/);
   assert.doesNotMatch(home.slice(home.indexOf('async function persistDraft()'), home.indexOf('async function changeTaskStatus')), /institutionSource|manualInput\.status|manualInput\.type|manualInput\.amount|manualInput\.assignee|manualInput\.followUp/);
   assert.ok(
     home.indexOf('setManualInput(emptyManualWorkInput())') > home.indexOf('await manualSaveSession.current.save(manualInput'),
@@ -43,4 +43,10 @@ test('Quick Voice and direct input share the same schedule result contract', () 
   assert.match(home, /saved\.scheduleDetected/);
   assert.match(home, /saved\.dueStart/);
   assert.match(home, /setScheduleFocusReason\('created'\)/);
+});
+
+test('Quick Voice and direct input both renew the authenticated token just before each write', () => {
+  assert.match(home, /saveWorklog\(await getFreshAccessToken\(client\), transcript, \{ \.\.\.options, sourceType: 'voice' \}\)/);
+  assert.match(home, /saveWorklog\(await getFreshAccessToken\(client\), text, options\)/);
+  assert.doesNotMatch(home, /saveWorklog\(session\.access_token, transcript, \{ \.\.\.options, sourceType: 'voice' \}\)/);
 });

@@ -21,7 +21,8 @@ function directSave(scope) {
 function ui(input, saver) {
   const state = { messages: [], cleared: 0, calls: 0 };
   const scope = {
-    session: { access_token: 'synthetic-token' }, client: null, busy: false, manualInput: input,
+    session: { access_token: 'expired-token' }, client: {}, busy: false, manualInput: input,
+    getFreshAccessToken: async () => 'synthetic-token',
     manualSaveSession: { current: createManualWorkSaveSession() }, manualSaveInFlight: { current: false },
     reminderFailureMessage: () => '알림 확인 필요',
     saveWorklog: (...args) => { state.calls++; return saver(...args); },
@@ -131,4 +132,17 @@ test('actual Home keeps save success and clears input when post-save permission 
   assert.equal(state.messages[0].tone, 'success');
   assert.match(state.messages[0].value, /알림 확인 필요/);
   assert.equal(state.reminder.message, '알림 확인 필요');
+});
+
+
+test('direct input refreshes a stale token without changing the retained idempotency payload', async () => {
+  const calls = [];
+  const { scope, save } = ui({ transcript: '합성 서류 확인', dueDate: '', dueTime: '' },
+    async (token, transcript, options) => { calls.push({ token, transcript, options }); return { pageId: 'synthetic-record', scheduleCreated: false }; });
+  scope.getFreshAccessToken = async () => 'fresh-token-after-session-renewal';
+  await save();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].token, 'fresh-token-after-session-renewal');
+  assert.equal(calls[0].transcript, '합성 서류 확인');
+  assert.ok(calls[0].options.clientRequestId);
 });
