@@ -720,7 +720,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function undoCompletedTask() {
-    if (!session || !client || !undoTask || taskBusyId || taskStatusInFlight.current) return;
+    if (!session || !client || !undoTask || taskBusyId || taskStatusInFlight.current || recordMutationInFlight.current) return;
     taskStatusInFlight.current = true;
     const target = undoTask;
     setTaskBusyId(target.pageId);
@@ -919,7 +919,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function openTaskEditor(task: BriefingTask) {
-    if (!session || !task.pageId || editBusy) return;
+    if (!session || !task.pageId || editBusy || recordMutationInFlight.current) return;
     editDirty.current = { title: false, date: false, time: false, kind: false };
     setEditTaskId(task.pageId);
     setEditTitle(task.title || '');
@@ -935,7 +935,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   async function openNoteEditor(note: BriefingNote) {
-    if (!session || !note.pageId || editBusy) return;
+    if (!session || !note.pageId || editBusy || recordMutationInFlight.current) return;
     editDirty.current = { title: false, date: false, time: false, kind: false };
     setEditTaskId(note.pageId);
     setEditTitle(note.title || '');
@@ -1092,7 +1092,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
 
   function closeTaskEditor() {
-    if (editBusy) return;
+    if (editBusy || recordMutationInFlight.current) return;
     editReadEpoch.current += 1;
     setEditLoading(false);
     setEditTaskId(null);
