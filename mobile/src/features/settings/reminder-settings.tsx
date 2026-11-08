@@ -107,6 +107,7 @@ export function ReminderSettings() {
         {reminderError ? '알림 예약 상태를 확인하지 못했습니다' : scheduled === null ? '예약 상태 확인 중' : scheduled ? `휴대폰 예약 확인 ${scheduled}개` : pending ? `예약 대기 중 ${pending}개` : unverified ? `알림 확인 필요 ${unverified}개` : '예약된 일정 알림 없음'}
       </Text>
       {scheduled === 0 && pending === 0 && unverified === 0 && cleanupPending === 0 ? <Text style={styles.detail}>날짜와 시작 시각이 확정된 미래 일정이 저장되면 자동으로 시작 알림을 예약합니다. 기록만 저장하거나 시간이 빠진 경우에는 알림이 생성되지 않습니다.</Text> : null}
+      {scheduled !== null && scheduled > 0 && pending > 0 ? <Text style={styles.detail}>추가 알림 {pending}개는 아직 예약 대기 중입니다.</Text> : null}
       {unverified > 0 ? <Text style={styles.warningTitle}>저장된 알림 {unverified}개는 휴대폰 예약이 확인되지 않았습니다. 앱을 다시 열어 알림 복구를 확인해주세요.</Text> : null}
       {cleanupPending > 0 ? <Text style={styles.detail}>취소한 일정의 알림 정리 {cleanupPending}개가 대기 중입니다. 앱을 다시 열면 정리를 다시 시도합니다.</Text> : null}
       {needsExactAlarmAccess ? <View style={styles.warning}>
