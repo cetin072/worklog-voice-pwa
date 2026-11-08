@@ -95,7 +95,7 @@ test('actual start durably records verified owner before capture and rejects acc
 });
 
 test('actual provider value hides recording duration/completion/error from the next account',()=>{
- let initializer='';function find(n){if(ts.isVariableDeclaration(n)&&n.name.getText(ast)==='value')initializer=n.initializer.getText(ast);ts.forEachChild(n,find);}find(ast);
+ let initializer='';function find(n){if(ts.isVariableDeclaration(n)&&n.name.getText(ast)==='value'&&n.initializer?.getText(ast).startsWith('useMemo'))initializer=n.initializer.getText(ast);ts.forEachChild(n,find);}find(ast);
  const js=ts.transpileModule('const value='+initializer+';return value;',{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
  const scope={useMemo:fn=>fn(),visibleToCurrentOwner:false,phase:'recording',recorderState:{durationMillis:9000},startedAt:'private-time',completed:{uri:'private-audio'},recordingOwner:{current:'account-a'},session:{user:{id:'account-b'}},meetingOwner:()=> 'account-b',libraryVersion:1,error:'private error',start(){},pause(){},resume(){},stop(){},setError(){}};
  const value=new Function('scope','with(scope){'+js+'}')(scope);
