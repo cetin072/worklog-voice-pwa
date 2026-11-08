@@ -72,3 +72,33 @@ test('new schedule focus never calls a 14-day briefing omission a failed save', 
   assert.match(source, /목록을 새로고침하거나 해당 날짜의 업무일지에서 확인해주세요/);
   assert.doesNotMatch(source, /empty="연결된 일정을 찾지 못했습니다\."/);
 });
+
+
+test('notes-only and schedules-only Home show their content without empty task filters', () => {
+  const memoOnly = homeOverview({
+    today: '2026-11-08',
+    notes: [{ pageId: 'note-1', title: '회의 결과 기록' }],
+  });
+  const scheduleOnly = homeOverview({
+    today: '2026-11-08',
+    schedules: { today: [{ scheduleId: 'schedule-1', title: '상담 예약' }] },
+  });
+  const mixed = homeOverview({
+    today: '2026-11-08',
+    structure: { upcoming: [{ pageId: 'task-1', title: '내일 서류 확인' }] },
+    notes: [{ pageId: 'note-1', title: '회의 결과 기록' }],
+  });
+  for (const emptyTasks of [memoOnly, scheduleOnly]) {
+    assert.equal(emptyTasks.empty, false, 'the Home contains real notes or schedules');
+    assert.equal(emptyTasks.hasTasks, false, 'there are no action-ready task rows');
+    assert.equal(Object.values(emptyTasks.structure).flat().length, 0);
+  }
+  assert.equal(mixed.hasTasks, true);
+  assert.equal(mixed.structure.upcoming.length, 1);
+  const source = readFileSync('mobile/app/index.tsx', 'utf8');
+  assert.match(source, /\{overview\.hasTasks \? <View style=\{styles\.homeFilters\}>/);
+  assert.match(source, /\{briefing && overview\.hasTasks \? briefingBuckets\.filter/);
+  assert.match(source, /\{notes\.length \? <View style=\{\[styles\.briefingSection/);
+  assert.match(source, /\{briefing\?\.scheduleEnabled && !overview\.empty \?/,
+    'do not hide valid schedule section when no task rows exist');
+});
