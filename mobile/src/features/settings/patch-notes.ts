@@ -10,6 +10,15 @@ export type PatchNoteEntry = {
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
     date: '2026-11-08',
+    title: '기한 미루기·다시 확인 중복 실행 방지',
+    summary: '빠른 연속 탭에도 업무 미루기와 다시 확인, 실행 취소가 중복 저장되지 않도록 했습니다.',
+    items: [
+      '미루기·다시 확인 및 두 실행 취소 동작에 동일 요청 잠금을 적용했습니다.',
+      '오류 뒤에는 잠금을 해제하여 다시 시도할 수 있습니다.',
+    ],
+  },
+  {
+    date: '2026-11-08',
     title: '업무 저장 결과 확인 강화',
     summary: '직접 입력과 캡처 저장에서 실제 기록 ID가 확인되기 전에는 성공으로 안내하지 않도록 했습니다.',
     items: [
