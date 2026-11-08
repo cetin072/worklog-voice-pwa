@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const read = path => readFileSync(resolve(path), 'utf8');
@@ -56,4 +56,41 @@ test('native Android Schedule notifications remain untouched by Web Push retirem
   assert.match(native, /Notifications\.scheduleNotificationAsync/);
   assert.match(native, /worklog-schedule-reminders/);
   assert.match(settings, /getScheduleReminderStatus/);
+});
+
+
+test('no newly named Netlify function can quietly restore Web Push or a duplicate scheduled sender', () => {
+  const functions = readdirSync('netlify/functions').filter(name => name.endsWith('.mts'));
+  const cron = [];
+  for (const filename of functions) {
+    const source = read('netlify/functions/' + filename);
+    assert.doesNotMatch(source, /\bsendWebPush\s*\(|\bclaimMorning\s*\(|\bclaimAfternoon\s*\(/,
+      filename + ': retired Web Push must never be invoked from a Netlify function');
+    if (/export\s+const\s+config\s*:\s*Config\s*=\s*\{\s*schedule\s*:/.test(source)) {
+      cron.push(filename);
+      assert.match(source, /automatic\s*:\s*true/, filename + ': Kakao scheduled calls must declare automatic mode');
+    }
+  }
+  assert.deepEqual(cron.sort(), [
+    'kakao-briefing-afternoon-retry.mts',
+    'kakao-briefing-afternoon.mts',
+    'kakao-briefing-morning-retry.mts',
+    'kakao-briefing-morning.mts',
+  ]);
+});
+
+test('PWA installed shell has no user-visible browser Push registration, while Kakao is a separate server channel', () => {
+  const index = read('public/index.html');
+  const settings = read('public/settings.html');
+  const pageScripts = [...index.matchAll(/<script\b[^>]*src="([^"]+)"/g), ...settings.matchAll(/<script\b[^>]*src="([^"]+)"/g)]
+    .map(match => match[1].split('?')[0]).filter(path => path.startsWith('/') && path.endsWith('.js'));
+  for (const asset of pageScripts) {
+    const source = read('public' + asset);
+    assert.doesNotMatch(source, /pushManager\.subscribe\s*\(|new\s+Notification\s*\(|showNotification\s*\(/,
+      asset + ': do not resurrect browser notification delivery from a live screen');
+  }
+  assert.doesNotMatch(index, /kakao\.js|id="kakaoDelivery"/);
+  const sender = read('netlify/shared/kakao.mts');
+  assert.match(sender, /options\.automatic && !automaticKakaoSendEnabled\(\)/);
+  assert.match(sender, /dedupeKey=slot \? `sent:\$\{date\}:\$\{slot\}`/);
 });
