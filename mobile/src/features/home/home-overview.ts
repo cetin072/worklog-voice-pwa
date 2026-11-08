@@ -26,7 +26,9 @@ export function homeOverview(briefing: MobileBriefing) {
     structure[bucket].push(task);
   }
   const total = Object.values(structure).reduce((n, tasks) => n + tasks.length, 0);
+  const hasTasks = total > 0;
   const schedules = briefing.schedules?.today?.length || 0;
-  const empty = total === 0 && !schedules && !briefing.schedules?.upcoming?.length && !briefing.notes?.length;
-  return { structure, empty, summary: `표시된 업무: 오늘 ${structure.today.length} · 기한 지남 ${structure.overdue.length} · 다가오는 ${structure.upcoming.length} · 기한 없음 ${structure.undated.length} / 오늘 일정 ${schedules}개` };
+  const empty = !hasTasks && !schedules && !briefing.schedules?.upcoming?.length && !briefing.notes?.length;
+  // Notes-only and schedules-only home screens have content, not task rows.
+  return { structure, hasTasks, empty, summary: `표시된 업무: 오늘 ${structure.today.length} · 기한 지남 ${structure.overdue.length} · 다가오는 ${structure.upcoming.length} · 기한 없음 ${structure.undated.length} / 오늘 일정 ${schedules}개` };
 }
