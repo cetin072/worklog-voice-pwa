@@ -111,11 +111,11 @@ test('exact-alarm scheduling failure stays durable and is visible as pending', a
   const h = harness();
   h.failSchedule(true);
   await assert.rejects(h.coordinator.synchronize(active()), /SCHEDULE_EXACT_ALARM/);
-  assert.deepEqual(await h.reminders.getScheduleReminderStatus(), { scheduled: 0, pending: 1, cleanupPending: 0 });
+  assert.deepEqual(await h.reminders.getScheduleReminderStatus(), { scheduled: 0, pending: 1, cleanupPending: 0, unverified: 0 });
   h.failSchedule(false);
   const recovered = await h.coordinator.recover();
   assert.equal(recovered.reminders.failed, 0);
-  assert.deepEqual(await h.reminders.getScheduleReminderStatus(), { scheduled: 1, pending: 0, cleanupPending: 0 });
+  assert.deepEqual(await h.reminders.getScheduleReminderStatus(), { scheduled: 1, pending: 0, cleanupPending: 0, unverified: 0 });
   assert.equal(h.os.size, 1);
 });
 
