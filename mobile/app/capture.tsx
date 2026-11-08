@@ -49,23 +49,28 @@ export default function CaptureScreen() {
   useEffect(() => { setEntry(null);setEditing(false);void receive();return () => { epoch.current++; }; }, [receive]);
   const visible = entry && entry.owner === owner && (!hash || entry.hash === hash) ? entry : null;
   const id = visible?.saved?.dataCoreWorkRecordId || visible?.saved?.pageId;
-  async function openEditor() {
-    if (!client || !id || busy) return;
+  async function loadEditorDetails(recordId: string) {
+    if (!client || busy) return;
     const current = ++epoch.current;
-    const seed = visible?.details;
-    const complete = seed && typeof seed.title === 'string' && typeof seed.dueDate === 'string' && typeof seed.dueTime === 'string';
-    editDirty.current = { title: false, date: false, time: false };
-    setTitle(seed?.title || visible?.decision?.title || '');setDate(seed?.dueDate || '');setTime(seed?.dueTime || '');
-    setEditing(true);setEditLoading(!complete);setEditReady(Boolean(complete));setEditError('');
+    // Captured/list details are a visual seed, never authority for a new write.
+    setEditLoading(true);setEditReady(false);setEditError('');
     try {
-      const details = await readWorklogDetails(await getFreshAccessToken(client), id);
+      const details = await readWorklogDetails(await getFreshAccessToken(client), recordId);
       if (current !== epoch.current) return;
       if (!editDirty.current.title) setTitle(details.title);
       if (!editDirty.current.date) setDate(details.dueDate);
       if (!editDirty.current.time) setTime(details.dueTime);
       setEditReady(true);
-    } catch { if (current === epoch.current) setEditError(complete ? '최신 정보를 확인하지 못했습니다. 표시된 내용으로 수정할 수 있습니다.' : '저장된 정보를 읽지 못했습니다. 다시 시도해주세요.'); }
+    } catch { if (current === epoch.current) setEditError('저장된 최신 정보를 읽지 못했습니다. 다시 불러와주세요.'); }
     finally { if (current === epoch.current) setEditLoading(false); }
+  }
+  async function openEditor() {
+    if (!client || !id || busy) return;
+    const seed = visible?.details;
+    editDirty.current = { title: false, date: false, time: false };
+    setTitle(seed?.title || visible?.decision?.title || '');setDate(seed?.dueDate || '');setTime(seed?.dueTime || '');
+    setEditing(true);
+    await loadEditorDetails(id);
   }
   async function saveEdit() {
     if (!client || !visible || busy || !editReady) return;
@@ -119,7 +124,7 @@ export default function CaptureScreen() {
     <Button label="업무수첩으로" action={() => void leave()} />
   </ScrollView><WorkRecordEditSheet visible={editing && Boolean(visible?.saved)} title={title} date={date} time={time} loading={editLoading} saving={busy} ready={editReady}
     statusText={editError} statusTone={editError ? 'error' : 'neutral'} onTitle={value => { editDirty.current.title = true;setTitle(value); }} onDate={value => { editDirty.current.date = true;setDate(value); }} onTime={value => { editDirty.current.time = true;setTime(value); }}
-    onSave={() => void saveEdit()} onCancel={() => { epoch.current++;setEditing(false); }} onRetry={() => void openEditor()} /></View>;
+    onSave={() => void saveEdit()} onCancel={() => { epoch.current++;setEditLoading(false);setEditReady(false);setEditing(false); }} onRetry={() => { if (id) void loadEditorDetails(id); }} /></View>;
 }
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#f2f5f8' },content: { padding: 20, gap: 16 },
