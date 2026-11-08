@@ -48,6 +48,120 @@ test('failed or unresolved canonical lookup does not run native expiry cleanup',
   }
 });
 
+
+test('legacy save ID without snapshot reads only owner-verified canonical Schedule before native alarm', async () => {
+  fake.reset();
+  const row = {
+    id: SID, created_by_user_id: USER, title: '검수용 일정',
+    starts_at: '2099-01-01T10:00:00Z', status: 'confirmed', all_day: false,
+    updated_at: '2030-01-01T00:00:00Z',
+  };
+  const result = await post.synchronizeSavedScheduleReminders(
+    { scheduleId: SID }, () => true, clientFor([row]),
+  );
+  assert.deepEqual(result, [{ action: 'scheduled', scheduleId: SID }]);
+  assert.deepEqual(fake.calls, [['query', [SID]], ['move', SID], ['schedule', SID, 0]]);
+});
+
+test('complete canonical save receipt skips extra lookup and still schedules once', async () => {
+  fake.reset();
+  const client = { auth: { getUser() { throw Error('unneeded auth read'); } } };
+  const result = await post.synchronizeSavedScheduleReminders(
+    { scheduleId: SID, schedule }, () => true, client,
+  );
+  assert.deepEqual(result, [{ action: 'scheduled', scheduleId: SID }]);
+  assert.deepEqual(fake.calls, [['move', SID], ['schedule', SID, 0]]);
+});
+
+test('partial snapshot from old compatible RPC is repaired from read-only canonical Schedule', async () => {
+  fake.reset();
+  const row = {
+    id: SID, created_by_user_id: USER, title: '복구한 제목',
+    starts_at: schedule.startsAt, status: 'confirmed', all_day: false,
+    updated_at: '2030-01-01T00:00:00Z',
+  };
+  const result = await post.synchronizeSavedScheduleReminders(
+    { scheduleId: SID, schedule: { id: SID, status: 'confirmed' } },
+    () => true, clientFor([row]),
+  );
+  assert.deepEqual(result, [{ action: 'scheduled', scheduleId: SID }]);
+  assert.deepEqual(fake.calls, [['query', [SID]], ['move', SID], ['schedule', SID, 0]]);
+});
+
+test('missing or cross-account Schedule refuses native mutation after saved WorkRecord', async () => {
+  const other = {
+    id: SID, created_by_user_id: '33333333-3333-4333-8333-333333333333',
+    title: '다른 사람 기록', starts_at: schedule.startsAt, status: 'confirmed',
+    all_day: false, updated_at: '2030-01-01T00:00:00Z',
+  };
+  for (const rows of [[], [other]]) {
+    fake.reset();
+    await assert.rejects(
+      post.synchronizeSavedScheduleReminders({ scheduleId: SID }, () => true, clientFor(rows)),
+      /INCOMPLETE_REMINDER_SNAPSHOT|INVALID_REMINDER_SNAPSHOT/,
+    );
+    assert.deepEqual(fake.calls, [['query', [SID]]], 'no OS schedule or cancellation on unverified receipt');
+  }
+});
+
+test('failed, stale or missing authenticated snapshot cannot create a false scheduled state', async () => {
+  fake.reset();
+  const row = {
+    id: SID, created_by_user_id: USER, title: 'test',
+    starts_at: schedule.startsAt, status: 'confirmed', all_day: false,
+    updated_at: '2030-01-01T00:00:00Z',
+  };
+  await assert.rejects(
+    post.synchronizeSavedScheduleReminders({ scheduleId: SID }, () => true,
+      clientFor([row], { message: 'network read failed' })),
+    /REMINDER_SNAPSHOT_UNAVAILABLE/,
+  );
+  assert.deepEqual(fake.calls, [['query', [SID]]]);
+
+  fake.reset();
+  let reads = 0;
+  const changedOwner = clientFor([row]);
+  changedOwner.auth.getUser = async () => ({
+    data: { user: { id: ++reads > 1 ? '33333333-3333-4333-8333-333333333333' : USER } },
+    error: null,
+  });
+  await assert.rejects(
+    post.synchronizeSavedScheduleReminders({ scheduleId: SID }, () => true, changedOwner),
+    /REMINDER_OWNER_CHANGED/,
+  );
+  assert.deepEqual(fake.calls, [['query', [SID]]]);
+
+  fake.reset();
+  assert.deepEqual(
+    await post.synchronizeSavedScheduleReminders({ scheduleId: SID }, () => true),
+    [],
+    'without owner-verified reader the result remains unconfirmed',
+  );
+  assert.deepEqual(fake.calls, []);
+});
+
+test('receipt IDs are deduplicated; no second server read for already complete schedules', async () => {
+  fake.reset();
+  const second = '44444444-4444-4444-8444-444444444444';
+  const row = {
+    id: second, created_by_user_id: USER, title: '두 번째 일정',
+    starts_at: '2099-01-02T10:00:00Z', status: 'confirmed',
+    all_day: false, updated_at: '2030-01-01T00:00:00Z',
+  };
+  const result = await post.synchronizeSavedScheduleReminders(
+    { scheduleIds: [SID, second, SID], scheduleId: SID, schedules: [schedule] },
+    () => true, clientFor([row]),
+  );
+  assert.deepEqual(result, [
+    { action: 'scheduled', scheduleId: SID },
+    { action: 'scheduled', scheduleId: second },
+  ]);
+  assert.deepEqual(fake.calls, [
+    ['query', [second]], ['move', SID], ['schedule', SID, 0],
+    ['move', second], ['schedule', second, 0],
+  ]);
+});
+
 for (const offset of [0,30,1440]) test(`manual preset ${offset} reconciles all offsets and start before selected reservation`,async()=>{
  fake.reset(); await post.reserveConfirmedReminder(schedule,offset,()=>true);
  assert.deepEqual(fake.calls,[['move',SID],['schedule',SID,0],...(offset ? [['schedule',SID,offset]] : [])]);
