@@ -35,7 +35,7 @@ test('full parity sweep uses one native token source across shell and voice dock
 });
 
 test('settings keeps account, notifications, app info, and account actions without Calendar controls', () => {
-  for (const label of ['계정', '알림', '앱 정보', '계정 작업', '업데이트·패치노트', '로그아웃']) {
+  for (const label of ['계정', '알림', '앱 정보', '외부 연결', '업데이트·패치노트', '로그아웃']) {
     assert.match(mobileHome, new RegExp(label));
   }
   assert.match(mobileHome, /SettingsMenuItem/);
