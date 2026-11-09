@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -15,6 +15,7 @@ type Props = Readonly<{
   busy: boolean;
   onChange(next: ManualWorkInputValue): void;
   onSave(): void;
+  children?: ReactNode;
 }>;
 
 function dateValue(value: string) {
@@ -53,7 +54,7 @@ function timeLabel(value?: string) {
   return `${period} ${displayHour}:${String(minute).padStart(2, '0')}`;
 }
 
-export function ManualWorkInput({ value, busy, onChange, onSave }: Props) {
+export function ManualWorkInput({ value, busy, onChange, onSave, children }: Props) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const update = (patch: Partial<ManualWorkInputValue>) => onChange({ ...value, ...patch });
@@ -107,6 +108,7 @@ export function ManualWorkInput({ value, busy, onChange, onSave }: Props) {
       </View> : null}
     </View>
 
+    {children}
     <Pressable accessibilityRole="button" disabled={busy || !value.transcript.trim()} style={[styles.save, busy || !value.transcript.trim() ? styles.disabled : null]} onPress={onSave}>
       <Text style={styles.saveText}>{busy ? '저장 중…' : '저장'}</Text>
     </Pressable>

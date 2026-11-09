@@ -1,3 +1,11 @@
+import { findWorklogReminderLinks } from '@/src/features/schedule/worklog-reminder-adapter';
+import { RepeatFromRecord } from '@/src/features/recurring/repeat-from-record';
+import * as Crypto from 'expo-crypto';
+import { useRepeatingWork } from '@/src/features/recurring/use-repeating-work';
+import { RepeatOptions } from '@/src/features/recurring/repeat-options';
+import { RecurringDetail } from '@/src/features/recurring/recurring-detail';
+import { recurringHomeProjection } from '@/src/features/recurring/recurrence-home';
+import { newRepeatState, type RepeatRule, type RepeatOccurrence } from '@/src/features/recurring/recurrence-model';
 import type { ReactNode } from 'react';
 import { HomeCalendar } from '@/src/features/home/home-calendar';
 import { PersonalCalendarSheet } from '@/src/features/calendar/personal-calendar-sheet';
@@ -19,7 +27,7 @@ import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Modal, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -188,7 +196,7 @@ function HomeTaskRow(props: Parameters<typeof TaskRow>[0]) {
       {props.task.pageId && props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
     </View>
     {props.task.pageId ? <View style={styles.homeTaskUtilities}>
-      <ReminderShortcut id={props.task.pageId} title={props.task.title || '업무'} onPress={props.onReminder} disabled={props.completing} />
+      {props.task.pageId.startsWith('repeat:')?<Text style={styles.taskMeta}>{props.task.dueTime?`${props.task.dueTime} · 기기 알림 설정 확인`:'시간 미지정 · 알림 없음'}</Text>:<ReminderShortcut id={props.task.pageId} title={props.task.title || '업무'} onPress={props.onReminder} disabled={props.completing} />}
     </View> : null}
     {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} hideShortcuts /> : null}
   </View>;
@@ -364,6 +372,13 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const session = platform.session;
   const client = platform.client;
   const config = platform.config;
+  const recurring = useRepeatingWork(config?.dataSchema === 'worklog' ? client : null, session?.user.id);
+  const [repeatCreating,setRepeatCreating]=useState(false);
+  const repeatCreateTarget=useRef<string|null>(null);
+  const [repeatRule,setRepeatRule] = useState<RepeatRule|null>(null);
+  const [repeatDetail,setRepeatDetail] = useState<{workId:string;row?:RepeatOccurrence}|null>(null);
+  const [repeatUndo,setRepeatUndo] = useState<RepeatOccurrence|null>(null);
+
   const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
   const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
   const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => session?.access_token || 'android-touch-smoke-token' : getFreshAccessToken;
@@ -433,6 +448,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const [noteBusyId, setNoteBusyId] = useState<string | null>(null);
   const [undoNote, setUndoNote] = useState<{ pageId: string; title: string } | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
+  repeatCreateTarget.current=repeatCreating?editTaskId:null;
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
@@ -527,7 +543,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     if (!session || !client) return;
     let alive = true;
     const openSchedule = (data: unknown) => {
-      const payload = data as { target?: unknown; scheduleId?: unknown };
+      const payload = data as { target?: unknown; scheduleId?: unknown; workRecordId?: unknown; userId?: unknown };
+      if (payload?.target === 'repeating-work' && payload.userId === session?.user.id && typeof payload.workRecordId === 'string') { setScreen('home');setRepeatDetail({workId:payload.workRecordId});return true; }
       if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return false;
       setNotificationScheduleId(payload.scheduleId);
       setScheduleFocusReason('notification');
@@ -639,11 +656,23 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   async function persistDraft() {
     if (!session || !client || !manualInput.transcript.trim() || busy || manualSaveInFlight.current) return;
     manualSaveInFlight.current = true;
+    const wasRepeating = !!repeatRule;
     const original = manualInput.transcript.trim();
+    if (repeatRule) {
+      try { newRepeatState(original,{...repeatRule,anchor:manualInput.dueDate},manualInput.dueTime); }
+      catch { manualSaveInFlight.current=false; showMessage('반복 주기·요일·시작일을 확인해주세요.','error'); return; }
+    }
     try { await run(async () => {
       const reminderGuard = reminderSessionEpoch.capture();
       const saved = await manualSaveSession.current.save(manualInput,
         async (text, options) => saveWorklog(await getFreshAccessToken(client), text, options));
+      if (repeatRule) {
+        const id = saved.dataCoreWorkRecordId;
+        if (!id) throw new Error('업무는 저장됐지만 반복 연결을 확인하지 못했습니다. 다시 저장하면 같은 업무에 연결을 재시도합니다.');
+        const initial = newRepeatState(original,{...repeatRule,anchor:manualInput.dueDate},manualInput.dueTime);
+        if (!await recurring.mutate(id,{op:'create',revision:{...initial.revisions[0],sourceScheduleId:saved.scheduleId,sourceScheduleIds:saved.scheduleIds|| (saved.scheduleId?[saved.scheduleId]:[])}})) throw new Error('업무 저장됨 · 반복 저장 확인 필요. 입력을 유지했습니다. 같은 내용으로 다시 시도해주세요.');
+        setRepeatRule(null);
+      }
       const expectedDue = manualInput.dueDate && manualInput.dueTime
         ? `${manualInput.dueDate}T${manualInput.dueTime}:00+09:00` : manualInput.dueDate;
       const dueMatches = !expectedDue || (manualInput.dueTime
@@ -662,7 +691,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       };
       let reminderWarning = '';
       let reminderMessage = '';
-      try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard, client); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); }
+      try { const results = wasRepeating ? [] : await synchronizeSavedScheduleReminders(saved, reminderGuard, client); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); }
       catch (nextError) { reminderWarning = reminderFailureMessage(nextError); }
       if (!reminderGuard()) return;
       setSavedReminder({ target: { recordId: feedback.recordId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning || reminderMessage });
@@ -1183,7 +1212,12 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const journalToday = journal?.today || seoulTodayKey();
   const journalIsFuture = journalTarget > journalToday;
   const overview = homeOverview(briefing!);
-  const structure = overview.structure;
+  const repeatProjection = recurringHomeProjection(overview.structure,recurring.works,seoulTodayKey());
+  const structure = repeatProjection.structure;
+  const repeatRow = (task: BriefingTask) => task.pageId ? repeatProjection.occurrences.get(task.pageId) : undefined;
+  const openRepeat = (task: BriefingTask) => { const row=repeatRow(task); if(row)setRepeatDetail({workId:row.workRecordId,row}); };
+  async function completeRepeat(task: BriefingTask) { const row=repeatRow(task); if(row&&await recurring.mutate(row.workRecordId,{op:'complete',key:row.key,originalDate:row.originalDate})) setRepeatUndo(row); }
+
   const activeFilter = taskFilter || firstNonEmptyTaskBucket(structure);
   const notes = briefing?.notes || [];
   const visibleNotes = notesExpanded ? notes : notes.slice(0, 3);
@@ -1217,7 +1251,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
       </View>
-      <HomeCalendar key={session.user.id} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
+      <HomeCalendar repeatingWorks={recurring.works} onOpenRepeating={id=>{const parts=id.split(':');setRepeatDetail({workId:parts[1]});}} key={session.user.id} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
         onOpenCalendar={day => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarDate(day); setPersonalCalendarOpen(true); }}
         renderSchedule={schedule => <View>
           {schedule.scheduleId === notificationScheduleId ? <Text style={styles.helpText}>{scheduleFocusReason === 'created' ? '방금 생성된 일정' : '알림에서 연 일정'}</Text> : null}
@@ -1234,7 +1268,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
           <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>{bucket.key === 'today' ? '오늘 할 일' : bucket.label}</Text><Pressable accessibilityRole="button" accessibilityState={{ expanded: taskFiltersExpanded }} style={styles.homeRefresh} onPress={() => setTaskFiltersExpanded(value => !value)}><Text style={styles.linkText}>{taskFiltersExpanded ? '접기' : '전체 보기 ›'}</Text></Pressable></View>
           {taskFiltersExpanded ? <View style={styles.homeFilters}>{briefingBuckets.map(bucket => <Pressable key={bucket.key} accessibilityRole="button" accessibilityState={{ selected: activeFilter === bucket.key }} style={[styles.homeFilter, activeFilter === bucket.key ? styles.homeFilterActive : null]} onPress={() => setTaskFilter(bucket.key)}><Text>{bucket.label} {structure[bucket.key].length}</Text></Pressable>)}</View> : null}
           {tasks.length ? visibleTasks.map((task, index) => <View key={task.pageId || `${bucket.key}-${index}`}>
-            <HomeTaskRow bucket={bucket.key} task={task} onOpen={() => { setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onReminder={() => setReminderTarget({ recordId: task.pageId, title: task.title || '업무' })} onEdit={() => void openTaskEditor(task)} onDelete={() => task.pageId ? confirmDeleteRecord(task.pageId, task.title || '업무', 'task') : undefined} onComplete={() => void completeTaskInline(task)} completing={taskBusyId === task.pageId} />
+            <HomeTaskRow bucket={bucket.key} task={task} onOpen={() => { if(repeatRow(task)){openRepeat(task);return;} setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onReminder={() => repeatRow(task)?openRepeat(task):setReminderTarget({ recordId: task.pageId, title: task.title || '업무' })} onEdit={() => repeatRow(task)?openRepeat(task):void openTaskEditor(task)} onDelete={repeatRow(task)?undefined:() => task.pageId ? confirmDeleteRecord(task.pageId, task.title || '업무', 'task') : undefined} onComplete={() => repeatRow(task)?void completeRepeat(task):void completeTaskInline(task)} completing={taskBusyId === task.pageId || (recurring.busy && !!repeatRow(task))} />
           </View>) : <Text style={styles.emptyText}>{bucket.key === 'today' ? '오늘 기한인 업무가 없습니다. 다른 기한은 전체 보기에서 확인하세요.' : '이 기한의 업무가 없습니다.'}</Text>}
           {extra ? <Pressable accessibilityRole="button" accessibilityLabel={expanded ? `${bucket.label} 접기` : `${bucket.label} ${extra}개 더 보기`} style={styles.moreButton} onPress={() => setExpandedBuckets((value) => ({ ...value, [bucket.key]: !expanded }))}><Text style={styles.moreButtonText}>{expanded ? '접기' : `${extra}개 더 보기`}</Text></Pressable> : null}
           {bucket.key !== 'overdue' && structure.overdue.length ? <Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => { setTaskFilter('overdue'); setTaskFiltersExpanded(true); }}><Text style={styles.helpText}>기한 지난 업무 {structure.overdue.length}건 ›</Text></Pressable> : null}
@@ -1242,6 +1276,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         </View>;
       }) : null}
 
+      {recurring.notificationError ? <Text style={styles.helpText}>{recurring.notificationError}</Text> : null}
+      {recurring.error ? <View><Text style={styles.errorText}>{recurring.error}</Text><Button title="반복 업무 다시 확인" onPress={() => void recurring.retry()}/></View> : null}
+      {repeatUndo ? <View style={styles.undoBar}><Text style={styles.undoText}>{repeatUndo.title} 완료 저장 확인됨</Text><Pressable accessibilityRole="button" disabled={recurring.busy} onPress={async()=>{if(await recurring.mutate(repeatUndo.workRecordId,{op:'undo',key:repeatUndo.key,originalDate:repeatUndo.originalDate}))setRepeatUndo(null);}}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
       {undoTask ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoTask.title} 완료 처리</Text><Pressable accessibilityRole="button" disabled={Boolean(taskBusyId)} onPress={() => void undoCompletedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
       {undoPostpone ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoPostpone.title} 미루기</Text><Pressable accessibilityRole="button" disabled={Boolean(reminderBusyId)} onPress={() => void undoPostponedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
       {undoAttention ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoAttention.title} 다시 알림</Text><Pressable accessibilityRole="button" disabled={Boolean(reminderBusyId)} onPress={() => void undoTaskAttention()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
@@ -1289,7 +1326,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
 
     {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><Button title="알림 설정" onPress={() => setReminderTarget({ recordId: selectedTask.task.pageId, title: selectedTask.task.title || '업무' })} /><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
-    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
+    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()}><RepeatOptions value={repeatRule} anchor={manualInput.dueDate} disabled={busy} onChange={setRepeatRule}/></ManualWorkInput>{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
     {screen === 'settings' ? <View style={styles.settingsPanel}>
       <PanelHead eyebrow="내 업무공간" title="설정" onClose={() => setScreen('home')} />
@@ -1328,10 +1365,12 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     }} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { if (!client) throw new Error('로그인 연결을 확인한 뒤 다시 시도해주세요.'); const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(await getFreshAccessToken(client), transcript, { ...options, sourceType: 'voice' }); let reminderMessage: string; try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard, client); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); } catch (nextError) { reminderMessage = reminderFailureMessage(nextError); } if (reminderGuard()) setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage }); if (reminderGuard() && saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing: refreshQuickVoiceBriefing }} />
   </View> : null}
     {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
-  {personalCalendarOpen && config?.dataSchema === 'worklog' ? <PersonalCalendarSheet key={session.user.id} initialDate={personalCalendarDate} onClose={() => setPersonalCalendarOpen(false)} onSaved={() => { void refreshBriefing(); }} /> : null}
+  {repeatCreating && editTaskId ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatCreating(false)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><PanelHead eyebrow="기존 업무" title="반복 설정" onClose={()=>setRepeatCreating(false)}/><RepeatFromRecord initial={{transcript:editTitle,dueDate:editDate||seoulTodayKey(),dueTime:editTime}} busy={recurring.busy} onSave={async revision=>{try{const guard=reminderSessionEpoch.capture();const links=await findWorklogReminderLinks(client!,[editTaskId],guard);if(!guard()||repeatCreateTarget.current!==editTaskId)return false;if(await recurring.mutate(editTaskId,{op:'create',revision:{...revision,sourceScheduleIds:[...new Set(links[editTaskId]||[])].sort()}})){setRepeatCreating(false);setEditTaskId(null);return true;}}catch{showMessage('연결된 일정 확인 필요 · 입력을 유지했습니다. 다시 시도해주세요.','error');}return false;}}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
+  {repeatDetail && recurring.works.some(w=>w.workRecordId===repeatDetail.workId) ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatDetail(null)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><RecurringDetail key={repeatDetail.workId} work={recurring.works.find(w=>w.workRecordId===repeatDetail.workId)!} today={seoulTodayKey()} busy={recurring.busy} selected={repeatDetail.row} onClose={()=>setRepeatDetail(null)} onMutate={command=>recurring.mutate(repeatDetail.workId,command)}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
+  {personalCalendarOpen && config?.dataSchema === 'worklog' ? <PersonalCalendarSheet repeatingWorks={recurring.works} onOpenRepeating={id=>{setPersonalCalendarOpen(false);setRepeatDetail({workId:id.split(':')[1]});}} key={session.user.id} initialDate={personalCalendarDate} onClose={() => setPersonalCalendarOpen(false)} onSaved={() => { void refreshBriefing(); }} /> : null}
   <WorkRecordEditSheet
     allowTitleWhileLoading
-    visible={Boolean(editTaskId)}
+    visible={Boolean(editTaskId) && !repeatCreating}
     title={editTitle}
     date={editDate}
     time={editTime}
@@ -1349,6 +1388,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     onSave={() => void saveTaskEditor()}
     onCancel={closeTaskEditor}
     onRetry={() => void retryTaskEditor()}
+    onRepeat={config?.dataSchema === 'worklog' ? ()=>setRepeatCreating(true) : undefined}
   />
 </View></KeyboardAvoidingView></View></HomeReminderStatus>;
 }
