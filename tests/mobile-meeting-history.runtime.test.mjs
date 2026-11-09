@@ -63,16 +63,21 @@ async function loadActualTypeScript(path, replacements) {
 }
 const expoStub = [/import \{ (?:Directory, )?File, Paths \} from 'expo-file-system';/,
   "const { File, Directory, Paths } = globalThis.__meetingFileMock;"];
+const owner = await import('../mobile/src/features/voice/meeting-owner.ts');
+globalThis.__meetingOwner = owner;
 const recordings = await loadActualTypeScript('mobile/src/features/voice/meeting-recordings.ts', [
   expoStub,
+  ["import { requireMeetingOwner } from './meeting-owner';", 'const { requireMeetingOwner } = globalThis.__meetingOwner;'],
 ]);
+globalThis.__meetingRecordings = recordings;
 const minutes = await loadActualTypeScript('mobile/src/features/voice/meeting-minutes-storage.ts', [
   expoStub,
+  ["import { assertMeetingRecordingOwned } from './meeting-recordings';", 'const { assertMeetingRecordingOwned } = globalThis.__meetingRecordings;'],
   [/import \{[\s\S]*?\} from '\.\/meeting-minutes-document';/,
    'const { assertMeetingRecordingId, createMeetingMinutesDocument, parseMeetingMinutesDocument } = globalThis.__meetingModel;'],
 ]);
 
-function reset() { files.clear(); failNextMove = false; failDirectoryScan = false; }
+function reset() { owner.selectMeetingOwner('account-a'); files.clear(); failNextMove = false; failDirectoryScan = false; }
 function recording(index) {
   const uri = `file:///recordings/recording-${String(index).padStart(4, '0')}.m4a`;
   files.set(uri, 'M4A');
@@ -85,7 +90,7 @@ function recording(index) {
     createdAt: new Date(Date.UTC(2026, 10, 1, 10, 0, index)).toISOString(),
   };
 }
-const indexUri = 'file:///worklog/meeting-recordings-v1.json';
+const indexUri = 'file:///worklog/meeting-recordings-owned-account-a.json';
 
 test('201+ meetings retain all titles, old records and original audio after new saves', () => {
   reset();
@@ -188,7 +193,7 @@ test('UI keeps month grouping, explicit search and 20-row page without reading f
   assert.match(source, /isMeetingRecordingFileAvailable\(recording\)/);
 });
 
-test('new or existing QA orphan M4A files are recovered into the list without touching audio', () => {
+test('unowned orphan M4A files remain byte-for-byte preserved and are never attributed', () => {
   reset();
   const names = [
     'recording-63a1bd1e-dded-4bef-b324-bad46eb04bfc.m4a',
@@ -197,11 +202,9 @@ test('new or existing QA orphan M4A files are recovered into the list without to
   for (const name of names) files.set('file:///worklog/' + name, 'PRESERVED-ORIGINAL-AUDIO');
   assert.equal(files.has(indexUri), false);
   const saved = recordings.listMeetingRecordings();
-  assert.equal(saved.length, 2);
-  assert.ok(saved.every((entry) => entry.durationMs === 0));
-  assert.ok(saved.every((entry) => entry.id.startsWith('meeting-')));
-  assert.deepEqual(new Set(saved.map((entry) => entry.fileName)), new Set(names));
-  assert.equal(recordings.listMeetingRecordings().length, 2, 'recovery is idempotent after app restart');
+  assert.equal(saved.length, 0);
+  assert.equal(recordings.listMeetingRecordings().length, 0);
+  assert.equal(files.has(indexUri), false);
   for (const name of names) assert.equal(files.get('file:///worklog/' + name), 'PRESERVED-ORIGINAL-AUDIO');
 });
 
@@ -222,8 +225,8 @@ test('Expo 57 writes index and minutes synchronously, verifies moved files and p
   assert.match(draftSource, /movedToTarget = true/);
   assert.match(indexSource, /if \(!movedToTarget && pending\.exists\)/);
   assert.match(draftSource, /if \(!movedToTarget && temporary\.exists\)/);
-  assert.match(indexSource, /const committed = readIndexRaw\(\)/);
-  assert.match(indexSource, /if \(!readIndexRaw\(\)\.some/);
+  assert.match(indexSource, /const committed = readIndexRaw\(owner\)/);
+  assert.match(indexSource, /if \(!readIndexRaw\(owner\)\.some/);
 });
 
 test('moving a temporary file never deletes the final saved index or meeting minutes', () => {
@@ -252,4 +255,32 @@ test('temporary orphan-scan failure still displays all indexed meeting recording
   assert.equal(files.has(row.uri), true);
   failDirectoryScan = false;
   assert.equal(recordings.listMeetingRecordings().length, 1);
+});
+
+test('A→B→A and restart keep audio, titles and minutes scoped; forged row cannot play', () => {
+  reset(); const a=recordings.rememberMeetingRecording(recording(101));
+  minutes.saveMeetingMinutes({recordingId:a.id,transcriptText:'A private',minutesText:'A minutes',expectedPrevious:null});
+  const baseline=new Map(files);
+  owner.selectMeetingOwner('account-b');
+  assert.equal(recordings.listMeetingRecordings().length,0);
+  assert.throws(()=>minutes.loadMeetingMinutes(a.id),/접근할 수 없는/);
+  assert.throws(()=>minutes.saveMeetingMinutes({recordingId:a.id,transcriptText:'overwrite',minutesText:'',expectedPrevious:null}),/접근할 수 없는/);
+  assert.throws(()=>recordings.isMeetingRecordingFileAvailable(a),/접근할 수 없는/);
+  assert.throws(()=>recordings.renameMeetingRecording(a.id,'B rename'),/찾지 못/);
+  for(const [key,value] of baseline)assert.equal(files.get(key),value);
+  owner.selectMeetingOwner(null); assert.throws(()=>recordings.listMeetingRecordings(),/계정이 변경/);
+  owner.selectMeetingOwner('account-a');
+  assert.equal(recordings.listMeetingRecordings()[0].id,a.id);
+  assert.equal(minutes.loadMeetingMinutes(a.id).transcriptText,'A private');
+});
+test('recording started by A can be finalized to A after logout without attributing it to B',()=>{
+  reset(); const input=recording(102);recordings.rememberMeetingRecording(input,'account-a');
+  owner.selectMeetingOwner('account-b');recordings.rememberMeetingRecording({...input,durationMs:90000},'account-a');
+  assert.equal(recordings.listMeetingRecordings().length,0);
+  owner.selectMeetingOwner('account-a');assert.equal(recordings.listMeetingRecordings()[0].durationMs,90000);
+});
+
+test('finalizing an in-progress owned recording preserves a title edited during capture',()=>{
+ reset();const input=recording(103);const row=recordings.rememberMeetingRecording(input);recordings.renameMeetingRecording(row.id,'진행 중 붙인 제목');
+ recordings.rememberMeetingRecording({...input,durationMs:120000});assert.equal(recordings.listMeetingRecordings()[0].title,'진행 중 붙인 제목');
 });

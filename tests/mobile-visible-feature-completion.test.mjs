@@ -27,7 +27,7 @@ test('Visible feature gate keeps meeting recording inspectable after capture', (
   assert.match(voice, /MeetingRecordingLibrary/);
   assert.match(meetingProvider, /MeetingRecordingSession/);
   assert.match(meetingBanner, /진행 중인 회의 녹음으로 돌아가기/);
-  assert.match(meetingRepo, /meeting-recordings-v1\.json/);
+  assert.match(meetingRepo, /meeting-recordings-owned-/);
   assert.match(meetingLibrary, /최근 회의 녹음/);
   assert.match(meetingLibrary, /▶ 재생/);
   assert.match(meetingLibrary, /⏸ 일시정지/);
