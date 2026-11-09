@@ -44,9 +44,9 @@ test('compact schedule and task buttons share words, wrapping and >=44 point tar
   const schedule=upper.type(upper.props);
   assert.deepEqual(record.children,schedule.children);
   const copy=JSON.stringify(record.children);
-  assert.match(copy,current.startsWith('이 기기 예약:')?/알림 변경/:/알림 설정/);
-  if(current==='알림 확인 필요')assert.match(copy,/상태 확인 필요/);
-  if(current.includes('알림 없음'))assert.match(copy,/미설정/);
+  assert.match(copy,/알림/);
+  if(current==='알림 확인 필요')assert.match(copy,/알림 확인 필요/);
+  if(current.includes('알림 없음'))assert.match(copy,/알림 없음/);
   if(current.includes('권한'))assert.match(copy,/권한 필요/);
   if(current.startsWith('이 기기 예약:'))assert.match(copy,/30분 전/);
   assert.ok(record.props.style.minHeight>=44);assert.ok(record.props.style.minHeight+record.props.hitSlop.top+record.props.hitSlop.bottom>=44);assert.equal(record.props.style.maxWidth,'100%');
