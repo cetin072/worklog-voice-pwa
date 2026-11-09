@@ -8,6 +8,8 @@ import { captureChanges } from '@/src/features/capture/capture-runtime';
 import { firstNonEmptyTaskBucket, homeOverview } from '@/src/features/home/home-overview';
 import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
 import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
+import { SubscriptionsScreen } from '@/src/features/subscriptions/subscriptions-screen';
+import { cancelAllSubscriptionReminders } from '@/src/features/subscriptions/subscription-reminders';
 import { notificationResponseHandler } from '@/src/features/startup/notification-response-gate';
 import { StartupScreen } from '@/src/features/startup/startup-screen';
 import { initialBriefingState } from '@/src/features/startup/briefing-startup';
@@ -49,7 +51,7 @@ import { mobileTheme } from '@/src/ui/theme';
 
 const QUICK_VOICE_SPEECH_RECOGNITION = createExpoSpeechRecognitionAdapter();
 const APP_BUILD_INFO = appBuildInfo(Constants.expoConfig);
-type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes';
+type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes' | 'subscriptions';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
 type AuthMode = 'signIn' | 'signUp';
@@ -476,7 +478,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     reminderSyncEpoch.invalidate();
     briefingRefreshEpoch.current += 1;
     briefingRefreshQueue.current.reset();
-    if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); return; }
+    if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); void cancelAllSubscriptionReminders().catch(() => undefined); return; }
     if (androidTouchSmoke) void refreshBriefing();
     return () => { briefingRefreshEpoch.current += 1; briefingRefreshQueue.current.reset(); };
   }, [session?.access_token]);
@@ -518,6 +520,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (quickVoiceNavigation.current) { warnPendingVoice(); return true; }
       if (screen === 'home') return false;
+      if (screen === 'subscriptions') { setScreen('settings'); return true; }
       setScreen(screen === 'journal' ? 'settings' : 'home');
       return true;
     });
@@ -528,6 +531,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     let alive = true;
     const openSchedule = (data: unknown) => {
       const payload = data as { target?: unknown; scheduleId?: unknown };
+      if (payload?.target === 'subscriptions') { setScreen('subscriptions'); return true; }
       if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return false;
       setNotificationScheduleId(payload.scheduleId);
       setScheduleFocusReason('notification');
@@ -1297,6 +1301,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         <SettingsMenuItem title="업무일지" accessibilityLabel="업무일지 열기" onPress={openJournal} />
         <SettingsMenuItem title="과거 업무 검색" onPress={() => setScreen('recordSearch')} />
       </SettingsGroup>
+      <SettingsGroup title="내 관리">
+        <SettingsMenuItem title="구독·정기결제" description="한 달 구독료를 한눈에 보고 계속 쓸지 판단" onPress={() => setScreen('subscriptions')} />
+      </SettingsGroup>
       <SettingsGroup title="알림">
         <SettingsMenuItem title="알림·리마인더" onPress={() => setScreen('reminderSettings')} />
       </SettingsGroup>
@@ -1317,6 +1324,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
       </SettingsGroup>
     </View> : null}
+    {screen === 'subscriptions' ? <View style={styles.panel}><PanelHead eyebrow="내 관리" title="구독·정기결제" onClose={() => setScreen('settings')} />{client ? <SubscriptionsScreen client={client} /> : <Text style={styles.errorText}>로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
   </ScrollView>
