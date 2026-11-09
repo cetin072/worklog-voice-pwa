@@ -9,6 +9,16 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-09',
+    title: '설정 카테고리 정리',
+    summary: '자주 찾는 기록·알림·외부 연결을 위쪽에, 앱 정보와 계정을 아래쪽에 모았습니다.',
+    items: [
+      '같은 종류의 메뉴를 한 블록으로 묶고 반복 설명과 영문 라벨을 줄였습니다.',
+      'Google 캘린더의 연결 상태와 연결 안내는 유지합니다.',
+      '로그인 계정과 삭제 요청·로그아웃을 마지막 블록에 모았습니다.',
+    ],
+  },
+  {
     date: '2026-11-08',
     title: 'QA·Play용 앱 구분 및 패치노트 보기 개선',
     summary: '설정에서 앱 유형을 확인하고, 패치노트는 최근 변경부터 간단히 볼 수 있도록 정리했습니다.',
