@@ -184,12 +184,13 @@ function HomeTaskRow(props: Parameters<typeof TaskRow>[0]) {
   return <View style={styles.homeTaskEntry}>
     <View style={styles.homeTaskLine}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 관리 펼치기`} accessibilityState={{ expanded }} style={styles.homeTaskOpen} onPress={() => setExpanded(value => !value)}><Text style={styles.homeTaskTitle}>{props.task.title || '제목 없는 업무'}</Text></Pressable>
+      {props.task.pageId && props.onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 수정`} disabled={props.completing} style={styles.inlineEdit} onPress={props.onEdit}><Text style={styles.inlineEditText}>✏️ 수정</Text></Pressable> : null}
       {props.task.pageId && props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
     </View>
     {props.task.pageId ? <View style={styles.homeTaskUtilities}>
       <ReminderShortcut id={props.task.pageId} title={props.task.title || '업무'} onPress={props.onReminder} disabled={props.completing} />
     </View> : null}
-    {expanded ? <TaskRow {...props} onComplete={undefined} hideShortcuts /> : null}
+    {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} hideShortcuts /> : null}
   </View>;
 }
 
