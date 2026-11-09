@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { CalendarSettings } from '@/src/features/settings/calendar-settings';
 import { CalendarExportPreview } from '@/src/features/calendar/calendar-export-preview';
 import { CaptureImportButton } from '@/src/features/capture/capture-import-button';
@@ -292,10 +293,20 @@ function AuthModeSelector({ mode, onChange }: { mode: AuthMode; onChange: (mode:
   </View>;
 }
 
-function SettingsMenuItem({ eyebrow, title, description, onPress, accessibilityLabel, destructive = false }: { eyebrow: string; title: string; description: string; onPress: () => void; accessibilityLabel?: string; destructive?: boolean }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={[styles.settingsMenuItem, destructive ? styles.settingsMenuItemDestructive : null]} onPress={onPress}>
-    <View style={styles.settingsMenuCopy}><Text style={styles.settingsMenuEyebrow}>{eyebrow}</Text><Text style={[styles.settingsMenuTitle, destructive ? styles.settingsMenuTitleDestructive : null]}>{title}</Text><Text style={styles.settingsMenuDescription}>{description}</Text></View>
-    <Text style={[styles.settingsMenuChevron, destructive ? styles.settingsMenuTitleDestructive : null]}>›</Text>
+function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+  return <View style={styles.settingsGroup}>
+    <Text accessibilityRole="header" style={styles.settingsGroupTitle}>{title}</Text>
+    <View style={styles.settingsGroupCard}>{children}</View>
+  </View>;
+}
+
+function SettingsMenuItem({ title, description, onPress, accessibilityLabel, destructive = false }: { title: string; description?: string; onPress: () => void; accessibilityLabel?: string; destructive?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel || title} style={[styles.settingsMenuItem, destructive ? styles.settingsMenuItemDestructive : null]} onPress={onPress}>
+    <View style={styles.settingsMenuCopy}>
+      <Text style={[styles.settingsMenuTitle, destructive ? styles.settingsMenuTitleDestructive : null]}>{title}</Text>
+      {description ? <Text style={styles.settingsMenuDescription}>{description}</Text> : null}
+    </View>
+    <Text accessibilityElementsHidden importantForAccessibility="no" style={[styles.settingsMenuChevron, destructive ? styles.settingsMenuTitleDestructive : null]}>›</Text>
   </Pressable>;
 }
 
@@ -1262,9 +1273,31 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
 
     {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy} onChange={setManualInput} onSave={() => void persistDraft()} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
-    {screen === 'settings' ? <View style={styles.settingsPanel}><PanelHead eyebrow="설정" title="내 업무공간" onClose={() => setScreen('home')} /><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>기록</Text><SettingsMenuItem eyebrow="기록" title="업무일지" accessibilityLabel="업무일지 열기" description="날짜별 일정과 업무·메모를 확인합니다." onPress={openJournal} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정</Text><View style={styles.settingsAccount}><Text style={styles.body}>{session.user.email || '로그인 사용자'}</Text><Text style={styles.meta}>개인 업무공간에 안전하게 연결됨</Text></View></View><View style={styles.settingsGroup}><CalendarSettings /><Text style={styles.settingsGroupTitle}>알림</Text><SettingsMenuItem eyebrow="NOTIFICATIONS" title="알림·리마인더" description="앱 알림 권한과 예약된 일정 알림을 확인합니다." onPress={() => setScreen('reminderSettings')} /></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>앱 정보</Text><SettingsMenuItem eyebrow="RELEASE NOTES" title="업데이트·패치노트" description="최근 변경사항과 이전 업데이트 내역을 확인합니다." onPress={() => { setPatchNotesExpanded(false); setScreen('patchNotes'); }} /><SettingsMenuItem eyebrow="PRIVACY" title="개인정보처리방침" description="업무수첩의 개인정보 처리 방침을 확인합니다." onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/privacy.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} /><SettingsMenuItem eyebrow="ACCOUNT" title="계정 및 데이터 삭제 요청" description="계정과 서비스 데이터의 삭제를 요청합니다." onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/account-deletion.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} /><Text style={styles.settingsMeta}>{APP_BUILD_INFO.label}</Text><Text style={styles.settingsMeta}>{APP_BUILD_INFO.help}</Text><Text style={styles.settingsMeta}>Data Core primary: {config?.dataCorePrimaryEnabled ? 'ON' : 'OFF'}</Text></View><View style={styles.settingsGroup}><Text style={styles.settingsGroupTitle}>계정 작업</Text><SettingsMenuItem eyebrow="ACCOUNT" title="로그아웃" description="이 기기에서 현재 업무수첩 계정 세션을 종료합니다." destructive onPress={confirmSignOut} /></View></View> : null}
+    {screen === 'settings' ? <View style={styles.settingsPanel}>
+      <PanelHead eyebrow="내 업무공간" title="설정" onClose={() => setScreen('home')} />
+      <SettingsGroup title="기록">
+        <SettingsMenuItem title="업무일지" accessibilityLabel="업무일지 열기" onPress={openJournal} />
+        <SettingsMenuItem title="과거 업무 검색" onPress={() => setScreen('recordSearch')} />
+      </SettingsGroup>
+      <SettingsGroup title="알림">
+        <SettingsMenuItem title="알림·리마인더" onPress={() => setScreen('reminderSettings')} />
+      </SettingsGroup>
+      <SettingsGroup title="외부 연결">
+        <CalendarSettings />
+      </SettingsGroup>
+      <SettingsGroup title="앱 정보">
+        <SettingsMenuItem title="업데이트·패치노트" onPress={() => { setPatchNotesExpanded(false); setScreen('patchNotes'); }} />
+        <SettingsMenuItem title="개인정보처리방침" onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/privacy.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} />
+        <Text style={styles.settingsMeta}>{APP_BUILD_INFO.label}</Text>
+      </SettingsGroup>
+      <SettingsGroup title="계정">
+        <View style={styles.settingsAccount}><Text selectable style={styles.body}>{session.user.email || '로그인 사용자'}</Text></View>
+        <SettingsMenuItem title="계정 및 데이터 삭제 요청" onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/account-deletion.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} />
+        <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
+      </SettingsGroup>
+    </View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
-    {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
+    {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
   </ScrollView>
   {screen === 'home' ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
     <VoiceRecorderCard mode="quick" renderPhotoAction={disabled => <CaptureImportButton compact disabled={disabled} />} navigationGuard={quickVoiceNavigation} onOpenWorklogInput={(recognizedText) => {
@@ -1456,17 +1489,17 @@ const styles = StyleSheet.create({
   authHint: { fontSize: 12, color: '#737985', lineHeight: 18 },
   settingsPanel: { gap: mobileTheme.spacing.section, paddingBottom: mobileTheme.spacing.page },
   settingsGroup: { gap: 8 },
-  settingsGroupTitle: { color: mobileTheme.colors.textMuted, fontSize: 12, fontWeight: '800', letterSpacing: 0.9, paddingHorizontal: 4 },
-  settingsAccount: { gap: 5, backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.control, padding: mobileTheme.spacing.control },
-  settingsMenuItem: { minHeight: 86, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.control, padding: mobileTheme.spacing.control },
-  settingsMenuItemDestructive: { backgroundColor: '#fff7f7', borderWidth: 1, borderColor: '#fecaca' },
+  settingsGroupTitle: { color: mobileTheme.colors.textSecondary, fontSize: 13, fontWeight: '800', paddingHorizontal: 4 },
+  settingsGroupCard: { backgroundColor: mobileTheme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: mobileTheme.colors.borderSubtle, overflow: 'hidden' },
+  settingsAccount: { padding: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
+  settingsMenuItem: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
+  settingsMenuItemDestructive: { backgroundColor: '#fff7f7' },
   settingsMenuCopy: { flex: 1, minWidth: 0, gap: 3 },
-  settingsMenuEyebrow: { color: mobileTheme.colors.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 0.7 },
   settingsMenuTitle: { color: mobileTheme.colors.text, fontSize: 16, fontWeight: '800' },
   settingsMenuTitleDestructive: { color: mobileTheme.colors.danger },
   settingsMenuDescription: { color: mobileTheme.colors.textSecondary, fontSize: 12, lineHeight: 18 },
   settingsMenuChevron: { color: mobileTheme.colors.link, fontSize: 26, fontWeight: '400' },
-  settingsMeta: { color: mobileTheme.colors.textMuted, fontSize: 11, paddingHorizontal: 4 },
+  settingsMeta: { color: mobileTheme.colors.textMuted, fontSize: 12, padding: 14, lineHeight: 18 },
   patchNoteItem: { fontSize: 14, color: '#4b515c', lineHeight: 21 },
   message: { padding: 14, borderRadius: 12, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
   messageInline: { padding: 12, borderRadius: 10, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
