@@ -5,6 +5,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { mobileTheme } from '@/src/ui/theme';
 import {
   CYCLE_LABEL,
+  EXPENSE_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   SCOPE_LABEL,
   parseDateKey,
@@ -30,8 +31,8 @@ function dateToKey(date: Date) {
 
 export function draftFromSubscription(sub: Subscription | null, todayKey: string, defaultScope: SubscriptionScope): SubscriptionDraft {
   return sub
-    ? { name: sub.name, amountText: String(sub.amountKrw), cycle: sub.cycle, scope: sub.scope, billingAnchorDate: sub.billingAnchorDate, cancelDeadline: sub.cancelDeadline || '', paymentMethod: sub.paymentMethod || '', paymentName: sub.paymentName || '' }
-    : { name: '', amountText: '', cycle: 'monthly', scope: defaultScope, billingAnchorDate: todayKey, cancelDeadline: '', paymentMethod: '', paymentName: '' };
+    ? { name: sub.name, amountText: String(sub.amountKrw), cycle: sub.cycle, scope: sub.scope, billingAnchorDate: sub.billingAnchorDate, cancelDeadline: sub.cancelDeadline || '', paymentMethod: sub.paymentMethod || '', paymentName: sub.paymentName || '', expenseKind: sub.expenseKind || 'subscription', variableAmount: !!sub.variableAmount }
+    : { name: '', amountText: '', cycle: 'monthly', scope: defaultScope, billingAnchorDate: todayKey, cancelDeadline: '', paymentMethod: '', paymentName: '', expenseKind: 'subscription', variableAmount: false };
 }
 
 function DateField({ label, value, placeholder, optional, error, onChange }: {
@@ -64,7 +65,7 @@ function Choice<T extends string>({ label, options, value, labels, onChange }: {
   return <View style={styles.field}>
     <Text style={styles.label}>{label}</Text>
     <View style={styles.choiceRow}>
-      {options.map((option) => <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected: value === option }} style={[styles.choice, value === option ? styles.choiceActive : null]} onPress={() => onChange(option)}>
+      {options.map((option) => <Pressable key={option} accessibilityLabel={`${label} ${labels[option]}`} accessibilityRole="button" accessibilityState={{ selected: value === option }} style={[styles.choice, value === option ? styles.choiceActive : null]} onPress={() => onChange(option)}>
         <Text style={value === option ? styles.choiceActiveText : styles.choiceText}>{labels[option]}</Text>
       </Pressable>)}
     </View>
@@ -90,7 +91,7 @@ export function SubscriptionForm({ initial, busy, isNew, assist, sourceText, onS
   }
 
   return <View style={styles.form}>
-    <Text style={styles.formTitle}>{isNew ? '구독 추가' : '구독 수정'}</Text>
+    <Text style={styles.formTitle}>{isNew ? '정기지출 추가' : '정기지출 수정'}</Text>
     {assist ? <View style={styles.assist}>
       <Text style={styles.assistLabel}>입력하신 말</Text>
       <Text selectable style={styles.assistRaw}>{assist.rawText}</Text>
@@ -98,6 +99,8 @@ export function SubscriptionForm({ initial, busy, isNew, assist, sourceText, onS
       {assist.warnings.map((w) => <Text key={w} style={styles.assistWarning}>{w}</Text>)}
     </View> : null}
     {!assist && sourceText ? <Text style={styles.sourceText}>처음 입력한 말 · {sourceText}</Text> : null}
+    <Choice label="지출 유형" options={['subscription', 'insurance', 'transfer', 'other'] as const} value={draft.expenseKind || 'subscription'} labels={EXPENSE_KIND_LABEL} onChange={v => set('expenseKind', v)} />
+    <Choice label="금액 구분" options={['fixed', 'variable'] as const} value={draft.variableAmount ? 'variable' : 'fixed'} labels={{ fixed: '고정 금액', variable: '변동 · 예상액' }} onChange={v => set('variableAmount', v === 'variable')} />
     <Choice label="구분" options={SCOPES} value={draft.scope} labels={SCOPE_LABEL} onChange={(v) => set('scope', v)} />
     <View style={styles.field}>
       <Text style={styles.label}>서비스 이름</Text>
@@ -127,7 +130,7 @@ export function SubscriptionForm({ initial, busy, isNew, assist, sourceText, onS
       <Pressable accessibilityRole="button" disabled={busy} style={[styles.primary, busy ? styles.disabled : null]} onPress={submit}><Text style={styles.primaryText}>{busy ? '저장 중…' : '저장'}</Text></Pressable>
       <Pressable accessibilityRole="button" disabled={busy} style={styles.secondary} onPress={onCancel}><Text style={styles.secondaryText}>취소</Text></Pressable>
     </View>
-    {onDelete ? <Pressable accessibilityRole="button" disabled={busy} style={styles.deleteButton} onPress={onDelete}><Text style={styles.deleteText}>이 구독 삭제</Text></Pressable> : null}
+    {onDelete ? <Pressable accessibilityRole="button" disabled={busy} style={styles.deleteButton} onPress={onDelete}><Text style={styles.deleteText}>이 정기지출 종료</Text></Pressable> : null}
   </View>;
 }
 
@@ -144,8 +147,8 @@ const styles = StyleSheet.create({
   dateButton: { flex: 1 },
   clearButton: { minHeight: mobileTheme.size.touchTarget, paddingHorizontal: 12, justifyContent: 'center' },
   clearText: { color: c.link, fontSize: 14 },
-  choiceRow: { flexDirection: 'row', gap: 8 },
-  choice: { flex: 1, minHeight: mobileTheme.size.touchTarget, borderWidth: 1, borderColor: c.border, borderRadius: mobileTheme.radius.control, alignItems: 'center', justifyContent: 'center' },
+  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  choice: { flexGrow: 1, flexBasis: 100, minHeight: mobileTheme.size.touchTarget, borderWidth: 1, borderColor: c.border, borderRadius: mobileTheme.radius.control, alignItems: 'center', justifyContent: 'center' },
   choiceActive: { backgroundColor: c.primary, borderColor: c.primary },
   choiceText: { color: c.text, fontSize: 15 },
   choiceActiveText: { color: c.primaryText, fontSize: 15, fontWeight: '600' },

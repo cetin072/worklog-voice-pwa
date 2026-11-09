@@ -2,6 +2,8 @@ import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import {
   isValidDateKey,
   PAYMENT_METHOD_LABEL,
+  EXPENSE_KIND_LABEL,
+  type ExpenseKind,
   type PaymentMethod,
   type BillingCycle,
   type Subscription,
@@ -12,7 +14,7 @@ import {
 export type SubscriptionInput = Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> & { sourceText?: string | null };
 
 const TABLE = 'subscriptions';
-const COLUMNS = 'id,name,amount_krw,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at,payment_method,payment_name';
+const COLUMNS = 'id,name,amount_krw,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at,payment_method,payment_name,expense_kind,variable_amount';
 const LIST_LIMIT = 500;
 
 type Row = Record<string, unknown>;
@@ -38,6 +40,8 @@ export function subscriptionFromRow(row: unknown): Subscription | null {
   if (r.payment_method != null && (typeof r.payment_method !== 'string' || !r.payment_method || !Object.hasOwn(PAYMENT_METHOD_LABEL, r.payment_method))) return null;
   return {
     ...(r.payment_method !== undefined ? { paymentMethod: r.payment_method as PaymentMethod | null, paymentName: typeof r.payment_name === 'string' ? r.payment_name : null } : {}),
+    expenseKind: Object.hasOwn(EXPENSE_KIND_LABEL, String(r.expense_kind)) ? r.expense_kind as ExpenseKind : 'subscription',
+    variableAmount: r.variable_amount === true,
     id: r.id,
     name: r.name,
     amountKrw: r.amount_krw,
@@ -55,6 +59,7 @@ function inputToRow(input: SubscriptionInput, { withSource = false } = {}) {
   return {
     ...(withSource && input.sourceText ? { source_text: input.sourceText.slice(0, 300) } : {}),
     ...(input.paymentMethod !== undefined ? { payment_method: input.paymentMethod, payment_name: input.paymentMethod ? input.paymentName || null : null } : {}),
+    ...(input.expenseKind !== undefined ? { expense_kind: input.expenseKind, variable_amount: !!input.variableAmount } : {}),
     name: input.name,
     amount_krw: input.amountKrw,
     billing_cycle: input.cycle,
@@ -71,7 +76,7 @@ export function subscriptionErrorMessage(error: { code?: string; message?: strin
   return '처리하지 못했습니다. 입력은 유지했습니다. 다시 시도해주세요.';
 }
 
-function fail(error: { code?: string; message?: string }): never {
+function fail(error: { code?: string; message?: string } | null): never {
   throw new Error(subscriptionErrorMessage(error));
 }
 
@@ -86,12 +91,20 @@ export async function listSubscriptions(client: PlatformSupabaseClient): Promise
   return (Array.isArray(data) ? data : []).map(subscriptionFromRow).filter((s): s is Subscription => s !== null);
 }
 
-export async function createSubscription(client: PlatformSupabaseClient, input: SubscriptionInput): Promise<Subscription> {
-  const { data, error } = await client.from(TABLE).insert(inputToRow(input, { withSource: true })).select(COLUMNS).single();
-  if (error) fail(error);
-  const created = subscriptionFromRow(data);
-  if (!created) throw new Error(subscriptionErrorMessage(null));
-  return created;
+export async function createSubscription(client: PlatformSupabaseClient, input: SubscriptionInput, requestId?: string): Promise<Subscription> {
+  try {
+    const { data, error } = await client.from(TABLE).insert({ ...inputToRow(input, { withSource: true }), ...(requestId ? { id: requestId } : {}) }).select(COLUMNS).single();
+    if (!error) {
+      const created = subscriptionFromRow(data);
+      if (created) return created;
+    }
+    if (!requestId) fail(error);
+  } catch (error) { if (!requestId) throw error; }
+  // Keep the same identifier until confirmed, including after a lost successful response.
+  const { data, error } = await client.from(TABLE).select(COLUMNS).eq('id', requestId!).maybeSingle();
+  const confirmed = !error ? subscriptionFromRow(data) : null;
+  if (confirmed) return confirmed;
+  throw new Error('저장 확인 필요 · 입력을 유지했습니다. 같은 내용으로 다시 시도해주세요.');
 }
 
 async function updateOwned(client: PlatformSupabaseClient, id: string, patch: Row): Promise<Subscription> {
@@ -116,4 +129,26 @@ export function markSubscriptionUsed(client: PlatformSupabaseClient, id: string,
 /** 삭제 대신 보관(archived_at). 목록에서는 사라지지만 기록은 남는다. */
 export async function archiveSubscription(client: PlatformSupabaseClient, id: string, now = new Date()) {
   await updateOwned(client, id, { archived_at: now.toISOString() });
+}
+
+export type PaymentReceipt = { subscription_id: string; due_date: string; amount_krw: number; name: string; confirmed_at: string };
+export async function listPaymentReceipts(client: PlatformSupabaseClient): Promise<PaymentReceipt[]> {
+  const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at').order('due_date', { ascending: false }).limit(500);
+  if (error) fail(error);
+  return (data || []) as PaymentReceipt[];
+}
+/** Stable (subscription, due-date) key. Lost responses are read back before retry is offered. */
+export async function confirmSubscriptionPayment(client: PlatformSupabaseClient, id: string, due: string): Promise<PaymentReceipt> {
+  if (!isValidDateKey(due)) throw new Error('결제일을 확인해주세요.');
+  const read = async () => {
+    const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at').eq('subscription_id', id).eq('due_date', due).maybeSingle();
+    return !error && data ? data as PaymentReceipt : null;
+  };
+  try {
+    const { data, error } = await client.rpc('confirm_subscription_payment', { p_subscription_id: id, p_due_date: due });
+    if (!error && data) return data as PaymentReceipt;
+  } catch { /* May already have committed. Read the same occurrence. */ }
+  const found = await read().catch(() => null);
+  if (found) return found;
+  throw new Error('납부 저장 확인 필요 · 같은 회차로 다시 시도해주세요.');
 }

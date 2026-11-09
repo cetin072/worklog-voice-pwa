@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
+const opened = [];
+afterEach(async () => { for (const db of opened.splice(0)) await db.close(); });
 import { PGlite } from '@electric-sql/pglite';
 
 const migration = fs.readFileSync('supabase/migrations/20261109120000_subscriptions_v1.sql', 'utf8');
@@ -10,6 +12,7 @@ const USER_B = '22222222-2222-4222-8222-222222222222';
 // Supabase 환경을 흉내 낸 최소 부트스트랩: auth.uid(), auth.users, anon/authenticated 역할.
 async function freshDb() {
   const db = new PGlite();
+  opened.push(db);
   await db.exec(`
     create role anon nologin;
     create role authenticated nologin;
@@ -26,6 +29,7 @@ async function freshDb() {
   `);
   await db.exec(migration);
   await db.exec(fs.readFileSync('supabase/migrations/20261109144344_subscriptions_payment_method.sql', 'utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261109232907_regular_expenses_v1.sql', 'utf8'));
   return db;
 }
 
@@ -134,5 +138,24 @@ test('선택 결제수단을 본인 구독에 기록하고 이전 행은 null로
  await assert.rejects(asUser(db,USER_A,"update worklog.subscriptions set payment_method='invalid' where id=$1",[id]),/check constraint/);
  await assert.rejects(asUser(db,USER_A,"update worklog.subscriptions set payment_name=repeat('가',61) where id=$1",[id]),/check constraint/);
  await assert.rejects(asUser(db,USER_A,'update worklog.subscriptions set payment_method=null where id=$1',[id]),/check constraint/);
- await db.close();
+});
+
+
+test('납부 회차 중복 방지·본인 격리·종료 후 이력 보존·임의 회차 거부', async () => {
+  const db = await freshDb();
+  try {
+    const a = await asUser(db, USER_A, insertSql, ['보험', 120000, 'monthly', 'personal']);
+    const id = a.rows[0].id;
+    const paid = () => asUser(db, USER_A, 'select worklog.confirm_subscription_payment($1,$2) receipt', [id, '2026-11-15']);
+    const first = await paid();
+    for (let i = 0; i < 10; i++) assert.deepEqual((await paid()).rows, first.rows);
+    assert.equal((await asUser(db, USER_A, 'select * from worklog.subscription_payments')).rows.length, 1);
+    assert.equal((await asUser(db, USER_B, 'select * from worklog.subscription_payments')).rows.length, 0);
+    await assert.rejects(asUser(db, USER_B, 'select worklog.confirm_subscription_payment($1,$2)', [id,'2026-11-15']), /EXPENSE_NOT_AVAILABLE/);
+    await assert.rejects(asUser(db, USER_A, 'select worklog.confirm_subscription_payment($1,$2)', [id,'2026-11-16']), /row-level security/);
+    await asUser(db, USER_A, 'update worklog.subscriptions set archived_at = now() where id = $1', [id]);
+    assert.deepEqual((await paid()).rows, first.rows);
+    await assert.rejects(asUser(db, USER_A, 'select worklog.confirm_subscription_payment($1,$2)', [id,'2026-12-15']), /EXPENSE_NOT_AVAILABLE/);
+    await assert.rejects(asUser(db, USER_A, 'delete from worklog.subscription_payments'), /permission denied/);
+  } finally { /* afterEach closes the isolated database. */ }
 });

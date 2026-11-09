@@ -9,6 +9,9 @@ export type SubscriptionScope = 'business' | 'personal';
 export type PaymentMethod = 'card' | 'bank_transfer' | 'other';
 export const PAYMENT_METHOD_LABEL = { '': '미등록', card: '카드', bank_transfer: '자동이체', other: '기타' } as const;
 
+export type ExpenseKind = 'subscription' | 'insurance' | 'transfer' | 'other';
+export const EXPENSE_KIND_LABEL: Record<ExpenseKind, string> = { subscription: '구독', insurance: '보험', transfer: '자동이체', other: '기타' };
+
 export type BillingCycle = 'monthly' | 'yearly';
 export type ScopeFilter = 'all' | SubscriptionScope;
 
@@ -29,6 +32,8 @@ export type Subscription = {
   sourceText: string | null;
   paymentMethod?: PaymentMethod | null;
   paymentName?: string | null;
+  expenseKind?: ExpenseKind;
+  variableAmount?: boolean;
 };
 
 /** 해지 후보 기준 — 초안 값. 테스트하며 조정한다. */
@@ -200,6 +205,7 @@ export function daysSinceUse(sub: Pick<Subscription, 'lastUsedDate' | 'createdAt
 
 /** 금액이 크고 오래 안 쓴 구독. 구분(사업/개인)과 무관하게 전체에서 판단한다. */
 export function isCancelCandidate(sub: Subscription, todayKey: string, rule = CANCEL_CANDIDATE_RULE) {
+  if (sub.expenseKind && sub.expenseKind !== 'subscription') return false;
   const idle = daysSinceUse(sub, todayKey);
   return idle !== null && idle >= rule.unusedDays && monthlyAmountKrw(sub) >= rule.minMonthlyAmountKrw;
 }
@@ -253,9 +259,11 @@ export type SubscriptionDraft = {
   cancelDeadline: string;
   paymentMethod?: PaymentMethod | '';
   paymentName?: string;
+  expenseKind?: ExpenseKind;
+  variableAmount?: boolean;
 };
 
-export type SubscriptionDraftErrors = Partial<Record<'name' | 'amount' | 'billingAnchorDate' | 'cancelDeadline' | 'paymentMethod' | 'paymentName', string>>;
+export type SubscriptionDraftErrors = Partial<Record<'name' | 'amount' | 'billingAnchorDate' | 'cancelDeadline' | 'paymentMethod' | 'paymentName' | 'expenseKind', string>>;
 
 export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true; value: Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> } | { ok: false; errors: SubscriptionDraftErrors } {
   const errors: SubscriptionDraftErrors = {};
@@ -268,6 +276,7 @@ export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true;
   if (!isValidDateKey(draft.billingAnchorDate)) errors.billingAnchorDate = '결제일을 2026-11-15 형식으로 입력해주세요.';
   const deadline = draft.cancelDeadline.trim();
   if (deadline && !isValidDateKey(deadline)) errors.cancelDeadline = '해지기한을 2026-11-15 형식으로 입력하거나 비워주세요.';
+  if (draft.expenseKind && !Object.hasOwn(EXPENSE_KIND_LABEL, draft.expenseKind)) errors.expenseKind = '지출 유형을 다시 선택해주세요.';
   const method = draft.paymentMethod || '';
   const paymentName = (draft.paymentName || '').trim();
   if (!Object.hasOwn(PAYMENT_METHOD_LABEL, method)) errors.paymentMethod = '결제수단을 다시 선택해주세요.';
@@ -277,6 +286,7 @@ export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true;
     ok: true,
     value: {
       name,
+      ...(draft.expenseKind !== undefined ? { expenseKind: draft.expenseKind, variableAmount: !!draft.variableAmount } : {}),
       amountKrw: amount as number,
       cycle: draft.cycle,
       scope: draft.scope,
@@ -290,4 +300,24 @@ export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true;
 export function subscriptionPaymentLabel(sub: Pick<Subscription, 'paymentMethod' | 'paymentName'>) {
   if (!sub.paymentMethod) return '';
   return [PAYMENT_METHOD_LABEL[sub.paymentMethod], sub.paymentName].filter(Boolean).join(' · ');
+}
+
+/** 월 환산과 구별: 해당 월에 실제 청구 예정인 1회 금액의 합. */
+export function expectedExpenseForMonth(subs: readonly Subscription[], monthKey: string) {
+  const first = `${monthKey.slice(0, 7)}-01`;
+  return subs.reduce((sum, s) => nextPaymentDate(s.billingAnchorDate, s.cycle, first).slice(0, 7) === first.slice(0, 7) ? sum + s.amountKrw : sum, 0);
+}
+/** 납부 확인 대상: 시작 전에는 첫 회차, 이후에는 가장 최근 도래한 회차. 미납을 자동 완료하지 않는다. */
+export function paymentConfirmationDate(sub: Subscription, today: string) {
+  if (sub.billingAnchorDate >= today) return sub.billingAnchorDate;
+  const next = nextPaymentDate(sub.billingAnchorDate, sub.cycle, today);
+  if (next === today) return next;
+  const anchor = parseDateKey(sub.billingAnchorDate)!;
+  const p = parseDateKey(today)!;
+  const step = sub.cycle === 'yearly' ? 12 : 1;
+  const months = (p.y - anchor.y) * 12 + p.m - anchor.m;
+  let n = Math.floor(months / step);
+  let date = toKey(addMonthsClamped(anchor, n * step));
+  if (date > today) date = toKey(addMonthsClamped(anchor, --n * step));
+  return date;
 }

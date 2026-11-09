@@ -68,7 +68,7 @@ const validRow = (o = {}) => ({
 
 test('서버 행을 앱 모델로 바꾸되 형식이 틀린 행은 고치지 않고 버린다', () => {
   assert.deepEqual(store.subscriptionFromRow(validRow({ last_used_date: '2026-11-05', cancel_deadline: '2026-12-01' })), {
-    id: 'a', name: '클라우드', amountKrw: 12000, cycle: 'monthly', scope: 'business', billingAnchorDate: '2026-11-15',
+    expenseKind: 'subscription', variableAmount: false, id: 'a', name: '클라우드', amountKrw: 12000, cycle: 'monthly', scope: 'business', billingAnchorDate: '2026-11-15',
     cancelDeadline: '2026-12-01', lastUsedDate: '2026-11-05', createdAt: '2026-11-01T00:00:00Z', sourceText: null,
   });
   assert.equal(store.subscriptionFromRow(validRow({ source_text: '사업 클라우드 매달 1만원' })).sourceText, '사업 클라우드 매달 1만원');

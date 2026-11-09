@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -6,6 +7,9 @@ import { mobileTheme } from '@/src/ui/theme';
 import { draftFromSubscription, SubscriptionForm, type FormAssist } from './subscription-form';
 import {
   CYCLE_LABEL,
+  EXPENSE_KIND_LABEL,
+  expectedExpenseForMonth,
+  paymentConfirmationDate,
   subscriptionPaymentLabel,
   SCOPE_LABEL,
   buildSubscriptionRows,
@@ -31,6 +35,9 @@ import {
 } from './subscription-utterance';
 import {
   archiveSubscription,
+  confirmSubscriptionPayment,
+  listPaymentReceipts,
+  type PaymentReceipt,
   createSubscription,
   listSubscriptions,
   markSubscriptionUsed,
@@ -52,6 +59,9 @@ const shortDate = (key: string) => `${Number(key.slice(5, 7))}/${Number(key.slic
 const dayLabel = (days: number) => (days === 0 ? '오늘' : days === 1 ? '내일' : `${days}일 뒤`);
 
 export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient }) {
+  const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+  const mutation = useRef(false);
+  const createId = useRef<string | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -79,9 +89,10 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const next = await listSubscriptions(client);
+      const [next, paid] = await Promise.all([listSubscriptions(client), listPaymentReceipts(client)]);
       if (!alive.current) return;
       setSubs(next);
+      setReceipts(paid);
       syncReminders(next);
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : '구독 목록을 불러오지 못했습니다.');
@@ -109,14 +120,15 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     setQuickText('');
   }
 
-  function openCompose() { setError(''); setQuickText(''); setEditing({ kind: 'compose' }); }
+  function openCompose() { createId.current = Crypto.randomUUID(); setError(''); setQuickText(''); setEditing({ kind: 'compose' }); }
 
   async function save(input: SubscriptionInput) {
-    if (!editing || editing.kind === 'compose' || busyId) return;
+    if (!editing || editing.kind === 'compose' || mutation.current) return;
+    mutation.current = true;
     setBusyId('form'); setError('');
     try {
       if (editing.kind === 'new') {
-        const created = await createSubscription(client, { ...input, sourceText: editing.parse?.rawText || null });
+        const created = await createSubscription(client, { ...input, sourceText: editing.parse?.rawText || null }, createId.current || (createId.current = Crypto.randomUUID()));
         lastScope.current = created.scope;
         if (alive.current) applyChange([...subs, created]);
       } else {
@@ -127,12 +139,14 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : '저장하지 못했습니다. 입력은 유지했습니다.');
     } finally {
+      mutation.current = false;
       if (alive.current) setBusyId(null);
     }
   }
 
   async function markUsed(id: string) {
-    if (busyId) return;
+    if (mutation.current) return;
+    mutation.current = true;
     setBusyId(id); setError('');
     try {
       const updated = await markSubscriptionUsed(client, id, todayKey());
@@ -140,18 +154,31 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : '사용 기록을 저장하지 못했습니다.');
     } finally {
+      mutation.current = false;
       if (alive.current) setBusyId(null);
     }
   }
 
+  async function confirmPaid(sub: Subscription) {
+    if (mutation.current) return;
+    mutation.current = true; setBusyId(sub.id); setError('');
+    try {
+      const paid = await confirmSubscriptionPayment(client, sub.id, paymentConfirmationDate(sub, todayKey()));
+      if (alive.current) setReceipts(previous => [...previous.filter(r => r.subscription_id !== paid.subscription_id || r.due_date !== paid.due_date), paid]);
+    } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : '납부 저장 확인 필요'); }
+    finally { mutation.current = false; if (alive.current) setBusyId(null); }
+  }
+
   function confirmDelete(sub: Subscription) {
-    Alert.alert('구독 삭제', `‘${sub.name}’을(를) 목록에서 삭제할까요? 결제일 알림도 함께 사라집니다.`, [
+    Alert.alert('정기지출 종료', `‘${sub.name}’의 미래 예정과 알림을 중단할까요? 기존 기록은 보존됩니다.`, [
       { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: () => { void remove(sub.id); } },
+      { text: '종료', style: 'destructive', onPress: () => { void remove(sub.id); } },
     ]);
   }
 
   async function remove(id: string) {
+    if (mutation.current) return;
+    mutation.current = true;
     setBusyId('form'); setError('');
     try {
       await archiveSubscription(client, id);
@@ -159,6 +186,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : '삭제하지 못했습니다.');
     } finally {
+      mutation.current = false;
       if (alive.current) setBusyId(null);
     }
   }
@@ -215,9 +243,9 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
 
   return <View style={styles.root}>
     <View style={styles.summaryCard} accessibilityRole="summary">
-      <Text style={styles.summaryLabel}>{filter === 'all' ? '이번 달 구독 총액' : `이번 달 ${SCOPE_LABEL[filter]} 구독`}</Text>
-      <Text style={styles.summaryAmount}>{formatWon(summary.monthlyTotalKrw)}</Text>
-      <Text style={styles.summarySub}>연 환산 {formatWon(summary.yearlyTotalKrw)} · {summary.count}개</Text>
+      <Text style={styles.summaryLabel}>{filter === 'all' ? '이번 달 예상 지출' : `이번 달 ${SCOPE_LABEL[filter]} 예상 지출`}</Text>
+      <Text style={styles.summaryAmount}>{formatWon(expectedExpenseForMonth(visible, today))}</Text>
+      <Text style={styles.summarySub}>월 환산 {formatWon(summary.monthlyTotalKrw)} · 연 환산 {formatWon(summary.yearlyTotalKrw)} · {summary.count}개</Text>
       {filter === 'all' && subs.length > 0 ? <Text style={styles.summarySplit}>사업 {formatWon(allSummary.byScope.business.monthlyTotalKrw)} · 개인 {formatWon(allSummary.byScope.personal.monthlyTotalKrw)}</Text> : null}
     </View>
 
@@ -245,15 +273,16 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     {!loading && !error && subs.length === 0 ? <Text style={styles.empty}>등록된 구독이 없어요. 아래 버튼으로 첫 구독을 추가해보세요.</Text> : null}
     {!loading && subs.length > 0 && rows.length === 0 ? <Text style={styles.empty}>이 구분에는 등록된 구독이 없어요.</Text> : null}
 
-    {rows.map((row) => <Row key={row.subscription.id} row={row} busy={busyId === row.subscription.id} onUsed={() => void markUsed(row.subscription.id)} onEdit={() => setEditing({ kind: 'edit', id: row.subscription.id })} />)}
+    {rows.map((row) => <Row paid={receipts.some(r => r.subscription_id === row.subscription.id && r.due_date === paymentConfirmationDate(row.subscription, today))} due={paymentConfirmationDate(row.subscription, today)} onPaid={() => void confirmPaid(row.subscription)} key={row.subscription.id} row={row} busy={busyId === row.subscription.id} onUsed={() => void markUsed(row.subscription.id)} onEdit={() => setEditing({ kind: 'edit', id: row.subscription.id })} />)}
 
+    {receipts.length ? <View style={styles.urgentBox}><Text style={styles.urgentTitle}>납부 이력</Text>{receipts.slice(0, 20).map(r => <Text key={`${r.subscription_id}:${r.due_date}`} style={styles.rowMeta}>{r.due_date} · {r.name} · {formatWon(r.amount_krw)} · 확인됨</Text>)}</View> : null}
     <Pressable accessibilityRole="button" accessibilityLabel="구독 추가" style={styles.addButton} onPress={openCompose}>
       <Text style={styles.addText}>+ 구독 추가</Text>
     </Pressable>
   </View>;
 }
 
-function Row({ row, busy, onUsed, onEdit }: { row: SubscriptionRow; busy: boolean; onUsed: () => void; onEdit: () => void }) {
+function Row({ row, busy, onUsed, onEdit, paid, due, onPaid }: { paid: boolean; due: string; onPaid: () => void; row: SubscriptionRow; busy: boolean; onUsed: () => void; onEdit: () => void }) {
   const { subscription: s } = row;
   const idle = row.usedToday ? '오늘 사용' : row.idleDays === null ? '사용 기록 없음' : row.idleDays === 0 ? '오늘 등록' : `마지막 사용 ${row.idleDays}일 전`;
   return <View style={[styles.row, row.cancelCandidate ? styles.rowCandidate : null]}>
@@ -262,14 +291,15 @@ function Row({ row, busy, onUsed, onEdit }: { row: SubscriptionRow; busy: boolea
       <Text style={styles.rowAmount}>{formatWon(row.monthlyAmountKrw)}<Text style={styles.rowAmountUnit}> /월</Text></Text>
     </View>
     <Text style={styles.rowMeta}>
-      {SCOPE_LABEL[s.scope]} · {CYCLE_LABEL[s.cycle]} {formatWon(s.amountKrw)} · 다음 결제 {shortDate(row.nextPayment)} ({dayLabel(row.daysToPayment)})
+      {EXPENSE_KIND_LABEL[s.expenseKind || 'subscription']} · {SCOPE_LABEL[s.scope]} · {s.variableAmount ? '예상 ' : ''}{CYCLE_LABEL[s.cycle]} {formatWon(s.amountKrw)} · 다음 결제 {shortDate(row.nextPayment)} ({dayLabel(row.daysToPayment)})
     </Text>
     {subscriptionPaymentLabel(s) ? <Text style={styles.rowMeta}>{subscriptionPaymentLabel(s)}</Text> : null}
-    <Text style={[styles.rowMeta, row.cancelCandidate ? styles.candidateText : null]}>{row.cancelCandidate ? `해지 후보 · ${idle}` : idle}</Text>
+    {(!s.expenseKind || s.expenseKind === 'subscription') ? <Text style={[styles.rowMeta, row.cancelCandidate ? styles.candidateText : null]}>{row.cancelCandidate ? `해지 후보 · ${idle}` : idle}</Text> : null}
     <View style={styles.rowActions}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${s.name} 오늘 사용함으로 기록`} disabled={busy || row.usedToday} style={[styles.rowButton, row.usedToday ? styles.rowButtonDone : null]} onPress={onUsed}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${s.name} ${due} 납부 확인`} disabled={busy || paid} style={styles.rowButton} onPress={onPaid}><Text style={styles.rowButtonText}>{busy ? '저장 중…' : paid ? `${shortDate(due)} 납부 확인됨` : `${shortDate(due)} 납부 확인`}</Text></Pressable>
+      {(!s.expenseKind || s.expenseKind === 'subscription') ? <Pressable accessibilityRole="button" accessibilityLabel={`${s.name} 오늘 사용함으로 기록`} disabled={busy || row.usedToday} style={[styles.rowButton, row.usedToday ? styles.rowButtonDone : null]} onPress={onUsed}>
         <Text style={styles.rowButtonText}>{row.usedToday ? '✓ 오늘 썼음' : busy ? '저장 중…' : '오늘 썼음'}</Text>
-      </Pressable>
+      </Pressable> : null}
       <Pressable accessibilityRole="button" accessibilityLabel={`${s.name} 수정`} disabled={busy} style={styles.rowButton} onPress={onEdit}><Text style={styles.rowButtonText}>수정</Text></Pressable>
     </View>
   </View>;
@@ -306,7 +336,7 @@ const styles = StyleSheet.create({
   rowAmountUnit: { fontSize: 12, fontWeight: '400', color: c.textMuted },
   rowMeta: { fontSize: 13, color: c.textSecondary, lineHeight: 19 },
   candidateText: { color: c.danger, fontWeight: '600' },
-  rowActions: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  rowActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   rowButton: { flex: 1, minHeight: mobileTheme.size.touchTarget, borderRadius: mobileTheme.radius.control, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface },
   rowButtonDone: { backgroundColor: c.neutralBackground },
   rowButtonText: { fontSize: 15, color: c.text },

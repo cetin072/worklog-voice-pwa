@@ -24,7 +24,7 @@ test('실제 구독 폼에서 카드명 입력·저장, 자동이체 변경 시 
  assert.equal(nodes(h.render()).some(n=>n.props?.accessibilityLabel==='결제수단 이름'),false);
  button('카드').props.onPress();nodes(h.render()).find(n=>n.props?.accessibilityLabel==='결제수단 이름').props.onChangeText('삼성카드 · 업무용');
  button('저장').props.onPress();assert.equal(h.saved().paymentMethod,'card');assert.equal(h.saved().paymentName,'삼성카드 · 업무용');
- button('자동이체').props.onPress();assert.equal(nodes(h.render()).find(n=>n.props?.accessibilityLabel==='결제수단 이름').props.value,'');
+ nodes(h.render()).find(n=>n.props?.accessibilityLabel==='결제수단 (선택) 자동이체').props.onPress();assert.equal(nodes(h.render()).find(n=>n.props?.accessibilityLabel==='결제수단 이름').props.value,'');
  nodes(h.render()).find(n=>n.props?.accessibilityLabel==='결제수단 이름').props.onChangeText('국민은행 · 사업용');button('저장').props.onPress();assert.equal(h.saved().paymentMethod,'bank_transfer');
  button('미등록').props.onPress();button('저장').props.onPress();assert.equal(h.saved().paymentMethod,null);assert.equal(h.saved().paymentName,null);
 });
@@ -40,4 +40,21 @@ test('선택 결제수단을 한 번의 저장 요청에 보내고 결제수단 
  const b={select(){return b;},insert(v){sent=v;return b;},single:async()=>({data:returned,error:null})};
  const input=model.validateSubscriptionDraft({...draft,paymentMethod:'card',paymentName:'삼성카드'}).value;
  const sub=await store.createSubscription({from:()=>b},input);assert.equal(sent.payment_method,'card');assert.equal(sent.payment_name,'삼성카드');assert.equal(sub.paymentName,'삼성카드');assert.equal('user_id' in sent,false);
+});
+
+test('월 예상 지출과 연 환산 구별, 보험 해지 후보 제외, 현재 납부 회차 유지', () => {
+ const base=store.subscriptionFromRow({id:'s',name:'보험',amount_krw:120000,billing_cycle:'monthly',scope:'personal',billing_anchor_date:'2026-11-15',expense_kind:'insurance',created_at:'2026-01-01T00:00:00Z'});
+ assert.equal(model.isCancelCandidate(base,'2026-11-30'),false);
+ const annual={...base,cycle:'yearly',amountKrw:240000,billingAnchorDate:'2026-12-01'};
+ assert.equal(model.expectedExpenseForMonth([base,annual],'2026-11-30'),120000);
+ assert.equal(model.expectedExpenseForMonth([base,annual],'2026-12-01'),360000);
+ assert.equal(model.paymentConfirmationDate(base,'2026-11-30'),'2026-11-15');
+ assert.equal(model.paymentConfirmationDate({...base,billingAnchorDate:'2024-01-31'},'2026-03-01'),'2026-02-28');
+});
+test('납부 성공 응답 유실 후 서버의 동일 회차를 읽어 확인하고 원본 재요청하지 않음', async () => {
+ let writes=0; const receipt={subscription_id:'s',due_date:'2026-11-15',name:'보험',amount_krw:120000,confirmed_at:'2026-11-15T00:00:00Z'};
+ const b={select(){return b;},eq(){return b;},maybeSingle:async()=>({data:receipt,error:null})};
+ const client={rpc:async()=>{writes++;throw Error('timeout');},from:()=>b};
+ assert.deepEqual(await store.confirmSubscriptionPayment(client,'s','2026-11-15'),receipt);assert.equal(writes,1);
+ b.maybeSingle=async()=>({data:null,error:null});await assert.rejects(store.confirmSubscriptionPayment(client,'s','2026-11-15'),/확인 필요/);
 });
