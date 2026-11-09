@@ -300,13 +300,13 @@ function SettingsGroup({ title, children }: { title: string; children: ReactNode
   </View>;
 }
 
-function SettingsMenuItem({ title, description, onPress, accessibilityLabel, destructive = false }: { title: string; description?: string; onPress: () => void; accessibilityLabel?: string; destructive?: boolean }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel || title} style={[styles.settingsMenuItem, destructive ? styles.settingsMenuItemDestructive : null]} onPress={onPress}>
+function SettingsMenuItem({ title, description, onPress, accessibilityLabel, destructive = false, expanded }: { title: string; description?: string; onPress: () => void; accessibilityLabel?: string; destructive?: boolean; expanded?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel || title} accessibilityState={expanded === undefined ? undefined : { expanded }} style={[styles.settingsMenuItem, destructive ? styles.settingsMenuItemDestructive : null]} onPress={onPress}>
     <View style={styles.settingsMenuCopy}>
       <Text style={[styles.settingsMenuTitle, destructive ? styles.settingsMenuTitleDestructive : null]}>{title}</Text>
       {description ? <Text style={styles.settingsMenuDescription}>{description}</Text> : null}
     </View>
-    <Text accessibilityElementsHidden importantForAccessibility="no" style={[styles.settingsMenuChevron, destructive ? styles.settingsMenuTitleDestructive : null]}>›</Text>
+    <Text accessibilityElementsHidden importantForAccessibility="no" style={[styles.settingsMenuChevron, destructive ? styles.settingsMenuTitleDestructive : null]}>{expanded ? '⌄' : '›'}</Text>
   </Pressable>;
 }
 
@@ -367,6 +367,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     return () => { clearInterval(timer); subscription.remove(); };
   }, []);
   const [screen, applyScreen] = useState<AppScreen>(initialScreen);
+  const [policyExpanded, setPolicyExpanded] = useState(false);
+  useEffect(() => { if (screen !== 'settings') setPolicyExpanded(false); }, [screen]);
   const quickVoiceNavigation = useRef(false);
   function warnPendingVoice() {
     Alert.alert('음성 기록을 먼저 확인해주세요', '녹음을 마치고 전사문을 저장하거나 버리면 다른 화면으로 이동할 수 있습니다.');
@@ -1287,14 +1289,21 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       </SettingsGroup>
       <SettingsGroup title="앱 정보">
         <SettingsMenuItem title="업데이트·패치노트" onPress={() => { setPatchNotesExpanded(false); setScreen('patchNotes'); }} />
-        <SettingsMenuItem title="개인정보처리방침" onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/privacy.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} />
         <Text style={styles.settingsMeta}>{APP_BUILD_INFO.label}</Text>
-      </SettingsGroup>
-      <SettingsGroup title="계정">
-        <View style={styles.settingsAccount}><Text selectable style={styles.body}>{session.user.email || '로그인 사용자'}</Text></View>
+        <SettingsMenuItem title="개인정보·계정 관리" expanded={policyExpanded} onPress={() => setPolicyExpanded(value => !value)} />
+        {policyExpanded ? <View style={styles.settingsPolicyDetails}>
+        <SettingsMenuItem title="개인정보처리방침" onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/privacy.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} />
         <SettingsMenuItem title="계정 및 데이터 삭제 요청" onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/account-deletion.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} />
-        <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
+        </View> : null}
       </SettingsGroup>
+      <View style={styles.settingsAccountSection}>
+        <SettingsGroup title="계정">
+          <View style={styles.settingsAccount}><Text selectable style={styles.body}>{session.user.email || '로그인 사용자'}</Text></View>
+        </SettingsGroup>
+        <View style={styles.settingsGroupCard}>
+          <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
+        </View>
+      </View>
     </View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
@@ -1491,6 +1500,7 @@ const styles = StyleSheet.create({
   settingsGroup: { gap: 8 },
   settingsGroupTitle: { color: mobileTheme.colors.textSecondary, fontSize: 13, fontWeight: '800', paddingHorizontal: 4 },
   settingsGroupCard: { backgroundColor: mobileTheme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: mobileTheme.colors.borderSubtle, overflow: 'hidden' },
+  settingsAccountSection: { gap: 56 },
   settingsAccount: { padding: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
   settingsMenuItem: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
   settingsMenuItemDestructive: { backgroundColor: '#fff7f7' },
@@ -1499,6 +1509,7 @@ const styles = StyleSheet.create({
   settingsMenuTitleDestructive: { color: mobileTheme.colors.danger },
   settingsMenuDescription: { color: mobileTheme.colors.textSecondary, fontSize: 12, lineHeight: 18 },
   settingsMenuChevron: { color: mobileTheme.colors.link, fontSize: 26, fontWeight: '400' },
+  settingsPolicyDetails: { backgroundColor: mobileTheme.colors.neutralBackground },
   settingsMeta: { color: mobileTheme.colors.textMuted, fontSize: 12, padding: 14, lineHeight: 18 },
   patchNoteItem: { fontSize: 14, color: '#4b515c', lineHeight: 21 },
   message: { padding: 14, borderRadius: 12, backgroundColor: '#eaf4ea', color: '#245c2a', lineHeight: 20 },
