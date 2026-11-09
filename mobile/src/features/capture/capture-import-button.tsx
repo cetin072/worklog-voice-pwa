@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { importCaptureFromGallery } from './capture-gallery';
 
-export function CaptureImportButton({ compact = false, disabled = false }: { compact?: boolean; disabled?: boolean }) {
+export function CaptureImportButton({ compact = false, disabled = false, label }: { compact?: boolean; disabled?: boolean; label?: string }) {
   const { session } = usePlatform(); const router = useRouter();
   const owner = session?.user.id || null;
   const account = useRef(owner); account.current = owner;
@@ -20,9 +20,9 @@ export function CaptureImportButton({ compact = false, disabled = false }: { com
     finally { pending.current = false;if (mounted.current) setBusy(false); }
   }
   if (Platform.OS !== 'android') return null;
-  if (compact) return <Pressable accessibilityRole="button" accessibilityLabel="사진 · 캡처 가져오기" accessibilityHint="갤러리에서 사진이나 캡처 한 장을 선택해 업무로 등록합니다" disabled={busy || !owner || disabled} onPress={() => void choose()} style={[styles.quickButton, busy || disabled ? styles.disabled : null]}><Text style={styles.quickIcon}>🖼️</Text><Text style={styles.quickLabel}>{busy ? '가져오는 중' : '사진 등록'}</Text></Pressable>;
+  if (compact) return <Pressable accessibilityRole="button" accessibilityLabel="사진 · 캡처 가져오기" accessibilityHint="갤러리에서 사진이나 캡처 한 장을 선택해 업무로 등록합니다" disabled={busy || !owner || disabled} onPress={() => void choose()} style={[label ? styles.homeButton : styles.quickButton, busy || disabled ? styles.disabled : null]}><Text style={styles.quickIcon}>🖼️</Text><Text style={[styles.quickLabel, label ? styles.homeLabel : null]}>{busy ? '가져오는 중' : label || '사진 등록'}</Text></Pressable>;
   return <View style={styles.group}><Pressable accessibilityRole="button" accessibilityLabel="사진 가져오기" accessibilityHint="갤러리에서 이미지 한 장을 선택하면 자동으로 기록합니다" disabled={busy || !owner || disabled} onPress={() => void choose()} style={[styles.button, busy || !owner || disabled ? styles.disabled : null]}>
     <Text style={styles.title}>{busy ? '이미지 가져오는 중…' : '🖼️ 사진 가져오기'}</Text><Text style={styles.help}>카톡 캡처·사진 속 내용을 업무로 등록해요</Text>
   </Pressable><Text style={styles.help}>갤러리·카톡에서도 사진 → 공유 → 업무수첩으로 보낼 수 있어요.</Text>{error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}</View>;
 }
-const styles = StyleSheet.create({ group: { gap: 8 }, button: { minHeight: 64, padding: 16, borderRadius: 16, backgroundColor: '#dcebf3', gap: 4 }, title: { fontSize: 18, fontWeight: '700', color: '#103244' }, help: { fontSize: 14, color: '#334155' }, error: { color: '#b91c1c', fontSize: 15 }, quickButton: { width: '100%', height: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', gap: 1 }, quickIcon: { fontSize: 18 }, quickLabel: { fontSize: 10, fontWeight: '800', color: '#374151' }, disabled: { opacity: 0.4 } });
+const styles = StyleSheet.create({ group: { gap: 8 }, button: { minHeight: 64, padding: 16, borderRadius: 16, backgroundColor: '#dcebf3', gap: 4 }, title: { fontSize: 18, fontWeight: '700', color: '#103244' }, help: { fontSize: 14, color: '#334155' }, error: { color: '#b91c1c', fontSize: 15 }, homeButton: { width: '100%', minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }, homeLabel: { fontSize: 13 }, quickButton: { width: '100%', height: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', gap: 1 }, quickIcon: { fontSize: 18 }, quickLabel: { fontSize: 10, fontWeight: '800', color: '#374151' }, disabled: { opacity: 0.4 } });

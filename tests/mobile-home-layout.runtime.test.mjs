@@ -16,20 +16,23 @@ for (const kind of ['empty','populated','overdue','schedules','mixed']) test(`cu
  const h = homeHarness(fixture(kind));
  const text = words(h.render());
  assert.equal(nodes([h.render(),h.photo()]).filter(n => n.type === 'CaptureImportButton').length,2);
- assert.equal(nodes(h.render()).filter(n => n.type === 'CaptureImportButton' && !n.props.compact).length,1);
+ assert.equal(nodes(h.render()).filter(n => n.type === 'CaptureImportButton' && n.props.label === '캡처 등록').length,1);
  assert.equal(h.photo().props.compact,true);assert.equal(h.photo(true).props.disabled,true);
- assert.match(text, /오늘 한눈에/);
- if (kind === 'empty') assert.doesNotMatch(text, /오늘 확정 일정이 없습니다/);
+ assert.match(text, /할 일/);
+ assert.doesNotMatch(text, /오늘 한눈에/);
  for (const key of ['today','overdue','upcoming','undated']) {
   h.context.setTaskFilter(key); const tree = h.render();
   assert.equal(nodes(tree).filter(n => n.props?.accessibilityLabel?.endsWith('완료 처리')).length, h.context.structure[key].length);
  }
- h.context.setUpcomingExpanded(v => !v);
- if (kind === 'mixed' || kind === 'schedules') assert.match(words(h.render()), /합성 다음 일정/);
+ const calendar = nodes(h.render()).find(n => n.type === 'HomeCalendar');
+ assert.ok(calendar);
+ if (kind === 'mixed' || kind === 'schedules') assert.equal(calendar.props.fallback.length, 2);
 });
 test('direct delete remains a single action that forwards to the existing confirmation', () => {
  const h = homeHarness(fixture('populated')); let confirmations = 0;
  h.context.confirmDeleteRecord = () => confirmations++;
+ const expand = nodes(h.render()).find(n => n.props?.accessibilityLabel?.endsWith('관리 펼치기'));
+ assert.ok(expand); expand.props.onPress();
  const tree = h.render();
  const remove = nodes(tree).find(n => n.type === 'Pressable' && n.props?.accessibilityLabel?.endsWith(' 삭제'));
  assert.ok(remove); assert.doesNotMatch(words(tree), /•••|닫기/);

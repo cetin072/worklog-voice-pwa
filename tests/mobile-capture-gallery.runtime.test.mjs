@@ -69,7 +69,7 @@ test('committed capture notifications refresh preserved Home and select the corr
   function walk(node) { if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect' && node.arguments[0]?.getText(ast).includes('captureChanges.subscribe')) effect = node.arguments[0].getText(ast); ts.forEachChild(node, walk); }
   walk(ast); assert.ok(effect); let listener, refreshes = 0, selected = null, expanded = {}, unsubscribed = false;
   const scope = { session: { user: { id: 'alice' } }, client: {}, captureChanges: { subscribe: fn => { listener = fn; return () => unsubscribed = true; } },
-    seoulTodayKey: () => '2026-10-31', setTaskFilter: value => selected = value, setExpandedBuckets: fn => expanded = fn(expanded), setUpcomingExpanded: () => {}, refreshBriefing: () => refreshes++ };
+    seoulTodayKey: () => '2026-10-31', setTaskFilter: value => selected = value, setExpandedBuckets: fn => expanded = fn(expanded), setTaskFiltersExpanded: () => {}, refreshBriefing: () => refreshes++ };
   const js = ts.transpileModule(`return (${effect});`, {}).outputText; const cleanup = new Function('scope', `with(scope) { ${js} }`)(scope)();
   listener({ owner: 'bob', recordId: 'other', dueDate: '' }); assert.equal(refreshes, 0);
   listener({ owner: 'alice', recordId: 'review-id', dueDate: '' }); assert.equal(refreshes, 1); assert.equal(selected, 'undated'); assert.equal(expanded.undated, true);
