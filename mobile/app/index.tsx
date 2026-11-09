@@ -392,6 +392,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   }
   const [personalCalendarOpen, setPersonalCalendarOpen] = useState(false);
   const [personalCalendarDate, setPersonalCalendarDate] = useState<string | undefined>();
+  const [homeCalendarRevision, setHomeCalendarRevision] = useState(0);
   const [homeScheduleCount, setHomeScheduleCount] = useState<number | null>(null);
   const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
   const [savedReminder, setSavedReminder] = useState<{ target: ReminderTarget; message: string } | null>(null);
@@ -574,6 +575,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       editDetailsCache.current = new Map();
       setBriefingBusy(true);
       setBriefingError('');
+      setHomeCalendarRevision(value => value + 1);
       try {
         const accessToken = await freshHomeAccessToken(client);
         const next = await loadHomeBriefing(accessToken);
@@ -1211,7 +1213,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
       </View>
-      <HomeCalendar key={session.user.id} today={briefing?.today || seoulTodayKey()} revision={briefingNow} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
+      <HomeCalendar key={session.user.id} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
         onOpenCalendar={day => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarDate(day); setPersonalCalendarOpen(true); }}
         renderSchedule={schedule => <View>
           {schedule.scheduleId === notificationScheduleId ? <Text style={styles.helpText}>{scheduleFocusReason === 'created' ? '방금 생성된 일정' : '알림에서 연 일정'}</Text> : null}

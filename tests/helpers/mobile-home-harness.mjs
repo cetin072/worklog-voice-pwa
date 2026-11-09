@@ -25,7 +25,7 @@ export function homeHarness(context) {
   CompactReminderLabel: props => node('Pressable', { onPress: props.onPress, accessibilityLabel: `${props.title} 알림 확인 필요` }, '알림 확인 필요'),
   ScheduleReminderLabel: props => node('Text', {}, '알림 확인 필요'), MeetingRecordingBanner: () => null,
   CalendarExportPreview: () => null, CaptureImportButton: props => node('CaptureImportButton', props),
-  session: {user:{id:'synthetic'}}, homeScheduleCount: 0, taskFiltersExpanded: false, setTaskFiltersExpanded() {}, personalCalendarDate: undefined, setPersonalCalendarDate() {}, HomeCalendar: props => node('HomeCalendar', props), lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
+  session: {user:{id:'synthetic'}}, homeCalendarRevision: 0, homeScheduleCount: 0, taskFiltersExpanded: false, setTaskFiltersExpanded() {}, personalCalendarDate: undefined, setPersonalCalendarDate() {}, HomeCalendar: props => node('HomeCalendar', props), lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
   briefingNow: 0, reminderTarget: null, upcomingExpanded: false, expandedBuckets: {}, taskBusyId: null, noteBusyId: null, notes: [], visibleNotes: [], extraNotes: 0,
   activeFilter: 'today', undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
   briefingBuckets: [{ key: 'today', label: '오늘', tone: 'warning' }, { key: 'overdue', label: '기한 지남', tone: 'danger' }, { key: 'upcoming', label: '다가오는 업무', tone: 'info' }, { key: 'undated', label: '기한 없는 업무', tone: 'neutral' }],

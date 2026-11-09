@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { personalCalendarMessage, personalCalendarRequest, type CalendarMonth, type PersonalCalendarEvent } from '../calendar/personal-calendar-api';
 import type { BriefingSchedule } from '@/src/platform/worklog-api';
@@ -26,10 +26,6 @@ export function HomeCalendar({ revision, today, fallback, onOpenCalendar, render
     if (focusId && focusDate && Number.isFinite(Date.parse(focusDate))) { setSelected(seoulDate(focusDate)); setOpened(focusId); }
   }, [focusId, focusDate]);
   useEffect(() => { onTodayCount(result?.key === key && !result.limited ? eventsOnDay(result.events, today).length : null); }, [result, key, today, onTodayCount]);
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', state => { if (state === 'active') setReload(n => n + 1); });
-    return () => subscription.remove();
-  }, []);
   useEffect(() => {
     let alive = true;
     const current = () => alive && latest.current.owner === owner && latest.current.key === key;

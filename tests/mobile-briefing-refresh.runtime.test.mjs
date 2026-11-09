@@ -18,12 +18,13 @@ function compile(code, scope) {
   return new Function('scope', `with(scope) { ${js} }`)(scope);
 }
 function harness() {
-  const state = { briefing: { title: 'previous snapshot' }, error: '', busy: false, reads: 0 };
+  const state = { briefing: { title: 'previous snapshot' }, error: '', busy: false, reads: 0, calendarRevision: 0 };
   const scope = {
     session: {}, client: {}, briefingRefreshEpoch: { current: 1 }, briefingRefreshQueue: { current: createSerialTaskQueue() },
     editDetailsCache: { current: new Map() }, androidTouchSmoke: false, initialReminderRecovery: { current: Promise.resolve() },
     freshHomeAccessToken: async () => 'synthetic',
     loadHomeBriefing: async () => { state.reads++; throw new Error('synthetic offline'); },
+    setHomeCalendarRevision: update => { state.calendarRevision = update(state.calendarRevision); },
     setBriefing: value => { state.briefing = value; }, setBriefingBusy: value => { state.busy = value; },
     setBriefingError: value => { state.error = value; }, messageOf: (e, fallback) => e instanceof Error ? e.message : fallback,
     synchronizeBriefingScheduleReminders: async () => {}, console,
@@ -192,4 +193,15 @@ test('note acknowledge and Undo renew access token instead of reusing an expired
     { token: 'fresh', id: 'note-1', state: 'acknowledged' },
     { token: 'fresh', id: 'note-1', state: 'active' },
   ]);
+});
+
+test('explicit Home refresh invalidates the calendar even if the briefing is offline', async () => {
+  const h = harness();
+  await h.refreshBriefing();
+  assert.equal(h.state.calendarRevision, 1);
+  await h.refreshBriefing();
+  assert.equal(h.state.calendarRevision, 2);
+  const source = readFileSync('mobile/app/index.tsx', 'utf8');
+  assert.match(source, /revision=\{homeCalendarRevision\}/);
+  assert.doesNotMatch(source, /revision=\{briefingNow\}/);
 });
