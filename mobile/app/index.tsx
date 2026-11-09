@@ -1296,10 +1296,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         <SettingsMenuItem title="계정 및 데이터 삭제 요청" onPress={() => void Linking.openURL('https://worklog-voice-pwa.netlify.app/account-deletion.html').catch(() => Alert.alert('페이지 열기 실패', '잠시 후 다시 시도해주세요.'))} />
         </View> : null}
       </SettingsGroup>
-      <SettingsGroup title="계정">
-        <View style={styles.settingsAccount}><Text selectable style={styles.body}>{session.user.email || '로그인 사용자'}</Text></View>
-        <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
-      </SettingsGroup>
+      <View style={styles.settingsAccountSection}>
+        <SettingsGroup title="계정">
+          <View style={styles.settingsAccount}><Text selectable style={styles.body}>{session.user.email || '로그인 사용자'}</Text></View>
+        </SettingsGroup>
+        <View style={styles.settingsGroupCard}>
+          <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
+        </View>
+      </View>
     </View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
@@ -1496,6 +1500,7 @@ const styles = StyleSheet.create({
   settingsGroup: { gap: 8 },
   settingsGroupTitle: { color: mobileTheme.colors.textSecondary, fontSize: 13, fontWeight: '800', paddingHorizontal: 4 },
   settingsGroupCard: { backgroundColor: mobileTheme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: mobileTheme.colors.borderSubtle, overflow: 'hidden' },
+  settingsAccountSection: { gap: 56 },
   settingsAccount: { padding: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
   settingsMenuItem: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
   settingsMenuItemDestructive: { backgroundColor: '#fff7f7' },
