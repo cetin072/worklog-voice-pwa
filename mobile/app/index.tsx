@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { PersonalCalendarSheet } from '@/src/features/calendar/personal-calendar-sheet';
 import { CalendarSettings } from '@/src/features/settings/calendar-settings';
 import { CalendarExportPreview } from '@/src/features/calendar/calendar-export-preview';
 import { CaptureImportButton } from '@/src/features/capture/capture-import-button';
@@ -377,6 +378,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     if (next !== 'home' && quickVoiceNavigation.current) { warnPendingVoice(); return; }
     applyScreen(next);
   }
+  const [personalCalendarOpen, setPersonalCalendarOpen] = useState(false);
   const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
   const [savedReminder, setSavedReminder] = useState<{ target: ReminderTarget; message: string } | null>(null);
   useEffect(() => { setReminderTarget(null); setSavedReminder(null); }, [session?.user.id]);
@@ -1206,6 +1208,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
       <View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무 · 메모 · 일정</Text></Pressable></View>
 
       <CaptureImportButton />
+      {config?.dataSchema === 'worklog' ? <Pressable accessibilityRole="button" style={styles.settingsMenuItem} onPress={() => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarOpen(true); }}><Text style={styles.linkText}>📅 내 캘린더 · 일정 등록</Text></Pressable> : null}
 
       {briefing?.scheduleEnabled && !overview.empty ? <View style={styles.card}>
         <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>📅 일정</Text><Text style={styles.sectionTitle}>오늘 일정</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable></View></View>
@@ -1316,6 +1319,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     }} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { if (!client) throw new Error('로그인 연결을 확인한 뒤 다시 시도해주세요.'); const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(await getFreshAccessToken(client), transcript, { ...options, sourceType: 'voice' }); let reminderMessage: string; try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard, client); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); } catch (nextError) { reminderMessage = reminderFailureMessage(nextError); } if (reminderGuard()) setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage }); if (reminderGuard() && saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing: refreshQuickVoiceBriefing }} />
   </View> : null}
     {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
+  {personalCalendarOpen && config?.dataSchema === 'worklog' ? <PersonalCalendarSheet key={session.user.id} onClose={() => setPersonalCalendarOpen(false)} onSaved={() => { void refreshBriefing(); }} /> : null}
   <WorkRecordEditSheet
     allowTitleWhileLoading
     visible={Boolean(editTaskId)}
