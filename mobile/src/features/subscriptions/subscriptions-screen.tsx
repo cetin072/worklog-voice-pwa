@@ -6,6 +6,7 @@ import { mobileTheme } from '@/src/ui/theme';
 import { draftFromSubscription, SubscriptionForm, type FormAssist } from './subscription-form';
 import {
   CYCLE_LABEL,
+  subscriptionPaymentLabel,
   SCOPE_LABEL,
   buildSubscriptionRows,
   filterByScope,
@@ -263,6 +264,7 @@ function Row({ row, busy, onUsed, onEdit }: { row: SubscriptionRow; busy: boolea
     <Text style={styles.rowMeta}>
       {SCOPE_LABEL[s.scope]} · {CYCLE_LABEL[s.cycle]} {formatWon(s.amountKrw)} · 다음 결제 {shortDate(row.nextPayment)} ({dayLabel(row.daysToPayment)})
     </Text>
+    {subscriptionPaymentLabel(s) ? <Text style={styles.rowMeta}>{subscriptionPaymentLabel(s)}</Text> : null}
     <Text style={[styles.rowMeta, row.cancelCandidate ? styles.candidateText : null]}>{row.cancelCandidate ? `해지 후보 · ${idle}` : idle}</Text>
     <View style={styles.rowActions}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${s.name} 오늘 사용함으로 기록`} disabled={busy || row.usedToday} style={[styles.rowButton, row.usedToday ? styles.rowButtonDone : null]} onPress={onUsed}>

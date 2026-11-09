@@ -1,6 +1,8 @@
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import {
   isValidDateKey,
+  PAYMENT_METHOD_LABEL,
+  type PaymentMethod,
   type BillingCycle,
   type Subscription,
   type SubscriptionScope,
@@ -10,7 +12,7 @@ import {
 export type SubscriptionInput = Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> & { sourceText?: string | null };
 
 const TABLE = 'subscriptions';
-const COLUMNS = 'id,name,amount_krw,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at';
+const COLUMNS = 'id,name,amount_krw,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at,payment_method,payment_name';
 const LIST_LIMIT = 500;
 
 type Row = Record<string, unknown>;
@@ -33,7 +35,9 @@ export function subscriptionFromRow(row: unknown): Subscription | null {
   if (typeof r.id !== 'string' || typeof r.name !== 'string' || !r.name.trim()) return null;
   if (typeof r.amount_krw !== 'number' || !Number.isInteger(r.amount_krw) || r.amount_krw <= 0) return null;
   if (!isCycle(r.billing_cycle) || !isScope(r.scope) || !anchor) return null;
+  if (r.payment_method != null && (typeof r.payment_method !== 'string' || !r.payment_method || !Object.hasOwn(PAYMENT_METHOD_LABEL, r.payment_method))) return null;
   return {
+    ...(r.payment_method !== undefined ? { paymentMethod: r.payment_method as PaymentMethod | null, paymentName: typeof r.payment_name === 'string' ? r.payment_name : null } : {}),
     id: r.id,
     name: r.name,
     amountKrw: r.amount_krw,
@@ -50,6 +54,7 @@ export function subscriptionFromRow(row: unknown): Subscription | null {
 function inputToRow(input: SubscriptionInput, { withSource = false } = {}) {
   return {
     ...(withSource && input.sourceText ? { source_text: input.sourceText.slice(0, 300) } : {}),
+    ...(input.paymentMethod !== undefined ? { payment_method: input.paymentMethod, payment_name: input.paymentMethod ? input.paymentName || null : null } : {}),
     name: input.name,
     amount_krw: input.amountKrw,
     billing_cycle: input.cycle,
@@ -61,7 +66,7 @@ function inputToRow(input: SubscriptionInput, { withSource = false } = {}) {
 
 export function subscriptionErrorMessage(error: { code?: string; message?: string } | null | undefined) {
   const text = `${error?.code || ''} ${error?.message || ''}`;
-  if (/PGRST205|PGRST202|42P01|does not exist|schema cache/i.test(text)) return '구독 관리를 준비하는 중입니다. 잠시 후 다시 열어주세요.';
+  if (/PGRST205|PGRST204|PGRST202|42703|42P01|does not exist|schema cache/i.test(text)) return '구독 관리를 준비하는 중입니다. 잠시 후 다시 열어주세요.';
   if (/JWT|401|permission|row-level security|42501/i.test(text)) return '로그인 상태를 확인한 뒤 다시 시도해주세요.';
   return '처리하지 못했습니다. 입력은 유지했습니다. 다시 시도해주세요.';
 }

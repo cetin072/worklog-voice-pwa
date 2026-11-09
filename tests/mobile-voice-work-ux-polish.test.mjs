@@ -54,7 +54,8 @@ test('Stage 2 edit sheet adds native polish without losing the shared editing mo
 });
 
 test('Briefing and search expose large one-tap edit actions and immediate post-save title feedback', () => {
-  assert.match(home, /inlineEdit: \{ minHeight: 48, minWidth: 48/);
+  assert.match(home, /inlineEdit: recordRowStyles\.inlineEdit/);
+  assert.match(fs.readFileSync('mobile/src/ui/record-row-styles.ts', 'utf8'), /inlineEdit: \{ minHeight: 48, minWidth: 48/);
   assert.match(home, /updateVisibleTaskTitle/);
   assert.match(home, /✓ 업무를 수정했습니다/);
   assert.match(search, /editIconAction/);

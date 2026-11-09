@@ -1,3 +1,4 @@
+import { recordRowStyles } from '@/src/ui/record-row-styles';
 import type { ReactNode } from 'react';
 import { HomeCalendar } from '@/src/features/home/home-calendar';
 import { PersonalCalendarSheet } from '@/src/features/calendar/personal-calendar-sheet';
@@ -185,14 +186,20 @@ function HomeTaskRow(props: Parameters<typeof TaskRow>[0]) {
   const [expanded, setExpanded] = useState(false);
   return <View style={styles.homeTaskEntry}>
     <View style={styles.homeTaskLine}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 관리 펼치기`} accessibilityState={{ expanded }} style={styles.homeTaskOpen} onPress={() => setExpanded(value => !value)}><Text style={styles.homeTaskTitle}>{props.task.title || '제목 없는 업무'}</Text></Pressable>
-      {props.task.pageId && props.onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 수정`} disabled={props.completing} style={styles.inlineEdit} onPress={props.onEdit}><Text style={styles.inlineEditText}>✏️ 수정</Text></Pressable> : null}
-      {props.task.pageId && props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 관리 펼치기`} accessibilityState={{ expanded }} style={styles.homeTaskOpen} onPress={() => setExpanded(value => !value)}><Text style={styles.taskTitle}>{props.task.title || '제목 없는 업무'}</Text></Pressable>
+      {props.task.pageId ? <View style={styles.taskActions}>
+        <View style={styles.taskMinorActions}>
+          {props.onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 수정`} disabled={props.completing} style={styles.inlineEdit} onPress={props.onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
+          {props.onDelete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 삭제`} disabled={props.completing} style={styles.inlineDelete} onPress={props.onDelete}><Text style={styles.inlineDeleteText}>삭제</Text></Pressable> : null}
+        </View>
+        {props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+      </View> : null}
     </View>
+    {props.bucket !== 'today' ? <Text style={styles.taskMeta}>{taskNote(props.bucket, props.task)}</Text> : null}
     {props.task.pageId ? <View style={styles.homeTaskUtilities}>
       <ReminderShortcut id={props.task.pageId} title={props.task.title || '업무'} onPress={props.onReminder} disabled={props.completing} />
     </View> : null}
-    {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} hideShortcuts /> : null}
+    {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} onDelete={undefined} hideShortcuts /> : null}
   </View>;
 }
 
@@ -1456,16 +1463,16 @@ const styles = StyleSheet.create({
   taskActions: { flexShrink: 0, gap: 6, alignItems: 'stretch' },
   focusTaskActions: { flexShrink: 0, gap: 6, alignItems: 'stretch' },
   taskMinorActions: { flexDirection: 'row', gap: 6 },
-  taskTitle: { fontSize: 15, fontWeight: '700', color: '#30343b', lineHeight: 21 },
-  taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 },
+  taskTitle: recordRowStyles.taskTitle,
+  taskMeta: recordRowStyles.taskMeta,
   taskBadge: { alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', color: '#374151', backgroundColor: '#e5e7eb', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   followUp: { fontSize: 13, color: '#4b515c', lineHeight: 18 },
   reminderShortcut: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 11, marginTop: 8, borderRadius: 10, borderWidth: 1, borderColor: '#93b5e6', backgroundColor: '#eaf3ff' },
   reminderShortcutText: { color: '#20599a', fontSize: 12, fontWeight: '900' },
-  inlineEdit: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db' },
-  inlineEditText: { fontSize: 18 },
-  inlineDelete: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff7f7', borderWidth: 1, borderColor: '#fecaca' },
-  inlineDeleteText: { color: mobileTheme.colors.danger, fontSize: 12, fontWeight: '900' },
+  inlineEdit: recordRowStyles.inlineEdit,
+  inlineEditText: recordRowStyles.inlineEditText,
+  inlineDelete: recordRowStyles.inlineDelete,
+  inlineDeleteText: recordRowStyles.inlineDeleteText,
   inlineComplete: { minHeight: 48, minWidth: 60, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#111827' },
   inlineCompleteBusy: { opacity: 0.55 },
   inlineCompleteText: { color: '#fff', fontSize: 12, fontWeight: '800' },

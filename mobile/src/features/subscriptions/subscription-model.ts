@@ -6,6 +6,9 @@
  */
 
 export type SubscriptionScope = 'business' | 'personal';
+export type PaymentMethod = 'card' | 'bank_transfer' | 'other';
+export const PAYMENT_METHOD_LABEL = { '': '미등록', card: '카드', bank_transfer: '자동이체', other: '기타' } as const;
+
 export type BillingCycle = 'monthly' | 'yearly';
 export type ScopeFilter = 'all' | SubscriptionScope;
 
@@ -24,6 +27,8 @@ export type Subscription = {
   createdAt: string | null;
   /** 한 줄(말) 입력으로 만든 경우 처음 입력한 문장 원문. 직접 입력이면 null. */
   sourceText: string | null;
+  paymentMethod?: PaymentMethod | null;
+  paymentName?: string | null;
 };
 
 /** 해지 후보 기준 — 초안 값. 테스트하며 조정한다. */
@@ -246,9 +251,11 @@ export type SubscriptionDraft = {
   scope: SubscriptionScope;
   billingAnchorDate: string;
   cancelDeadline: string;
+  paymentMethod?: PaymentMethod | '';
+  paymentName?: string;
 };
 
-export type SubscriptionDraftErrors = Partial<Record<'name' | 'amount' | 'billingAnchorDate' | 'cancelDeadline', string>>;
+export type SubscriptionDraftErrors = Partial<Record<'name' | 'amount' | 'billingAnchorDate' | 'cancelDeadline' | 'paymentMethod' | 'paymentName', string>>;
 
 export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true; value: Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> } | { ok: false; errors: SubscriptionDraftErrors } {
   const errors: SubscriptionDraftErrors = {};
@@ -261,6 +268,10 @@ export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true;
   if (!isValidDateKey(draft.billingAnchorDate)) errors.billingAnchorDate = '결제일을 2026-11-15 형식으로 입력해주세요.';
   const deadline = draft.cancelDeadline.trim();
   if (deadline && !isValidDateKey(deadline)) errors.cancelDeadline = '해지기한을 2026-11-15 형식으로 입력하거나 비워주세요.';
+  const method = draft.paymentMethod || '';
+  const paymentName = (draft.paymentName || '').trim();
+  if (!Object.hasOwn(PAYMENT_METHOD_LABEL, method)) errors.paymentMethod = '결제수단을 다시 선택해주세요.';
+  if (paymentName.length > 60) errors.paymentName = '결제수단 이름은 60자 이하로 입력해주세요.';
   if (Object.keys(errors).length) return { ok: false, errors };
   return {
     ok: true,
@@ -271,6 +282,12 @@ export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true;
       scope: draft.scope,
       billingAnchorDate: draft.billingAnchorDate,
       cancelDeadline: deadline || null,
+      ...(draft.paymentMethod !== undefined ? { paymentMethod: method || null, paymentName: method ? paymentName || null : null } : {}),
     },
   };
+}
+
+export function subscriptionPaymentLabel(sub: Pick<Subscription, 'paymentMethod' | 'paymentName'>) {
+  if (!sub.paymentMethod) return '';
+  return [PAYMENT_METHOD_LABEL[sub.paymentMethod], sub.paymentName].filter(Boolean).join(' · ');
 }

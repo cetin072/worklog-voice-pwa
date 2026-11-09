@@ -5,6 +5,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { mobileTheme } from '@/src/ui/theme';
 import {
   CYCLE_LABEL,
+  PAYMENT_METHOD_LABEL,
   SCOPE_LABEL,
   parseDateKey,
   validateSubscriptionDraft,
@@ -29,8 +30,8 @@ function dateToKey(date: Date) {
 
 export function draftFromSubscription(sub: Subscription | null, todayKey: string, defaultScope: SubscriptionScope): SubscriptionDraft {
   return sub
-    ? { name: sub.name, amountText: String(sub.amountKrw), cycle: sub.cycle, scope: sub.scope, billingAnchorDate: sub.billingAnchorDate, cancelDeadline: sub.cancelDeadline || '' }
-    : { name: '', amountText: '', cycle: 'monthly', scope: defaultScope, billingAnchorDate: todayKey, cancelDeadline: '' };
+    ? { name: sub.name, amountText: String(sub.amountKrw), cycle: sub.cycle, scope: sub.scope, billingAnchorDate: sub.billingAnchorDate, cancelDeadline: sub.cancelDeadline || '', paymentMethod: sub.paymentMethod || '', paymentName: sub.paymentName || '' }
+    : { name: '', amountText: '', cycle: 'monthly', scope: defaultScope, billingAnchorDate: todayKey, cancelDeadline: '', paymentMethod: '', paymentName: '' };
 }
 
 function DateField({ label, value, placeholder, optional, error, onChange }: {
@@ -112,6 +113,13 @@ export function SubscriptionForm({ initial, busy, isNew, assist, sourceText, onS
       <TextInput accessibilityLabel="결제 금액" style={styles.input} value={draft.amountText} keyboardType="number-pad" placeholder="예: 12000" onChangeText={(v) => set('amountText', v)} />
       {errors.amount ? <Text accessibilityLiveRegion="polite" style={styles.error}>{errors.amount}</Text> : null}
     </View>
+    <Choice label="결제수단 (선택)" options={['', 'card', 'bank_transfer', 'other'] as const} value={draft.paymentMethod || ''} labels={PAYMENT_METHOD_LABEL} onChange={(v) => setDraft(d => ({ ...d, paymentMethod: v, paymentName: v === d.paymentMethod ? d.paymentName : '' }))} />
+    {errors.paymentMethod ? <Text style={styles.error}>{errors.paymentMethod}</Text> : null}
+    {draft.paymentMethod ? <View style={styles.field}>
+      <Text style={styles.label}>{draft.paymentMethod === 'card' ? '카드명 (선택)' : draft.paymentMethod === 'bank_transfer' ? '은행·계좌 별칭 (선택)' : '결제수단 이름 (선택)'}</Text>
+      <TextInput accessibilityLabel="결제수단 이름" style={styles.input} value={draft.paymentName || ''} maxLength={60} placeholder={draft.paymentMethod === 'card' ? '예: 삼성카드 · 업무용' : draft.paymentMethod === 'bank_transfer' ? '예: 국민은행 · 사업용' : '예: 휴대폰 결제'} onChangeText={v => set('paymentName', v)} />
+      {errors.paymentName ? <Text style={styles.error}>{errors.paymentName}</Text> : null}
+    </View> : null}
     <Choice label="결제 주기" options={CYCLES} value={draft.cycle} labels={CYCLE_LABEL} onChange={(v) => set('cycle', v)} />
     <DateField label="다음 결제일" value={draft.billingAnchorDate} placeholder="날짜 선택" error={errors.billingAnchorDate} onChange={(v) => set('billingAnchorDate', v)} />
     <DateField label="해지기한 (선택)" value={draft.cancelDeadline} placeholder="없으면 비워두세요" optional error={errors.cancelDeadline} onChange={(v) => set('cancelDeadline', v)} />

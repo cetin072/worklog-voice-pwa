@@ -25,6 +25,7 @@ async function freshDb() {
     insert into auth.users values ('${USER_A}'), ('${USER_B}');
   `);
   await db.exec(migration);
+  await db.exec(fs.readFileSync('supabase/migrations/20261109141303_subscriptions_payment_method.sql', 'utf8'));
   return db;
 }
 
@@ -116,4 +117,22 @@ test('원문(source_text)은 300자까지 저장되고 그보다 길면 거부�
   await assert.rejects(asUser(db, USER_A, insertWithSource, ['가'.repeat(301)]), /violates check constraint/i);
   const none = await asUser(db, USER_A, insertSql, ['직접 입력', 1000, 'monthly', 'personal']);
   assert.equal(none.rows.length, 1, '직접 입력은 원문 없이 저장');
+});
+
+
+test('선택 결제수단을 본인 구독에 기록하고 이전 행은 null로 보존한다', async () => {
+ const db = await freshDb();
+ const a = await asUser(db, USER_A, insertSql, ['합성 구독', 12000, 'monthly', 'business']);
+ const id=a.rows[0].id;
+ const initial=await asUser(db,USER_A,'select payment_method,payment_name from worklog.subscriptions where id=$1',[id]);
+ assert.deepEqual(initial.rows,[{payment_method:null,payment_name:null}]);
+ await asUser(db,USER_A,"update worklog.subscriptions set payment_method='card',payment_name='삼성카드 · 업무용' where id=$1",[id]);
+ const mine=await asUser(db,USER_A,'select payment_method,payment_name from worklog.subscriptions where id=$1',[id]);
+ assert.equal(mine.rows[0].payment_name,'삼성카드 · 업무용');
+ const theirs=await asUser(db,USER_B,'select payment_name from worklog.subscriptions where id=$1',[id]);assert.equal(theirs.rows.length,0);
+ const changed=await asUser(db,USER_B,"update worklog.subscriptions set payment_name='가로채기' where id=$1 returning id",[id]);assert.equal(changed.rows.length,0);
+ await assert.rejects(asUser(db,USER_A,"update worklog.subscriptions set payment_method='invalid' where id=$1",[id]),/check constraint/);
+ await assert.rejects(asUser(db,USER_A,"update worklog.subscriptions set payment_name=repeat('가',61) where id=$1",[id]),/check constraint/);
+ await assert.rejects(asUser(db,USER_A,'update worklog.subscriptions set payment_method=null where id=$1',[id]),/check constraint/);
+ await db.close();
 });
