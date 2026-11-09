@@ -57,14 +57,19 @@ test('failed/limited month never claims complete emptiness; verified briefing re
  fail=false;button(h,'일정 다시 불러오기').props.onPress();h.render();await flush();assert.match(words(h.render()),/일부 일정만/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);h.close();
 });
 test('actual Home shows schedule before actionable tasks and moves tools after them; task expansion preserves edit/delete/undo',()=>{
- const task={pageId:'t',title:'견적서 검토'};let complete=0,edit=0,remove=0,undo=0;
- const h=homeHarness({briefing:{today:'2026-11-09'},structure:{today:[task],overdue:[],upcoming:[],undated:[]},activeFilter:'today',completeTaskInline:()=>complete++,openTaskEditor:()=>edit++,confirmDeleteRecord:()=>remove++,undoTask:{title:task.title},undoCompletedTask:()=>undo++});
+ const task={pageId:'t',title:'견적서 검토'};let complete=0,edit=0,remove=0,undo=0,reminders=0,settings=0;
+ const h=homeHarness({setReminderTarget:()=>reminders++,setScreen:screen=>{assert.equal(screen,'settings');settings++;},CalendarExportPreview:props=>({type:'CalendarExportPreview',props}),briefing:{today:'2026-11-09'},structure:{today:[task],overdue:[],upcoming:[],undated:[]},activeFilter:'today',completeTaskInline:()=>complete++,openTaskEditor:()=>edit++,confirmDeleteRecord:()=>remove++,undoTask:{title:task.title},undoCompletedTask:()=>undo++});
  const tree=h.render(),all=nodes(tree);const idx=label=>all.findIndex(n=>n.props?.accessibilityLabel===label);
  assert.ok(all.findIndex(n=>n.type==='HomeCalendar')<idx('견적서 검토 완료 처리'));
  assert.ok(idx('견적서 검토 완료 처리')<all.findIndex(n=>n.props?.label==='캡처 등록'));
  const action=label=>nodes(h.render()).find(n=>n.props?.accessibilityLabel===label);
+ assert.equal(words(action('견적서 검토 완료 처리')).trim(),'완료');
+ assert.doesNotMatch(words(h.render()),/□/);
+ action('견적서 검토 알림 확인 필요').props.onPress();assert.equal(reminders,1);
+ nodes(h.render()).find(n=>n.type==='CalendarExportPreview').props.onOpenSettings();assert.equal(settings,1);
  action('견적서 검토 완료 처리').props.onPress();assert.equal(complete,1);
  assert.equal(action('견적서 검토 삭제'),undefined);action('견적서 검토 관리 펼치기').props.onPress();
+ assert.equal(nodes(h.render()).filter(n=>n.type==='CalendarExportPreview').length,1);
  action('견적서 검토 수정').props.onPress();action('견적서 검토 삭제').props.onPress();assert.equal(edit,1);assert.equal(remove,1);
  const undoButton=nodes(h.render()).find(n=>n.type==='Pressable'&&words(n).trim()==='실행 취소');undoButton.props.onPress();assert.equal(undo,1);
 });
