@@ -103,3 +103,15 @@ test('계정이 삭제되면 그 사용자의 구독도 함께 지워진다', as
   await db.exec(`delete from auth.users where id = '${USER_A}'`);
   assert.equal((await db.query('select count(*)::int as n from public.subscriptions')).rows[0].n, 0);
 });
+
+test('원문(source_text)은 300자까지 저장되고 그보다 길면 거부된다', async () => {
+  const db = await freshDb();
+  const insertWithSource = `insert into public.subscriptions (name, amount_krw, billing_cycle, scope, billing_anchor_date, source_text)
+    values ('x', 1000, 'monthly', 'personal', '2026-11-15', $1) returning source_text`;
+  const ok = await asUser(db, USER_A, insertWithSource, ['사업 클라우드 매달 1만원 15일']);
+  assert.equal(ok.rows[0].source_text, '사업 클라우드 매달 1만원 15일');
+  await asUser(db, USER_A, insertWithSource, ['가'.repeat(300)]);
+  await assert.rejects(asUser(db, USER_A, insertWithSource, ['가'.repeat(301)]), /violates check constraint/i);
+  const none = await asUser(db, USER_A, insertSql, ['직접 입력', 1000, 'monthly', 'personal']);
+  assert.equal(none.rows.length, 1, '직접 입력은 원문 없이 저장');
+});

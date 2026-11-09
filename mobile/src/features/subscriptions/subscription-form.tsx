@@ -70,8 +70,11 @@ function Choice<T extends string>({ label, options, value, labels, onChange }: {
   </View>;
 }
 
-export function SubscriptionForm({ initial, busy, isNew, onSave, onCancel, onDelete }: {
-  initial: SubscriptionDraft; busy: boolean; isNew: boolean;
+/** 한 줄 입력으로 만든 초안일 때 폼 위에 보여주는 확인 안내. */
+export type FormAssist = { rawText: string; missingLabels: string[]; warnings: string[]; nameCandidates: string[] };
+
+export function SubscriptionForm({ initial, busy, isNew, assist, sourceText, onSave, onCancel, onDelete }: {
+  initial: SubscriptionDraft; busy: boolean; isNew: boolean; assist?: FormAssist; sourceText?: string | null;
   onSave: (value: SubscriptionInput) => void; onCancel: () => void; onDelete?: () => void;
 }) {
   const [draft, setDraft] = useState(initial);
@@ -87,10 +90,21 @@ export function SubscriptionForm({ initial, busy, isNew, onSave, onCancel, onDel
 
   return <View style={styles.form}>
     <Text style={styles.formTitle}>{isNew ? '구독 추가' : '구독 수정'}</Text>
+    {assist ? <View style={styles.assist}>
+      <Text style={styles.assistLabel}>입력하신 말</Text>
+      <Text selectable style={styles.assistRaw}>{assist.rawText}</Text>
+      {assist.missingLabels.length > 0 ? <Text style={styles.assistMissing}>확인이 필요해요 · {assist.missingLabels.join(', ')}</Text> : <Text style={styles.assistOk}>읽은 내용이 맞는지 확인하고 저장해주세요.</Text>}
+      {assist.warnings.map((w) => <Text key={w} style={styles.assistWarning}>{w}</Text>)}
+    </View> : null}
+    {!assist && sourceText ? <Text style={styles.sourceText}>처음 입력한 말 · {sourceText}</Text> : null}
     <Choice label="구분" options={SCOPES} value={draft.scope} labels={SCOPE_LABEL} onChange={(v) => set('scope', v)} />
     <View style={styles.field}>
       <Text style={styles.label}>서비스 이름</Text>
       <TextInput accessibilityLabel="서비스 이름" style={styles.input} value={draft.name} maxLength={60} placeholder="예: 클라우드 저장공간" onChangeText={(v) => set('name', v)} />
+      {assist && assist.nameCandidates.length > 0 ? <View style={styles.candidateRow}>
+        <Text style={styles.candidateLabel}>혹시 이미 등록한 이름이에요?</Text>
+        {assist.nameCandidates.map((candidate) => <Pressable key={candidate} accessibilityRole="button" accessibilityLabel={`이름을 ${candidate}(으)로 바꾸기`} style={styles.candidate} onPress={() => set('name', candidate)}><Text style={styles.candidateText}>{candidate}</Text></Pressable>)}
+      </View> : null}
       {errors.name ? <Text accessibilityLiveRegion="polite" style={styles.error}>{errors.name}</Text> : null}
     </View>
     <View style={styles.field}>
@@ -134,6 +148,17 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   secondary: { minHeight: mobileTheme.size.touchTarget, paddingHorizontal: 20, borderRadius: mobileTheme.radius.control, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: c.text, fontSize: 16 },
+  assist: { backgroundColor: c.todayBackground, borderColor: c.todayBorder, borderWidth: 1, borderRadius: mobileTheme.radius.control, padding: 12, gap: 4 },
+  assistLabel: { fontSize: 12, color: c.textMuted },
+  assistRaw: { fontSize: 15, color: c.text, lineHeight: 22 },
+  assistMissing: { fontSize: 14, color: c.warning, fontWeight: '700' },
+  assistOk: { fontSize: 14, color: c.success },
+  assistWarning: { fontSize: 13, color: c.danger, lineHeight: 18 },
+  sourceText: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
+  candidateRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  candidateLabel: { fontSize: 13, color: c.textSecondary },
+  candidate: { minHeight: 36, paddingHorizontal: 12, borderRadius: mobileTheme.radius.pill, borderWidth: 1, borderColor: c.link, justifyContent: 'center' },
+  candidateText: { fontSize: 14, color: c.link },
   deleteButton: { minHeight: mobileTheme.size.touchTarget, alignItems: 'center', justifyContent: 'center' },
   deleteText: { color: c.danger, fontSize: 15 },
 });

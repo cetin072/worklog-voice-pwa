@@ -22,6 +22,8 @@ export type Subscription = {
   lastUsedDate: string | null;
   /** ISO timestamp. 한 번도 안 쓴 구독의 미사용 기간 계산 기준. */
   createdAt: string | null;
+  /** 한 줄(말) 입력으로 만든 경우 처음 입력한 문장 원문. 직접 입력이면 null. */
+  sourceText: string | null;
 };
 
 /** 해지 후보 기준 — 초안 값. 테스트하며 조정한다. */
@@ -248,7 +250,7 @@ export type SubscriptionDraft = {
 
 export type SubscriptionDraftErrors = Partial<Record<'name' | 'amount' | 'billingAnchorDate' | 'cancelDeadline', string>>;
 
-export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true; value: Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt'> } | { ok: false; errors: SubscriptionDraftErrors } {
+export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true; value: Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> } | { ok: false; errors: SubscriptionDraftErrors } {
   const errors: SubscriptionDraftErrors = {};
   const name = draft.name.trim();
   if (!name) errors.name = '서비스 이름을 입력해주세요.';

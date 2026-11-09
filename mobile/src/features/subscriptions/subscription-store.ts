@@ -6,11 +6,11 @@ import {
   type SubscriptionScope,
 } from './subscription-model';
 
-/** 입력 폼에서 검증을 통과한 값. id/사용일/등록일은 서버가 정한다. */
-export type SubscriptionInput = Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt'>;
+/** 입력 폼에서 검증을 통과한 값. id/사용일/등록일은 서버가 정한다. sourceText는 새로 만들 때만 보낸다. */
+export type SubscriptionInput = Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> & { sourceText?: string | null };
 
 const TABLE = 'subscriptions';
-const COLUMNS = 'id,name,amount_krw,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,created_at';
+const COLUMNS = 'id,name,amount_krw,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at';
 const LIST_LIMIT = 500;
 
 type Row = Record<string, unknown>;
@@ -43,11 +43,13 @@ export function subscriptionFromRow(row: unknown): Subscription | null {
     cancelDeadline: dateOrNull(r.cancel_deadline),
     lastUsedDate: dateOrNull(r.last_used_date),
     createdAt: typeof r.created_at === 'string' ? r.created_at : null,
+    sourceText: typeof r.source_text === 'string' && r.source_text.trim() ? r.source_text : null,
   };
 }
 
-function inputToRow(input: SubscriptionInput) {
+function inputToRow(input: SubscriptionInput, { withSource = false } = {}) {
   return {
+    ...(withSource && input.sourceText ? { source_text: input.sourceText.slice(0, 300) } : {}),
     name: input.name,
     amount_krw: input.amountKrw,
     billing_cycle: input.cycle,
@@ -80,7 +82,7 @@ export async function listSubscriptions(client: PlatformSupabaseClient): Promise
 }
 
 export async function createSubscription(client: PlatformSupabaseClient, input: SubscriptionInput): Promise<Subscription> {
-  const { data, error } = await client.from(TABLE).insert(inputToRow(input)).select(COLUMNS).single();
+  const { data, error } = await client.from(TABLE).insert(inputToRow(input, { withSource: true })).select(COLUMNS).single();
   if (error) fail(error);
   const created = subscriptionFromRow(data);
   if (!created) throw new Error(subscriptionErrorMessage(null));

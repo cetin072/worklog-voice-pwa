@@ -28,7 +28,7 @@ test('구독 기능은 일정(Schedule) 알림 모듈과 섞이지 않는다 —
 });
 
 test('순수 로직 모듈은 네이티브/네트워크에 의존하지 않는다', () => {
-  for (const file of ['subscription-model.ts', 'subscription-reminder-plan.ts']) {
+  for (const file of ['subscription-model.ts', 'subscription-reminder-plan.ts', 'subscription-utterance.ts']) {
     const source = fs.readFileSync(`${dir}/${file}`, 'utf8');
     assert.doesNotMatch(source, /from 'react-native'|from 'expo-|@supabase|fetch\(/, file);
   }
@@ -36,4 +36,13 @@ test('순수 로직 모듈은 네이티브/네트워크에 의존하지 않는�
 
 test('홈 화면 레이아웃(버튼·카드)은 이번 변경에서 건드리지 않았다', () => {
   assert.doesNotMatch(home, /accessibilityLabel="구독/, '홈 직접 진입 버튼은 사용자 승인 후 별도 변경');
+});
+
+test('한 줄 입력은 곧바로 저장하지 않고 항상 확인 화면을 거친다', () => {
+  const screen = fs.readFileSync(`${dir}/subscriptions-screen.tsx`, 'utf8');
+  const start = screen.indexOf('function openFromQuickText');
+  const open = screen.slice(start, screen.indexOf('\n  }\n', start));
+  assert.match(open, /setEditing\(\{ kind: 'new', parse:/);
+  assert.doesNotMatch(open, /createSubscription/);
+  assert.match(screen, /sourceText: editing\.parse\?\.rawText \|\| null/);
 });

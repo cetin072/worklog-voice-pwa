@@ -13,6 +13,8 @@ create table public.subscriptions (
   billing_anchor_date date not null,
   cancel_deadline date,
   last_used_date date,
+  -- 한 줄(말/키보드 음성) 입력으로 만든 경우 처음 입력한 문장 원문. 잘못 읽혔을 때 되돌아볼 근거.
+  source_text text check (source_text is null or char_length(source_text) <= 300),
   archived_at timestamptz,
   created_at timestamptz not null default now()
 );

@@ -69,8 +69,10 @@ const validRow = (o = {}) => ({
 test('서버 행을 앱 모델로 바꾸되 형식이 틀린 행은 고치지 않고 버린다', () => {
   assert.deepEqual(store.subscriptionFromRow(validRow({ last_used_date: '2026-11-05', cancel_deadline: '2026-12-01' })), {
     id: 'a', name: '클라우드', amountKrw: 12000, cycle: 'monthly', scope: 'business', billingAnchorDate: '2026-11-15',
-    cancelDeadline: '2026-12-01', lastUsedDate: '2026-11-05', createdAt: '2026-11-01T00:00:00Z',
+    cancelDeadline: '2026-12-01', lastUsedDate: '2026-11-05', createdAt: '2026-11-01T00:00:00Z', sourceText: null,
   });
+  assert.equal(store.subscriptionFromRow(validRow({ source_text: '사업 클라우드 매달 1만원' })).sourceText, '사업 클라우드 매달 1만원');
+  assert.equal(store.subscriptionFromRow(validRow({ source_text: '   ' })).sourceText, null);
   assert.equal(store.subscriptionFromRow(validRow({ amount_krw: 0 })), null);
   assert.equal(store.subscriptionFromRow(validRow({ amount_krw: 1.5 })), null);
   assert.equal(store.subscriptionFromRow(validRow({ scope: 'team' })), null);
@@ -132,4 +134,24 @@ test('오류 메시지: 테이블 미준비·권한·일반 오류를 구분하�
   const generic = store.subscriptionErrorMessage({ message: 'connection reset by peer at 10.0.0.1' });
   assert.doesNotMatch(generic, /10\.0\.0\.1/);
   await assert.rejects(store.listSubscriptions(fakeClient({ data: null, error: { code: 'PGRST205', message: 'x' } })), /준비하는 중/);
+});
+
+test('원문(source_text)은 새로 만들 때만 보내고, 수정·사용기록에서는 덮어쓰지 않는다', async () => {
+  const input = { name: '클라우드', amountKrw: 12000, cycle: 'monthly', scope: 'business', billingAnchorDate: '2026-11-15', cancelDeadline: null, sourceText: '사업 클라우드 매달 1만 2천원 15일' };
+  const created = fakeClient({ data: validRow({ source_text: input.sourceText }), error: null });
+  const result = await store.createSubscription(created, input);
+  assert.equal(created.calls.find((c) => c[0] === 'insert')[1].source_text, input.sourceText);
+  assert.equal(result.sourceText, input.sourceText);
+
+  const direct = fakeClient({ data: validRow(), error: null });
+  await store.createSubscription(direct, { ...input, sourceText: null });
+  assert.equal('source_text' in direct.calls.find((c) => c[0] === 'insert')[1], false, '직접 입력은 원문 칸을 비워 둔다');
+
+  const edited = fakeClient({ data: validRow(), error: null });
+  await store.updateSubscription(edited, 'a', input);
+  assert.equal('source_text' in edited.calls.find((c) => c[0] === 'update')[1], false, '수정은 처음 입력한 원문을 지우거나 바꾸지 않는다');
+
+  const long = fakeClient({ data: validRow(), error: null });
+  await store.createSubscription(long, { ...input, sourceText: '가'.repeat(500) });
+  assert.equal(long.calls.find((c) => c[0] === 'insert')[1].source_text.length, 300);
 });
