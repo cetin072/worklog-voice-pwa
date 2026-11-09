@@ -1,7 +1,11 @@
+import { selectMeetingOwner } from '@/src/features/voice/meeting-owner';
+import { createLocalAccountGate } from '@/src/platform/local-account-gate';
 import type { Session } from '@supabase/supabase-js';
 import { resetCalendarConnection, selectCalendarOwner, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
+import { clearForAccountExit } from '@/src/features/schedule/local-notifications';
+import { reminderSessionEpoch, reminderSyncEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 
 import { loadRememberedLoginEmail, saveRememberedLoginEmail } from '@/src/platform/auth-preferences';
@@ -77,6 +81,7 @@ function createAndroidTouchSmokeClient() {
         console.info('[android-touch-smoke] platform-session-restored', { restored: Boolean(session) });
         return { data: { session }, error: null };
       },
+      async getUser() { const { data } = await this.getSession(); return { data: { user: data.session?.user || null }, error: null }; },
       onAuthStateChange(callback: (event: string, session: Session | null) => void) {
         listener = callback;
         return { data: { subscription: { unsubscribe() { listener = null; } } } };
@@ -102,6 +107,21 @@ function authErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '로그인 처리 중 오류가 발생했습니다.';
 }
 
+/** Before leaving the active account, clear only this app's verified native
+ * schedule alarms. The canonical server schedules remain untouched.
+ * Cleanup failures prevent an explicit logout / next login.
+ */
+async function clearDeviceRemindersForAccountExit() {
+  if (Platform.OS === 'web') return;
+  reminderSessionEpoch.invalidate();
+  reminderSyncEpoch.invalidate();
+  try {
+    await clearForAccountExit();
+  } catch {
+    throw new Error('이 기기의 이전 일정 알림 정리를 확인하지 못했습니다. 기존 계정으로 로그인한 상태에서 다시 시도해주세요.');
+  }
+}
+
 export function PlatformProvider({ children }: PropsWithChildren) {
   const [phase, setPhase] = useState<PlatformPhase>('loading');
   const [config, setConfig] = useState<PublicPlatformConfig | null>(null);
@@ -120,8 +140,10 @@ export function PlatformProvider({ children }: PropsWithChildren) {
     let activeClient: PlatformSupabaseClient | null = null;
     let authSubscription: { unsubscribe: () => void } | null = null;
     let appStateSubscription: { remove: () => void } | null = null;
+    let localGate: ReturnType<typeof createLocalAccountGate<Session>> | null = null;
     let linkingSubscription: { remove: () => void } | null = null;
 
+    selectMeetingOwner(null);
     setPhase('loading');
     setError('');
 
@@ -146,7 +168,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl && isGoogleAuthCallbackUrl(initialUrl)) {
           try {
-            await completeGoogleOAuthFromUrl(nextClient, initialUrl);
+            await completeGoogleOAuthFromUrl(nextClient, initialUrl, clearDeviceRemindersForAccountExit);
             if (alive) setAuthError('');
           } catch (nextError) {
             if (alive) setAuthError(authErrorMessage(nextError));
@@ -159,7 +181,17 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
         setConfig(nextConfig);
         setClient(nextClient);
-        setSession(data.session);
+        localGate = createLocalAccountGate<Session>({
+          clear: clearDeviceRemindersForAccountExit,
+          verify: async id => {
+            const verified = await nextClient.auth.getUser();
+            return !verified.error && verified.data.user?.id === id;
+          },
+          owner: selectMeetingOwner,
+          publish: value => { if (alive) setSession(value); },
+          failed: () => { if (alive) setAuthError('계정 확인 또는 이전 기기 알림 정리가 남았습니다. 새로고침으로 다시 확인해주세요.'); },
+        });
+        await localGate.transition(data.session);
         if (data.session?.user.email) {
           setRememberedEmail(data.session.user.email);
           void saveRememberedLoginEmail(data.session.user.email).catch(() => undefined);
@@ -170,7 +202,8 @@ export function PlatformProvider({ children }: PropsWithChildren) {
         const { data: authData } = nextClient.auth.onAuthStateChange((_event, nextSession) => {
           if (!alive) return;
           if (_event === 'SIGNED_OUT') resetCalendarConnection();
-          setSession(nextSession);
+          if (localGate?.current() === nextSession?.user.id) setSession(nextSession);
+          else void localGate?.transition(nextSession);
           if (nextSession?.user.email) {
             setRememberedEmail(nextSession.user.email);
             void saveRememberedLoginEmail(nextSession.user.email).catch(() => undefined);
@@ -180,7 +213,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
         linkingSubscription = Linking.addEventListener('url', ({ url }) => {
           if (!isGoogleAuthCallbackUrl(url)) return;
-          void completeGoogleOAuthFromUrl(nextClient, url)
+          void completeGoogleOAuthFromUrl(nextClient, url, clearDeviceRemindersForAccountExit)
             .then(() => {
               if (alive) setAuthError('');
             })
@@ -203,6 +236,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
 
     return () => {
       alive = false;
+      localGate?.dispose();
       authSubscription?.unsubscribe();
       appStateSubscription?.remove();
       linkingSubscription?.remove();
@@ -224,6 +258,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
       signIn: async (email, password) => {
         if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');
         setAuthError('');
+        await clearDeviceRemindersForAccountExit();
         const { error: signInError } = await client.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
         setRememberedEmail(email);
@@ -232,6 +267,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
       signUp: async (email, password) => {
         if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');
         setAuthError('');
+        await clearDeviceRemindersForAccountExit();
         const { data, error: signUpError } = await client.auth.signUp({
           email,
           password,
@@ -245,15 +281,19 @@ export function PlatformProvider({ children }: PropsWithChildren) {
       signInWithGoogle: async () => {
         if (!client) throw new Error('로그인 모듈이 아직 준비되지 않았습니다.');
         setAuthError('');
-        const result = await beginGoogleOAuth(client);
+        await clearDeviceRemindersForAccountExit();
+        const result = await beginGoogleOAuth(client, clearDeviceRemindersForAccountExit);
         if (result === 'cancelled') setAuthError('Google 로그인을 취소했습니다. 다른 방법으로 로그인할 수 있습니다.');
       },
       signOut: async () => {
         if (!client) return;
-        resetCalendarConnection();
         setAuthError('');
+        // Refuse to report a successful logout if old personal schedule text
+        // can still appear in this device's pending notification queue.
+        await clearDeviceRemindersForAccountExit();
         const { error: signOutError } = await client.auth.signOut();
         if (signOutError) throw signOutError;
+        resetCalendarConnection();
       },
     }),
     [phase, config, client, session, error, authError, rememberedEmail],

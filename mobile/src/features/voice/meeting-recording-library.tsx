@@ -1,9 +1,11 @@
+import { requireMeetingOwner } from './meeting-owner';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
+  assertMeetingRecordingOwned,
   deleteMeetingRecording,
   listMeetingRecordings,
   isMeetingRecordingFileAvailable,
@@ -43,6 +45,8 @@ function formatBytes(bytes: number | null) {
 }
 
 function MeetingRecordingPlayer({ recording }: { recording: MeetingRecordingEntry }) {
+  assertMeetingRecordingOwned(recording.id, recording.uri);
+  const owner = requireMeetingOwner();
   const player = useAudioPlayer(recording.uri, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
   const durationSeconds = status.duration || Math.max(0, recording.durationMs / 1000);
@@ -65,11 +69,14 @@ function MeetingRecordingPlayer({ recording }: { recording: MeetingRecordingEntr
     if (status.didJustFinish && durationSeconds > 0) {
       await player.seekTo(0);
     }
+    requireMeetingOwner(owner);
+    assertMeetingRecordingOwned(recording.id, recording.uri);
     player.play();
   }
 
   function seekBy(deltaSeconds: number) {
     const next = Math.max(0, Math.min(durationSeconds || Number.MAX_SAFE_INTEGER, currentSeconds + deltaSeconds));
+    requireMeetingOwner(owner);
     void player.seekTo(next);
   }
 
@@ -97,6 +104,7 @@ function MeetingMinutesEditor({ recording, onClose }: {
   recording: MeetingRecordingEntry;
   onClose(): void;
 }) {
+  const owner = requireMeetingOwner();
   const [transcriptText, setTranscriptText] = useState('');
   const [minutesText, setMinutesText] = useState('');
   const [saved, setSaved] = useState<MeetingMinutesDocumentV1 | null>(null);
@@ -173,6 +181,8 @@ function MeetingMinutesEditor({ recording, onClose }: {
           latest.minutesText !== saved.minutesText) {
         throw new Error('최신 회의록과 변경 내용이 다릅니다. 다시 열어 확인해주세요.');
       }
+      requireMeetingOwner(owner);
+      assertMeetingRecordingOwned(recording.id, recording.uri);
       await Share.share({
         title: '업무수첩 회의록',
         message: formatMeetingMinutesForShare({
@@ -331,7 +341,7 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
   return <View style={styles.library}>
     <View style={styles.libraryHead}>
       <View>
-        <Text style={styles.libraryEyebrow}>기기 보관</Text>
+  <Text style={styles.libraryEyebrow}>현재 계정 · 기기 보관</Text>
         <Text style={styles.libraryTitle}>최근 회의 녹음</Text>
       </View>
       <Pressable accessibilityRole="button" style={styles.reloadAction} onPress={reload}>
@@ -339,6 +349,7 @@ export function MeetingRecordingLibrary({ refreshToken = 0 }: { refreshToken?: n
       </Pressable>
     </View>
 
+    <Text style={styles.emptyText}>소유권 정보가 없는 이전 녹음·회의록은 원본을 그대로 보존하며 계정 확인 전 목록에서 제외합니다. 복구가 필요하면 앱을 삭제하거나 데이터를 초기화하지 말고 지원을 요청해주세요.</Text>
     <TextInput
       accessibilityLabel="회의 기록 검색"
       placeholder="회의명·날짜 검색"

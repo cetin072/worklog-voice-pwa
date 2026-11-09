@@ -22,6 +22,7 @@ function ui(input, saver) {
   const state = { messages: [], cleared: 0, calls: 0 };
   const scope = {
     session: { access_token: 'expired-token' }, client: {}, busy: false, manualInput: input,
+    manualVault: null, manualDraftLoaded: true, setManualDraftNotice() {}, manualDraftEpoch: { current: 0 },
     getFreshAccessToken: async () => 'synthetic-token',
     manualSaveSession: { current: createManualWorkSaveSession() }, manualSaveInFlight: { current: false },
     reminderFailureMessage: () => '알림 확인 필요',
