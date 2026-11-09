@@ -46,3 +46,16 @@ test('한 줄 입력은 곧바로 저장하지 않고 항상 확인 화면을 �
   assert.doesNotMatch(open, /createSubscription/);
   assert.match(screen, /sourceText: editing\.parse\?\.rawText \|\| null/);
 });
+
+test('구독 추가는 목록 하단 입력칸이 아니라 별도 추가 페이지(compose)에서 한다', () => {
+  const screen = fs.readFileSync(`${dir}/subscriptions-screen.tsx`, 'utf8');
+  const listStart = screen.indexOf('return <View style={styles.root}>\n    <View style={styles.summaryCard}');
+  assert.ok(listStart > 0, 'list render block exists');
+  const list = screen.slice(listStart, screen.indexOf('\nfunction Row'));
+  assert.doesNotMatch(list, /TextInput/, '목록 화면에는 입력칸이 없다');
+  assert.match(list, /accessibilityLabel="구독 추가"[^\n]*onPress=\{openCompose\}/);
+  const compose = screen.slice(screen.indexOf("if (editing?.kind === 'compose')"), listStart);
+  assert.match(compose, /autoFocus/);
+  assert.match(compose, /직접 입력하기/);
+  assert.match(compose, /onPress=\{openFromQuickText\}/);
+});

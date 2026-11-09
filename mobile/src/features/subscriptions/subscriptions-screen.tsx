@@ -43,7 +43,7 @@ const FILTERS: { key: ScopeFilter; label: string }[] = [
   { key: 'personal', label: '개인' },
 ];
 
-type Editing = { kind: 'new'; parse?: UtteranceParse } | { kind: 'edit'; id: string } | null;
+type Editing = { kind: 'compose' } | { kind: 'new'; parse?: UtteranceParse } | { kind: 'edit'; id: string } | null;
 type PermissionState = 'checking' | 'granted' | 'undetermined' | 'denied' | 'unsupported';
 
 const todayKey = () => seoulDateKeyFromIso(new Date().toISOString()) as string;
@@ -101,15 +101,17 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
   function applyChange(next: Subscription[]) { setSubs(next); syncReminders(next); }
 
   function openFromQuickText() {
-    const text = quickText.trim();
+    const text = quickText.replace(/\s+/g, ' ').trim();
     if (!text) { setError('추가할 구독을 한 줄로 적어주세요. 예: 사업 클라우드 매달 1만 2천원 15일'); return; }
     setError('');
     setEditing({ kind: 'new', parse: parseSubscriptionUtterance(text, todayKey(), subs.map((s) => s.name)) });
     setQuickText('');
   }
 
+  function openCompose() { setError(''); setQuickText(''); setEditing({ kind: 'compose' }); }
+
   async function save(input: SubscriptionInput) {
-    if (!editing || busyId) return;
+    if (!editing || editing.kind === 'compose' || busyId) return;
     setBusyId('form'); setError('');
     try {
       if (editing.kind === 'new') {
@@ -171,6 +173,20 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
 
   const editingSub = editing?.kind === 'edit' ? subs.find((s) => s.id === editing.id) || null : null;
 
+  if (editing?.kind === 'compose') {
+    return <View style={styles.root}>
+      <View style={styles.quickCard}>
+        <Text style={styles.quickTitle}>말하거나 한 줄로 적기</Text>
+        <TextInput accessibilityLabel="구독을 한 줄로 입력" autoFocus multiline style={[styles.quickInput, styles.quickInputBig]} value={quickText} maxLength={300} placeholder="예: 사업 클라우드 매달 1만 2천원 15일" onChangeText={setQuickText} />
+        <Text style={styles.quickHelp}>키보드의 마이크 버튼으로 말해도 돼요. 읽은 내용은 저장 전에 꼭 확인할 수 있어요.</Text>
+        {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel="한 줄 내용 확인하기" style={styles.addButton} onPress={openFromQuickText}><Text style={styles.addText}>내용 확인하기</Text></Pressable>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="폼에 직접 입력하기" style={styles.quickButton} onPress={() => { setError(''); setEditing({ kind: 'new' }); }}><Text style={styles.quickButtonText}>직접 입력하기</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="목록으로 돌아가기" style={styles.linkButton} onPress={() => { setEditing(null); setError(''); setQuickText(''); }}><Text style={styles.link}>목록으로</Text></Pressable>
+    </View>;
+  }
+
   if (editing && (editing.kind === 'new' || editingSub)) {
     const parse = editing.kind === 'new' ? editing.parse : undefined;
     const defaultScope = filter === 'all' ? lastScope.current : filter;
@@ -230,13 +246,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
 
     {rows.map((row) => <Row key={row.subscription.id} row={row} busy={busyId === row.subscription.id} onUsed={() => void markUsed(row.subscription.id)} onEdit={() => setEditing({ kind: 'edit', id: row.subscription.id })} />)}
 
-    <View style={styles.quickCard}>
-      <Text style={styles.quickTitle}>한 줄로 추가</Text>
-      <TextInput accessibilityLabel="구독을 한 줄로 입력" style={styles.quickInput} value={quickText} maxLength={300} returnKeyType="done" placeholder="예: 사업 클라우드 매달 1만 2천원 15일" onChangeText={setQuickText} onSubmitEditing={openFromQuickText} />
-      <Text style={styles.quickHelp}>키보드의 마이크 버튼으로 말해도 돼요. 읽은 내용은 저장 전에 꼭 확인할 수 있어요.</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="한 줄 내용 확인하기" style={styles.quickButton} onPress={openFromQuickText}><Text style={styles.quickButtonText}>내용 확인하기</Text></Pressable>
-    </View>
-    <Pressable accessibilityRole="button" accessibilityLabel="구독 추가" style={styles.addButton} onPress={() => { setError(''); setEditing({ kind: 'new' }); }}>
+    <Pressable accessibilityRole="button" accessibilityLabel="구독 추가" style={styles.addButton} onPress={openCompose}>
       <Text style={styles.addText}>+ 구독 추가</Text>
     </Pressable>
   </View>;
@@ -301,6 +311,7 @@ const styles = StyleSheet.create({
   quickCard: { backgroundColor: c.surface, borderRadius: mobileTheme.radius.card, borderWidth: 1, borderColor: c.borderSubtle, padding: 16, gap: 8 },
   quickTitle: { fontSize: 15, fontWeight: '700', color: c.text },
   quickInput: { minHeight: mobileTheme.size.input, borderWidth: 1, borderColor: c.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 12, fontSize: 16, color: c.text },
+  quickInputBig: { minHeight: 96, paddingVertical: 12, textAlignVertical: 'top' },
   quickHelp: { fontSize: 12, color: c.textMuted, lineHeight: 18 },
   quickButton: { minHeight: mobileTheme.size.touchTarget, borderRadius: mobileTheme.radius.control, borderWidth: 1, borderColor: c.primary, alignItems: 'center', justifyContent: 'center' },
   quickButtonText: { color: c.primary, fontSize: 16, fontWeight: '700' },
