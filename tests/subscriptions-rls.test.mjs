@@ -25,7 +25,7 @@ async function freshDb() {
     insert into auth.users values ('${USER_A}'), ('${USER_B}');
   `);
   await db.exec(migration);
-  await db.exec(fs.readFileSync('supabase/migrations/20261109141303_subscriptions_payment_method.sql', 'utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261109144344_subscriptions_payment_method.sql', 'utf8'));
   return db;
 }
 
