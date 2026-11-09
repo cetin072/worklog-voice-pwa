@@ -494,7 +494,723 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (quickVoic…11893 tokens truncated…'created' ? '✅ 방금 생성된 일정' : '🔔 알림에서 연 일정'}</Text><ScheduleRows key={`${briefingNow}:${Boolean(reminderTarget)}`} onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={allSchedules.filter((schedule) => schedule.scheduleId === notificationScheduleId)} empty={scheduleFocusReason === 'created'
+      if (quickVoiceNavigation.current) { warnPendingVoice(); return true; }
+      if (screen === 'home') return false;
+      setScreen(screen === 'journal' ? 'settings' : 'home');
+      return true;
+    });
+    return () => subscription.remove();
+  }, [screen]);
+  useEffect(() => {
+    if (!session || !client) return;
+    let alive = true;
+    const openSchedule = (data: unknown) => {
+      const payload = data as { target?: unknown; scheduleId?: unknown };
+      if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return false;
+      setNotificationScheduleId(payload.scheduleId);
+      setScheduleFocusReason('notification');
+      setScreen('home');
+      showMessage('알림에서 연 일정을 홈의 일정 영역에 표시했습니다.', 'info');
+      return true;
+    };
+
+    const handleNotificationResponse = notificationResponseHandler<Notifications.NotificationResponse>(
+      () => alive,
+      (response) => openSchedule(response.notification.request.content.data),
+      () => Notifications.clearLastNotificationResponseAsync(),
+    );
+
+    void Notifications.getLastNotificationResponseAsync().then(handleNotificationResponse).catch(() => undefined);
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => { void handleNotificationResponse(response); });
+    return () => { alive = false; subscription.remove(); };
+  }, [client, session?.access_token]);
+
+  function showMessage(text: string, tone: 'success' | 'error' | 'info' = 'info') {
+    setMessage(text);
+    setMessageTone(tone);
+  }
+
+  function clearMessage() {
+    setMessage('');
+    setMessageTone('info');
+  }
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true); clearMessage();
+    try { await action(); } catch (nextError) { showMessage(messageOf(nextError, '처리 중 오류가 발생했습니다.'), 'error'); } finally { setBusy(false); }
+  }
+
+  function openJournal() {
+    setJournalDate(seoulTodayKey());
+    setScreen('journal');
+  }
+
+  function moveJournalDay(days: number) {
+    setJournalDate((current) => shiftDateKey(current, days));
+  }
+
+  async function refreshBriefing() {
+    if (!session || !client) return false;
+    const epoch = briefingRefreshEpoch.current;
+    return briefingRefreshQueue.current.run(async () => {
+      if (epoch !== briefingRefreshEpoch.current) return false;
+      editDetailsCache.current = new Map();
+      setBriefingBusy(true);
+      setBriefingError('');
+      try {
+        const accessToken = await freshHomeAccessToken(client);
+        const next = await loadHomeBriefing(accessToken);
+        if (epoch !== briefingRefreshEpoch.current) return false;
+        setBriefing(next);
+        if (!androidTouchSmoke) {
+          await initialReminderRecovery.current;
+          if (epoch !== briefingRefreshEpoch.current) return false;
+          await synchronizeBriefingScheduleReminders(client, next.schedules).catch((nextError) => {
+            console.warn('[schedule-reminder] canonical schedule sync pending', messageOf(nextError, 'unknown'));
+          });
+        }
+        return epoch === briefingRefreshEpoch.current;
+      } catch (nextError) {
+        if (epoch === briefingRefreshEpoch.current) setBriefingError(messageOf(nextError, '브리핑을 불러오지 못했습니다.'));
+        return false;
+      } finally {
+        if (epoch === briefingRefreshEpoch.current) setBriefingBusy(false);
+      }
+    });
+  }
+
+  async function refreshQuickVoiceBriefing() {
+    // Background refreshes keep handling their own errors. Quick Voice needs
+    // failure to reach its existing list-only retry UI, after a successful save.
+    if (!await refreshBriefing()) throw new Error('기록은 저장됐지만 목록을 새로 불러오지 못했습니다. 목록만 다시 불러와주세요.');
+  }
+
+  function switchAuthMode(nextMode: AuthMode) {
+    if (nextMode === authMode || busy) return;
+    setAuthMode(nextMode);
+    setPassword('');
+    setShowPassword(false);
+    clearMessage();
+    clearAuthError();
+  }
+
+  async function runEmailSignIn() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password || busy) return;
+    if (authMode === 'signUp' && password.length < 8) {
+      showMessage('가입용 비밀번호는 8자 이상 입력해주세요.', 'error');
+      return;
+    }
+    await run(async () => {
+      if (authMode === 'signIn') {
+        await signIn(normalizedEmail, password);
+        return;
+      }
+      const outcome = await signUp(normalizedEmail, password);
+      if (outcome === 'confirmationRequired') {
+        showMessage('가입 확인 이메일을 보냈습니다. 업무수첩이 설치된 휴대폰에서 인증 버튼을 누르면 앱으로 돌아옵니다. 다른 기기에서 인증했다면 앱으로 돌아와 로그인해 주세요.', 'success');
+      }
+    });
+  }
+
+  async function persistDraft() {
+    if (!session || !client || !manualInput.transcript.trim() || busy || manualSaveInFlight.current) return;
+    manualSaveInFlight.current = true;
+    const original = manualInput.transcript.trim();
+    try { await run(async () => {
+      const reminderGuard = reminderSessionEpoch.capture();
+      const saved = await manualSaveSession.current.save(manualInput,
+        async (text, options) => saveWorklog(await getFreshAccessToken(client), text, options));
+      const expectedDue = manualInput.dueDate && manualInput.dueTime
+        ? `${manualInput.dueDate}T${manualInput.dueTime}:00+09:00` : manualInput.dueDate;
+      const dueMatches = !expectedDue || (manualInput.dueTime
+        ? Date.parse(saved.dueStart || '') === Date.parse(expectedDue) && Boolean(saved.scheduleCreated && saved.scheduleId?.trim())
+        : saved.dueStart === expectedDue);
+      const scheduleWarning = dueMatches ? ''
+        : `업무만 저장되었습니다. 선택한 ${manualInput.dueDate}${manualInput.dueTime ? ` ${manualInput.dueTime}` : ''}의 ${manualInput.dueTime ? '일정' : '기한'} 저장을 확인하지 못했습니다. 다시 등록하지 말고 저장된 항목의 연필 버튼에서 날짜와 시간을 확인해주세요.`;
+      const feedback = {
+        recordId: saved.dataCoreWorkRecordId || saved.pageId || '',
+        scheduleWarning,
+        transcript: saved.cleanTranscript?.trim() || original,
+        scheduleDetected: Boolean(saved.scheduleDetected),
+        scheduleCreated: Boolean(saved.scheduleCreated),
+        scheduleId: saved.scheduleId?.trim() || '',
+        dueStart: saved.dueStart?.trim() || '',
+      };
+      let reminderWarning = '';
+      let reminderMessage = '';
+      try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard, client); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); }
+      catch (nextError) { reminderWarning = reminderFailureMessage(nextError); }
+      if (!reminderGuard()) return;
+      setSavedReminder({ target: { recordId: feedback.recordId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning || reminderMessage });
+      // Permission guidance is post-save UI; its failure cannot undo a saved record.
+      try { await maybeGuideExactAlarmPermission(Boolean(saved.scheduleId)); }
+      catch (nextError) {
+        reminderWarning = reminderFailureMessage(nextError);
+        setSavedReminder({ target: { recordId: feedback.recordId, scheduleId: saved.scheduleId, title: feedback.transcript }, message: reminderWarning });
+      }
+      if (!reminderGuard()) return;
+      setManualInput(emptyManualWorkInput());
+      manualSaveSession.current.reset();
+      setLastDirectSave(feedback);
+      if (feedback.scheduleId) { setNotificationScheduleId(feedback.scheduleId); setScheduleFocusReason('created'); }
+      const dueLabel = formatSavedDue(feedback.dueStart);
+      showMessage(scheduleWarning || (feedback.scheduleCreated
+        ? `업무 저장 완료 · 일정 생성됨${dueLabel ? ` · ${dueLabel}` : ''}${reminderWarning ? ` · ${reminderWarning}` : ''}`
+        : '업무 저장 완료'), scheduleWarning ? 'error' : 'success');
+      setScreen('home');
+      await refreshBriefing();
+    }); } finally { manualSaveInFlight.current = false; }
+  }
+
+  async function changeTaskStatus(status: '완료' | '진행중' | '대기' | '확인필요') {
+    if (!session || !client || !selectedTask?.task.pageId || busy) return;
+    await run(async () => {
+      const accessToken = await getFreshAccessToken(client);
+      await updateWorklogStatus(accessToken, selectedTask.task.pageId!, status);
+      showMessage(`업무 상태를 ${status}(으)로 변경했습니다.`, 'success');
+      setSelectedTask(null); setScreen('home');
+      await refreshBriefing();
+    });
+  }
+
+  async function completeTaskInline(task: BriefingTask) {
+    if (!session || !client || !task.pageId || taskBusyId || taskStatusInFlight.current || recordMutationInFlight.current) return;
+    taskStatusInFlight.current = true;
+    const previousStatus: WorkStatus = task.status === '대기' || task.status === '확인필요' || task.status === '진행중' ? task.status : '진행중';
+    setTaskBusyId(task.pageId);
+    clearMessage();
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      await updateWorklogStatus(accessToken, task.pageId, '완료');
+      setUndoTask({ pageId: task.pageId, status: previousStatus, title: task.title || '업무', previousAttentionAt: task.nextAttentionAt || null });
+      // The server mutation is confirmed even if the separate list read fails.
+      if (!await refreshBriefing()) showMessage(`${task.title || '업무'} 완료 처리는 저장됐습니다. 목록만 새로고침해주세요.`, 'info');
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '업무 완료 처리에 실패했습니다.'), 'error');
+    } finally {
+      taskStatusInFlight.current = false;
+      setTaskBusyId(null);
+    }
+  }
+
+  function confirmDeleteRecord(recordId: string, title: string, kind: 'task' | 'note') {
+    Alert.alert(
+      kind === 'note' ? '메모 삭제' : '업무 삭제',
+      `"${title || (kind === 'note' ? '메모' : '업무')}"을(를) 업무수첩에서 삭제할까요?\n완료 기록이나 업무일지에는 남기지 않습니다.`,
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => { void deleteBriefingRecord(recordId, title, kind); } },
+      ],
+    );
+  }
+
+  async function deleteBriefingRecord(recordId: string, title: string, kind: 'task' | 'note') {
+    if (!session || !client || !recordId || taskBusyId || noteBusyId || taskStatusInFlight.current || recordMutationInFlight.current) return;
+    recordMutationInFlight.current = true;
+    if (kind === 'note') setNoteBusyId(recordId); else setTaskBusyId(recordId);
+    clearMessage();
+    let cleanupWarning = '';
+    try {
+      const reminderGuard = reminderSessionEpoch.capture();
+      const result = await deleteWorklog(client, recordId);
+      removeVisibleRecordForConversion(recordId);
+      setSelectedTask((current) => current?.task.pageId === recordId ? null : current);
+      try {
+        await cancelSavedScheduleReminders(result.cancelledScheduleIds || [], reminderGuard);
+      } catch (nextError) {
+        cleanupWarning = messageOf(nextError, '취소된 일정의 휴대폰 알림 일부를 정리하지 못했습니다.');
+      }
+      showMessage(
+        cleanupWarning
+          ? `${title || (kind === 'note' ? '메모' : '업무')}을(를) 삭제했습니다. ${cleanupWarning}`
+          : `${title || (kind === 'note' ? '메모' : '업무')}을(를) 삭제했습니다.`,
+        cleanupWarning ? 'info' : 'success',
+      );
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, kind === 'note' ? '메모를 삭제하지 못했습니다.' : '업무를 삭제하지 못했습니다.'), 'error');
+    } finally {
+      recordMutationInFlight.current = false;
+      if (kind === 'note') setNoteBusyId(null); else setTaskBusyId(null);
+    }
+  }
+
+  async function undoCompletedTask() {
+    if (!session || !client || !undoTask || taskBusyId || taskStatusInFlight.current || recordMutationInFlight.current) return;
+    taskStatusInFlight.current = true;
+    const target = undoTask;
+    setTaskBusyId(target.pageId);
+    clearMessage();
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      await updateWorklogStatus(accessToken, target.pageId, target.status);
+      let attentionError = '';
+      if (target.previousAttentionAt) {
+        try {
+          await undoWorklogAttention(accessToken, target.pageId, null, target.previousAttentionAt);
+        } catch (nextError) {
+          attentionError = messageOf(nextError, '기존 다시 알림을 복원하지 못했습니다.');
+        }
+      }
+      setUndoTask(null);
+      showMessage(
+        attentionError ? `${target.title} 완료는 되돌렸지만 다시 알림은 확인이 필요합니다. ${attentionError}` : `${target.title} 완료 처리를 되돌렸습니다.`,
+        attentionError ? 'error' : 'success',
+      );
+      if (!await refreshBriefing()) showMessage(
+        attentionError ? `${target.title} 완료는 되돌렸습니다. 다시 알림과 목록을 확인해주세요. ${attentionError}` : `${target.title} 완료는 되돌렸습니다. 목록만 새로고침해주세요.`,
+        attentionError ? 'error' : 'info',
+      );
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '완료 처리를 되돌리지 못했습니다.'), 'error');
+    } finally {
+      taskStatusInFlight.current = false;
+      setTaskBusyId(null);
+    }
+  }
+
+  async function postponeSelectedTask(date: string) {
+    const task = selectedTask?.task;
+    if (!session || !client || !task?.pageId || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
+    setReminderBusyId(task.pageId);
+    clearMessage();
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      const current = await readWorklogDetails(accessToken, task.pageId);
+      await postponeWorklog(accessToken, { pageId: task.pageId, dueDate: date, dueTime: current.dueTime });
+      setUndoPostpone({ pageId: task.pageId, title: task.title || '업무' });
+      setSelectedTask(null);
+      setScreen('home');
+      showMessage(`${task.title || '업무'} 기한을 ${date}로 미뤘습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '업무를 미루지 못했습니다.'), 'error');
+    } finally {
+      reminderMutationInFlight.current = false;
+      setReminderBusyId(null);
+    }
+  }
+
+  async function remindSelectedTask(date: string | null) {
+    const task = selectedTask?.task;
+    if (!session || !client || !task?.pageId || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
+    setReminderBusyId(task.pageId);
+    clearMessage();
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      const result = await setWorklogAttention(accessToken, task.pageId, date ? `${date}T09:00:00+09:00` : null);
+      setUndoAttention({
+        pageId: task.pageId,
+        title: task.title || '업무',
+        appliedAttentionAt: result.nextAttentionAt || null,
+        previousAttentionAt: result.previousAttentionAt || null,
+      });
+      setSelectedTask(null);
+      setScreen('home');
+      showMessage(date ? `${task.title || '업무'}을(를) ${date}에 다시 확인합니다.` : `${task.title || '업무'}의 다시 확인을 취소했습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '다시 확인을 변경하지 못했습니다.'), 'error');
+    } finally {
+      reminderMutationInFlight.current = false;
+      setReminderBusyId(null);
+    }
+  }
+
+  async function undoPostponedTask() {
+    if (!session || !client || !undoPostpone || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
+    const target = undoPostpone;
+    setReminderBusyId(target.pageId);
+    clearMessage();
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      await undoPostponeWorklog(accessToken, target.pageId);
+      setUndoPostpone(null);
+      showMessage(`${target.title} 미루기를 되돌렸습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '미루기를 되돌리지 못했습니다.'), 'error');
+    } finally {
+      reminderMutationInFlight.current = false;
+      setReminderBusyId(null);
+    }
+  }
+
+  async function undoTaskAttention() {
+    if (!session || !client || !undoAttention || reminderBusyId || reminderMutationInFlight.current) return;
+    reminderMutationInFlight.current = true;
+    const target = undoAttention;
+    setReminderBusyId(target.pageId);
+    clearMessage();
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      await undoWorklogAttention(accessToken, target.pageId, target.appliedAttentionAt, target.previousAttentionAt);
+      setUndoAttention(null);
+      showMessage(`${target.title} 다시 확인을 되돌렸습니다.`, 'success');
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '다시 확인을 되돌리지 못했습니다.'), 'error');
+    } finally {
+      reminderMutationInFlight.current = false;
+      setReminderBusyId(null);
+    }
+  }
+
+  async function loadTaskEditorDetails(pageId: string, fallbackTitle = '', fallbackDate = '', seedTime?: string) {
+    if (!session || !client || editBusy) return;
+    const epoch = ++editReadEpoch.current;
+    const cache = editDetailsCache.current;
+    const cached = cache.get(pageId);
+    const completeSeed = cached || (typeof seedTime === 'string' ? { title: fallbackTitle, dueDate: fallbackDate, dueTime: seedTime } : null);
+    // Cached/list fields are only a visual seed; a fresh owner-scoped read must
+    // succeed before the edit can be saved (otherwise stale dates can overwrite).
+    setEditLoading(true);
+    setEditReady(false);
+    if (completeSeed) {
+      if (!editDirty.current.title) setEditTitle(completeSeed.title);
+      if (!editDirty.current.date) setEditDate(completeSeed.dueDate);
+      if (!editDirty.current.time) setEditTime(completeSeed.dueTime);
+    }
+    setEditStatus('');
+    setEditStatusTone('neutral');
+    try {
+      const details = await readWorklogDetails(await getFreshAccessToken(client), pageId);
+      if (epoch !== editReadEpoch.current) return;
+      if (cache === editDetailsCache.current) cache.set(pageId, details);
+      if (!editDirty.current.title) setEditTitle(details.title || fallbackTitle);
+      if (!editDirty.current.date) setEditDate(details.dueDate);
+      if (!editDirty.current.time) setEditTime(details.dueTime || '');
+      if (!editDirty.current.kind) setEditActionKind(details.actionKind);
+      setEditOriginalActionKind(details.actionKind);
+      setEditActionConversionAllowed(details.actionConversionAllowed === true);
+      setEditReady(true);
+    } catch (nextError) {
+      if (epoch !== editReadEpoch.current) return;
+      setEditStatus(messageOf(nextError, '현재 업무 정보를 불러오지 못했습니다.'));
+      setEditStatusTone('error');
+    } finally {
+      if (epoch === editReadEpoch.current) setEditLoading(false);
+    }
+  }
+
+  function removeVisibleNote(recordId: string) {
+    setBriefing((current) => current
+      ? { ...current, notes: (current.notes || []).filter((note) => note.pageId !== recordId) }
+      : current);
+  }
+
+  async function acknowledgeNote(note: BriefingNote) {
+    if (!session || !client || !note.pageId || noteBusyId) return;
+    setNoteBusyId(note.pageId);
+    clearMessage();
+    try {
+      await updateBriefingNoteState(await getFreshAccessToken(client), note.pageId, 'acknowledged');
+      removeVisibleNote(note.pageId);
+      setUndoNote({ pageId: note.pageId, title: note.title || '메모' });
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '메모 확인 처리에 실패했습니다.'), 'error');
+    } finally {
+      setNoteBusyId(null);
+    }
+  }
+
+  async function undoAcknowledgedNote() {
+    if (!session || !client || !undoNote || noteBusyId) return;
+    const target = undoNote;
+    setNoteBusyId(target.pageId);
+    clearMessage();
+    try {
+      await updateBriefingNoteState(await getFreshAccessToken(client), target.pageId, 'active');
+      setUndoNote(null);
+      await refreshBriefing();
+    } catch (nextError) {
+      showMessage(messageOf(nextError, '메모 확인 처리를 되돌리지 못했습니다.'), 'error');
+    } finally {
+      setNoteBusyId(null);
+    }
+  }
+
+  async function openTaskEditor(task: BriefingTask) {
+    if (!session || !task.pageId || editBusy || recordMutationInFlight.current) return;
+    editDirty.current = { title: false, date: false, time: false, kind: false };
+    setEditTaskId(task.pageId);
+    setEditTitle(task.title || '');
+    setEditDate(task.dueKey || '');
+    setEditTime('');
+    setEditActionKind(undefined);
+    setEditOriginalActionKind(undefined);
+    setEditActionConversionAllowed(false);
+    setEditReady(false);
+    setEditStatus('');
+    setEditStatusTone('neutral');
+    await loadTaskEditorDetails(task.pageId, task.title || '', task.dueKey || '', task.dueTime);
+  }
+
+  async function openNoteEditor(note: BriefingNote) {
+    if (!session || !note.pageId || editBusy || recordMutationInFlight.current) return;
+    editDirty.current = { title: false, date: false, time: false, kind: false };
+    setEditTaskId(note.pageId);
+    setEditTitle(note.title || '');
+    setEditDate('');
+    setEditTime('');
+    setEditActionKind('note');
+    setEditOriginalActionKind(undefined);
+    setEditActionConversionAllowed(false);
+    setEditReady(false);
+    setEditStatus('');
+    setEditStatusTone('neutral');
+    await loadTaskEditorDetails(note.pageId, note.title || '', '');
+  }
+
+  async function retryTaskEditor() {
+    if (!editTaskId) return;
+    await loadTaskEditorDetails(editTaskId, editTitle, editDate);
+  }
+
+  function updateVisibleTaskTitle(recordId: string, nextTitle: string) {
+    setBriefing((current) => {
+      if (!current?.structure) return current;
+      const structure = { ...current.structure };
+      for (const bucket of briefingBuckets) {
+        const tasks = structure[bucket.key];
+        if (Array.isArray(tasks)) {
+          structure[bucket.key] = tasks.map((task) => task.pageId === recordId ? { ...task, title: nextTitle } : task);
+        }
+      }
+      const notes = (current.notes || []).map((note) => note.pageId === recordId ? { ...note, title: nextTitle } : note);
+      return { ...current, structure, notes };
+    });
+    setSelectedTask((current) => current?.task.pageId === recordId
+      ? { ...current, task: { ...current.task, title: nextTitle } }
+      : current);
+  }
+
+  function removeVisibleRecordForConversion(recordId: string) {
+    setBriefing((current) => {
+      if (!current) return current;
+      const structure = { ...(current.structure || {}) };
+      for (const bucket of briefingBuckets) {
+        const tasks = structure[bucket.key];
+        if (Array.isArray(tasks)) {
+          structure[bucket.key] = tasks.filter((task) => task.pageId !== recordId);
+        }
+      }
+      return {
+        ...current,
+        structure,
+        notes: (current.notes || []).filter((note) => note.pageId !== recordId),
+      };
+    });
+  }
+
+  async function saveTaskEditor() {
+    if (!session || !client || !editTaskId || editBusy || editLoading || !editReady || recordMutationInFlight.current || taskStatusInFlight.current) return;
+    const recordId = editTaskId;
+    const nextTitle = editTitle.replace(/\s+/g, ' ').trim();
+    if (!nextTitle) {
+      setEditStatus('업무명을 입력해주세요.');
+      setEditStatusTone('error');
+      return;
+    }
+    if (nextTitle.length > 160) {
+      setEditStatus('업무명은 160자 이하로 입력해주세요.');
+      setEditStatusTone('error');
+      return;
+    }
+    if (editTime.trim() && !editDate.trim()) {
+      setEditStatus('시간을 설정하려면 날짜도 입력해주세요.');
+      setEditStatusTone('error');
+      return;
+    }
+    editReadEpoch.current += 1; // A background read must not change fields once saving begins.
+    recordMutationInFlight.current = true;
+    setEditBusy(true);
+    setEditStatus('');
+    setEditStatusTone('neutral');
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      const reminderGuard = reminderSessionEpoch.capture();
+      const result = await updateWorklogDetails(accessToken, {
+        pageId: recordId,
+        title: nextTitle,
+        dueDate: editDate.trim(),
+        dueTime: editTime.trim(),
+        ...(editActionConversionAllowed && editActionKind && editOriginalActionKind && editActionKind !== editOriginalActionKind
+          ? { actionKind: editActionKind }
+          : {}),
+      });
+      editDetailsCache.current.delete(recordId);
+      const visibleTitle = result.title?.trim() || nextTitle;
+      let reminderWarning = '';
+      let reminderResult: 'linked' | 'created' | 'no-time' = 'no-time';
+      try {
+        reminderResult = await synchronizeEditedWorklogReminder(client, {
+          recordId,
+          schedule: result.schedule,
+          dueDate: editDate,
+          dueTime: editTime,
+        }, reminderGuard);
+      } catch (nextError) {
+        reminderWarning = reminderFailureMessage(nextError);
+      }
+      if (!reminderGuard()) return;
+      const reminderFeedback = reminderWarning
+        ? `기록은 수정됐지만 알림은 미확인 · ${reminderWarning}`
+        : reminderResult === 'created' ? '새 일정 알림을 이 휴대폰에 예약했습니다.'
+        : reminderResult === 'linked' ? '연결된 일정의 알림을 확인했습니다.'
+        : '알림 없음 · 미래 날짜와 시작 시간을 지정하면 자동 등록됩니다.';
+      if (editDate && editTime && result.mode === 'data_core') {
+        setSavedReminder({ target: { recordId, scheduleId: result.schedule?.id, title: visibleTitle }, message: reminderFeedback });
+      }
+      if (result.actionKindChanged) removeVisibleRecordForConversion(recordId);
+      else updateVisibleTaskTitle(recordId, visibleTitle);
+      setEditReady(false);
+      setEditStatus(result.actionKindChanged
+        ? result.actionKind === 'note'
+          ? '✓ 메모 · 참고로 변경했습니다.'
+          : '✓ 할 일로 변경했습니다.'
+        : result.unchanged
+          ? '변경된 내용이 없습니다.'
+          : result.scheduleUpdated
+            ? `✓ 업무와 연결된 일정도 수정했습니다.${reminderWarning ? ` ${reminderWarning}` : ''}`
+            : '✓ 업무를 수정했습니다.');
+      setEditStatusTone(reminderWarning ? 'error' : result.unchanged && !result.actionKindChanged ? 'neutral' : 'success');
+      // The editor closes quickly: keep device notification status visible on the home screen.
+      showMessage(`업무 수정 저장 · ${reminderFeedback}`, reminderWarning ? 'info' : 'success');
+      // Do not leave a committed edit pending behind a fixed delay: a
+      // delayed close could dismiss another record's editor.
+      setEditTaskId(null);
+      setEditStatus('');
+      setEditStatusTone('neutral');
+      await refreshBriefing();
+    } catch (nextError) {
+      setEditStatus(messageOf(nextError, '업무 수정에 실패했습니다.'));
+      setEditStatusTone('error');
+    } finally {
+      recordMutationInFlight.current = false;
+      setEditBusy(false);
+    }
+  }
+
+  function confirmSignOut() {
+    Alert.alert(
+      '로그아웃',
+      '이 기기에서 현재 업무수첩 계정 세션을 종료할까요?',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '로그아웃', style: 'destructive', onPress: () => { void run(signOut); } },
+      ],
+    );
+  }
+
+  function closeTaskEditor() {
+    if (editBusy || recordMutationInFlight.current) return;
+    editReadEpoch.current += 1;
+    setEditLoading(false);
+    setEditTaskId(null);
+    setEditTitle('');
+    setEditDate('');
+    setEditTime('');
+    setEditActionKind(undefined);
+    setEditOriginalActionKind(undefined);
+    setEditActionConversionAllowed(false);
+    setEditReady(false);
+    setEditStatus('');
+    setEditStatusTone('neutral');
+  }
+
+  if (phase === 'loading') return <StartupScreen stage="account" onRetry={reload} />;
+  if (phase === 'error') return <View style={[styles.center, { paddingTop: 24 + insets.top, paddingBottom: 24 + insets.bottom }]}><Text style={styles.title}>연결을 확인해주세요</Text><Text style={styles.errorText}>{error}</Text><Button title="다시 시도" onPress={reload} /></View>;
+
+  if (!session) return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><ScrollView contentContainerStyle={[styles.loginScroll, { paddingBottom: 20 + insets.bottom }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
+    <View style={styles.loginHero}><Text style={styles.eyebrow}>나의 개인 업무공간</Text><Text style={styles.title}>🎙 업무수첩</Text><Text style={styles.body}>말하면 기록되고, 일정까지 한눈에</Text></View>
+    <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>업무를 놓치지 않는{`\n`}개인 업무수첩</Text><View style={styles.welcomeBenefits}><Text style={styles.welcomeBenefit}>🎙 말하거나 직접 입력</Text><Text style={styles.welcomeBenefit}>📅 오늘·다가오는 일정 확인</Text><Text style={styles.welcomeBenefit}>✓ 저장 후 브리핑에서 바로 확인</Text></View></View>
+    <View style={[styles.card, authMode === 'signUp' ? styles.signUpCard : null]}>
+      <AuthModeSelector mode={authMode} onChange={switchAuthMode} />
+      <View style={styles.authModeIntro}>
+        <Text style={styles.authModeEyebrow}>{authMode === 'signIn' ? '기존 사용자' : '처음 사용자'}</Text>
+        <Text style={styles.sectionTitle}>{authMode === 'signIn' ? '업무수첩 로그인' : '새 계정 만들기'}</Text>
+        <Text style={styles.body}>{authMode === 'signIn'
+          ? '이미 만든 계정으로 내 업무공간에 들어갑니다.'
+          : '새 계정을 만든 뒤 이메일 인증을 완료하면 업무수첩을 시작할 수 있습니다.'}</Text>
+      </View>
+      <AuthAction title={authMode === 'signIn' ? 'Google로 로그인' : 'Google로 회원가입'} variant="google" disabled={busy} onPress={() => void run(signInWithGoogle)} />
+      <View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는 이메일로</Text><View style={styles.dividerLine} /></View>
+      <TextInput accessibilityLabel="이메일" autoCapitalize="none" autoComplete="email" autoCorrect={false} importantForAutofill="yes" keyboardType="email-address" placeholder="name@example.com" returnKeyType="next" style={styles.input} textContentType="username" value={email} onChangeText={(value) => { setEmail(value); clearAuthError(); }} />
+      <View style={styles.passwordRow}><TextInput accessibilityLabel="비밀번호" autoCapitalize="none" autoComplete={authMode === 'signUp' ? 'new-password' : 'current-password'} autoCorrect={false} importantForAutofill="yes" placeholder={authMode === 'signUp' ? '새 비밀번호 8자 이상' : '비밀번호'} returnKeyType="done" secureTextEntry={!showPassword} style={[styles.input, styles.passwordInput]} textContentType={authMode === 'signUp' ? 'newPassword' : 'password'} value={password} onChangeText={(value) => { setPassword(value); clearAuthError(); }} onSubmitEditing={() => void runEmailSignIn()} /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'} hitSlop={8} style={styles.passwordToggle} onPress={() => setShowPassword((value) => !value)}><Text style={styles.passwordToggleText}>{showPassword ? '숨기기' : '보기'}</Text></Pressable></View>
+      <AuthAction title={busy ? '처리 중...' : authMode === 'signIn' ? '로그인' : '계정 만들기'} variant="primary" disabled={busy || !email.trim() || !password} onPress={() => void runEmailSignIn()} />
+      <Pressable accessibilityRole="button" style={styles.authModeSwitch} disabled={busy} onPress={() => switchAuthMode(authMode === 'signIn' ? 'signUp' : 'signIn')}>
+        <Text style={styles.authModeSwitchText}>{authMode === 'signIn' ? '처음이신가요?  무료 회원가입으로 전환 →' : '이미 계정이 있나요?  로그인으로 돌아가기 →'}</Text>
+      </Pressable>
+      <Text style={styles.authHint}>{authMode === 'signIn'
+        ? '이메일은 마지막 사용 계정을 기억합니다. 비밀번호 원문은 앱에 저장하지 않고 휴대폰 비밀번호 관리자/자동완성을 사용합니다.'
+        : '가입 확인 메일은 업무수첩이 설치된 휴대폰에서 여는 것을 권장합니다. 인증이 끝나면 앱으로 돌아오며, 다른 기기에서 인증한 경우에는 이 앱으로 돌아와 로그인하면 됩니다.'}</Text>
+      {message || authError ? <Text style={authError || messageTone === 'error' ? styles.errorText : messageTone === 'success' ? styles.successText : styles.infoText}>{authError || message}</Text> : null}
+    </View></ScrollView></KeyboardAvoidingView></View>;
+
+  if (initialBriefingState(Boolean(briefing), briefingError) !== 'ready') return <StartupScreen error={briefingError} onRetry={() => { setBriefingError(''); reload(); }} onSignOut={() => void run(signOut)} />;
+
+  const briefingInfo = briefing ? briefingMetadata(briefing, briefingNow) : null;
+  const journalTarget = journal?.targetDate || journalDate;
+  const journalToday = journal?.today || seoulTodayKey();
+  const journalIsFuture = journalTarget > journalToday;
+  const overview = homeOverview(briefing!);
+  const structure = overview.structure;
+  const activeFilter = taskFilter || firstNonEmptyTaskBucket(structure);
+  const notes = briefing?.notes || [];
+  const visibleNotes = notesExpanded ? notes : notes.slice(0, 3);
+  const extraNotes = Math.max(0, notes.length - 3);
+  const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
+  // Match feedback by the saved record, not by whichever notice happens to be
+  // latest: Quick Voice and edited tasks must never be hidden by an old draft.
+  const matchingDirectReminder = lastDirectSave?.recordId &&
+    savedReminder?.target.recordId === lastDirectSave.recordId ? savedReminder : null;
+
+  return <HomeReminderStatus client={client} briefing={briefing} scope={`${session.user.id}:${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
+    {savedReminder && !(screen === 'home' && matchingDirectReminder) ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
+    {screen === 'home' ? <>
+      <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
+      {lastDirectSave ? <View style={styles.saveFeedback}>
+        <View style={styles.saveFeedbackHead}><View><Text style={styles.saveFeedbackEyebrow}>직접 입력 저장 결과</Text><Text style={styles.saveFeedbackTitle}>{lastDirectSave.scheduleWarning ? '⚠️ 날짜·시간 확인 필요' : '✅ 업무 저장 완료'}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="직접 입력 저장 결과 닫기" onPress={() => { if (matchingDirectReminder) setSavedReminder(null); setLastDirectSave(null); }}><Text style={styles.saveFeedbackClose}>닫기</Text></Pressable></View>
+        <Text style={styles.saveFeedbackText}>{lastDirectSave.transcript}</Text>
+        {lastDirectSave.scheduleWarning ? <Text style={styles.errorText}>{lastDirectSave.scheduleWarning}</Text> : lastDirectSave.scheduleCreated ? <Text style={styles.saveFeedbackSchedule}>📅 일정 생성 완료{formatSavedDue(lastDirectSave.dueStart) ? ` · ${formatSavedDue(lastDirectSave.dueStart)}` : ''}</Text> : <Text style={styles.saveFeedbackMeta}>일정으로 해석된 날짜·시간은 없습니다.</Text>}
+        {matchingDirectReminder ? <View style={styles.saveFeedbackReminder}>
+          <Text accessibilityLiveRegion="polite" style={styles.saveFeedbackMeta}>{matchingDirectReminder.message}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="방금 저장한 기록 알림 확인" style={styles.saveFeedbackReminderAction} onPress={() => setReminderTarget(matchingDirectReminder.target)}>
+            <Text style={styles.saveFeedbackReminderActionText}>알림 확인</Text>
+          </Pressable>
+        </View> : null}
+      </View> : null}
+
+      <View style={styles.card}>
+        <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>{briefingInfo?.heading || '오늘의 브리핑'}</Text><Text style={styles.sectionTitle}>오늘 한눈에</Text></View><Pressable accessibilityRole="button" onPress={() => void refreshBriefing()}><Text style={styles.linkText}>{briefingBusy ? '정리 중…' : '새로고침'}</Text></Pressable></View>
+        {briefingInfo ? <View accessibilityLiveRegion="polite">{briefingInfo.warnings.map((warning) => <Text key={warning} style={styles.errorText}>{warning}</Text>)}</View> : null}
+        {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
+        {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
+        <Text style={styles.summaryDate}>{briefing?.today?.replaceAll('-', '.')}</Text>
+        <View style={styles.summaryGrid}>{[
+          { label: '오늘 할 일', count: structure.today.length, background: '#172b4d', color: '#ffffff', border: '#172b4d' },
+          { label: '기한 지남', count: structure.overdue.length, background: structure.overdue.length ? '#fff1f2' : '#f8fafc', color: structure.overdue.length ? '#be123c' : '#64748b', border: structure.overdue.length ? '#fecdd3' : '#e2e8f0' },
+          { label: '오늘 일정', count: briefing?.schedules?.today?.length || 0, background: '#ffffff', color: '#334155', border: '#cbd5e1' },
+        ].map(item => <View key={item.label} style={[styles.summaryTile, { backgroundColor: item.background, borderColor: item.border }]}><Text style={[styles.summaryNumber, { color: item.color }]}>{item.count}<Text style={styles.summaryUnit}>건</Text></Text><Text style={[styles.summaryLabel, { color: item.color }]}>{item.label}</Text></View>)}</View>
+        <Text style={styles.helpText}>다가오는 업무 {structure.upcoming.length}건 · 기한 없는 업무 {structure.undated.length}건</Text>
+        {overview.empty ? <Text style={styles.helpText}>현재 표시할 업무·일정이 없습니다. 처음이라면 직접 입력이나 아래 마이크로 시작하세요. 이전 기록은 설정의 업무일지에서 확인하세요.</Text> : null}
+
+      </View>
+
+      <View style={styles.actionGrid}><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('meeting')}><Text style={styles.actionIcon}>⏺</Text><Text style={styles.actionTitle}>회의 녹음</Text><Text style={styles.actionBody}>긴 회의 · 일시정지 · 화면 잠금</Text></Pressable><Pressable accessibilityRole="button" style={styles.actionCard} onPress={() => setScreen('input')}><Text style={styles.actionIcon}>⌨</Text><Text style={styles.actionTitle}>직접 입력</Text><Text style={styles.actionBody}>업무 · 메모 · 일정</Text></Pressable></View>
+
+      <CaptureImportButton />
+
+      {briefing?.scheduleEnabled && !overview.empty ? <View style={styles.card}>
+        <View style={styles.sectionHead}><View style={styles.sectionHeadText}><Text style={styles.eyebrow}>📅 일정</Text><Text style={styles.sectionTitle}>오늘 일정</Text></View><View style={styles.headerActions}><Pressable accessibilityRole="button" onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable></View></View>
+        <Pressable accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => Alert.alert('이 기기의 알림', '예약됨은 이 기기의 예약을 확인한 상태입니다. 알림 없음은 미설정, 확인 필요는 아직 확인할 수 없는 상태입니다. 예약 확인은 실제 전달을 보장하지 않습니다.')}><Text style={styles.helpText}>이 기기 기준 · 알림 표시 도움말 ⓘ</Text></Pressable>
+        {notificationScheduleId ? <View style={styles.notificationFocus}><Text style={styles.detailTitle}>{scheduleFocusReason === 'created' ? '✅ 방금 생성된 일정' : '🔔 알림에서 연 일정'}</Text><ScheduleRows key={`${briefingNow}:${Boolean(reminderTarget)}`} onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={allSchedules.filter((schedule) => schedule.scheduleId === notificationScheduleId)} empty={scheduleFocusReason === 'created'
           ? '방금 저장한 일정이 현재 브리핑에 보이지 않습니다. 이 화면은 오늘과 14일 이내 일정만 보여주므로, 표시되지 않는다고 저장이 누락된 것은 아닙니다. 해당 날짜의 업무일지에서 확인해주세요.'
           : '알림에서 연 일정이 현재 브리핑에 보이지 않습니다. 목록을 새로고침하거나 해당 날짜의 업무일지에서 확인해주세요.'} /></View> : null}
         <View style={styles.scheduleGroup}><Text style={styles.detailTitle}>오늘</Text><ScheduleRows key={`${briefingNow}:${Boolean(reminderTarget)}`} onReminder={(schedule) => setReminderTarget({ scheduleId: schedule.scheduleId, title: schedule.title || '일정' })} schedules={briefing.schedules?.today?.filter(schedule => schedule.scheduleId !== notificationScheduleId)} empty={briefing.schedules?.today?.length ? '선택한 일정은 위에 표시했습니다.' : '오늘 확정 일정이 없습니다.'} /></View>
