@@ -19,6 +19,8 @@ async function freshDb() {
       as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;
+    create schema worklog;
+    grant usage on schema worklog to authenticated;
     grant usage on schema public to anon, authenticated;
     insert into auth.users values ('${USER_A}'), ('${USER_B}');
   `);
@@ -32,7 +34,7 @@ async function asUser(db, userId, sql, params) {
   finally { await db.exec('reset role;'); }
 }
 
-const insertSql = `insert into public.subscriptions (name, amount_krw, billing_cycle, scope, billing_anchor_date)
+const insertSql = `insert into worklog.subscriptions (name, amount_krw, billing_cycle, scope, billing_anchor_date)
   values ($1, $2, $3, $4, '2026-11-15') returning id, user_id`;
 
 test('user_id는 로그인한 사용자로 자동 지정되고 본인 행만 조회된다', async () => {
@@ -40,8 +42,8 @@ test('user_id는 로그인한 사용자로 자동 지정되고 본인 행만 조
   const a = await asUser(db, USER_A, insertSql, ['클라우드', 12000, 'monthly', 'business']);
   assert.equal(a.rows[0].user_id, USER_A);
   await asUser(db, USER_B, insertSql, ['영상 구독', 9900, 'monthly', 'personal']);
-  const seenByA = await asUser(db, USER_A, 'select name from public.subscriptions');
-  const seenByB = await asUser(db, USER_B, 'select name from public.subscriptions');
+  const seenByA = await asUser(db, USER_A, 'select name from worklog.subscriptions');
+  const seenByB = await asUser(db, USER_B, 'select name from worklog.subscriptions');
   assert.deepEqual(seenByA.rows.map((r) => r.name), ['클라우드']);
   assert.deepEqual(seenByB.rows.map((r) => r.name), ['영상 구독']);
 });
@@ -50,15 +52,15 @@ test('다른 사용자 명의로 추가하거나 남의 행을 수정할 수 없
   const db = await freshDb();
   const a = await asUser(db, USER_A, insertSql, ['클라우드', 12000, 'monthly', 'business']);
   await assert.rejects(
-    asUser(db, USER_B, `insert into public.subscriptions (user_id, name, amount_krw, billing_cycle, scope, billing_anchor_date)
+    asUser(db, USER_B, `insert into worklog.subscriptions (user_id, name, amount_krw, billing_cycle, scope, billing_anchor_date)
       values ('${USER_A}', '위장', 1000, 'monthly', 'personal', '2026-11-15')`),
     /row-level security/i,
   );
-  const updated = await asUser(db, USER_B, `update public.subscriptions set last_used_date = '2026-11-09' where id = $1 returning id`, [a.rows[0].id]);
+  const updated = await asUser(db, USER_B, `update worklog.subscriptions set last_used_date = '2026-11-09' where id = $1 returning id`, [a.rows[0].id]);
   assert.equal(updated.rows.length, 0, '남의 행은 0건 갱신');
   // 소유자 변경(행 가로채기)도 막혀야 한다
   await assert.rejects(
-    asUser(db, USER_A, `update public.subscriptions set user_id = '${USER_B}' where id = $1`, [a.rows[0].id]),
+    asUser(db, USER_A, `update worklog.subscriptions set user_id = '${USER_B}' where id = $1`, [a.rows[0].id]),
     /row-level security/i,
   );
 });
@@ -66,10 +68,10 @@ test('다른 사용자 명의로 추가하거나 남의 행을 수정할 수 없
 test('하드 DELETE는 막혀 있고 보관(archived_at)만 가능하다', async () => {
   const db = await freshDb();
   const a = await asUser(db, USER_A, insertSql, ['클라우드', 12000, 'monthly', 'business']);
-  await assert.rejects(asUser(db, USER_A, 'delete from public.subscriptions where id = $1', [a.rows[0].id]), /permission denied/i);
-  const archived = await asUser(db, USER_A, 'update public.subscriptions set archived_at = now() where id = $1 returning id', [a.rows[0].id]);
+  await assert.rejects(asUser(db, USER_A, 'delete from worklog.subscriptions where id = $1', [a.rows[0].id]), /permission denied/i);
+  const archived = await asUser(db, USER_A, 'update worklog.subscriptions set archived_at = now() where id = $1 returning id', [a.rows[0].id]);
   assert.equal(archived.rows.length, 1);
-  const active = await asUser(db, USER_A, 'select id from public.subscriptions where archived_at is null');
+  const active = await asUser(db, USER_A, 'select id from worklog.subscriptions where archived_at is null');
   assert.equal(active.rows.length, 0);
 });
 
@@ -77,8 +79,8 @@ test('비로그인(anon)은 아무것도 읽거나 쓸 수 없다', async () => 
   const db = await freshDb();
   await asUser(db, USER_A, insertSql, ['클라우드', 12000, 'monthly', 'business']);
   await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
-  await assert.rejects(db.query('select * from public.subscriptions'), /permission denied/i);
-  await assert.rejects(db.query(`insert into public.subscriptions (name, amount_krw, billing_cycle, scope, billing_anchor_date) values ('x', 1, 'monthly', 'personal', '2026-11-15')`), /permission denied/i);
+  await assert.rejects(db.query('select * from worklog.subscriptions'), /permission denied/i);
+  await assert.rejects(db.query(`insert into worklog.subscriptions (name, amount_krw, billing_cycle, scope, billing_anchor_date) values ('x', 1, 'monthly', 'personal', '2026-11-15')`), /permission denied/i);
   await db.exec('reset role;');
 });
 
@@ -101,12 +103,12 @@ test('계정이 삭제되면 그 사용자의 구독도 함께 지워진다', as
   const db = await freshDb();
   await asUser(db, USER_A, insertSql, ['클라우드', 12000, 'monthly', 'business']);
   await db.exec(`delete from auth.users where id = '${USER_A}'`);
-  assert.equal((await db.query('select count(*)::int as n from public.subscriptions')).rows[0].n, 0);
+  assert.equal((await db.query('select count(*)::int as n from worklog.subscriptions')).rows[0].n, 0);
 });
 
 test('원문(source_text)은 300자까지 저장되고 그보다 길면 거부된다', async () => {
   const db = await freshDb();
-  const insertWithSource = `insert into public.subscriptions (name, amount_krw, billing_cycle, scope, billing_anchor_date, source_text)
+  const insertWithSource = `insert into worklog.subscriptions (name, amount_krw, billing_cycle, scope, billing_anchor_date, source_text)
     values ('x', 1000, 'monthly', 'personal', '2026-11-15', $1) returning source_text`;
   const ok = await asUser(db, USER_A, insertWithSource, ['사업 클라우드 매달 1만원 15일']);
   assert.equal(ok.rows[0].source_text, '사업 클라우드 매달 1만원 15일');
