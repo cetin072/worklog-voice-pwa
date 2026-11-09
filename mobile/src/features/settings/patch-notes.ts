@@ -10,6 +10,12 @@ export type PatchNoteEntry = {
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
     date: '2026-11-09',
+    title: '퀵 버튼에서 회의 녹음 열기',
+    summary: '마이크 위의 대기 표시를 회의 녹음 바로가기로 바꿨습니다.',
+    items: ['대기 중에는 회의 녹음 화면을 바로 열 수 있습니다.', '음성 기록·처리 중에는 기존 진행 상태를 표시합니다.'],
+  },
+  {
+    date: '2026-11-09',
     title: '주간 일정과 할 일 중심의 홈',
     summary: '홈에서 날짜별 일정과 업무를 먼저 확인하도록 화면 순서를 정리했습니다.',
     items: [

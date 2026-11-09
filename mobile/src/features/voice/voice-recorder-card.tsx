@@ -26,6 +26,7 @@ type QuickVoiceProps = Readonly<{
 }>;
 type VoiceRecorderCardProps = {
   mode?: 'quick';
+  onOpenMeetingRecording?: () => void;
   onOpenWorklogInput?: (recognizedText?: string) => void;
   renderPhotoAction?: (disabled: boolean) => ReactNode;
   quickVoice?: QuickVoiceProps;
@@ -36,6 +37,7 @@ type VoiceRecorderCardProps = {
   freezeQuickVoiceTimer?: boolean;
 } | {
   mode: 'meeting';
+  onOpenMeetingRecording?: never;
   renderPhotoAction?: never;
   onOpenWorklogInput?: (recognizedText?: string) => void;
   quickVoice?: QuickVoiceProps;
@@ -72,7 +74,7 @@ function quickStatus(phase: QuickVoicePhase) {
   return ({ idle: '대기', preparing: '녹음 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
 }
 
-export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPhotoAction, quickVoice, navigationGuard, onQuickVoicePhaseChange, freezeQuickVoiceTimer = false }: VoiceRecorderCardProps) {
+export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, onOpenMeetingRecording, renderPhotoAction, quickVoice, navigationGuard, onQuickVoicePhaseChange, freezeQuickVoiceTimer = false }: VoiceRecorderCardProps) {
   const meeting = useMeetingRecordingSession();
   const quickCapture = useQuickVoicePcmCapture();
   const [quickPhase, applyQuickPhase] = useState<QuickVoicePhase>('idle');
@@ -512,10 +514,12 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, renderPh
             : null;
 
     return <View pointerEvents="box-none" style={styles.quickDock}>
-      <View pointerEvents="none" style={styles.quickTopControl}>
-        <View style={[styles.quickStatusBubble, isRecording ? styles.quickStatusBubbleRecording : statusDone ? styles.quickStatusBubbleDone : null]}>
+      <View pointerEvents="box-none" style={styles.quickTopControl}>
+        {quickPhase === 'idle' && onOpenMeetingRecording ? <Pressable accessibilityRole="button" accessibilityLabel="회의 녹음 열기" style={styles.quickStatusBubble} onPress={() => { if (!inFlight.current && quickPhase === 'idle') onOpenMeetingRecording(); }}>
+          <Text style={styles.quickStatusBubbleText}>회의 녹음</Text>
+        </Pressable> : <View pointerEvents="none" style={[styles.quickStatusBubble, isRecording ? styles.quickStatusBubbleRecording : statusDone ? styles.quickStatusBubbleDone : null]}>
           <Text style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
-        </View>
+        </View>}
       </View>
       {quickPhase === 'transcribing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
