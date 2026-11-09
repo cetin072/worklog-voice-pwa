@@ -25,7 +25,7 @@ test('External Calendar integration is removed from the mobile runtime', () => {
 });
 
 test('Internal schedules stay visible and creatable without external Calendar', () => {
-  assert.match(homeSource, /오늘 일정/);
+  assert.match(homeSource + fs.readFileSync('mobile/src/features/home/home-calendar.tsx', 'utf8'), /오늘 일정/);
   assert.match(homeSource, /업무 · 메모 · 일정/);
   assert.match(homeSource, /ScheduleRows/);
   assert.match(homeSource, /scheduleCreated/);

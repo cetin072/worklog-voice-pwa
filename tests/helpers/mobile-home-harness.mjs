@@ -4,7 +4,7 @@ const require = createRequire(new URL('../../mobile/package.json', import.meta.u
 const ts = require('typescript');
 const source = readFileSync(new URL('../../mobile/app/index.tsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('home.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['taskNote', 'formatSchedule', 'ReminderShortcut', 'TaskRow', 'NoteRow', 'formatNoteJournalDate', 'ScheduleRows'];
+const names = ['HomeTaskRow', 'seoulTodayKey', 'formatJournalDate', 'taskNote', 'formatSchedule', 'ReminderShortcut', 'TaskRow', 'NoteRow', 'formatNoteJournalDate', 'ScheduleRows'];
 const declarations = ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.includes(node.name.text)).map(node => node.getText(ast)).join('\n');
 const start = source.indexOf("{screen === 'home' ? <>") + "{screen === 'home' ? ".length;
 const end = source.indexOf("\n    {screen === 'journal'", start);
@@ -25,14 +25,16 @@ export function homeHarness(context) {
   CompactReminderLabel: props => node('Pressable', { onPress: props.onPress, accessibilityLabel: `${props.title} 알림 확인 필요` }, '알림 확인 필요'),
   ScheduleReminderLabel: props => node('Text', {}, '알림 확인 필요'), MeetingRecordingBanner: () => null,
   CalendarExportPreview: () => null, CaptureImportButton: props => node('CaptureImportButton', props),
-  lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
+  session: {user:{id:'synthetic'}}, homeCalendarRevision: 0, homeScheduleCount: 0, taskFiltersExpanded: false, setTaskFiltersExpanded() {}, personalCalendarDate: undefined, setPersonalCalendarDate() {}, HomeCalendar: props => node('HomeCalendar', props), lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
   briefingNow: 0, reminderTarget: null, upcomingExpanded: false, expandedBuckets: {}, taskBusyId: null, noteBusyId: null, notes: [], visibleNotes: [], extraNotes: 0,
-  undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
+  activeFilter: 'today', undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
   briefingBuckets: [{ key: 'today', label: '오늘', tone: 'warning' }, { key: 'overdue', label: '기한 지남', tone: 'danger' }, { key: 'upcoming', label: '다가오는 업무', tone: 'info' }, { key: 'undated', label: '기한 없는 업무', tone: 'neutral' }],
   refreshBriefing() {}, setScreen() {}, setReminderTarget() {}, setSelectedTask() {}, openTaskEditor() {}, confirmDeleteRecord() {}, completeTaskInline() {},
   config: null, quickVoiceNavigation: {current:false}, warnPendingVoice() {}, setPersonalCalendarOpen() {},
   ...context,
  };
+ base.allSchedules = [...(base.briefing?.schedules?.today || []), ...(base.briefing?.schedules?.upcoming || [])];
+ base.setHomeScheduleCount = () => {};
  base.setTaskFilter = key => { base.activeFilter = key; };
  base.setUpcomingExpanded = update => { base.upcomingExpanded = update(base.upcomingExpanded); };
  base.setExpandedBuckets = update => { base.expandedBuckets = update(base.expandedBuckets); };

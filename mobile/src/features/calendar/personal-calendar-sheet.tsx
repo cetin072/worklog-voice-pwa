@@ -11,10 +11,10 @@ const timeKey=(v: string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul
 const shift=(v: string,n: number)=>new Date(Date.parse(v+'T00:00:00Z')+n*86400000).toISOString().slice(0,10);
 type Draft={id: string;requestId: string;revision: string|null;title: string;date: string;time: string;endDate: string;endTime: string;location: string;description: string};
 type Picker='date'|'time'|'endDate'|'endTime';
-export function PersonalCalendarSheet({onClose,onSaved}: {onClose(): void;onSaved(): void}) {
+export function PersonalCalendarSheet({onClose,onSaved,initialDate}: {onClose(): void;onSaved(): void;initialDate?: string}) {
  const {client,config,session}=usePlatform(),insets=useSafeAreaInsets();
  const live=useRef(true),sequence=useRef(0),flight=useRef(false),owner=session?.user.id;
- const [month,setMonth]=useState(()=>dateKey(new Date().toISOString()).slice(0,7));
+ const [month,setMonth]=useState(()=>(initialDate||dateKey(new Date().toISOString())).slice(0,7));
  const [data,setData]=useState<CalendarMonth|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const [draft,setDraft]=useState<Draft|null>(null),[dirty,setDirty]=useState(false),[picker,setPicker]=useState<Picker|null>(null),[expanded,setExpanded]=useState(false);
  useEffect(()=>{live.current=true;return()=>{live.current=false;sequence.current++;};},[]);
@@ -33,7 +33,7 @@ export function PersonalCalendarSheet({onClose,onSaved}: {onClose(): void;onSave
  function close(){if(flight.current)return;if(draft&&dirty){Alert.alert('입력을 닫을까요?','저장하지 않은 입력이 있습니다.',[{text:'계속 입력',style:'cancel'},{text:'닫기',style:'destructive',onPress:()=>{setDraft(null);setPicker(null);setDirty(false);}}]);return;}if(draft){setDraft(null);setPicker(null);}else onClose();}
  function edit(row?: PersonalCalendarEvent){
   if(busy)return;setMessage('');setDirty(false);setExpanded(false);setPicker(null);
-  setDraft({id:row?.id||Crypto.randomUUID(),requestId:Crypto.randomUUID(),revision:row?.updated_at||null,title:row?.title||'',date:row?dateKey(row.starts_at):(month===dateKey(new Date().toISOString()).slice(0,7)?dateKey(new Date().toISOString()):month+'-01'),time:row&&!row.all_day?timeKey(row.starts_at):'',endDate:row?.ends_at?(row.all_day?shift(dateKey(row.ends_at),-1):dateKey(row.ends_at)):'',endTime:row?.ends_at&&!row.all_day?timeKey(row.ends_at):'',location:row?.location||'',description:row?.description||''});
+  setDraft({id:row?.id||Crypto.randomUUID(),requestId:Crypto.randomUUID(),revision:row?.updated_at||null,title:row?.title||'',date:row?dateKey(row.starts_at):initialDate?.startsWith(month)?initialDate:(month===dateKey(new Date().toISOString()).slice(0,7)?dateKey(new Date().toISOString()):month+'-01'),time:row&&!row.all_day?timeKey(row.starts_at):'',endDate:row?.ends_at?(row.all_day?shift(dateKey(row.ends_at),-1):dateKey(row.ends_at)):'',endTime:row?.ends_at&&!row.all_day?timeKey(row.ends_at):'',location:row?.location||'',description:row?.description||''});
  }
  function patch(value: Partial<Draft>){setDraft(d=>d?{...d,...value}:d);setDirty(true);}
  async function save(){

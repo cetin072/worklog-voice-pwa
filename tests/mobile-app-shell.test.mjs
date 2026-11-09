@@ -44,7 +44,7 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
   assert.doesNotMatch(homeSource, /screen === 'calendar'/);
   assert.match(homeSource, /accessibilityLabel="과거 업무 검색"/);
   assert.match(homeSource, /accessibilityLabel="설정 열기"/);
-  assert.match(homeSource, /오늘 일정/);
+  assert.match(homeSource + fs.readFileSync('mobile/src/features/home/home-calendar.tsx', 'utf8'), /오늘 일정/);
   assert.match(homeSource, /업무 · 메모 · 일정/);
   assert.match(homeSource, /briefingBuckets\.map/);
   assert.match(homeSource, /tasks\.slice\(0, 3\)/);
@@ -56,7 +56,7 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
 
 
 test('Internal schedule summaries stay on Home while external Calendar controls stay removed', () => {
-  assert.match(homeSource, /오늘 일정/);
+  assert.match(homeSource + fs.readFileSync('mobile/src/features/home/home-calendar.tsx', 'utf8'), /오늘 일정/);
   assert.match(homeSource, /이 기기 기준 · 알림 표시 도움말/);
   assert.match(homeSource, /알림 설정/);
   assert.doesNotMatch(homeSource, /scheduleSettings|CalendarConnection|showDeviceActions|showDeviceStatus|Google\/휴대폰 Calendar/);
