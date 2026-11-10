@@ -44,7 +44,7 @@ migration 도구가 실제 적용 시각을 이력 version으로 부여해 파�
 
 ## APK 제작·파일 검증 결과
 
-- [수동 빌드 #844](https://github.com/cetin072/worklog-voice-pwa/actions/runs/42773585201), 소스 `343768865c1c879f4c64030b457b3da94ec501e8`. changes/typecheck/android-standalone 성공. 이 기록 시점의 physical-qa 및 runtime-smoke는 진행 중이며 성공으로 표시하지 않는다.
+- [수동 빌드 #844](https://github.com/cetin072/worklog-voice-pwa/actions/runs/42773585201), 소스 `343768865c1c879f4c64030b457b3da94ec501e8`. changes/typecheck/android-standalone 성공. physical-qa APK도 성공했다. runtime-smoke는 실패했으며 아래 결과를 따른다.
 - artifact `worklog-mobile-auth-ux-arm64-apk`, ID `13742818818`. ZIP SHA-256 `7e1dbcad8bf955b8a3f204e43707bdd4e1ed72f1244596271fe363e1a1ee230c`가 GitHub artifact digest와 일치했다.
 - 파일 `worklog_QA_my_management_3437688_arm64.apk`, 65,946,450 bytes. APK SHA-256 `84f1ee66fb2890275f2135e051075ed684014006d95f9cc23656e832135dc230`.
 - manifest: `com.cetin072.worklog.qa`, version `0.1.0`, code `12`, minSdk 24, targetSdk 36. native ABI는 arm64-v8a 하나다.
@@ -54,3 +54,9 @@ migration 도구가 실제 적용 시각을 이력 version으로 부여해 파�
 - main은 `5fb97f089b5b98a949f6b36963a4a02b0a2262bb` 그대로다. 정식앱·Production 웹·Google Play 배포는 하지 않았다. 공유 DB 신규 구조 적용과 QA 프리뷰 갱신만 수행했다.
 
 사용자 기기에서 기존 기록 유지, 내 관리 세 영역 등록/수정/완료·체크 취소, 앱 재시작, 알림 전달과 글꼴/키보드, 기존 녹음/사진/Google 기능을 확인해야 한다. ERP 실제 화면 연결과 #490 AC-13/20은 아직 미완료다.
+
+## 에뮬레이터 최종 결과
+
+android-runtime-smoke는 실패했다. 로그에서 설치·프로세스 실행·홈 첫 터치(5,767ms)·설정 이동/복귀·직접입력 이동·녹음 상태 표시까지 진행한 뒤, `worklog-mic-after.xml`에서 녹음 취소 버튼 좌표를 찾는 단계가 exit 1로 끝났다. 해당 XML/화면 artifact는 저장되지 않아 버튼의 실제 가림/접근성/타이밍 중 어떤 원인인지 확정하지 못했다. 초기 adb offline 메시지 뒤 에뮬레이터는 정상 부팅했으므로 이를 최종 실패 원인으로 기록하지 않는다. 사진 선택 단계에는 도달하지 않았다.
+
+추측으로 제품 코드를 수정하거나 비용이 큰 전체 네이티브 빌드를 반복하지 않았다. 일반 사용자 설치 APK와 physical-qa APK 생성 성공은 이 E2E 실패와 별도로 기록한다. 전체 workflow는 failure이며, 이 APK는 사용자 검수 후보이지 검수 완료/출시 후보가 아니다.
