@@ -224,7 +224,58 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     const state = await read();
     return Object.values(state.reminders[sid] || {}).sort((a, b) => a.offsetMinutes - b.offsetMinutes);
   }
+  /**
+   * Explicit account exit: remove only reservations that this app can prove it
+   * owns. The full operation stays in the existing native/storage queue.
+   * A failure must block logout, leaving durable retry evidence untouched.
+   * Server Schedule and WorkRecord rows are never modified.
+   */
+  async function clearForAccountExit() {
+    const state = await read();
+    const ids = new Set([
+      ...Object.keys(state.reminders),
+      ...Object.values(state.intents).map((intent) => intent.scheduleId),
+      ...Object.keys(state.legacyCleanup),
+    ]);
+    let removed = 0;
+    for (const sid of ids) {
+      for (const minutes of REMINDER_OFFSETS) {
+        if (await cancel(sid, minutes)) removed += 1;
+      }
+      // Older locally tracked notifications have no v3 owner marker. Only
+      // cancel identifiers tied to an exact stored schedule ID.
+      for (const identifier of (await read()).legacyCleanup[sid] || []) {
+        await cancelKnown(identifier, sid);
+        await change((next) => {
+          next.legacyCleanup[sid] = next.legacyCleanup[sid].filter((value) => value !== identifier);
+          if (!next.legacyCleanup[sid].length) delete next.legacyCleanup[sid];
+        });
+        removed += 1;
+      }
+    }
+    // A crashed old operation might have left an orphaned v3 notification
+    // not referenced by SecureStore. Its app-specific owner tag authorizes
+    // cleanup; never sweep notifications without that tag.
+    for (const request of await deps.driver.list()) {
+      if (!isOwned(request)) continue;
+      const data = request.content.data;
+      if (!id(data?.scheduleId) || data?.target !== 'schedule'
+        || !offset(data?.offsetMinutes)) throw new ReminderStateError('UNKNOWN_ACCOUNT_REMINDER');
+      await cancelKnown(request.identifier, data.scheduleId);
+      removed += 1;
+    }
+    const remaining = await deps.driver.list();
+    const final = await read();
+    if (remaining.some(isOwned)
+      || Object.keys(final.intents).length
+      || Object.values(final.reminders).some((entries) => Object.keys(entries).length)
+      || Object.values(final.legacyCleanup).some((items) => items.length)) {
+      throw new ReminderStateError('ACCOUNT_EXIT_CLEANUP_PENDING');
+    }
+    return { removed };
+  }
   return Object.freeze({
+    clearForAccountExit: () => serial(clearForAccountExit),
     scheduleReminder: (input: ReminderInput, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, () => schedule(input, true))),
     hasPendingScheduleReminder: (sid: string) => serial(async () => {
       const state = await read();
