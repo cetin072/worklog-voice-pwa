@@ -59,10 +59,11 @@ const todayKey = () => seoulDateKeyFromIso(new Date().toISOString()) as string;
 const shortDate = (key: string) => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
 const dayLabel = (days: number) => (days === 0 ? '오늘' : days === 1 ? '내일' : `${days}일 뒤`);
 
-export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient }) {
+export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupabaseClient; ownerId:string }) {
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const mutation = useRef(false);
   const receiptsRef=useRef<PaymentReceipt[]>([]);
+  const snapshotReady=useRef(false);
   const createId = useRef<string | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,16 +84,18 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
   }, []);
 
   const syncReminders = useCallback((next: Subscription[], paid=receiptsRef.current) => {
-    void syncSubscriptionReminders(next, todayKey(), Date.now(), paid, ()=>alive.current).then((r) => {
+    if(!snapshotReady.current)return;
+    void syncSubscriptionReminders(next, todayKey(), Date.now(), paid, ()=>alive.current, ownerId).then((r) => {
       if (alive.current && r.status === 'permission-needed') setPermission((p) => (p === 'granted' ? 'undetermined' : p));
     }).catch(() => undefined);
-  }, []);
+  }, [ownerId]);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const [next, paid] = await Promise.all([listSubscriptions(client), listPaymentReceipts(client)]);
       if (!alive.current) return;
+      snapshotReady.current=true;
       setSubs(next);
       receiptsRef.current=paid;
       setReceipts(paid);
@@ -113,7 +116,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
   const rows = useMemo(() => buildSubscriptionRows(subs, filter, today), [subs, filter, today]);
   const urgent = useMemo(() => urgentItems(visible, today), [visible, today]);
 
-  function applyChange(next: Subscription[]) { setSubs(next); syncReminders(next); }
+  function applyChange(next: Subscription[]) { setSubs(next); if(snapshotReady.current)syncReminders(next);else void load(); }
 
   function openFromQuickText() {
     const text = quickText.replace(/\s+/g, ' ').trim();

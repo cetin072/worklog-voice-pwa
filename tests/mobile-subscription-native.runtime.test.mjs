@@ -18,3 +18,9 @@ test('로그아웃과 늦은 권한 응답 경합 후 이전 계정 알림이 �
  assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
  assert.equal((await r.syncSubscriptionReminders([sub],'2026-11-09',now,[],()=>false)).status,'superseded');
 });
+
+test('구독 예약은 현재 계정을 기록하고 재시작 보존·다른 계정 전환 정리',async()=>{
+ n.seed([other]);await r.syncSubscriptionReminders([sub],'2026-11-09',now,[],()=>true,'A');
+ const count=(await n.getAllScheduledNotificationsAsync()).length;await r.reconcileSubscriptionReminderOwner('A',()=>true);assert.equal((await n.getAllScheduledNotificationsAsync()).length,count);
+ await r.reconcileSubscriptionReminderOwner('B',()=>true);assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
+});

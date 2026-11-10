@@ -81,14 +81,17 @@ function fail(error: { code?: string; message?: string } | null): never {
 }
 
 export async function listSubscriptions(client: PlatformSupabaseClient): Promise<Subscription[]> {
-  const { data, error } = await client
+  const { data, error, count } = await client
     .from(TABLE)
-    .select(COLUMNS)
+    .select(COLUMNS,{count:'exact'})
     .is('archived_at', null)
     .order('created_at', { ascending: true })
     .limit(LIST_LIMIT);
   if (error) fail(error);
-  return (Array.isArray(data) ? data : []).map(subscriptionFromRow).filter((s): s is Subscription => s !== null);
+  if(!Array.isArray(data)||count!==data.length)throw new Error('정기지출 전체 목록 확인이 필요합니다. 기존 알림은 유지했습니다.');
+  const rows=data.map(subscriptionFromRow);
+  if(rows.some(row=>row===null))throw new Error('정기지출 데이터 확인이 필요합니다. 기존 기록과 알림은 유지했습니다.');
+  return rows as Subscription[];
 }
 
 export async function createSubscription(client: PlatformSupabaseClient, input: SubscriptionInput, requestId?: string): Promise<Subscription> {
@@ -134,10 +137,17 @@ export async function archiveSubscription(client: PlatformSupabaseClient, id: st
 
 export type PaymentReceipt = { subscription_id: string; due_date: string; amount_krw: number; name: string; confirmed_at: string; variable_amount?: boolean };
 export async function listPaymentReceipts(client: PlatformSupabaseClient): Promise<PaymentReceipt[]> {
-  const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at,variable_amount').order('due_date', { ascending: false }).limit(500);
-  if (error) fail(error);
-  return (data || []) as PaymentReceipt[];
+  const rows:PaymentReceipt[]=[];
+  let total:number|null=null;
+  for(let from=0;;from+=500){
+    const {data,error,count}=await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at,variable_amount',{count:'exact'}).order('due_date',{ascending:false}).order('subscription_id',{ascending:true}).range(from,from+499);
+    if(error)fail(error);
+    if(!Array.isArray(data)||count===null||count>5000||(total!==null&&count!==total)||data.length!==Math.min(500,count-from))throw new Error('납부 이력 전체 확인이 필요합니다. 기록과 기존 알림은 유지했습니다.');
+    total=count;rows.push(...data as PaymentReceipt[]);
+    if(rows.length===count)return rows;
+  }
 }
+
 /** Stable (subscription, due-date) key. Lost responses are read back before retry is offered. */
 export async function confirmSubscriptionPayment(client: PlatformSupabaseClient, id: string, due: string): Promise<PaymentReceipt> {
   if (!isValidDateKey(due)) throw new Error('결제일을 확인해주세요.');

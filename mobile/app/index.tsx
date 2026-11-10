@@ -10,7 +10,7 @@ import { firstNonEmptyTaskBucket, homeOverview } from '@/src/features/home/home-
 import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
 import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
 import { SubscriptionsScreen } from '@/src/features/subscriptions/subscriptions-screen';
-import { cancelAllSubscriptionReminders } from '@/src/features/subscriptions/subscription-reminders';
+import { cancelAllSubscriptionReminders, reconcileSubscriptionReminderOwner } from '@/src/features/subscriptions/subscription-reminders';
 import { notificationResponseHandler } from '@/src/features/startup/notification-response-gate';
 import { StartupScreen } from '@/src/features/startup/startup-screen';
 import { initialBriefingState } from '@/src/features/startup/briefing-startup';
@@ -373,6 +373,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const session = platform.session;
   const client = platform.client;
   const config = platform.config;
+  useEffect(()=>{if(phase!=='ready')return;if (!session) { void cancelAllSubscriptionReminders().catch(() => undefined); return; }let current=true;void reconcileSubscriptionReminderOwner(session.user.id,()=>current).catch(()=>undefined);return()=>{current=false;};},[phase,session?.user.id]);
   const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
   const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
   const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => session?.access_token || 'android-touch-smoke-token' : getFreshAccessToken;
@@ -485,7 +486,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     reminderSyncEpoch.invalidate();
     briefingRefreshEpoch.current += 1;
     briefingRefreshQueue.current.reset();
-    if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); void cancelAllSubscriptionReminders().catch(() => undefined); return; }
+    if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); return; }
     if (androidTouchSmoke) void refreshBriefing();
     return () => { briefingRefreshEpoch.current += 1; briefingRefreshQueue.current.reset(); };
   }, [session?.access_token]);
@@ -1331,7 +1332,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
       </SettingsGroup>
     </View> : null}
-    {screen === 'subscriptions' ? <View style={styles.panel}><PanelHead eyebrow="내 관리" title="구독·정기결제" onClose={() => setScreen('settings')} />{client ? <SubscriptionsScreen client={client} /> : <Text style={styles.errorText}>로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
+    {screen === 'subscriptions' ? <View style={styles.panel}><PanelHead eyebrow="내 관리" title="구독·정기결제" onClose={() => setScreen('settings')} />{client ? <SubscriptionsScreen client={client} ownerId={session.user.id} /> : <Text style={styles.errorText}>로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
   </ScrollView>
