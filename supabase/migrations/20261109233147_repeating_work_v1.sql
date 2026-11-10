@@ -115,7 +115,17 @@ begin
   end if;
   select * into current_row from worklog.repeating_work where work_record_id=p_work_record_id for update;
   if op='create' then
-    if current_row.work_record_id is not null or p_expected_version is distinct from -1 then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+    if current_row.work_record_id is not null then
+      -- Canonical WorkRecord is the stable registration identity across app restarts.
+      if (current_row.state->'revisions'->0 - 'version' - 'from') = (p_command->'revision' - 'version' - 'from') then
+        result:=to_jsonb(current_row);
+        insert into worklog.repeating_work_requests(request_id,work_record_id,command,result)
+          values(p_request_id,p_work_record_id,p_command,jsonb_build_object('work_record_id',current_row.work_record_id,'version',current_row.version));
+        return result;
+      end if;
+      raise exception 'VERSION_CONFLICT' using errcode='40001';
+    end if;
+    if p_expected_version is distinct from -1 then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
     rev:=p_command->'revision';
     if not worklog.validate_repeat_revision(rev) then raise exception 'INVALID_REPEAT_RULE'; end if;
     rev:=rev || jsonb_build_object('version',1,'from',rev->'rule'->>'anchor');

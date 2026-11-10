@@ -16,6 +16,7 @@ test('반복 업무 실제 SQL: 원본 소유자·회차 검증·완료/Undo·�
   const rev={title:'청소',time:'',rule:{kind:'weekly',anchor:'2026-01-02',interval:1,weekdays:[5],unit:'day'}};
   const createId=request();let row=await call({op:'create',revision:rev},-1,createId);assert.equal(row.version,0);
   assert.deepEqual(await call({op:'create',revision:rev},-1,createId),row);
+  assert.deepEqual(await call({op:'create',revision:rev},-1),row,'앱 재시작의 새 요청도 같은 원본에 중복 규칙을 만들지 않음');
   const complete={op:'complete',key:'v1:2026-01-02',originalDate:'2026-01-02'};const id=request();row=await call(complete,0,id);assert.equal(row.version,1);assert.equal(row.state.occurrences[complete.key].status,'completed');
   for(let i=0;i<10;i++)assert.deepEqual(await call(complete,0,id),row);
   await assert.rejects(call({...complete,key:'v1:2026-01-03',originalDate:'2026-01-03'},1),/INVALID_OCCURRENCE/);
