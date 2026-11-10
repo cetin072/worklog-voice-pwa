@@ -39,24 +39,29 @@ dump_window() {
 }
 
 find_node_center() {
-  python3 - "$1" "$2" <<'PY'
+  python3 - "$1" "$2" "${3:-first}" <<'PYSELECT'
 import re
 import sys
 import xml.etree.ElementTree as ET
 
 root = ET.parse(sys.argv[1]).getroot()
 needle = sys.argv[2]
+candidates = []
 for node in root.iter("node"):
+    if node.attrib.get("enabled") == "false":
+        continue
     if node.attrib.get("text", "") != needle and node.attrib.get("content-desc", "") != needle:
         continue
     match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
     if not match:
         continue
     x1, y1, x2, y2 = map(int, match.groups())
-    print((x1 + x2) // 2, (y1 + y2) // 2)
-    raise SystemExit(0)
-raise SystemExit(1)
-PY
+    if x2 > x1 and y2 > y1:
+        candidates.append(((x1 + x2) // 2, (y1 + y2) // 2))
+if not candidates:
+    raise SystemExit(1)
+print(*candidates[-1] if sys.argv[3] == "last" else candidates[0])
+PYSELECT
 }
 
 find_quickstep_wait_center() {
@@ -247,7 +252,7 @@ adb shell input keyevent KEYCODE_BACK
 GALLERY_COORDS=""
 for attempt in 1 2 3 4 5; do
   dump_window /sdcard/worklog-gallery-home.xml /tmp/worklog-gallery-home.xml
-  GALLERY_COORDS="$(find_node_center /tmp/worklog-gallery-home.xml "사진 · 캡처 가져오기" || true)"
+  GALLERY_COORDS="$(find_node_center /tmp/worklog-gallery-home.xml "사진 · 캡처 가져오기" last || true)"
   if [[ -n "$GALLERY_COORDS" ]]; then break; fi
   adb shell input swipe 500 1500 500 500 300
 done

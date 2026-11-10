@@ -1,6 +1,7 @@
+import { validateRule, type RepeatRule } from '../recurring/recurrence-model';
 import type { SaveWorklogOptions } from '@/src/platform/worklog-api';
 
-export type ManualDraftValue = Readonly<{ transcript: string; dueDate: string; dueTime: string }>;
+export type ManualDraftValue = Readonly<{ transcript: string; dueDate: string; dueTime: string; repeatRule?: RepeatRule }>;
 export type ManualSaveCheckpoint = Readonly<{
   signature: string;
   transcript: string;
@@ -36,7 +37,8 @@ function normalizeDraft(value: unknown): ManualDraftValue {
     (row.dueTime && (!row.dueDate || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(row.dueTime)))) {
     throw Error('MANUAL_DRAFT_CORRUPT');
   }
-  return { transcript: row.transcript, dueDate: row.dueDate, dueTime: row.dueTime };
+  const repeatRule=row.repeatRule==null?null:validateRule(row.repeatRule as RepeatRule);
+  return { transcript: row.transcript, dueDate: row.dueDate, dueTime: row.dueTime, ...(repeatRule?{repeatRule}:{}) };
 }
 
 export function manualDraftSignature(draft: ManualDraftValue) {
