@@ -43,7 +43,13 @@ test('compact schedule and task buttons share words, wrapping and >=44 point tar
   const upper=ScheduleReminderLabel({schedule:{scheduleId:sid,title:'Synthetic'},onPress:()=>calls++});
   const schedule=upper.type(upper.props);
   assert.deepEqual(record.children,schedule.children);
-  assert.equal(record.props.style.minHeight,32);assert.ok(record.props.style.minHeight+record.props.hitSlop.top+record.props.hitSlop.bottom>=44);assert.equal(record.props.style.maxWidth,'100%');
+  const copy=JSON.stringify(record.children);
+  assert.match(copy,/알림/);
+  if(current==='알림 확인 필요')assert.match(copy,/알림 확인 필요/);
+  if(current.includes('알림 없음'))assert.match(copy,/알림 없음/);
+  if(current.includes('권한'))assert.match(copy,/권한 필요/);
+  if(current.startsWith('이 기기 예약:'))assert.match(copy,/30분 전/);
+  assert.ok(record.props.style.minHeight>=44);assert.ok(record.props.style.minHeight+record.props.hitSlop.top+record.props.hitSlop.bottom>=44);assert.equal(record.props.style.maxWidth,'100%');
   assert.equal(record.children[0].props.numberOfLines,undefined);
   assert.ok(record.props.accessibilityLabel.includes(current));record.props.onPress();
  }

@@ -30,6 +30,7 @@ export function homeHarness(context) {
   activeFilter: 'today', undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
   briefingBuckets: [{ key: 'today', label: '오늘', tone: 'warning' }, { key: 'overdue', label: '기한 지남', tone: 'danger' }, { key: 'upcoming', label: '다가오는 업무', tone: 'info' }, { key: 'undated', label: '기한 없는 업무', tone: 'neutral' }],
   refreshBriefing() {}, setScreen() {}, setReminderTarget() {}, setSelectedTask() {}, openTaskEditor() {}, confirmDeleteRecord() {}, completeTaskInline() {},
+  recurring:{works:[],error:'',busy:false,reload(){}}, repeatUndo:null, repeatRow:()=>undefined, openRepeat(){}, completeRepeat(){},
   config: null, quickVoiceNavigation: {current:false}, warnPendingVoice() {}, setPersonalCalendarOpen() {},
   ...context,
  };

@@ -21,6 +21,7 @@ function directSave(scope) {
 function ui(input, saver) {
   const state = { messages: [], cleared: 0, calls: 0 };
   const scope = {
+    repeatRule:null,
     session: { access_token: 'expired-token' }, client: {}, busy: false, manualInput: input,
     manualVault: null, manualDraftLoaded: true, setManualDraftNotice() {}, manualDraftEpoch: { current: 0 },
     getFreshAccessToken: async () => 'synthetic-token',
@@ -205,4 +206,14 @@ test('legacy Notion-only save receipt remains compatible when it contains a real
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('직접입력 반복 연결 실패는 입력과 이미 저장된 원본 요청을 유지하고 같은 WorkRecord에 재시도', async()=>{
+ const {newRepeatState}=await import('../mobile/src/features/recurring/recurrence-model.ts');
+ const draft={transcript:'청소',dueDate:'2026-11-13',dueTime:''};
+ const h=ui(draft,async()=>({dataCoreWorkRecordId:'11111111-1111-4111-8111-111111111111',dueStart:'2026-11-13'}));
+ h.scope.repeatRule={kind:'weekly',anchor:draft.dueDate,interval:1,weekdays:[5],unit:'day'};h.scope.newRepeatState=newRepeatState;
+ let attached=0;h.scope.recurring={mutate:async()=>++attached>1};h.scope.setRepeatRule=()=>{};
+ await assert.rejects(h.save(),/반복 저장 확인 필요/);assert.equal(h.state.cleared,0);assert.equal(h.state.calls,1);
+ await h.save();assert.equal(h.state.cleared,1);assert.equal(h.state.calls,1);assert.equal(attached,2);
 });

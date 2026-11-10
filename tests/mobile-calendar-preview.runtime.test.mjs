@@ -38,6 +38,12 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   const button=(render,label)=>all(render()).find(n=>n.type==='Pressable'&&(text(n).includes(label)||n.props.accessibilityLabel?.includes(label)));
   const flush=()=>new Promise(r=>setImmediate(r));
   assert.equal(render(),null);assert.equal(connects,0);
+  let settingsOpened=0;
+  const discoverable=component('mobile/src/features/calendar/calendar-export-preview.tsx','CalendarExportPreview',{recordId:record.id,title:record.title,onOpenSettings:()=>settingsOpened++});
+  assert.match(text(discoverable()),/Google 연결/);
+  button(discoverable,'연결 설정 열기').props.onPress();
+  assert.equal(settingsOpened,1);assert.equal(connects,0);assert.equal(posts,0);
+
   button(settings,'Google 캘린더 연결').props.onPress();assert.equal(service.status().connecting,true);
   // The old settings view can disappear while the browser is open.
   finish();await flush();assert.equal(connects,1);assert.match(text(settings()),/연결됨/);

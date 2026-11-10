@@ -1,3 +1,6 @@
+import { recordRowStyles } from '@/src/ui/record-row-styles';
+import { recurringCalendarEvents } from '../recurring/recurrence-calendar';
+import type { RepeatingWork } from '../recurring/recurrence-model';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,7 +10,8 @@ import type { BriefingSchedule } from '@/src/platform/worklog-api';
 import { calendarDays, calendarTime, eventsOnDay, seoulDate, shiftDay, shiftMonth } from './home-calendar-model';
 import { mobileTheme } from '@/src/ui/theme';
 
-export function HomeCalendar({ revision, today, fallback, onOpenCalendar, renderSchedule, focusId, focusDate, onTodayCount }: {
+export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, today, fallback, onOpenCalendar, renderSchedule, focusId, focusDate, onTodayCount }: {
+  repeatingWorks?: RepeatingWork[]; onOpenRepeating?(id:string): void;
   revision: number; today: string; fallback: BriefingSchedule[]; onOpenCalendar(day?: string): void; onTodayCount(count: number | null): void;
   renderSchedule(schedule: BriefingSchedule): ReactNode; focusId?: string | null; focusDate?: string;
 }) {
@@ -42,7 +46,9 @@ export function HomeCalendar({ revision, today, fallback, onOpenCalendar, render
   // A legacy briefing is only a known window, never evidence of an empty month.
   const legacy = fallback.map((s, i): PersonalCalendarEvent => ({ id: s.scheduleId || `legacy-${i}`, source: 'personal', title: s.title || '제목 없는 일정', starts_at: s.startsAt || `${s.dateKey}T00:00:00+09:00`, ends_at: null, all_day: !!s.allDay, location: s.location || null, description: '', status: s.status || 'confirmed', updated_at: '', editable: false }));
   const events = integrated && loaded ? result.events : legacy;
-  const rows = eventsOnDay(events, selected);
+  const sourceIds=new Set(repeatingWorks.flatMap(w=>w.state.revisions.flatMap(r=>r.sourceScheduleIds||[r.sourceScheduleId]).filter(Boolean)));
+  const projected=repeatingWorks.length?months.flatMap(m=>recurringCalendarEvents(repeatingWorks,m)):[];
+  const rows = eventsOnDay([...events.filter(e=>!sourceIds.has(e.id)),...projected], selected);
   const action = (label: string, onPress: () => void, disabled = false) => <Pressable accessibilityRole="button" style={styles.action} disabled={disabled} onPress={onPress}><Text style={styles.link}>{label}</Text></Pressable>;
   return <View style={styles.card}>
     <View style={styles.row}>
@@ -65,8 +71,8 @@ export function HomeCalendar({ revision, today, fallback, onOpenCalendar, render
     {!busy && !error && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
     {rows.map(event => {
       const known = fallback.find(s => s.scheduleId === event.id);
-      return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => setOpened(id => id === event.id ? null : event.id)}>
-        <Text style={styles.time}>{calendarTime(event, selected)}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.muted}>›</Text>
+      return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => event.id.startsWith('repeat:')?onOpenRepeating?.(event.id):setOpened(id => id === event.id ? null : event.id)}>
+        <Text style={styles.time}>{calendarTime(event, selected)}</Text><View style={styles.eventMain}><Text style={recordRowStyles.taskTitle}>{event.title}</Text>{selected !== today ? <Text style={recordRowStyles.taskMeta}>{seoulDate(event.starts_at).replaceAll('-', '. ')}</Text> : null}</View><Text style={styles.muted}>›</Text>
       </Pressable>{opened === event.id ? known ? renderSchedule(known) : <View style={styles.details}>{event.location ? <Text>{event.location}</Text> : null}{event.description ? <Text>{event.description}</Text> : null}{integrated ? action('내 캘린더에서 확인·수정', () => onOpenCalendar(selected)) : null}</View> : null}</View>;
     })}
     {focusId && !busy && !rows.some(row => row.id === focusId) ? <View style={styles.details}>{fallback.find(s => s.scheduleId === focusId) ? renderSchedule(fallback.find(s => s.scheduleId === focusId)!) : <Text style={styles.muted}>선택한 일정은 해당 날짜의 업무일지 또는 내 캘린더에서 확인해주세요.</Text>}</View> : null}
@@ -82,6 +88,6 @@ const styles = StyleSheet.create({
   day: { width: '14.285714%', minHeight: 48, alignItems: 'center', justifyContent: 'center' }, dayNumber: { textAlign: 'center', minWidth: 32, padding: 5, fontSize: 16, color: mobileTheme.colors.text, borderRadius: 20 },
   selected: { backgroundColor: mobileTheme.colors.link, color: '#ffffff', fontWeight: '800' }, today: { color: mobileTheme.colors.link, fontWeight: '800' }, dot: { fontSize: 12, lineHeight: 14, color: mobileTheme.colors.link },
   divider: { height: 1, backgroundColor: mobileTheme.colors.borderSubtle, marginVertical: 6 },
-  event: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }, time: { fontSize: 14, color: mobileTheme.colors.link, minWidth: 44 }, eventTitle: { flex: 1, fontSize: 16, color: mobileTheme.colors.text },
+  event: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }, time: { fontSize: 14, color: mobileTheme.colors.link, minWidth: 44 }, eventMain: { flex: 1, minWidth: 0, gap: 3 },
   muted: { fontSize: 13, color: mobileTheme.colors.textSecondary }, error: { fontSize: 13, color: mobileTheme.colors.danger }, details: { padding: 10, gap: 4, backgroundColor: mobileTheme.colors.neutralBackground },
 });
