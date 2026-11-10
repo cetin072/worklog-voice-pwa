@@ -28,3 +28,20 @@ test('내 관리 영역은 세 구분만 보이고 선택한 한 영역만 렌�
  const tabs=nativeNodes(tree).filter(n=>n.props?.accessibilityRole==='tab');assert.equal(tabs.length,3);tabs[2].props.onPress();
  tree=h.render(props);assert.match(nativeWords(tree),/습관 목록/);assert.doesNotMatch(nativeWords(tree),/지출 목록/);
 });
+
+test('습관 재조회가 늦게 도착해도 확인된 오늘 체크를 되돌리지 않음',async()=>{
+ let finishRead;
+ const h=nativeComponentHarness('mobile/src/features/habits/habits-screen.tsx','HabitsScreen',{
+  '@/src/ui/record-row-styles':rowStyles,'expo-crypto':{randomUUID:()=> 'request'},'@/src/ui/theme':theme,'../home/home-calendar-model':date,'./habit-model':model,
+  './habit-store':{loadHabits:()=>new Promise(resolve=>{finishRead=resolve}),mutateHabit:async()=>({habit_id:'h',day:today,checked:true,version:0})},
+ },[[habit],[],'',false,true]);
+ const props={client:{}};
+ try{
+  h.render(props);await h.effects();
+  nativeNodes(h.render(props)).find(n=>n.props?.accessibilityLabel==='독서 오늘 체크').props.onPress();
+  await new Promise(r=>setImmediate(r));assert.match(nativeWords(h.render(props)),/1\s*\/\s*3\s*회/);
+  finishRead({habits:[habit],checks:[]});await new Promise(r=>setImmediate(r));
+  assert.match(nativeWords(h.render(props)),/1\s*\/\s*3\s*회/);
+  assert.ok(nativeNodes(h.render(props)).some(n=>n.props?.accessibilityLabel==='독서 오늘 체크 취소'));
+ }finally{h.close();}
+});
