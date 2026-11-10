@@ -1,7 +1,7 @@
 -- LOCAL ONLY. No remote deployment or existing data conversion.
 create table worklog.habits (
   id uuid primary key,
-  user_id uuid not null default auth.uid() references auth.users(id),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null check(char_length(btrim(name)) between 1 and 60),
   frequency text not null check(frequency in ('daily','weekdays','weekly-target')),
   weekdays integer[] not null default '{}' check(weekdays <@ array[1,2,3,4,5,6,7]),
@@ -12,17 +12,17 @@ create table worklog.habits (
   check(frequency<>'weekdays' or cardinality(weekdays)>0)
 );
 create table worklog.habit_checks (
-  habit_id uuid not null references worklog.habits(id),
-  user_id uuid not null default auth.uid() references auth.users(id),
+  habit_id uuid not null references worklog.habits(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   day date not null,
   checked boolean not null,
   version integer not null default 0,
   primary key(habit_id,day)
 );
 create table worklog.habit_requests (
-  user_id uuid not null default auth.uid() references auth.users(id),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   request_id uuid not null,
-  habit_id uuid not null references worklog.habits(id),
+  habit_id uuid not null references worklog.habits(id) on delete cascade,
   command jsonb not null,
   result jsonb not null,
   primary key(user_id,request_id)
@@ -76,3 +76,7 @@ begin
 end $$;
 revoke all on function worklog.mutate_habit(uuid,uuid,integer,jsonb) from public,anon;
 grant execute on function worklog.mutate_habit(uuid,uuid,integer,jsonb) to authenticated;
+
+-- Support the existing owner-filtered list/week queries.
+create index habits_owner_name on worklog.habits(user_id,name);
+create index habit_checks_owner_day on worklog.habit_checks(user_id,day);

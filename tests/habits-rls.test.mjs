@@ -26,5 +26,7 @@ test('습관 실제 DB: 하루 한 건·확인/취소·동시 수정 충돌·과
   assert.equal((await db.query('select * from worklog.habits')).rows.length,0);assert.equal((await db.query('select * from worklog.habit_checks')).rows.length,0);
   await assert.rejects(call(check,1),/HABIT_NOT_DUE/);
   await db.exec('reset role;set role anon');await assert.rejects(db.query('select * from worklog.habits'),/permission denied/);
+  await db.exec('reset role');await db.query('delete from auth.users where id=$1',[A]);
+  assert.equal((await db.query('select * from worklog.habits')).rows.length,0);assert.equal((await db.query('select * from worklog.habit_checks')).rows.length,0);assert.equal((await db.query('select * from worklog.habit_requests')).rows.length,0);
  }finally{await db.close();}
 });

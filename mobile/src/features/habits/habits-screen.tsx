@@ -1,3 +1,4 @@
+import { recordRowStyles } from '@/src/ui/record-row-styles';
 import { useCallback,useEffect,useRef,useState } from 'react';
 import { Alert,AppState,Pressable,StyleSheet,Text,TextInput,View } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -51,4 +52,4 @@ export function HabitsScreen({client}:{client:PlatformSupabaseClient}) {
  </View>;
 }
 const c=mobileTheme.colors;
-const s=StyleSheet.create({root:{gap:12},card:{backgroundColor:c.surface,borderWidth:1,borderColor:c.border,borderRadius:mobileTheme.radius.card,padding:mobileTheme.spacing.card,gap:10},row:{flexDirection:'row',flexWrap:'wrap',gap:8},title:{fontSize:15,lineHeight:21,fontWeight:'700',color:c.text},meta:{fontSize:13,lineHeight:18,color:c.textSecondary},nameButton:{minHeight:48,justifyContent:'center',gap:4},button:{minHeight:48,paddingHorizontal:12,borderRadius:mobileTheme.radius.control,borderWidth:1,borderColor:c.border,justifyContent:'center'},buttonText:{fontSize:15,color:c.text},selected:{backgroundColor:c.todayBackground,borderColor:c.todayBorder},disabled:{opacity:0.5},input:{minHeight:48,paddingHorizontal:12,fontSize:16,color:c.text,borderWidth:1,borderColor:c.border,borderRadius:mobileTheme.radius.control},error:{fontSize:14,color:c.danger}});
+const s=StyleSheet.create({root:{gap:12},card:{backgroundColor:c.surface,borderWidth:1,borderColor:c.border,borderRadius:mobileTheme.radius.card,padding:mobileTheme.spacing.card,gap:10},row:{flexDirection:'row',flexWrap:'wrap',gap:8},title:recordRowStyles.taskTitle,meta:recordRowStyles.taskMeta,nameButton:{minHeight:48,justifyContent:'center',gap:4},button:{minHeight:48,paddingHorizontal:12,borderRadius:mobileTheme.radius.control,borderWidth:1,borderColor:c.border,justifyContent:'center'},buttonText:{fontSize:15,color:c.text},selected:{backgroundColor:c.todayBackground,borderColor:c.todayBorder},disabled:{opacity:0.5},input:{minHeight:48,paddingHorizontal:12,fontSize:16,color:c.text,borderWidth:1,borderColor:c.border,borderRadius:mobileTheme.radius.control},error:{fontSize:14,color:c.danger}});
