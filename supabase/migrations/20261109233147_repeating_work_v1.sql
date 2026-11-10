@@ -117,7 +117,7 @@ begin
   if op='create' then
     if current_row.work_record_id is not null then
       -- Canonical WorkRecord is the stable registration identity across app restarts.
-      if (current_row.state->'revisions'->0 - 'version' - 'from') = (p_command->'revision' - 'version' - 'from') then
+      if ((current_row.state->'revisions'->0) - 'version' - 'from') = ((p_command->'revision') - 'version' - 'from') then
         result:=to_jsonb(current_row);
         insert into worklog.repeating_work_requests(request_id,work_record_id,command,result)
           values(p_request_id,p_work_record_id,p_command,jsonb_build_object('work_record_id',current_row.work_record_id,'version',current_row.version));
