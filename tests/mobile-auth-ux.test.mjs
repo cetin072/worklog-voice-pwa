@@ -81,7 +81,7 @@ test('Signup guidance explains the mobile confirmation return path', () => {
 test('Android touch smoke restores its QA session through PlatformProvider instead of bypassing Home auth state', () => {
   assert.match(providerSource, /seedAndroidTouchSmokeSession/);
   assert.match(providerSource, /await nextClient\.auth\.getSession\(\)/);
-  assert.match(providerSource, /setSession\(data\.session\)/);
+  assert.match(providerSource, /await localGate\.transition\(data\.session\)/);
   assert.match(providerSource, /setPhase\('ready'\)/);
   assert.match(homeSource, /const phase = platform\.phase/);
   assert.match(homeSource, /const session = platform\.session/);

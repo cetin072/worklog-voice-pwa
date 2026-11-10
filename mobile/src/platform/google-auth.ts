@@ -41,7 +41,7 @@ export function isGoogleAuthCallbackUrl(url: string) {
   }
 }
 
-export async function beginGoogleOAuth(client: PlatformSupabaseClient) {
+export async function beginGoogleOAuth(client: PlatformSupabaseClient, beforeSessionChange?: () => Promise<void>) {
   const { data, error } = await client.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -55,7 +55,7 @@ export async function beginGoogleOAuth(client: PlatformSupabaseClient) {
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, GOOGLE_AUTH_REDIRECT_URL);
   if (result.type === 'success') {
-    await completeGoogleOAuthFromUrl(client, result.url);
+    await completeGoogleOAuthFromUrl(client, result.url, beforeSessionChange);
     return 'success' as const;
   }
 
@@ -63,7 +63,7 @@ export async function beginGoogleOAuth(client: PlatformSupabaseClient) {
   throw new Error('Google 로그인 브라우저를 시작하지 못했습니다.');
 }
 
-async function completeGoogleOAuthCallback(client: PlatformSupabaseClient, url: string) {
+async function completeGoogleOAuthCallback(client: PlatformSupabaseClient, url: string, beforeSessionChange?: () => Promise<void>) {
   const callback = parseGoogleAuthCallback(url);
   if (!callback) return false;
 
@@ -72,6 +72,9 @@ async function completeGoogleOAuthCallback(client: PlatformSupabaseClient, url: 
   }
 
   if (callback.accessToken && callback.refreshToken) {
+    // A deep link can arrive while another account is signed in. Do not
+    // replace the Supabase session until old app-owned OS alerts are cleared.
+    await beforeSessionChange?.();
     const { error } = await client.auth.setSession({
       access_token: callback.accessToken,
       refresh_token: callback.refreshToken,
@@ -81,6 +84,7 @@ async function completeGoogleOAuthCallback(client: PlatformSupabaseClient, url: 
   }
 
   if (callback.code) {
+    await beforeSessionChange?.();
     const { error } = await client.auth.exchangeCodeForSession(callback.code);
     if (error) throw error;
     return true;
@@ -89,10 +93,10 @@ async function completeGoogleOAuthCallback(client: PlatformSupabaseClient, url: 
   throw new Error('Google 로그인 결과에서 Supabase 세션을 확인하지 못했습니다.');
 }
 
-export function completeGoogleOAuthFromUrl(client: PlatformSupabaseClient, url: string) {
+export function completeGoogleOAuthFromUrl(client: PlatformSupabaseClient, url: string, beforeSessionChange?: () => Promise<void>) {
   if (callbackInFlight?.url === url) return callbackInFlight.completion;
 
-  const completion = completeGoogleOAuthCallback(client, url).finally(() => {
+  const completion = completeGoogleOAuthCallback(client, url, beforeSessionChange).finally(() => {
     if (callbackInFlight?.completion === completion) callbackInFlight = null;
   });
   callbackInFlight = { url, completion };

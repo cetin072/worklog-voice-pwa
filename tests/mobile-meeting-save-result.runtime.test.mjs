@@ -26,6 +26,7 @@ function harness({ audioResetFails = false, indexFails = false } = {}) {
   };
   const scope = {
     phase: 'recording',
+    stopping: { current: false }, recordingOwner: { current: 'account-a' },
     recorder: {
       uri: recorded.uri,
       async stop() { calls.push('stop'); },
@@ -76,4 +77,27 @@ test('failed index write is never falsely reported as a completed local recordin
   assert.equal(h.state.completed, null);
   assert.equal(h.state.libraryVersion, 5);
   assert.match(h.state.error, /index unavailable/);
+});
+
+test('actual start durably records verified owner before capture and rejects account switch during prepare',async()=>{
+ let startSource='';function find(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==='start')startSource=n.getText(ast);ts.forEachChild(n,find);}find(ast);
+ for(const switchDuringPrepare of [false,true]){
+  const calls=[];let active='account-a';const scope={phase:'idle',session:{user:{id:'account-a'}},pendingStart:{current:false},recordingOwner:{current:null},
+   requireMeetingOwner(id){if(active!==id)throw Error('changed');return active;},
+   AudioModule:{requestRecordingPermissionsAsync:async()=>({granted:true}),requestNotificationPermissionsAsync:async()=>({granted:true})},Platform:{OS:'android'},
+   recorder:{uri:'file:///new-recording.m4a',prepareToRecordAsync:async()=>{if(switchDuringPrepare)active='account-b';},record(){calls.push('capture');}},RECORDING_OPTIONS:{},
+   setAudioModeAsync:async()=>{},createMobileRecordingAudioInput:x=>x,rememberMeetingRecording(input,owner){assert.equal(owner,'account-a');assert.ok(input.uri);calls.push('durable-owner');},
+   setError(){},setStartedAt(){},setCompleted(){},setPhase(){},messageOf:e=>e.message};
+  const js=ts.transpileModule(startSource,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+  await new Function('scope','with(scope){'+js+';return start;}')(scope)();
+  assert.deepEqual(calls,switchDuringPrepare?[]:['durable-owner','capture']);assert.equal(scope.pendingStart.current,false);
+ }
+});
+
+test('actual provider value hides recording duration/completion/error from the next account',()=>{
+ let initializer='';function find(n){if(ts.isVariableDeclaration(n)&&n.name.getText(ast)==='value'&&n.initializer?.getText(ast).startsWith('useMemo'))initializer=n.initializer.getText(ast);ts.forEachChild(n,find);}find(ast);
+ const js=ts.transpileModule('const value='+initializer+';return value;',{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+ const scope={useMemo:fn=>fn(),visibleToCurrentOwner:false,phase:'recording',recorderState:{durationMillis:9000},startedAt:'private-time',completed:{uri:'private-audio'},recordingOwner:{current:'account-a'},session:{user:{id:'account-b'}},meetingOwner:()=> 'account-b',libraryVersion:1,error:'private error',start(){},pause(){},resume(){},stop(){},setError(){}};
+ const value=new Function('scope','with(scope){'+js+'}')(scope);
+ assert.equal(value.phase,'idle');assert.equal(value.active,false);assert.equal(value.durationMs,0);assert.equal(value.startedAt,null);assert.equal(value.completed,null);assert.equal(value.error,'');
 });

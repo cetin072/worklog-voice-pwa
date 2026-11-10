@@ -134,6 +134,10 @@ test('historical editor rejects rapid duplicate saves and stays locked until ref
   let release;
   const barrier = new Promise(resolve => { release = resolve; });
   const scope = {
+    reminderSessionEpoch: { capture: () => () => true },
+    synchronizeEditedWorklogReminder: async () => {},
+    reminderFailureMessage: () => '기기 예약 미확인',
+    setMessage() {},
     client: {}, editId: 'record-a', editBusy: false, editLoading: false, editReady: true,
     editWriteInFlight: { current: false },
     editTitle: '수정한 거래처 회신', editDate: '2030-01-05', editTime: '11:00',
@@ -167,6 +171,10 @@ test('historical editor unlocks after a failed server write and preserves the in
   let attempts = 0;
   const state = { errors: [], closed: [] };
   const scope = {
+    reminderSessionEpoch: { capture: () => () => true },
+    synchronizeEditedWorklogReminder: async () => {},
+    reminderFailureMessage: () => '기기 예약 미확인',
+    setMessage() {},
     client: {}, editId: 'record-a', editBusy: false, editLoading: false, editReady: true,
     editWriteInFlight: { current: false },
     editTitle: '입력 중인 새 제목', editDate: '', editTime: '',
@@ -186,4 +194,25 @@ test('historical editor unlocks after a failed server write and preserves the in
   await save();
   assert.equal(attempts, 2);
   assert.equal(scope.editWriteInFlight.current, false);
+});
+
+// Exercise the actual editor closure, including a committed server write followed
+// by failed device synchronization. It must not turn into a failed record save.
+test('historical editor reuses Home reminder bridge and reports device failure separately', async () => {
+  const seen = []; let message = ''; let updated = false;
+  const scope = {
+    client: {}, editId:'record-a', editBusy:false, editLoading:false, editReady:true,
+    editWriteInFlight:{current:false}, editTitle:'변경 제목', editDate:'2030-01-05', editTime:'11:00',
+    editActionConversionAllowed:false,
+    reminderSessionEpoch:{capture:()=>()=>true}, getFreshAccessToken:async()=> 'synthetic',
+    updateWorklogDetails:async()=>{updated=true; return {schedule:{id:'schedule-a',status:'confirmed'},mode:'data_core'};},
+    synchronizeEditedWorklogReminder:async(client,input,guard)=>{ assert.equal(updated,true); assert.equal(guard(),true); seen.push(input); throw Error('cancel failed'); },
+    reminderFailureMessage:()=> '기기 예약 미확인',
+    setEditBusy(){},setEditReady(){},setEditStatus(){},setEditStatusTone(){},setEditId(){},setItems(){},
+    setMessage(v){message=v;},search:async()=>{},
+  };
+  await compile(['saveEditor'],scope).saveEditor();
+  assert.equal(seen[0].recordId,'record-a'); assert.equal(seen[0].schedule.id,'schedule-a');
+  assert.match(message,/기록은 수정됐지만 알림은 미확인/);
+  assert.equal(scope.editWriteInFlight.current,false);
 });

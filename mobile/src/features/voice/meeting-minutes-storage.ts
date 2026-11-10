@@ -1,3 +1,4 @@
+import { assertMeetingRecordingOwned } from './meeting-recordings';
 import { File, Paths } from 'expo-file-system';
 
 import {
@@ -8,6 +9,7 @@ import {
 } from './meeting-minutes-document';
 
 function meetingMinutesFile(recordingId: string) {
+  assertMeetingRecordingOwned(recordingId);
   return new File(Paths.document, `meeting-minutes-${assertMeetingRecordingId(recordingId)}.json`);
 }
 

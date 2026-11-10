@@ -45,7 +45,7 @@ export type MobileBriefing = {
   queryLimit?: number;
   filteredTaskCount?: number;
   counts?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated' | 'total', number>>;
-  structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>>;
+  structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>> & { waitingCount?: number; followUpCount?: number; totalOpen?: number };
   resurface?: BriefingTask[];
   notes?: BriefingNote[];
   schedules?: { today?: BriefingSchedule[]; upcoming?: BriefingSchedule[]; total?: number };
@@ -408,6 +408,7 @@ export async function deleteWorklog(client: PlatformSupabaseClient, pageId: stri
   const normalizedId = pageId.trim();
   if (!normalizedId) throw new Error('삭제할 업무 식별자가 없습니다.');
   const { data, error } = await client.rpc('cancel_my_work_record', { p_record_id: normalizedId });
+  if(error&&/REPEATING_WORK_USE_OCCURRENCE/.test(error.message))throw new Error('반복 업무입니다. 새로고침한 뒤 해당 회차에서 처리해주세요.');
   if (error) throw new Error(error.message || '업무를 삭제하지 못했습니다.');
   const rows = Array.isArray(data) ? data : data ? [data] : [];
   const row = rows[0] as Record<string, unknown> | undefined;

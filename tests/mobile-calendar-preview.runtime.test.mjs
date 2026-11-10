@@ -49,6 +49,9 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   finish();await flush();assert.equal(connects,1);assert.match(text(settings()),/연결됨/);
   const remountedSettings=component('mobile/src/features/settings/calendar-settings.tsx','CalendarSettings');
   assert.match(text(remountedSettings()),/qa@example.invalid/);assert.equal(posts,0);
+  const compact=component('mobile/src/features/calendar/calendar-export-preview.tsx','CalendarExportPreview',{recordId:record.id,title:record.title,compact:true});
+  assert.equal(text(button(compact,'Google 캘린더에 보내기')),'','compact entry is an accessible Google icon');
+  assert.equal(posts,0,'connecting and mounting compact entry never export automatically');
   button(render,'Google 캘린더에 보내기').props.onPress();await flush();
   assert.equal(button(render,'확인한 일정').props.disabled,false);assert.match(text(render()),/기본 30분/);assert.equal(posts,0);
   button(render,'시간 변경').props.onPress();

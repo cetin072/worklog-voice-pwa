@@ -8,8 +8,8 @@ import { calendarEndIssue, calendarExportEnd, type CalendarSource } from './cale
 import { readCalendarEntry } from './calendar-record-source';
 
 /** Optional Calendar output. Opening or connecting never writes an event. */
-export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, title, onOpenSettings }: {
-  scheduleId?: string; recordId?: string; title: string; startsAt?: string; allDay?: boolean; dateKey?: string; onOpenSettings?: () => void;
+export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, title, onOpenSettings, compact = false }: {
+  compact?: boolean; scheduleId?: string; recordId?: string; title: string; startsAt?: string; allDay?: boolean; dateKey?: string; onOpenSettings?: () => void;
 }) {
   const scheduleId = directScheduleId;
   const target = { recordId, scheduleId };
@@ -70,8 +70,8 @@ export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, 
     <Image accessible={false} source={require('../../../assets/google-g.png')} style={styles.googleIcon} /><Text style={styles.shortcutText}>{info?.expired ? 'Google 다시 연결' : 'Google 연결'}</Text>
   </Pressable> : null;
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title} Google 캘린더에 보내기`} onPress={() => void open()} hitSlop={{ top: 6, bottom: 6, left: 3, right: 3 }} style={styles.shortcut}>
-      <Image accessible={false} source={require('../../../assets/google-g.png')} style={styles.googleIcon} /><Text style={styles.shortcutText}>Google에 추가</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title} Google 캘린더에 보내기`} onPress={() => void open()} hitSlop={{ top: 6, bottom: 6, left: 3, right: 3 }} style={[styles.shortcut, compact ? styles.compact : null]}>
+      <Image accessible={false} source={require('../../../assets/google-g.png')} style={styles.googleIcon} />{compact ? null : <Text style={styles.shortcutText}>Google에 추가</Text>}
     </Pressable>
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
       <View style={styles.overlay}><View style={styles.card}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -104,6 +104,7 @@ export function CalendarExportPreview({ scheduleId: directScheduleId, recordId, 
 const styles = StyleSheet.create({
   button: { minHeight: 48, justifyContent: 'center', paddingVertical: 10 }, link: { color: '#1d4ed8', fontSize: 15 },
   shortcut: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, paddingHorizontal: 8, maxWidth: '100%', borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc', borderRadius: 12 },
+  compact: { width: 44, paddingHorizontal: 0, justifyContent: 'center' },
   googleIcon: { width: 14, height: 14 }, shortcutText: { fontSize: 12, flexShrink: 1, fontWeight: '600', color: '#334155' },
   durationRow: { flexDirection: 'row', gap: 10 }, duration: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10 },
   validation: { color: '#b45309', fontSize: 15, lineHeight: 23 }, hint: { color: '#64748b', fontSize: 13, lineHeight: 21 },

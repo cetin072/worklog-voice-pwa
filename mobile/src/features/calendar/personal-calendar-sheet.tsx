@@ -1,3 +1,6 @@
+import {recordRowStyles} from '@/src/ui/record-row-styles';
+import { recurringCalendarEvents } from '../recurring/recurrence-calendar';
+import type { RepeatingWork } from '../recurring/recurrence-model';
 import {useEffect,useRef,useState} from 'react';
 import {ActivityIndicator,AppState,Alert,KeyboardAvoidingView,Modal,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -11,7 +14,7 @@ const timeKey=(v: string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul
 const shift=(v: string,n: number)=>new Date(Date.parse(v+'T00:00:00Z')+n*86400000).toISOString().slice(0,10);
 type Draft={id: string;requestId: string;revision: string|null;title: string;date: string;time: string;endDate: string;endTime: string;location: string;description: string};
 type Picker='date'|'time'|'endDate'|'endTime';
-export function PersonalCalendarSheet({onClose,onSaved,initialDate}: {onClose(): void;onSaved(): void;initialDate?: string}) {
+export function PersonalCalendarSheet({onClose,onSaved,initialDate,repeatingWorks=[],onOpenRepeating}: {repeatingWorks?: RepeatingWork[];onOpenRepeating?(id:string,date?:string):void;onClose(): void;onSaved(): void;initialDate?: string}) {
  const {client,config,session}=usePlatform(),insets=useSafeAreaInsets();
  const live=useRef(true),sequence=useRef(0),flight=useRef(false),owner=session?.user.id;
  const [month,setMonth]=useState(()=>(initialDate||dateKey(new Date().toISOString())).slice(0,7));
@@ -59,7 +62,8 @@ export function PersonalCalendarSheet({onClose,onSaved,initialDate}: {onClose():
  const field=(key: 'title'|'location'|'description',label: string,maxLength: number)=>draft?<View><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={draft[key]} onChangeText={text=>patch({[key]:text})} maxLength={maxLength} editable={!busy} multiline={key==='description'} style={styles.input}/></View>:null;
  const dateControl=(key: Picker,label: string)=>draft?<View><Text style={styles.label}>{label}</Text>{action(draft[key]||'선택',()=>setPicker(key))}</View>:null;
  let pickerValue=new Date();if(draft){const [y,m,d]=(picker==='endDate'?draft.endDate||draft.date:draft.date).split('-').map(Number);const [h,min]=(picker==='endTime'?draft.endTime||'09:00':draft.time||'09:00').split(':').map(Number);pickerValue=new Date(y,m-1,d,h,min);}
- const events=personalEventsForMonth(data,month);
+ const sourceIds=new Set(repeatingWorks.flatMap(w=>w.state.revisions.flatMap(r=>r.sourceScheduleIds||[r.sourceScheduleId]).filter(Boolean)));
+ const events=[...personalEventsForMonth(data,month).filter(e=>!sourceIds.has(e.id)),...(repeatingWorks.length?recurringCalendarEvents(repeatingWorks,month):[])].sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
  return <Modal visible animationType="slide" onRequestClose={close}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={[styles.root,{paddingTop:insets.top+12,paddingBottom:insets.bottom+12}]}>
   <View style={styles.row}><Text style={styles.heading}>{draft?'내 일정 '+(draft.revision?'수정':'등록'):'내 캘린더'}</Text>{action(draft?'뒤로':'닫기',close)}</View>
   <Text style={styles.help}>ERP와 같은 개인 일정입니다. 업무·성과 기록을 만들지 않습니다.</Text>
@@ -75,9 +79,9 @@ export function PersonalCalendarSheet({onClose,onSaved,initialDate}: {onClose():
     <View style={styles.row}>{action('이전 달',()=>setMonth(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7))-2,1)).toISOString().slice(0,7)),busy||month==='2000-01')}<Text>{month}</Text>{action('다음 달',()=>setMonth(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,7)),busy||month==='2099-12')}</View>
     <View style={styles.row}>{action('일정 등록',()=>edit())}{action('새로고침',()=>void load())}</View>
     {data?.limited?<Text style={styles.error}>일부 일정만 표시 중입니다.</Text>:null}{!busy&&!events.length?<Text>이번 달에 등록한 개인 일정이 없습니다.</Text>:null}
-    {events.map(event=><View key={event.id} style={styles.event}><Text style={styles.label}>{event.title}</Text><Text>{dateKey(event.starts_at)} · {event.all_day?'종일':timeKey(event.starts_at)}</Text>{event.location?<Text>{event.location}</Text>:null}{event.editable?<View style={styles.row}>{action('수정',()=>edit(event))}{action('삭제',()=>remove(event))}</View>:<Text style={styles.help}>연결된 업무에서 수정할 수 있습니다.</Text>}</View>)}
+    {events.map(event=><View key={event.id} style={styles.event}><Text style={recordRowStyles.taskTitle}>{event.title}</Text><Text style={recordRowStyles.taskMeta}>{dateKey(event.starts_at)} · {event.all_day?'종일':timeKey(event.starts_at)}</Text>{event.location?<Text style={recordRowStyles.taskMeta}>{event.location}</Text>:null}{event.editable?<View style={styles.eventActions}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 수정`} disabled={busy} style={recordRowStyles.inlineEdit} onPress={()=>edit(event)}><Text style={recordRowStyles.inlineEditText}>✏️</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 삭제`} disabled={busy} style={recordRowStyles.inlineDelete} onPress={()=>remove(event)}><Text style={recordRowStyles.inlineDeleteText}>삭제</Text></Pressable></View>:event.id.startsWith('repeat:')?action('반복 업무 상세',()=>onOpenRepeating?.(event.id,dateKey(event.starts_at))):<Text style={styles.help}>연결된 업무에서 수정할 수 있습니다.</Text>}</View>)}
    </>}
   </ScrollView>
  </KeyboardAvoidingView></Modal>;
 }
-const styles=StyleSheet.create({root:{flex:1,paddingHorizontal:20,backgroundColor:mobileTheme.colors.surface},content:{gap:14,paddingBottom:24},row:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8},heading:{fontSize:22,fontWeight:'700',flexShrink:1},label:{fontSize:16,fontWeight:'600',marginBottom:6},help:{color:mobileTheme.colors.textSecondary,marginVertical:10},error:{color:mobileTheme.colors.danger,marginVertical:10},input:{borderWidth:1,borderColor:mobileTheme.colors.border,borderRadius:12,padding:12,minHeight:48},button:{minHeight:46,paddingHorizontal:12,justifyContent:'center',borderWidth:1,borderColor:mobileTheme.colors.border,borderRadius:12},link:{color:mobileTheme.colors.link,fontWeight:'600'},disabled:{opacity:0.45},event:{paddingVertical:12,borderBottomWidth:1,borderColor:mobileTheme.colors.borderSubtle,gap:6}});
+const styles=StyleSheet.create({eventActions:{flexDirection:'row',gap:6,alignSelf:'flex-end'},root:{flex:1,paddingHorizontal:20,backgroundColor:mobileTheme.colors.surface},content:{gap:14,paddingBottom:24},row:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8},heading:{fontSize:22,fontWeight:'700',flexShrink:1},label:{fontSize:16,fontWeight:'600',marginBottom:6},help:{color:mobileTheme.colors.textSecondary,marginVertical:10},error:{color:mobileTheme.colors.danger,marginVertical:10},input:{borderWidth:1,borderColor:mobileTheme.colors.border,borderRadius:12,padding:12,minHeight:48},button:{minHeight:46,paddingHorizontal:12,justifyContent:'center',borderWidth:1,borderColor:mobileTheme.colors.border,borderRadius:12},link:{color:mobileTheme.colors.link,fontWeight:'600'},disabled:{opacity:0.45},event:{paddingVertical:12,borderBottomWidth:1,borderColor:mobileTheme.colors.borderSubtle,gap:6}});

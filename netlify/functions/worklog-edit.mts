@@ -105,6 +105,7 @@ async function updateNotionWorklog(token:string,pageId:string,title:string,dueSt
 }
 
 function dataCoreErrorResponse(error:any){
+  if(/REPEATING_WORK_USE_OCCURRENCE/.test(String(error?.message||'')))return json(409,{error:'반복 업무입니다. 새로고침한 뒤 해당 회차에서 처리해주세요.'});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_AUTH_REQUIRED") return json(401,{error:"로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요."});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_WORKSPACE_MISSING") return json(404,{error:"개인 업무공간을 찾지 못했습니다."});
   if(error?.code==="WORKLOG_DATA_CORE_EDIT_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_TITLE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_DUE_INVALID" || error?.code==="WORKLOG_DATA_CORE_EDIT_ACTION_KIND_INVALID") return json(400,{error:error.message});

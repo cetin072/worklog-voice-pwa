@@ -92,7 +92,7 @@ const service = createScheduleReminderService({
     permission: async (request) => (await (request ? requestScheduleNotificationPermission() : Notifications.getPermissionsAsync())).granted,
   },
 });
-export const { scheduleReminder, hasPendingScheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, getScheduleReminderStatus, cancelScheduleReminder,
+export const { clearForAccountExit, scheduleReminder, hasPendingScheduleReminder, listScheduleReminders, listTrackedReminderScheduleIds, getScheduleReminderStatus, cancelScheduleReminder,
   cancelAllScheduleReminders, synchronizeScheduleReminders, reconcileScheduleReminders } = service;
 
 /** Read-only native evidence for the home screen. No permission prompt or registration. */

@@ -31,7 +31,7 @@ test('visible reminder actions are available directly on every home record type'
   assert.match(home, /function TaskRow\(\{ bucket, task, onOpen, onReminder/);
   assert.match(home, /function NoteRow\(\{ note, onEdit, onDelete, onAcknowledge, onReminder/);
   assert.match(home, /function ScheduleRows\(\{ schedules, empty, onReminder/);
-  assert.match(home, /onReminder=\{\(\) => setReminderTarget\(\{ recordId: task\.pageId/);
+  assert.match(home, /onReminder=\{\(\) => repeatRow\(task\)\?openRepeat\(task\):setReminderTarget\(\{ recordId: task\.pageId/);
   assert.match(home, /CompactReminderLabel/);
 });
 test('editing a record tries a guarded automatic reminder but keeps save and notification outcomes separate', () => {
