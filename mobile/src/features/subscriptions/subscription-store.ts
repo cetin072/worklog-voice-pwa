@@ -103,7 +103,8 @@ export async function createSubscription(client: PlatformSupabaseClient, input: 
   // Keep the same identifier until confirmed, including after a lost successful response.
   const { data, error } = await client.from(TABLE).select(COLUMNS).eq('id', requestId!).maybeSingle();
   const confirmed = !error ? subscriptionFromRow(data) : null;
-  if (confirmed) return confirmed;
+  if (confirmed && Object.entries(inputToRow(input,{withSource:true})).every(([key,value]) => data[key] === value)) return confirmed;
+  if (confirmed) throw new Error('이 요청은 이전 내용으로 저장됐습니다. 목록에서 확인한 뒤 수정해주세요.');
   throw new Error('저장 확인 필요 · 입력을 유지했습니다. 같은 내용으로 다시 시도해주세요.');
 }
 

@@ -5,7 +5,7 @@ const opened = [];
 afterEach(async () => { for (const db of opened.splice(0)) await db.close(); });
 import { PGlite } from '@electric-sql/pglite';
 
-const migration = fs.readFileSync('supabase/migrations/20261109120000_subscriptions_v1.sql', 'utf8');
+const migration = fs.readFileSync('supabase/migrations/20261109125845_subscriptions_v1.sql', 'utf8');
 const USER_A = '11111111-1111-4111-8111-111111111111';
 const USER_B = '22222222-2222-4222-8222-222222222222';
 
