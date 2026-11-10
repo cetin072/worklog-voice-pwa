@@ -24,10 +24,10 @@ for spec in '320 1.0' '390 1.0' '320 1.4'; do
   for attempt in $(seq 1 12); do
     adb shell uiautomator dump /sdcard/home-capture.xml >/dev/null
     adb pull /sdcard/home-capture.xml "$output/$name-top.xml" >/dev/null
-    if grep -q '오늘 한눈에' "$output/$name-top.xml"; then break; fi
+    if grep -q '이번 주' "$output/$name-top.xml"; then break; fi
     sleep 1
   done
-  grep -q '오늘 한눈에' "$output/$name-top.xml"
+  grep -q '이번 주' "$output/$name-top.xml"
   grep -q '음성 기록 시작' "$output/$name-top.xml"
   adb exec-out screencap -p > "$output/$name-top.png"
   for page in 1 2 3; do

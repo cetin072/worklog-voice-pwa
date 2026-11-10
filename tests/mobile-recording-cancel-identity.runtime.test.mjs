@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import test from 'node:test';
+const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
+const ast=ts.createSourceFile('voice.tsx',readFileSync('mobile/src/features/voice/voice-recorder-card.tsx','utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+let expression;
+function walk(n){if(ts.isConditionalExpression(n)&&n.condition.getText(ast)==='isRecording'&&n.whenTrue.getText(ast).includes('accessibilityLabel="녹음 취소"'))expression=n.getText(ast);ts.forEachChild(n,walk);}walk(ast);
+assert.ok(expression);
+const js=ts.transpileModule('function render(){return ('+expression+');}',{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
+test('recording Cancel gets a fresh enabled native control instead of reusing the disabled preparing shortcut',()=>{
+ let cancellations=0,opens=0;
+ const scope={React:{createElement:(type,props,...children)=>({type,props,children})},Pressable:'Pressable',Text:'Text',styles:{},isRecording:false,quickActive:true,onOpenWorklogInput:()=>opens++,cancelQuickVoice:()=>cancellations++};
+ const render=new Function('scope','with(scope){'+js+';return render;}')(scope);
+ const preparing=render();assert.equal(preparing.props.disabled,true);
+ scope.isRecording=true;
+ const recording=render();assert.equal(recording.props.disabled,false);
+ assert.notEqual(recording.props.key,preparing.props.key,'the disabled native view must not retain its identity');
+ assert.equal(recording.props.accessibilityLabel,'녹음 취소');
+ recording.props.onPress();assert.equal(cancellations,1);assert.equal(opens,0);
+});

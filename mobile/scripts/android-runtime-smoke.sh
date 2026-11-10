@@ -220,13 +220,22 @@ fi
 # The CI-only timer freeze keeps this rendered state idle. Require the actual
 # mic accessibility node to change; a click/console event alone is insufficient.
 dump_window /sdcard/worklog-mic-after.xml /tmp/worklog-mic-after.xml
+if [[ "${CI:-}" == "true" && -n "${RUNNER_TEMP:-}" ]]; then
+  mkdir -p "$RUNNER_TEMP/launcher-evidence"
+  cp /tmp/worklog-mic-after.xml "$RUNNER_TEMP/launcher-evidence/recording-controls.xml"
+  adb exec-out screencap -p > "$RUNNER_TEMP/launcher-evidence/recording-controls.png"
+fi
 if ! grep -Eq '음성 기록 종료 후 바로 저장|녹음 중' /tmp/worklog-mic-after.xml; then
   echo "HomeScreenApp Quick Voice recording UI did not render after Android tap."
   cat /tmp/worklog-mic-after.xml
   exit 1
 fi
 
-CANCEL_COORDS="$(find_node_center /tmp/worklog-mic-after.xml "녹음 취소")"
+if ! CANCEL_COORDS="$(find_node_center /tmp/worklog-mic-after.xml "녹음 취소")"; then
+  echo "Recording cancel control is absent, disabled or has no touch bounds."
+  cat /tmp/worklog-mic-after.xml
+  exit 1
+fi
 read -r CANCEL_X CANCEL_Y <<<"$CANCEL_COORDS"
 adb shell input tap "$CANCEL_X" "$CANCEL_Y"
 sleep 1
