@@ -103,7 +103,7 @@ export async function createSubscription(client: PlatformSupabaseClient, input: 
   // Keep the same identifier until confirmed, including after a lost successful response.
   const { data, error } = await client.from(TABLE).select(COLUMNS).eq('id', requestId!).maybeSingle();
   const confirmed = !error ? subscriptionFromRow(data) : null;
-  if (confirmed && Object.entries(inputToRow(input,{withSource:true})).every(([key,value]) => data[key] === value)) return confirmed;
+  if (confirmed && data && Object.entries(inputToRow(input,{withSource:true})).every(([key,value]) => (data as Row)[key] === value)) return confirmed;
   if (confirmed) throw new Error('이 요청은 이전 내용으로 저장됐습니다. 목록에서 확인한 뒤 수정해주세요.');
   throw new Error('저장 확인 필요 · 입력을 유지했습니다. 같은 내용으로 다시 시도해주세요.');
 }
@@ -132,9 +132,9 @@ export async function archiveSubscription(client: PlatformSupabaseClient, id: st
   await updateOwned(client, id, { archived_at: now.toISOString() });
 }
 
-export type PaymentReceipt = { subscription_id: string; due_date: string; amount_krw: number; name: string; confirmed_at: string };
+export type PaymentReceipt = { subscription_id: string; due_date: string; amount_krw: number; name: string; confirmed_at: string; variable_amount?: boolean };
 export async function listPaymentReceipts(client: PlatformSupabaseClient): Promise<PaymentReceipt[]> {
-  const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at').order('due_date', { ascending: false }).limit(500);
+  const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at,variable_amount').order('due_date', { ascending: false }).limit(500);
   if (error) fail(error);
   return (data || []) as PaymentReceipt[];
 }
@@ -142,7 +142,7 @@ export async function listPaymentReceipts(client: PlatformSupabaseClient): Promi
 export async function confirmSubscriptionPayment(client: PlatformSupabaseClient, id: string, due: string): Promise<PaymentReceipt> {
   if (!isValidDateKey(due)) throw new Error('결제일을 확인해주세요.');
   const read = async () => {
-    const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at').eq('subscription_id', id).eq('due_date', due).maybeSingle();
+    const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at,variable_amount').eq('subscription_id', id).eq('due_date', due).maybeSingle();
     return !error && data ? data as PaymentReceipt : null;
   };
   try {

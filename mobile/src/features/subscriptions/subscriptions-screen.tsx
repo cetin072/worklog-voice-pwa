@@ -275,7 +275,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
 
     {rows.map((row) => <Row paid={receipts.some(r => r.subscription_id === row.subscription.id && r.due_date === paymentConfirmationDate(row.subscription, today))} due={paymentConfirmationDate(row.subscription, today)} onPaid={() => void confirmPaid(row.subscription)} key={row.subscription.id} row={row} busy={busyId === row.subscription.id} onUsed={() => void markUsed(row.subscription.id)} onEdit={() => setEditing({ kind: 'edit', id: row.subscription.id })} />)}
 
-    {receipts.length ? <View style={styles.urgentBox}><Text style={styles.urgentTitle}>납부 이력</Text>{receipts.slice(0, 20).map(r => <Text key={`${r.subscription_id}:${r.due_date}`} style={styles.rowMeta}>{r.due_date} · {r.name} · {formatWon(r.amount_krw)} · 확인됨</Text>)}</View> : null}
+    {receipts.length ? <View style={styles.urgentBox}><Text style={styles.urgentTitle}>납부 이력</Text>{receipts.slice(0, 20).map(r => <Text key={`${r.subscription_id}:${r.due_date}`} style={styles.rowMeta}>{r.due_date} · {r.name} · {formatWon(r.amount_krw)}{r.variable_amount ? ' (예상액 기준)' : ''} · 확인됨</Text>)}</View> : null}
     <Pressable accessibilityRole="button" accessibilityLabel="구독 추가" style={styles.addButton} onPress={openCompose}>
       <Text style={styles.addText}>+ 구독 추가</Text>
     </Pressable>
