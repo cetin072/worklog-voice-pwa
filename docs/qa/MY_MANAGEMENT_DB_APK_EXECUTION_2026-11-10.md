@@ -40,4 +40,17 @@ migration 도구가 실제 적용 시각을 이력 version으로 부여해 파�
 
 빌드 완료 뒤 qa-build-info의 sourceSha/API 주소·manifest package/versionCode·인증서·APK SHA-256을 기록한다. 이전 제공 APK의 인증서와 비교하며 앱 삭제/데이터 초기화를 요구하지 않는다. 설치본 자체에 대한 검수는 연결된 실제 기기가 없어 미실행이다.
 
-이 기록 작성 시점에 APK dispatch/다운로드 검증 결과는 아직 추가 전이다. 이후 결과는 PR에 기록한다. 기존 1,308 자동검사와 TypeScript/Metro 근거는 유지하며, 파일명 참조 변경은 격리 SQL을 재검증했다. APK 빌드 성공과 Android 실제 사용 성공은 구분한다.
+기존 1,308 자동검사와 TypeScript/Metro 근거는 유지하며, 파일명 참조 변경은 격리 SQL을 재검증했다. APK 빌드 성공과 Android 실제 사용 성공은 구분한다.
+
+## APK 제작·파일 검증 결과
+
+- [수동 빌드 #844](https://github.com/cetin072/worklog-voice-pwa/actions/runs/42773585201), 소스 `343768865c1c879f4c64030b457b3da94ec501e8`. changes/typecheck/android-standalone 성공. 이 기록 시점의 physical-qa 및 runtime-smoke는 진행 중이며 성공으로 표시하지 않는다.
+- artifact `worklog-mobile-auth-ux-arm64-apk`, ID `13742818818`. ZIP SHA-256 `7e1dbcad8bf955b8a3f204e43707bdd4e1ed72f1244596271fe363e1a1ee230c`가 GitHub artifact digest와 일치했다.
+- 파일 `worklog_QA_my_management_3437688_arm64.apk`, 65,946,450 bytes. APK SHA-256 `84f1ee66fb2890275f2135e051075ed684014006d95f9cc23656e832135dc230`.
+- manifest: `com.cetin072.worklog.qa`, version `0.1.0`, code `12`, minSdk 24, targetSdk 36. native ABI는 arm64-v8a 하나다.
+- 공식 Android build-tools 35.0.0을 공식 metadata의 크기/체크섬과 대조한 후 apksigner/aapt로 검사했다. APK v2 서명 검증 PASS. 인증서 SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- 이전 제공 `worklog_QA_subscriptions_534_9405a6cc_arm64.apk`의 실제 인증서/패키지/code 12와 일치한다. 사용자의 현재 설치본 자체는 읽지 않았으므로 기기 설치 성공을 보증한 검사는 아니다. 삭제/데이터 초기화를 요구하지 않는다.
+- qa-build-info의 sourceSha/API/package/callback을 검증했고, APK 내 실제 JS 번들에도 #535 QA API 호스트가 포함된 것을 확인했다. source archive의 SOURCE_SHA 및 CI_CHECKOUT_SHA도 후보와 일치한다.
+- main은 `5fb97f089b5b98a949f6b36963a4a02b0a2262bb` 그대로다. 정식앱·Production 웹·Google Play 배포는 하지 않았다. 공유 DB 신규 구조 적용과 QA 프리뷰 갱신만 수행했다.
+
+사용자 기기에서 기존 기록 유지, 내 관리 세 영역 등록/수정/완료·체크 취소, 앱 재시작, 알림 전달과 글꼴/키보드, 기존 녹음/사진/Google 기능을 확인해야 한다. ERP 실제 화면 연결과 #490 AC-13/20은 아직 미완료다.
