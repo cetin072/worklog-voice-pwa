@@ -34,13 +34,15 @@ function triggerAtFor(eventDateKey: string) {
  * 앞으로 걸어 둘 알림 목록. 이미 지난 시각은 제외하고 시각 순으로 상한까지만 돌려준다.
  * 같은 입력이면 항상 같은 identifier를 만들어 재동기화가 중복 알림을 만들지 않는다.
  */
-export function planSubscriptionReminders(subs: readonly Subscription[], todayKey: string, nowMs: number): PlannedSubscriptionReminder[] {
+export function planSubscriptionReminders(subs: readonly Subscription[], todayKey: string, nowMs: number, paid: readonly {subscription_id:string;due_date:string}[] = []): PlannedSubscriptionReminder[] {
   const planned: PlannedSubscriptionReminder[] = [];
+  const confirmed=new Set(paid.map(r=>`${r.subscription_id}:${r.due_date}`));
   const push = (reminder: PlannedSubscriptionReminder) => {
     if (Date.parse(reminder.triggerAt) > nowMs) planned.push(reminder);
   };
   for (const sub of subs) {
     for (const date of upcomingPaymentDates(sub.billingAnchorDate, sub.cycle, todayKey, PAYMENT_OCCURRENCES_AHEAD)) {
+      if(confirmed.has(`${sub.id}:${date}`))continue;
       push({
         identifier: `${SUBSCRIPTION_REMINDER_ID_PREFIX}payment.${sub.id}.${date}`,
         triggerAt: triggerAtFor(date),

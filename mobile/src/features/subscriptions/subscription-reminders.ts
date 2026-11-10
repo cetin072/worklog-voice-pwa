@@ -13,10 +13,12 @@ const CHANNEL_ID = 'worklog-subscription-reminders';
 
 export type SubscriptionReminderSyncResult =
   | { status: 'unsupported' }
+  | { status: 'superseded' }
   | { status: 'permission-needed' }
   | { status: 'synced'; scheduled: number };
 
 let queue: Promise<unknown> = Promise.resolve();
+let generation=0;
 
 async function ensureChannel() {
   if (Platform.OS !== 'android') return;
@@ -58,15 +60,19 @@ export async function requestSubscriptionReminderPermission() {
  * 구독 알림만 전부 지우고 현재 목록 기준으로 다시 건다. 권한을 새로 묻지 않는다
  * (권한 요청은 사용자가 '알림 켜기'를 누를 때만). 실행은 한 번에 하나씩 순서대로.
  */
-export function syncSubscriptionReminders(subs: readonly Subscription[], todayKey: string, nowMs = Date.now()): Promise<SubscriptionReminderSyncResult> {
+export function syncSubscriptionReminders(subs: readonly Subscription[], todayKey: string, nowMs = Date.now(), paid: readonly {subscription_id:string;due_date:string}[] = [], current:()=>boolean = ()=>true): Promise<SubscriptionReminderSyncResult> {
+  const token=generation;
+  const active=()=>current()&&token===generation;
   const run = async (): Promise<SubscriptionReminderSyncResult> => {
+    if(!active())return {status:'superseded'};
     if (Platform.OS === 'web') return { status: 'unsupported' };
     if (!(await Notifications.getPermissionsAsync()).granted) return { status: 'permission-needed' };
+    if(!active())return {status:'superseded'};
     await ensureChannel();
     const existing = await Notifications.getAllScheduledNotificationsAsync();
-    await Promise.all(existing.filter(isSubscriptionReminderRequest).map((r) => Notifications.cancelScheduledNotificationAsync(r.identifier)));
-    const plan = planSubscriptionReminders(subs, todayKey, nowMs);
-    for (const reminder of plan) await Notifications.scheduleNotificationAsync(requestFor(reminder));
+    for(const r of existing.filter(isSubscriptionReminderRequest)){if(!active())return {status:'superseded'};await Notifications.cancelScheduledNotificationAsync(r.identifier);}
+    const plan = planSubscriptionReminders(subs, todayKey, nowMs, paid);
+    for (const reminder of plan){if(!active())return {status:'superseded'};await Notifications.scheduleNotificationAsync(requestFor(reminder));}
     return { status: 'synced', scheduled: plan.length };
   };
   const result = queue.then(run, run);
@@ -76,6 +82,7 @@ export function syncSubscriptionReminders(subs: readonly Subscription[], todayKe
 
 /** 로그아웃/계정 전환 시 이 기기에 남은 구독 알림을 모두 지운다. */
 export function cancelAllSubscriptionReminders() {
+  generation++;
   const run = async () => {
     if (Platform.OS === 'web') return;
     const existing = await Notifications.getAllScheduledNotificationsAsync();

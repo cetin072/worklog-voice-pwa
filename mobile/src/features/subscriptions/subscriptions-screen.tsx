@@ -61,6 +61,7 @@ const dayLabel = (days: number) => (days === 0 ? '오늘' : days === 1 ? '내일
 export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient }) {
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const mutation = useRef(false);
+  const receiptsRef=useRef<PaymentReceipt[]>([]);
   const createId = useRef<string | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,8 +81,8 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     catch { if (alive.current) setPermission('undetermined'); }
   }, []);
 
-  const syncReminders = useCallback((next: Subscription[]) => {
-    void syncSubscriptionReminders(next, todayKey()).then((r) => {
+  const syncReminders = useCallback((next: Subscription[], paid=receiptsRef.current) => {
+    void syncSubscriptionReminders(next, todayKey(), Date.now(), paid, ()=>alive.current).then((r) => {
       if (alive.current && r.status === 'permission-needed') setPermission((p) => (p === 'granted' ? 'undetermined' : p));
     }).catch(() => undefined);
   }, []);
@@ -92,6 +93,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
       const [next, paid] = await Promise.all([listSubscriptions(client), listPaymentReceipts(client)]);
       if (!alive.current) return;
       setSubs(next);
+      receiptsRef.current=paid;
       setReceipts(paid);
       syncReminders(next);
     } catch (e) {
@@ -164,7 +166,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     mutation.current = true; setBusyId(sub.id); setError('');
     try {
       const paid = await confirmSubscriptionPayment(client, sub.id, paymentConfirmationDate(sub, todayKey()));
-      if (alive.current) setReceipts(previous => [...previous.filter(r => r.subscription_id !== paid.subscription_id || r.due_date !== paid.due_date), paid]);
+      if (alive.current) {const next=[...receiptsRef.current.filter(r => r.subscription_id !== paid.subscription_id || r.due_date !== paid.due_date), paid];receiptsRef.current=next;setReceipts(next);syncReminders(subs,next);}
     } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : '납부 저장 확인 필요'); }
     finally { mutation.current = false; if (alive.current) setBusyId(null); }
   }
@@ -195,6 +197,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
     try {
       const granted = await requestSubscriptionReminderPermission();
       await refreshPermission();
+      if (!alive.current) return;
       if (granted) syncReminders(subs);
       else Alert.alert('알림 권한 필요', '휴대폰 설정에서 업무수첩 알림을 허용하면 결제일 하루 전에 알려드립니다.');
     } catch { setError('알림 설정을 확인하지 못했습니다.'); }
