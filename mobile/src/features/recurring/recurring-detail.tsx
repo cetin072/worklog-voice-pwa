@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { mobileTheme } from '@/src/ui/theme';
 import { shiftDay } from '../home/home-calendar-model';
+import { ManualWorkInput } from '../work/manual-work-input';
 import { RepeatOptions } from './repeat-options';
 import { repeatOccurrences, repeatHistory, repeatSummary, validDay, validateRule, type RepeatingWork, type RepeatOccurrence, type RepeatRule } from './recurrence-model';
 import type { RepeatCommand } from './recurrence-store';
@@ -10,6 +11,7 @@ export function RecurringDetail({work,today,busy,onMutate,onClose,selected}: {wo
  const revision=work.state.revisions.at(-1)!;
  const [year,setYear]=useState(Number(selected?.dueDate.slice(0,4)||today.slice(0,4)));
  const [editing,setEditing]=useState<'single'|'future'|null>(null),[title,setTitle]=useState(selected?.title||revision.title),[date,setDate]=useState(selected?.dueDate||today),[rule,setRule]=useState<RepeatRule|null>(revision.rule),[error,setError]=useState('');
+ const [time,setTime]=useState(selected?.time||revision.time);
  const [next,setNext]=useState('');
  const rows=repeatOccurrences(work,`${year}-01-01`,`${year}-12-31`), summary=repeatSummary(repeatHistory(work,shiftDay(today,90)),today);
  const button=(label:string,action:()=>void,disabled=busy)=><Pressable accessibilityRole="button" disabled={disabled} style={s.button} onPress={action}><Text style={s.link}>{label}</Text></Pressable>;
@@ -17,9 +19,9 @@ export function RecurringDetail({work,today,busy,onMutate,onClose,selected}: {wo
  const command=(row:RepeatOccurrence,op:'complete'|'undo'|'skip'):RepeatCommand=>({op,key:row.key,originalDate:row.originalDate});
  const save=()=>{
   try {
-   if(!validDay(date)||!title.trim())throw Error('invalid');
-   if(editing==='single'&&selected)void send({op:'move',key:selected.key,originalDate:selected.originalDate,dueDate:date,title:title.trim()});
-   else if(rule){validateRule({...rule,anchor:date});Alert.alert('앞으로 전체 수정',`${date}부터 적용합니다. 이전 이력은 보존합니다.`,[{text:'취소',style:'cancel'},{text:'수정',onPress:()=>void send({op:'revise',revision:{...revision,from:date,title:title.trim(),rule:{...rule,anchor:date}}})}]);}
+   if(!validDay(date)||!title.trim()||(time&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)))throw Error('invalid');
+   if(editing==='single'&&selected)void send({op:'move',key:selected.key,originalDate:selected.originalDate,dueDate:date,title:title.trim(),time});
+   else if(rule){validateRule({...rule,anchor:date});Alert.alert('앞으로 전체 수정',`${date}부터 적용합니다. 이전 이력은 보존합니다.`,[{text:'취소',style:'cancel'},{text:'수정',onPress:()=>void send({op:'revise',revision:{...revision,from:date,title:title.trim(),time,rule:{...rule,anchor:date}}})}]);}
   }catch{setError('업무 이름·날짜·반복 주기를 확인해주세요.');}
  };
  const paused=work.state.pauses.some(p=>!p.to);
@@ -29,16 +31,16 @@ export function RecurringDetail({work,today,busy,onMutate,onClose,selected}: {wo
   <Text style={s.meta}>마지막 완료 {summary.lastCompleted||'없음'} · 다음 예정 {summary.nextDate||'이 기간에 없음'}</Text>
   {work.state.endedOn?<Text style={s.meta}>{work.state.endedOn} 종료 · 이력 보존</Text>:<View style={s.row}>
    {button(paused?'재개':'일시중지',()=>void send({op:paused?'resume':'pause'}))}
-   {button('앞으로 전체 수정',()=>{setTitle(revision.title);setDate(today>revision.from?today:shiftDay(revision.from,1));setRule(revision.rule);setEditing('future');})}
+   {button('앞으로 전체 수정',()=>{setTitle(revision.title);setDate(today>revision.from?today:shiftDay(revision.from,1));setRule(revision.rule);setTime(revision.time);setEditing('future');})}
    {button('반복 종료',()=>Alert.alert('반복 종료','미래 예정만 중단하고 지난 기록은 보존합니다.',[{text:'취소',style:'cancel'},{text:'종료',style:'destructive',onPress:()=>void send({op:'end'})}]))}
   </View>}
-  {selected? <View style={s.card}><Text style={s.title}>{selected.dueDate} 회차</Text>{button('이번 회차만 수정',()=>{setTitle(selected.title);setDate(selected.dueDate);setEditing('single');})}</View>:null}
+  {selected? <View style={s.card}><Text style={s.title}>{selected.dueDate} 회차</Text>{button('이번 회차만 수정',()=>{setTitle(selected.title);setDate(selected.dueDate);setTime(selected.time);setEditing('single');})}</View>:null}
   {editing?<View style={s.card}>
    <Text style={s.meta}>{editing==='single'?'이번 회차만':'앞으로 전체'} 수정</Text>
-   <TextInput accessibilityLabel="반복 업무 이름" editable={!busy} value={title} onChangeText={setTitle} style={s.input}/>
-   <TextInput accessibilityLabel="반복 적용 날짜" editable={!busy} value={date} placeholder="YYYY-MM-DD" onChangeText={setDate} style={s.input}/>
-   {editing==='future'?<RepeatOptions value={rule} anchor={date} disabled={busy} onChange={setRule}/>:null}
-   {button('수정 저장',save)}{button('수정 취소',()=>setEditing(null))}
+   <ManualWorkInput value={{transcript:title,dueDate:date,dueTime:time}} busy={busy} onChange={v=>{setTitle(v.transcript);setDate(v.dueDate);setTime(v.dueTime);}} onSave={save}>
+    {editing==='future'?<RepeatOptions value={rule} anchor={date} disabled={busy} onChange={setRule}/>:null}
+   </ManualWorkInput>
+   {button('수정 취소',()=>setEditing(null))}
   </View>:null}
   {error?<Text accessibilityLiveRegion="polite" style={s.error}>{error}</Text>:null}
   <View style={s.row}>{button('이전 해',()=>setYear(y=>y-1),busy||year<=1900)}{button('다음 해',()=>setYear(y=>y+1),busy||year>=2199)}</View>

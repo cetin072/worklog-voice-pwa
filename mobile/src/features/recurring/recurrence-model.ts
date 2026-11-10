@@ -3,7 +3,7 @@ import { shiftDay } from '../home/home-calendar-model';
 /** Dates are Seoul calendar days, never local/UTC instants. Weekdays: Monday=1, Sunday=7. */
 export type RepeatRule = { kind: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'after-completion'; anchor: string; interval: number; weekdays: number[]; unit: 'day' | 'week' };
 export type RepeatRevision = { version: number; from: string; title: string; time: string; sourceScheduleId?: string; sourceScheduleIds?: string[]; rule: RepeatRule };
-export type OccurrenceState = { key: string; originalDate: string; dueDate: string; title?: string; status: 'pending' | 'completed' | 'skipped'; completedOn: string | null; nextDate?: string | null };
+export type OccurrenceState = { key: string; originalDate: string; dueDate: string; title?: string; time?: string; status: 'pending' | 'completed' | 'skipped'; completedOn: string | null; nextDate?: string | null };
 export type RepeatState = { revisions: RepeatRevision[]; pauses: { from: string; to: string | null }[]; endedOn: string | null; occurrences: Record<string, OccurrenceState> };
 export type RepeatingWork = { workRecordId: string; version: number; state: RepeatState };
 export type RepeatOccurrence = OccurrenceState & { workRecordId: string; title: string; time: string; ruleVersion: number };
@@ -39,7 +39,7 @@ function activeOn(state: RepeatState, date: string) {
 }
 function occurrence(work: RepeatingWork, revision: RepeatRevision, key: string, date: string): RepeatOccurrence {
   const saved = work.state.occurrences[key];
-  return { ...(saved || { key, originalDate: date, dueDate: date, status: 'pending' as const, completedOn: null }), workRecordId: work.workRecordId, title: saved?.title || revision.title, time: revision.time, ruleVersion: revision.version };
+  return { ...(saved || { key, originalDate: date, dueDate: date, status: 'pending' as const, completedOn: null }), workRecordId: work.workRecordId, title: saved?.title || revision.title, time: saved?.time ?? revision.time, ruleVersion: revision.version };
 }
 /** Computed projection. No future rows are written. Call per-month or page for old history. */
 export function repeatOccurrences(work: RepeatingWork, from: string, through: string): RepeatOccurrence[] {

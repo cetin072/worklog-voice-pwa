@@ -161,8 +161,8 @@ begin
         if op='complete' then item:=item || jsonb_build_object('status','completed','completedOn',today::text);
         elsif op='skip' then item:=item || jsonb_build_object('status','skipped','completedOn',null,'nextDate',null);
         elsif op='move' then
-          if due_day is null or coalesce(char_length(btrim(p_command->>'title')),0) not between 1 and 300 then raise exception 'INVALID_OCCURRENCE'; end if;
-          item:=item || jsonb_build_object('dueDate',due_day::text,'title',p_command->>'title');
+          if due_day is null or coalesce(char_length(btrim(p_command->>'title')),0) not between 1 and 300 or coalesce(p_command->>'time','') !~ '^$|^([01][0-9]|2[0-3]):[0-5][0-9]$' then raise exception 'INVALID_OCCURRENCE'; end if;
+          item:=item || jsonb_build_object('dueDate',due_day::text,'title',p_command->>'title') || case when p_command ? 'time' then jsonb_build_object('time',p_command->>'time') else '{}'::jsonb end;
         end if;
       end if;
       s:=jsonb_set(s,array['occurrences',k],item);

@@ -52,3 +52,12 @@ test('실제 완료 2주 후와 중지 기간 다음 예정·미래 전체 수�
  const fixed=work(rule({kind:'monthly',anchor:'2026-11-10'}));fixed.state.revisions.push({version:2,from:'2026-12-01',title:'새 청소',time:'',rule:rule({kind:'monthly',anchor:'2026-12-15'})});
  assert.deepEqual(dates(fixed,'2026-11-01','2027-01-31'),['2026-11-10','2026-12-15','2027-01-15']);
 });
+
+
+test('이번 회차 시간만 변경하면 다음 회차 시간 불변·논리 키 보존',()=>{
+ const w=work(rule());w.state.revisions[0].time='09:00';
+ const row=m.repeatOccurrences(w,'2026-11-01','2026-11-30')[0];
+ w.state.occurrences[row.key]={...row,time:'15:30'};
+ const rows=m.repeatOccurrences(w,'2026-11-01','2026-11-30');
+ assert.equal(rows[0].key,row.key);assert.equal(rows[0].time,'15:30');assert.equal(rows[1].time,'09:00');
+});
