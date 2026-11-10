@@ -9,7 +9,7 @@ const request=()=>`44444444-4444-4444-8444-${String(++next).padStart(12,'0')}`;
 test('반복 업무 실제 SQL: 원본 소유자·회차 검증·완료/Undo·중복 요청·버전 충돌·종료 이력',async()=>{
  const db=new PGlite();
  try {
-  await db.exec(`create role anon;create role authenticated;create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create table auth.users(id uuid primary key);insert into auth.users values('${A}'),('${B}');grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;create schema worklog;grant usage on schema worklog to authenticated,anon;create table worklog.work_records(id uuid primary key,created_by_user_id uuid not null);insert into worklog.work_records values('${W}','${A}'),('${W2}','${A}');alter table worklog.work_records enable row level security;grant select,update on worklog.work_records to authenticated;create policy owner on worklog.work_records for all to authenticated using(created_by_user_id=auth.uid()) with check(created_by_user_id=auth.uid());`);
+  await db.exec(`create role anon;create role authenticated;create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create table auth.users(id uuid primary key);insert into auth.users values('${A}'),('${B}');grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;create schema worklog;grant usage on schema worklog to authenticated,anon;create table worklog.work_records(id uuid primary key,created_by_user_id uuid references auth.users(id) on delete set null);insert into worklog.work_records values('${W}','${A}'),('${W2}','${A}');alter table worklog.work_records enable row level security;grant select,update on worklog.work_records to authenticated;create policy owner on worklog.work_records for all to authenticated using(created_by_user_id=auth.uid() and coalesce(current_setting('qa.access',true),'')<>'revoked') with check(created_by_user_id=auth.uid());`);
   await db.exec(fs.readFileSync('supabase/migrations/20261109233147_repeating_work_v1.sql','utf8'));
   await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${A}',false)`);
   const call=async(cmd,version,id=request(),workId=W)=>(await db.query('select worklog.mutate_repeating_work($1,$2,$3,$4) value',[workId,id,version,JSON.stringify(cmd)])).rows[0].value;
@@ -39,9 +39,20 @@ test('반복 업무 실제 SQL: 원본 소유자·회차 검증·완료/Undo·�
   intervalRow=await call({...firstInterval,op:'next-date',nextDate:plus14},4,request(),W2);
   intervalRow=await call({op:'complete',key:'v1:i1',originalDate:plus14},5,request(),W2);
   await assert.rejects(call({...firstInterval,op:'undo'},6,request(),W2),/LATER_OCCURRENCE_EXISTS/);
+  const before=(await db.query('select count(*)::integer n from worklog.repeating_work_requests')).rows[0].n;
+  const feed=(await db.query("select worklog.get_my_repeating_work_month('2026-01-01') value")).rows[0].value;
+  assert.equal(feed.readonly,true);assert.ok(feed.events.length>0);assert.ok(feed.events.every(e=>e.editable===false&&e.app_path.startsWith('repeating-work?id=')));
+  assert.equal((await db.query('select count(*)::integer n from worklog.repeating_work_requests')).rows[0].n,before,'달력 읽기는 회차를 저장하지 않음');
+  await db.exec("select set_config('qa.access','revoked',false)");
+  assert.equal((await db.query('select * from worklog.repeating_work')).rows.length,0);
+  assert.equal((await db.query('select * from worklog.repeating_work_requests')).rows.length,0);
+  assert.equal((await db.query("select worklog.get_my_repeating_work_month('2026-01-01') value")).rows[0].value.events.length,0);
+  await db.exec("select set_config('qa.access','',false)");
   await db.exec(`select set_config('request.jwt.claim.sub','${B}',false)`);
   assert.equal((await db.query('select * from worklog.repeating_work')).rows.length,0);
   await assert.rejects(call({op:'end'},4),/RECORD_NOT_AVAILABLE/);
   await db.exec('reset role;set role anon;');await assert.rejects(db.query('select * from worklog.repeating_work'),/permission denied/);
+  await db.exec('reset role');await db.query('delete from auth.users where id=$1',[A]);
+  assert.equal((await db.query('select * from worklog.repeating_work')).rows.length,0);assert.equal((await db.query('select * from worklog.repeating_work_requests')).rows.length,0);
  } finally {await db.close();}
 });

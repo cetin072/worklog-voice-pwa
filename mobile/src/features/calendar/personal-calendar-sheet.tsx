@@ -13,7 +13,7 @@ const timeKey=(v: string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul
 const shift=(v: string,n: number)=>new Date(Date.parse(v+'T00:00:00Z')+n*86400000).toISOString().slice(0,10);
 type Draft={id: string;requestId: string;revision: string|null;title: string;date: string;time: string;endDate: string;endTime: string;location: string;description: string};
 type Picker='date'|'time'|'endDate'|'endTime';
-export function PersonalCalendarSheet({onClose,onSaved,initialDate,repeatingWorks=[],onOpenRepeating}: {repeatingWorks?: RepeatingWork[];onOpenRepeating?(id:string):void;onClose(): void;onSaved(): void;initialDate?: string}) {
+export function PersonalCalendarSheet({onClose,onSaved,initialDate,repeatingWorks=[],onOpenRepeating}: {repeatingWorks?: RepeatingWork[];onOpenRepeating?(id:string,date?:string):void;onClose(): void;onSaved(): void;initialDate?: string}) {
  const {client,config,session}=usePlatform(),insets=useSafeAreaInsets();
  const live=useRef(true),sequence=useRef(0),flight=useRef(false),owner=session?.user.id;
  const [month,setMonth]=useState(()=>(initialDate||dateKey(new Date().toISOString())).slice(0,7));
@@ -78,7 +78,7 @@ export function PersonalCalendarSheet({onClose,onSaved,initialDate,repeatingWork
     <View style={styles.row}>{action('이전 달',()=>setMonth(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7))-2,1)).toISOString().slice(0,7)),busy||month==='2000-01')}<Text>{month}</Text>{action('다음 달',()=>setMonth(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,7)),busy||month==='2099-12')}</View>
     <View style={styles.row}>{action('일정 등록',()=>edit())}{action('새로고침',()=>void load())}</View>
     {data?.limited?<Text style={styles.error}>일부 일정만 표시 중입니다.</Text>:null}{!busy&&!events.length?<Text>이번 달에 등록한 개인 일정이 없습니다.</Text>:null}
-    {events.map(event=><View key={event.id} style={styles.event}><Text style={styles.label}>{event.title}</Text><Text>{dateKey(event.starts_at)} · {event.all_day?'종일':timeKey(event.starts_at)}</Text>{event.location?<Text>{event.location}</Text>:null}{event.editable?<View style={styles.row}>{action('수정',()=>edit(event))}{action('삭제',()=>remove(event))}</View>:event.id.startsWith('repeat:')?action('반복 업무 상세',()=>onOpenRepeating?.(event.id)):<Text style={styles.help}>연결된 업무에서 수정할 수 있습니다.</Text>}</View>)}
+    {events.map(event=><View key={event.id} style={styles.event}><Text style={styles.label}>{event.title}</Text><Text>{dateKey(event.starts_at)} · {event.all_day?'종일':timeKey(event.starts_at)}</Text>{event.location?<Text>{event.location}</Text>:null}{event.editable?<View style={styles.row}>{action('수정',()=>edit(event))}{action('삭제',()=>remove(event))}</View>:event.id.startsWith('repeat:')?action('반복 업무 상세',()=>onOpenRepeating?.(event.id,dateKey(event.starts_at))):<Text style={styles.help}>연결된 업무에서 수정할 수 있습니다.</Text>}</View>)}
    </>}
   </ScrollView>
  </KeyboardAvoidingView></Modal>;

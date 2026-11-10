@@ -1,11 +1,10 @@
 import { findWorklogReminderLinks } from '@/src/features/schedule/worklog-reminder-adapter';
 import { RepeatFromRecord } from '@/src/features/recurring/repeat-from-record';
-import * as Crypto from 'expo-crypto';
 import { useRepeatingWork } from '@/src/features/recurring/use-repeating-work';
 import { RepeatOptions } from '@/src/features/recurring/repeat-options';
 import { RecurringDetail } from '@/src/features/recurring/recurring-detail';
 import { recurringHomeProjection } from '@/src/features/recurring/recurrence-home';
-import { newRepeatState, type RepeatRule, type RepeatOccurrence } from '@/src/features/recurring/recurrence-model';
+import { newRepeatState, validDay, type RepeatRule, type RepeatOccurrence } from '@/src/features/recurring/recurrence-model';
 import type { ReactNode } from 'react';
 import { HomeCalendar } from '@/src/features/home/home-calendar';
 import { PersonalCalendarSheet } from '@/src/features/calendar/personal-calendar-sheet';
@@ -360,12 +359,12 @@ function HomeHeader({ onOpenRecordSearch, onOpenSettings }: { onOpenRecordSearch
   </View>;
 }
 
-export default function HomeScreen({ initialScreen = 'home' }: { initialScreen?: 'home' | 'input' } = {}) {
+export default function HomeScreen({ initialScreen = 'home', initialRepeatWorkId, initialRepeatDate }: { initialScreen?: 'home' | 'input'; initialRepeatWorkId?:string;initialRepeatDate?:string } = {}) {
   const { session } = usePlatform();
-  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} initialScreen={initialScreen} key={session?.user.id || 'signed-out'} />;
+  return <HomeScreenApp androidTouchSmoke={ANDROID_TOUCH_SMOKE_MODE} initialScreen={initialScreen} initialRepeatWorkId={initialRepeatWorkId} initialRepeatDate={initialRepeatDate} key={session?.user.id || 'signed-out'} />;
 }
 
-function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { androidTouchSmoke?: boolean; initialScreen?: 'home' | 'input' }) {
+function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', initialRepeatWorkId, initialRepeatDate }: { androidTouchSmoke?: boolean; initialScreen?: 'home' | 'input'; initialRepeatWorkId?:string;initialRepeatDate?:string }) {
   const platform = usePlatform();
   const { error, authError, rememberedEmail, reload, clearAuthError, signIn, signUp, signInWithGoogle, signOut } = platform;
   const phase = platform.phase;
@@ -376,7 +375,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const [repeatCreating,setRepeatCreating]=useState(false);
   const repeatCreateTarget=useRef<string|null>(null);
   const [repeatRule,setRepeatRule] = useState<RepeatRule|null>(null);
-  const [repeatDetail,setRepeatDetail] = useState<{workId:string;row?:RepeatOccurrence}|null>(null);
+  const [repeatDetail,setRepeatDetail] = useState<{workId:string;row?:RepeatOccurrence;focusDate?:string}|null>(null);
+  useEffect(()=>{if(initialRepeatWorkId&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(initialRepeatWorkId))setRepeatDetail({workId:initialRepeatWorkId,focusDate:initialRepeatDate&&validDay(initialRepeatDate)?initialRepeatDate:undefined});},[initialRepeatWorkId,initialRepeatDate]);
   const [repeatUndo,setRepeatUndo] = useState<RepeatOccurrence|null>(null);
 
   const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
@@ -1251,7 +1251,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
       </View>
-      <HomeCalendar repeatingWorks={recurring.works} onOpenRepeating={id=>{const parts=id.split(':');setRepeatDetail({workId:parts[1]});}} key={session.user.id} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
+      <HomeCalendar repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{const parts=id.split(':');setRepeatDetail({workId:parts[1],focusDate:date});}} key={session.user.id} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
         onOpenCalendar={day => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarDate(day); setPersonalCalendarOpen(true); }}
         renderSchedule={schedule => <View>
           {schedule.scheduleId === notificationScheduleId ? <Text style={styles.helpText}>{scheduleFocusReason === 'created' ? '방금 생성된 일정' : '알림에서 연 일정'}</Text> : null}
@@ -1366,8 +1366,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   </View> : null}
     {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
   {repeatCreating && editTaskId ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatCreating(false)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><PanelHead eyebrow="기존 업무" title="반복 설정" onClose={()=>setRepeatCreating(false)}/><RepeatFromRecord initial={{transcript:editTitle,dueDate:editDate||seoulTodayKey(),dueTime:editTime}} busy={recurring.busy} onSave={async revision=>{try{const guard=reminderSessionEpoch.capture();const links=await findWorklogReminderLinks(client!,[editTaskId],guard);if(!guard()||repeatCreateTarget.current!==editTaskId)return false;if(await recurring.mutate(editTaskId,{op:'create',revision:{...revision,sourceScheduleIds:[...new Set(links[editTaskId]||[])].sort()}})){setRepeatCreating(false);setEditTaskId(null);return true;}}catch{showMessage('연결된 일정 확인 필요 · 입력을 유지했습니다. 다시 시도해주세요.','error');}return false;}}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
-  {repeatDetail && recurring.works.some(w=>w.workRecordId===repeatDetail.workId) ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatDetail(null)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><RecurringDetail key={repeatDetail.workId} work={recurring.works.find(w=>w.workRecordId===repeatDetail.workId)!} today={seoulTodayKey()} busy={recurring.busy} selected={repeatDetail.row} onClose={()=>setRepeatDetail(null)} onMutate={command=>recurring.mutate(repeatDetail.workId,command)}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
-  {personalCalendarOpen && config?.dataSchema === 'worklog' ? <PersonalCalendarSheet repeatingWorks={recurring.works} onOpenRepeating={id=>{setPersonalCalendarOpen(false);setRepeatDetail({workId:id.split(':')[1]});}} key={session.user.id} initialDate={personalCalendarDate} onClose={() => setPersonalCalendarOpen(false)} onSaved={() => { void refreshBriefing(); }} /> : null}
+  {repeatDetail && recurring.loaded && !recurring.works.some(w=>w.workRecordId===repeatDetail.workId)?<Modal visible onRequestClose={()=>setRepeatDetail(null)}><View style={[styles.scroll,{paddingTop:insets.top+24}]}><Text style={styles.body}>반복 업무를 찾지 못했거나 접근할 수 없습니다.</Text><Button title="닫기" onPress={()=>setRepeatDetail(null)}/></View></Modal>:null}
+  {repeatDetail && recurring.works.some(w=>w.workRecordId===repeatDetail.workId) ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatDetail(null)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><RecurringDetail key={repeatDetail.workId} work={recurring.works.find(w=>w.workRecordId===repeatDetail.workId)!} today={seoulTodayKey()} busy={recurring.busy} selected={repeatDetail.row} focusDate={repeatDetail.focusDate} onClose={()=>setRepeatDetail(null)} onMutate={command=>recurring.mutate(repeatDetail.workId,command)}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
+  {personalCalendarOpen && config?.dataSchema === 'worklog' ? <PersonalCalendarSheet repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{setPersonalCalendarOpen(false);setRepeatDetail({workId:id.split(':')[1],focusDate:date});}} key={session.user.id} initialDate={personalCalendarDate} onClose={() => setPersonalCalendarOpen(false)} onSaved={() => { void refreshBriefing(); }} /> : null}
   <WorkRecordEditSheet
     allowTitleWhileLoading
     visible={Boolean(editTaskId) && !repeatCreating}

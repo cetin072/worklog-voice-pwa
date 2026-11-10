@@ -9,14 +9,15 @@ import { listRepeatingWork, mutateRepeatingWork, type RepeatCommand } from './re
 
 export function useRepeatingWork(client: PlatformSupabaseClient | null, owner: string | undefined) {
   const [works,setWorks]=useState<RepeatingWork[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [loaded,setLoaded]=useState(false);
   const alive=useRef(true),flight=useRef(false);
   const [notificationError,setNotificationError]=useState('');
   useEffect(()=>{if(!owner){void cancelAllRepeatReminders();return;}let current=true;void syncRepeatReminders(works,owner,seoulDate(),()=>current&&alive.current).then(()=>{if(current)setNotificationError('');}).catch(()=>{if(current)setNotificationError('반복 업무 저장과 별개로 · 알림 확인 필요. 알림 설정을 확인해주세요.');});return()=>{current=false;};},[works,owner]);
   const attempt=useRef<{id:string;workId:string;version:number;command:RepeatCommand}|null>(null);
   const reload=useCallback(async()=>{
     if (!client || !owner) return;
-    try { const next=await listRepeatingWork(client);if(alive.current){setWorks(next);setError('');} }
-    catch(e){if(alive.current)setError(e instanceof Error?e.message:'반복 업무를 확인하지 못했습니다.');}
+    try { const next=await listRepeatingWork(client);if(alive.current){setWorks(next);setError('');setLoaded(true);} }
+    catch(e){if(alive.current){setLoaded(true);setError(e instanceof Error?e.message:'반복 업무를 확인하지 못했습니다.');}}
   },[client,owner]);
   useEffect(()=>{alive.current=true;void reload();const sub=AppState.addEventListener('change',s=>{if(s==='active')void reload();});return()=>{alive.current=false;sub.remove();};},[reload]);
   const mutate=async(workId:string,command:RepeatCommand)=>{
@@ -28,5 +29,5 @@ export function useRepeatingWork(client: PlatformSupabaseClient | null, owner: s
     catch(e){if(alive.current)setError(e instanceof Error?e.message:'저장 확인 필요');if(e instanceof Error&&e.message.includes('다른 기기')){attempt.current=null;await reload();}return false;}
     finally{flight.current=false;if(alive.current)setBusy(false);}
   };
-  return {works,error,notificationError,busy,reload,mutate,pending:!!attempt.current,retry:()=>attempt.current?mutate(attempt.current.workId,attempt.current.command):reload()};
+  return {works,loaded,error,notificationError,busy,reload,mutate,pending:!!attempt.current,retry:()=>attempt.current?mutate(attempt.current.workId,attempt.current.command):reload()};
 }

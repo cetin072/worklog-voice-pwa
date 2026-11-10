@@ -10,7 +10,7 @@ import { calendarDays, calendarTime, eventsOnDay, seoulDate, shiftDay, shiftMont
 import { mobileTheme } from '@/src/ui/theme';
 
 export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, today, fallback, onOpenCalendar, renderSchedule, focusId, focusDate, onTodayCount }: {
-  repeatingWorks?: RepeatingWork[]; onOpenRepeating?(id:string): void;
+  repeatingWorks?: RepeatingWork[]; onOpenRepeating?(id:string,date?:string): void;
   revision: number; today: string; fallback: BriefingSchedule[]; onOpenCalendar(day?: string): void; onTodayCount(count: number | null): void;
   renderSchedule(schedule: BriefingSchedule): ReactNode; focusId?: string | null; focusDate?: string;
 }) {
@@ -70,7 +70,7 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     {!busy && !error && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
     {rows.map(event => {
       const known = fallback.find(s => s.scheduleId === event.id);
-      return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => event.id.startsWith('repeat:')?onOpenRepeating?.(event.id):setOpened(id => id === event.id ? null : event.id)}>
+      return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => event.id.startsWith('repeat:')?onOpenRepeating?.(event.id,seoulDate(event.starts_at)):setOpened(id => id === event.id ? null : event.id)}>
         <Text style={styles.time}>{calendarTime(event, selected)}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.muted}>›</Text>
       </Pressable>{opened === event.id ? known ? renderSchedule(known) : <View style={styles.details}>{event.location ? <Text>{event.location}</Text> : null}{event.description ? <Text>{event.description}</Text> : null}{integrated ? action('내 캘린더에서 확인·수정', () => onOpenCalendar(selected)) : null}</View> : null}</View>;
     })}
