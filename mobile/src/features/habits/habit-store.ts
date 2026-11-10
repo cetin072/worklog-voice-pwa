@@ -2,9 +2,9 @@ import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import { validateHabit, type Habit, type HabitCheck, type HabitDraft } from './habit-model';
 export type HabitCommand={op:'create'|'update';draft:HabitDraft}|{op:'end'}|{op:'check';day:string;checked:boolean};
 export async function loadHabits(client:PlatformSupabaseClient,from:string,through:string) {
- const [habits,checks]=await Promise.all([client.from('habits').select('id,name,frequency,weekdays,target,start_date,archived_at,version').order('name').limit(500),client.from('habit_checks').select('habit_id,day,checked,version').gte('day',from).lte('day',through).limit(3500)]);
+ const [habits,checks]=await Promise.all([client.from('habits').select('id,name,frequency,weekdays,target,start_date,archived_at,version',{count:'exact'}).order('name').limit(500),client.from('habit_checks').select('habit_id,day,checked,version',{count:'exact'}).gte('day',from).lte('day',through).limit(3500)]);
  if(habits.error||checks.error)throw Error('습관을 불러오지 못했습니다. 연결 또는 서버 준비 상태를 확인해주세요.');
- if(habits.data.length===500||checks.data.length===3500)throw Error('조회 범위를 초과했습니다. 모든 항목을 확인하지 못했습니다.');
+ if(habits.count!==habits.data.length||checks.count!==checks.data.length)throw Error('조회 범위를 초과했습니다. 모든 항목을 확인하지 못했습니다.');
  return {habits:habits.data as Habit[],checks:checks.data as HabitCheck[]};
 }
 function validResult(value:Habit|HabitCheck|null,id:string,command:HabitCommand) {
