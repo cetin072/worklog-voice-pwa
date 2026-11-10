@@ -1431,10 +1431,11 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       </SettingsGroup>
     </View> : null}
     {screen === 'subscriptions' ? <View style={styles.panel}><PanelHead eyebrow="내 업무공간" title="내 관리" onClose={() => setScreen(managementReturn)} />{client ? <MyManagementScreen expenses={<SubscriptionsScreen client={client} ownerId={session.user.id}/>} habits={<HabitsScreen client={client}/>} recurring={<View style={{gap:12}}>
-      {recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}
+      {recurring.error?<View><Text accessibilityLiveRegion="polite" style={styles.errorText}>{recurring.error}</Text><Button title="반복 업무 다시 확인" disabled={recurring.busy} onPress={()=>void recurring.retry()}/></View>:null}
       {recurring.notificationError?<Text style={styles.helpText}>{recurring.notificationError}</Text>:null}
       {recurring.works.map(work=>{const revision=work.state.revisions.at(-1)!;const summary=repeatSummary(repeatHistory(work,shiftDay(seoulTodayKey(),90)),seoulTodayKey());return <Pressable key={work.workRecordId} accessibilityRole="button" accessibilityLabel={`${revision.title} 반복 상세`} style={[styles.card,{minHeight:48}]} onPress={()=>setRepeatDetail({workId:work.workRecordId})}><Text style={styles.taskTitle}>{revision.title}</Text><Text style={styles.taskMeta}>{work.state.endedOn?'종료됨 · 이력 보존':work.state.pauses.some(p=>!p.to)?'일시중지':`다음 예정 ${summary.nextDate||'기존 회차 처리 후 계산'}`}</Text><Text style={styles.taskMeta}>마지막 완료 {summary.lastCompleted||'없음'} · 지난 미완료 {summary.missed}건</Text></Pressable>;})}
-      {!recurring.works.length?<Text style={styles.helpText}>기존 업무나 직접 입력에서 반복을 한 번 설정하세요. 오늘 회차는 홈에서 완료할 수 있습니다.</Text>:null}
+      {!recurring.loaded&&!recurring.error?<Text style={styles.helpText}>반복 업무를 불러오는 중…</Text>:null}
+      {recurring.loaded&&!recurring.error&&!recurring.works.length?<Text style={styles.helpText}>기존 업무나 직접 입력에서 반복을 한 번 설정하세요. 오늘 회차는 홈에서 완료할 수 있습니다.</Text>:null}
       <Button title="반복업무 등록" onPress={()=>{setRepeatRule(r=>r||{kind:'weekly',anchor:manualInput.dueDate||seoulTodayKey(),interval:1,weekdays:[5],unit:'day'});setScreen('input');}}/>
     </View>} /> : <Text style={styles.errorText}>로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
