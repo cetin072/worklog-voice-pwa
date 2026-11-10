@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {register} from 'node:module';
+const native=`export const Platform={OS:'android'};`;
+const notifications=`let rows=[];export const SchedulableTriggerInputTypes={DATE:'date'},AndroidImportance={DEFAULT:3};export async function getPermissionsAsync(){return {granted:true}};export async function setNotificationChannelAsync(){};export async function getAllScheduledNotificationsAsync(){return rows};export async function cancelScheduledNotificationAsync(id){rows=rows.filter(r=>r.identifier!==id)};export async function scheduleNotificationAsync(r){rows.push(r);return r.identifier};export function seed(r){rows=r};`;
+const url=s=>`data:text/javascript,${encodeURIComponent(s)}`;
+register('./helpers/mobile-ts-loader.mjs',import.meta.url,{data:{mocks:{'../schedule/local-notifications':url('export async function cancelAllScheduleReminders(){}'),'react-native':url(native),'expo-notifications':url(notifications)}}});
+const n=await import(url(notifications));
+const r=await import('../mobile/src/features/recurring/recurrence-reminders.ts');
+const m=await import('../mobile/src/features/recurring/recurrence-model.ts');
+test('실제 알림 reconcile은 중복 예약 없이 변경·중지·로그아웃만 정리하고 다른 알림 보존',async()=>{
+ const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+ const future=new Date(Date.parse(today+'T12:00:00Z')+86400000).toISOString().slice(0,10);
+ const w={workRecordId:'w',version:0,state:m.newRepeatState('청소',{kind:'daily',anchor:future,interval:1,weekdays:[],unit:'day'},'09:00')};
+ const other={identifier:'schedule:other',content:{title:'다른 일정',data:{owner:'schedule'}}};n.seed([other]);
+ await r.syncRepeatReminders([w],'A',today,()=>true);const count=(await n.getAllScheduledNotificationsAsync()).length;assert.ok(count>1&&count<=33);
+ await r.syncRepeatReminders([w],'A',today,()=>true);assert.equal((await n.getAllScheduledNotificationsAsync()).length,count);
+ await r.syncRepeatReminders([{...w,state:{...w.state,endedOn:today}}],'A',today,()=>true);assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
+ const pending=r.syncRepeatReminders([w],'A',today,()=>true);const cleanup=r.cancelAllRepeatReminders();await Promise.all([pending,cleanup]);assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
+});
+
+test('시작 시 같은 계정 예약은 유지하고 다른 계정 예약만 정리',async()=>{
+ const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10),future=new Date(Date.parse(today+'T12:00:00Z')+86400000).toISOString().slice(0,10);
+ const work={workRecordId:'w',version:0,state:m.newRepeatState('청소',{kind:'daily',anchor:future,interval:1,weekdays:[],unit:'day'},'09:00')};
+ const other={identifier:'schedule.other',content:{data:{owner:'schedule'}}};n.seed([other]);await r.syncRepeatReminders([work],'A',today,()=>true);
+ const count=(await n.getAllScheduledNotificationsAsync()).length;await r.reconcileRepeatReminderOwner('A',()=>true);assert.equal((await n.getAllScheduledNotificationsAsync()).length,count);
+ await r.reconcileRepeatReminderOwner('B',()=>true);assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
+});

@@ -25,6 +25,7 @@ type WorkRecordEditSheetProps = Readonly<{
   onSave(): void;
   onCancel(): void;
   onRetry?(): void;
+  onRepeat?(): void;
 }>;
 
 function pickerValue(date: string, time: string) {
@@ -74,6 +75,7 @@ export function WorkRecordEditSheet({
   onSave,
   onCancel,
   onRetry,
+  onRepeat,
 }: WorkRecordEditSheetProps) {
   const insets = useSafeAreaInsets();
   const titleInput = useRef<TextInput>(null);
@@ -219,6 +221,7 @@ export function WorkRecordEditSheet({
         {statusText ? <Text accessibilityLiveRegion="polite" style={[styles.status, statusTone === 'success' ? styles.statusSuccess : statusTone === 'error' ? styles.statusError : null]}>{statusText}</Text> : null}
         {!ready && !loading && onRetry ? <Pressable accessibilityRole="button" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>다시 불러오기</Text></Pressable> : null}
 
+        {onRepeat && ready && actionKind === 'task' ? <Pressable accessibilityRole="button" disabled={inputBlocked} style={styles.retry} onPress={onRepeat}><Text style={styles.retryText}>반복으로 관리</Text></Pressable> : null}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" disabled={saving} style={[styles.secondary, saving ? styles.disabled : null]} onPress={close}><Text style={styles.secondaryText}>취소</Text></Pressable>
           <Pressable accessibilityRole="button" disabled={!ready || inputBlocked || !title.trim()} style={[styles.primary, !ready || inputBlocked || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : statusTone === 'success' ? '✓ 저장 완료' : '저장'}</Text></Pressable>

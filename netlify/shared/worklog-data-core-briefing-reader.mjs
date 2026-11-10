@@ -1,4 +1,4 @@
-import { briefingCompleteness, BRIEFING_TASK_LIMIT } from "./briefing-completeness.mjs";
+import { briefingCompleteness, BRIEFING_TASK_LIMIT, BRIEFING_OPEN_TASK_REST_FILTER } from "./briefing-completeness.mjs";
 import { requireWorkspaceContext } from "./platform/workspace-context.mjs";
 
 const STATUS_MAP = Object.freeze({ in_progress: "진행중", waiting: "대기", needs_review: "확인필요" });
@@ -60,7 +60,7 @@ export function createWorklogDataCoreBriefingReader({ client } = {}) {
         select: "id,title,institution,status,follow_up,due_at,due_has_time,next_attention_at,updated_at,recorded_at,metadata,action_kind",
         workspace_id: `eq.${context.workspaceId}`,
         status: "in.(in_progress,waiting,needs_review)",
-        or: "(action_kind.is.null,action_kind.eq.task)",
+        and: BRIEFING_OPEN_TASK_REST_FILTER,
         order: "updated_at.desc",
         limit: "500",
       });
