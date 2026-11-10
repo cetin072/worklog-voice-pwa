@@ -31,11 +31,11 @@ test('both linkage keys resolve by identity; ambiguous links are preserved for s
  const c={auth:{async getUser(){return {data:{user:{id:owner}}};}},from(){return{select(){return{eq(){return{async or(){return{data:rows,count:2};}};}};}};}};
  assert.deepEqual((await findWorklogReminderLinks(c,[rid],()=>true))[rid],[sid,owner]);
 });
-test('compact schedule and task buttons share words, wrapping and >=44 point target',()=>{
+test('compact reminder icons distinguish evidence without color alone and preserve accessible words',()=>{
  let label='알림 확인 필요';let calls=0;
  const React={createElement:(type,props,...children)=>({type,props,children})};
  const {CompactReminderLabel,ScheduleReminderLabel}=compile('mobile/src/features/home/schedule-reminder-label.tsx',{
-  React,'react-native':{Pressable:'Pressable',Text:'Text'},'./reminder-label':{reminderPresentation},'./home-reminder-status':{useReminderStatus:()=>label},
+  React,'react-native':{Pressable:'Pressable',Text:'Text',View:'View'},'./reminder-label':{reminderPresentation},'./home-reminder-status':{useReminderStatus:()=>label},
  });
  for(const current of ['알림 확인 필요','이 기기 알림 없음 · 설정','알림 권한 차단 · 설정','이 기기 예약: 시작 시 · 30분 전','일정 취소됨 · 알림 확인 필요']){
   label=current;
@@ -44,13 +44,11 @@ test('compact schedule and task buttons share words, wrapping and >=44 point tar
   const schedule=upper.type(upper.props);
   assert.deepEqual(record.children,schedule.children);
   const copy=JSON.stringify(record.children);
-  assert.match(copy,/알림/);
-  if(current==='알림 확인 필요')assert.match(copy,/알림 확인 필요/);
-  if(current.includes('알림 없음'))assert.match(copy,/알림 없음/);
-  if(current.includes('권한'))assert.match(copy,/권한 필요/);
-  if(current.startsWith('이 기기 예약:'))assert.match(copy,/30분 전/);
-  assert.ok(record.props.style.minHeight>=44);assert.ok(record.props.style.minHeight+record.props.hitSlop.top+record.props.hitSlop.bottom>=44);assert.equal(record.props.style.maxWidth,'100%');
-  assert.equal(record.children[0].props.numberOfLines,undefined);
+  assert.doesNotMatch(copy,/알림|시작 시|30분 전/);
+  const badge=record.children[0].children.at(-1).children[0];
+  assert.equal(badge,current.startsWith('이 기기 예약:')?'✓':current.includes('알림 없음')?'−':current.includes('권한')?'!':'?');
+  assert.ok(record.props.style.minHeight>=44);assert.ok(record.props.style.minWidth>=44);
+  assert.equal(record.props.style.maxWidth,'100%');
   assert.ok(record.props.accessibilityLabel.includes(current));record.props.onPress();
  }
  assert.equal(calls,5);
@@ -62,23 +60,32 @@ test('past stored or native-only evidence never claims delivered or confirmed ab
 });
 
 test('home snapshot shares one device read and drops late responses after account/route cleanup',async()=>{
- let state=null,effect,cleanup,resolveNative,nativeReads=0;
+ let state=null,effect,cleanup,resolveNative,nativeReads=0,valid=true;
  const React={createElement:(type,props,...children)=>({type,props,children})};
  const {HomeReminderStatus}=compile('mobile/src/features/home/home-reminder-status.tsx',{
   React,react:{createContext:()=>({Provider:'Provider'}),useState:()=>[state,value=>{state=value;}],useEffect:fn=>{effect=fn;}},
   '../schedule/worklog-reminder-adapter':{findWorklogReminderLinks:async(_client,ids)=>{assert.ok(ids.includes(rid));return {[rid]:[sid]};}},
-  '../schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},reminderSyncEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[{id:sid,title:'Synthetic',status:'confirmed',startsAt:'2099-01-01T00:00:00Z',allDay:false}]})},
+  '../schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>valid},reminderSyncEpoch:{capture:()=>()=>valid},readOwnedReminderSnapshots:async()=>({rows:[{id:sid,title:'Synthetic',status:'confirmed',startsAt:'2099-01-01T00:00:00Z',allDay:false}]})},
   '../schedule/local-notifications':{readScheduleReminderEvidenceBatch:async ids=>{nativeReads++;assert.deepEqual(ids,[sid]);return new Promise(resolve=>{resolveNative=resolve;});}},
   './reminder-label':{reminderLabel},
  });
  // A resurfaced-only task is visible through homeOverview even without a dated bucket.
  const briefing={structure:{today:[]},resurface:[{pageId:rid}],schedules:{today:[{scheduleId:sid,title:'Synthetic',startsAt:'2099-01-01T00:00:00Z'}]}};
- const props={client:{},briefing,scope:'account-a:home:1',children:null};
+ const props={client:{},briefing,scope:'account-a',refreshKey:'home:1',children:null};
  HomeReminderStatus(props);cleanup=effect();await new Promise(resolve=>setImmediate(resolve));
  resolveNative({[sid]:{permission:'granted',stored:[],scheduled:[]}});await new Promise(resolve=>setImmediate(resolve));
  let tree=HomeReminderStatus(props);
  assert.equal(tree.props.value[`record:${rid}`],'이 기기 알림 없음 · 설정');
  assert.equal(tree.props.value[`record:${rid}`],tree.props.value[`schedule:${sid}`]);assert.equal(nativeReads,1);assert.equal(tree.children[0].props.value[rid],sid);
+ const identical={...props,briefing:structuredClone(briefing),refreshKey:'settings-return:2'};
+ tree=HomeReminderStatus(identical);
+ assert.equal(tree.props.value[`record:${rid}`],'이 기기 알림 없음 · 설정','same records retain verified status during refresh');
+ assert.equal(tree.children[0].props.value[rid],sid);
+ const edited=structuredClone(briefing);edited.resurface[0].title='Edited';
+ assert.deepEqual(HomeReminderStatus({...props,briefing:edited}).props.value,{},'changed records invalidate the old evidence');
+ valid=false;
+ assert.deepEqual(HomeReminderStatus(props).props.value,{},'session / reminder mutation invalidates evidence synchronously');
+ valid=true;
  cleanup();tree=HomeReminderStatus({...props,scope:'account-b:journal:2'});assert.deepEqual(tree.props.value,{});
  cleanup=effect();await new Promise(resolve=>setImmediate(resolve));cleanup();state=null;
  resolveNative({[sid]:{permission:'granted',stored:[],scheduled:[]}});await new Promise(resolve=>setImmediate(resolve));
@@ -97,4 +104,31 @@ test('installed Supabase query keeps exact count, creator scope and both stable 
  }}});
  client.auth.getUser=async()=>({data:{user:{id:owner}},error:null});
  assert.deepEqual(await findWorklogReminderLinks(client,[rid,rid,'invalid'],()=>true),{[rid]:[sid]});assert.equal(reads,1);
+});
+
+test('actual server classifier -> mobile parser -> Home accepts numeric structure counters and only reads task identities',async()=>{
+ const {classifyBriefingTasks,briefingV2Counts}=await import('../netlify/shared/briefing-v2.mjs');
+ const {parseMobileBriefing}=await import('../mobile/src/platform/worklog-api.ts');
+ for(const tasks of [[],[{pageId:rid,title:'Synthetic task',status:'대기',dueKey:'2026-11-13'}]]){
+  const structure=classifyBriefingTasks(tasks,'2026-11-10');
+  assert.equal(typeof structure.totalOpen,'number');
+  assert.equal(typeof structure.waitingCount,'number');
+  assert.equal(typeof structure.followUpCount,'number');
+  const briefing=parseMobileBriefing({today:'2026-11-10',structure,counts:briefingV2Counts(structure),notes:[]});
+  let state=null,effect,ids;
+  const React={createElement:(type,props,...children)=>({type,props,children})};
+  const {HomeReminderStatus}=compile('mobile/src/features/home/home-reminder-status.tsx',{
+   React,react:{createContext:()=>({Provider:'Provider'}),useState:()=>[state,value=>{state=value;}],useEffect:fn=>{effect=fn;}},
+   '../schedule/worklog-reminder-adapter':{findWorklogReminderLinks:async(_client,records)=>{ids=records;return {}; }},
+   '../schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},reminderSyncEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[]})},
+   '../schedule/local-notifications':{readScheduleReminderEvidenceBatch:async()=>({})},'./reminder-label':{reminderLabel},
+  });
+  const props={client:{},briefing,scope:owner,children:null};
+  assert.doesNotThrow(()=>HomeReminderStatus(props));
+  const cleanup=effect();await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(ids,tasks.length?[rid]:[],'summary counters must never become task records');
+  assert.ok(state,'successful effect must finish instead of swallowing a bad record access');
+  assert.doesNotThrow(()=>HomeReminderStatus({...props,briefing:structuredClone(briefing)}));
+  cleanup();
+ }
 });

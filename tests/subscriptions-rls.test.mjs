@@ -29,7 +29,7 @@ async function freshDb() {
   `);
   await db.exec(migration);
   await db.exec(fs.readFileSync('supabase/migrations/20261109144344_subscriptions_payment_method.sql', 'utf8'));
-  await db.exec(fs.readFileSync('supabase/migrations/20261109232907_regular_expenses_v1.sql', 'utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261110065304_regular_expenses_v1.sql', 'utf8'));
   return db;
 }
 

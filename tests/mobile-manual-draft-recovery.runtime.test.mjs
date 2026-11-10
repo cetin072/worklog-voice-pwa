@@ -125,6 +125,17 @@ test('Home runs encrypted recovery before enabling edit and prevents delayed wri
   assert.match(home, /manualSaveSession\.current\.restore\(saved\.attempt\)/);
   assert.match(home, /busy=\{busy \|\| !manualDraftLoaded\}/);
   assert.match(home, /capturedEpoch !== manualDraftEpoch\.current \|\| manualSaveInFlight\.current/);
-  assert.match(home, /manualVault\.prepareSave\(manualInput, checkpoint\)/);
+  assert.match(home, /manualVault\.prepareSave\(\{\.\.\.manualInput,\.\.\.\(repeatRule/);
   assert.match(home, /await manualVault\?\.clear\(\)/);
+});
+
+
+test('반복 설정도 같은 소유자의 암호화 초안/요청과 함께 재시작 복구되고 잘못된 규칙은 보존 후 거부',async()=>{
+ const local=store(),vault=createManualWorkDraftStorage(local,'repeat-owner');
+ const input={...draft(),repeatRule:{kind:'weekly',anchor:'2026-11-12',interval:2,weekdays:[5],unit:'week'}};
+ await vault.saveDraft(input);assert.deepEqual((await createManualWorkDraftStorage(local,'repeat-owner').load()).draft,input);
+ const session=createManualWorkSaveSession();await assert.rejects(session.save(input,async()=>{throw Error('lost')},checkpoint=>vault.prepareSave(input,checkpoint)),/lost/);
+ const stored=await vault.load();assert.deepEqual(stored.draft.repeatRule,input.repeatRule);assert.ok(stored.attempt.options.clientRequestId);
+ const before=await local.getItem('worklog.manual.draft.v1.repeat-owner');
+ await assert.rejects(vault.saveDraft({...input,repeatRule:{...input.repeatRule,interval:0}}));assert.equal(await local.getItem('worklog.manual.draft.v1.repeat-owner'),before);
 });

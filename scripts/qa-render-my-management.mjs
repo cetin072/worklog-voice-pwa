@@ -1,0 +1,61 @@
+// Local QA only: production RN TSX -> synthetic native host -> HTML for layout inspection.
+// This is explicitly NOT Android execution and makes no server requests.
+import fs from 'node:fs';
+import path from 'node:path';
+import {register} from 'node:module';
+import {nativeComponentHarness} from '../tests/helpers/native-component-harness.mjs';
+import {managementPanel} from '../tests/helpers/management-panel-harness.mjs';
+register('../tests/helpers/mobile-ts-loader.mjs',import.meta.url);
+const rowStyles=await import('../mobile/src/ui/record-row-styles.ts');
+const theme=await import('../mobile/src/ui/theme.ts');
+const dates=await import('../mobile/src/features/home/home-calendar-model.ts');
+const expenseModel=await import('../mobile/src/features/subscriptions/subscription-model.ts');
+const utterance=await import('../mobile/src/features/subscriptions/subscription-utterance.ts');
+const habitModel=await import('../mobile/src/features/habits/habit-model.ts');
+const repeatModel=await import('../mobile/src/features/recurring/recurrence-model.ts');
+const today=dates.seoulDate(),future=dates.shiftDay(today,5);
+const expense={id:'synthetic-expense',name:'건물 보험료 · 검수용',amountKrw:125000,cycle:'monthly',scope:'business',billingAnchorDate:future,cancelDeadline:null,lastUsedDate:null,createdAt:null,sourceText:null,paymentMethod:'bank_transfer',paymentName:'업무용 계좌',expenseKind:'insurance',variableAmount:false};
+const expenses=[expense,{...expense,id:'synthetic-transfer',name:'전기요금 자동이체 · 검수용',amountKrw:78000,expenseKind:'transfer',variableAmount:true}];
+const habit={id:'synthetic-habit',name:'매주 세 번 독서 · 검수용',frequency:'weekly-target',weekdays:[],target:3,start_date:today,archived_at:null,version:0};
+habit.start_date=today;
+function component(file,name,imports,seed,props){const h=nativeComponentHarness(file,name,imports,seed);return h.render(props);}
+const imports={'@/src/ui/record-row-styles':rowStyles,'expo-crypto':{randomUUID:()=> 'synthetic-request'},'@/src/ui/theme':theme,'../home/home-calendar-model':dates};
+const longName='매주 점검하고 기록하는 아주 긴 검수용 이름과 반복업무 확인 항목입니다';
+function expenseTree(mode='normal'){return component('mobile/src/features/subscriptions/subscriptions-screen.tsx','SubscriptionsScreen',{...imports,'./subscription-form':{},'./subscription-model':expenseModel,'./subscription-reminders':{},'./subscription-store':{},'./subscription-utterance':utterance},[[],mode==='empty'||mode==='error'?[]:mode==='long'?expenses.map(e=>({...e,name:longName})):expenses,false,mode==='error'?'정기지출 서버 준비 상태 확인 필요 · 다시 불러와 주세요.':'','all',null,null,'','granted'],{client:{},ownerId:'synthetic-owner'});}
+function habitTree(editing=false,mode='normal'){return component('mobile/src/features/habits/habits-screen.tsx','HabitsScreen',{...imports,'./habit-model':habitModel,'./habit-store':{}},[mode==='empty'||mode==='error'?[]:[mode==='long'?{...habit,name:longName}:habit],[],mode==='error'?'습관 서버 준비 상태 확인 필요 · 다시 불러와 주세요.':'',false,true,editing?{id:habit.id,version:0,draft:habit}:null],{client:{}});}
+function expenseForm(){return component('mobile/src/features/subscriptions/subscription-form.tsx','SubscriptionForm',{...imports,'@react-native-community/datetimepicker':{default:'DatePicker'},'./subscription-model':expenseModel},[],{initial:{name:expense.name,amountText:'125000',cycle:'monthly',scope:'business',billingAnchorDate:future,cancelDeadline:'',paymentMethod:'bank_transfer',paymentName:'업무용 계좌',expenseKind:'insurance',variableAmount:false},isNew:false,busy:false,onSave(){},onCancel(){}});}
+function repeatTree(){return component('mobile/src/features/recurring/recurring-detail.tsx','RecurringDetail',{...imports,'./recurrence-model':repeatModel,'./repeat-options':{RepeatOptions:()=>null},'../work/manual-work-input':{ManualWorkInput:()=>null}},[],{work:{workRecordId:'synthetic-work',version:0,state:repeatModel.newRepeatState('매주 금요일 청소 · 검수용',{kind:'weekly',anchor:dates.shiftDay(today,-14),interval:1,weekdays:[5],unit:'day'},'09:00')},today,busy:false,onClose(){},onMutate:async()=>true});}
+function management(area,child){return component('mobile/src/features/management/my-management-screen.tsx','MyManagementScreen',{'@/src/ui/theme':theme},[area],{expenses:area==='expenses'?child:null,recurring:area==='recurring'?child:null,habits:area==='habits'?child:null});}
+const panelStyles={helpText:rowStyles.recordRowStyles.taskMeta,errorText:{fontSize:14,color:theme.mobileTheme.colors.danger},taskTitle:rowStyles.recordRowStyles.taskTitle,taskMeta:rowStyles.recordRowStyles.taskMeta,card:{padding:16,gap:8,borderWidth:1,borderColor:'#d1d5db',borderRadius:12}};
+function recurringPanel(mode='normal'){
+ const work={workRecordId:'synthetic-work',version:0,state:repeatModel.newRepeatState(mode==='long'?longName:'매주 금요일 청소 · 검수용',{kind:'weekly',anchor:dates.shiftDay(today,-14),interval:1,weekdays:[5],unit:'day'},'09:00')};
+ return managementPanel({styles:panelStyles,recurring:{works:['empty','error','loading'].includes(mode)?[]:[work],loaded:mode!=='loading',error:mode==='error'?'반복 업무 서버 준비 상태 확인 필요':'',notificationError:'',busy:false},repeatSummary:repeatModel.repeatSummary,repeatHistory:repeatModel.repeatHistory,seoulTodayKey:()=>today,shiftDay:dates.shiftDay});
+}
+const fixtures={before:()=>expenseTree(),expenses:()=>management('expenses',expenseTree()),habits:()=>management('habits',habitTree()),recurring:()=>management('recurring',recurringPanel()),'recurring-detail':repeatTree,'expense-form':expenseForm,'habit-form':()=>management('habits',habitTree(true))};
+for(const mode of ['long','empty','error']){
+ fixtures[`expenses-${mode}`]=()=>management('expenses',expenseTree(mode));
+ fixtures[`habits-${mode}`]=()=>management('habits',habitTree(false,mode));
+ fixtures[`recurring-${mode}`]=()=>management('recurring',recurringPanel(mode));
+}
+fixtures['recurring-loading']=()=>management('recurring',recurringPanel('loading'));
+const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const kebab=s=>s.replace(/[A-Z]/g,c=>'-'+c.toLowerCase());
+function styles(input,scale){let s=Object.assign({},...(Array.isArray(input)?input.flat(Infinity):[input]).filter(v=>v&&typeof v==='object'));const out={};for(let [k,v] of Object.entries(s)){if(v==null)continue;if(k==='paddingHorizontal'){out.paddingLeft=v;out.paddingRight=v;continue}if(k==='paddingVertical'){out.paddingTop=v;out.paddingBottom=v;continue}if(k==='marginHorizontal'){out.marginLeft=v;out.marginRight=v;continue}if(k==='marginVertical'){out.marginTop=v;out.marginBottom=v;continue}if(k==='fontSize'||k==='lineHeight')v=Number(v)*scale;if(k==='textAlignVertical')continue;out[k]=v;}return Object.entries(out).map(([k,v])=>`${kebab(k)}:${typeof v==='number'&&!['flex','flexGrow','flexShrink','fontWeight','opacity','zIndex'].includes(k)?v+'px':v}`).join(';');}
+function html(n,scale,inText=false){
+ if(Array.isArray(n))return n.map(v=>html(v,scale,inText)).join('');
+ if(n==null||n===false||n===true)return '';
+ if(typeof n!=='object')return esc(n);
+ if(typeof n.type==='function')return html(n.type(n.props),scale,inText);
+ const p=n.props||{},type=n.type;
+ const tag=type==='Text'?(inText?'span':'div'):type==='Pressable'||type==='Button'?'button':type==='TextInput'?(p.multiline?'textarea':'input'):'div';
+ const text=type==='Text';
+ // RN's borderStyle defaults to solid; browser buttons otherwise hide the production border.
+ let style='border-style:solid;border-width:0;'+(text?'white-space:pre-wrap;overflow-wrap:anywhere;':type==='View'||type==='Pressable'?'display:flex;flex-direction:column;min-width:0;':type==='Button'?`min-height:48px;font-size:${16*scale}px;`:'')+styles(p.style,scale);
+ const label=p.accessibilityLabel?` aria-label="${esc(p.accessibilityLabel)}"`:'';
+ const disabled=p.disabled||p.editable===false?' disabled':'';
+ if(tag==='input')return `<input${label}${disabled} style="${esc(style)}" value="${esc(p.value)}" placeholder="${esc(p.placeholder)}">`;
+ return `<${tag}${label}${disabled} style="${esc(style)}">${type==='Button'?esc(p.title):tag==='textarea'?esc(p.value):html(p.children,scale,inText||text)}</${tag}>`;
+}
+const target=process.argv[2]||'/tmp/worklog-my-management-render';fs.mkdirSync(target,{recursive:true});
+for(const [name,create] of Object.entries(fixtures))for(const scale of [1,2]){const tree=create();const content=html(tree,scale);fs.writeFileSync(path.join(target,`${name}-${scale}.html`),`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}</title><style>*{box-sizing:border-box}body{margin:0;padding:20px;background:#f4f5f7;font-family:'Noto Sans CJK KR',sans-serif;font-size:${15*scale}px;line-height:1.35}button{font-family:inherit;white-space:normal;text-align:left;background:white;border:0;padding:0;flex-shrink:0;color:#17191d}input,textarea{font-family:inherit;max-width:100%;background:white}h1{font-size:${20*scale}px;margin:0 0 14px}footer{font-size:12px;color:#737985;margin-top:18px}</style><h1>${name==='before'?'통합 전 · 정기지출 단독':'내 관리'}</h1>${content}<footer>합성 데이터 · production TSX의 DOM 검수 렌더링<br>Android 실행 및 실제 글꼴 배율 검사가 아닙니다.</footer><pre id="qa-result" hidden></pre><script>const bad=[...document.querySelectorAll('button,input,textarea')].filter(e=>{const r=e.getBoundingClientRect();return r.left< -1||r.right>innerWidth+1||e.scrollHeight>e.clientHeight+2});document.getElementById('qa-result').textContent=JSON.stringify({fixture:'${name}',fontScale:${scale},width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth,bad:bad.map(e=>({text:e.textContent,label:e.getAttribute('aria-label')}))});</script>`);}
+console.log(JSON.stringify({target,fixtures:Object.keys(fixtures),fontScales:[1,2]}));

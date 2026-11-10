@@ -81,7 +81,7 @@ test('다가오는 업무 날짜는 펼치지 않아도 작은 보조 글자로 
  const task={pageId:'future',title:'합성 방문 일정',dueKey:'2026-12-01',daysUntil:22};
  const h=homeHarness({briefing:{today:'2026-11-09'},structure:{today:[],overdue:[],upcoming:[task],undated:[]},activeFilter:'upcoming'});
  const tree=h.render();assert.match(words(tree),/2026-12-01 · 22일 후/);
- const date=nodes(tree).find(n=>n.type==='Text'&&words(n)==='2026-12-01 · 22일 후');assert.equal(date.props.style,'taskMeta');
+ const date=nodes(tree).find(n=>n.type==='Text'&&words(n).trim()==='2026-12-01 · 22일 후');assert.equal(date.props.style,'taskMeta');
  assert.equal(nodes(tree).filter(n=>n.props?.accessibilityLabel==='합성 방문 일정 수정').length,1);
  assert.equal(nodes(tree).filter(n=>n.props?.accessibilityLabel==='합성 방문 일정 삭제').length,1);
 });

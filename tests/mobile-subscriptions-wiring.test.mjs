@@ -8,13 +8,13 @@ const files = fs.readdirSync(dir).filter((f) => /\.tsx?$/.test(f));
 
 test('설정 메뉴 → 구독 화면으로 연결되고 뒤로가기는 설정으로 돌아간다', () => {
   assert.match(home, /'subscriptions'\s*;?/);
-  assert.match(home, /<SettingsMenuItem title="구독·정기결제"[^\n]*setScreen\('subscriptions'\)/);
+  assert.match(home, /<SettingsMenuItem title="내 관리"[^\n]*setScreen\('subscriptions'\)/);
   assert.match(home, /screen === 'subscriptions' \? <View style=\{styles\.panel\}>/);
-  assert.match(home, /if \(screen === 'subscriptions'\) \{ setScreen\('settings'\); return true; \}/);
+  assert.match(home, /if \(screen === 'subscriptions'\) \{ setScreen\(managementReturn\); return true; \}/);
 });
 
 test('구독 알림을 탭하면 구독 화면이 열리고, 로그아웃하면 이 기기의 구독 알림이 정리된다', () => {
-  assert.match(home, /payload\?\.target === 'subscriptions'\) \{ setScreen\('subscriptions'\); return true; \}/);
+  assert.match(home, /payload\?\.target === 'subscriptions'\) \{ setManagementReturn\('home'\); setScreen\('subscriptions'\); return true; \}/);
   assert.match(home, /if \(!session\) \{[^}]*cancelAllSubscriptionReminders\(\)/);
 });
 
@@ -34,7 +34,8 @@ test('순수 로직 모듈은 네이티브/네트워크에 의존하지 않는�
   }
 });
 
-test('홈 화면 레이아웃(버튼·카드)은 이번 변경에서 건드리지 않았다', () => {
+test('홈은 작은 내 관리 바로가기 하나만 제공하고 구독 전용 중복 버튼을 두지 않는다', () => {
+  assert.equal((home.match(/accessibilityLabel="내 관리 열기"/g)||[]).length,1);
   assert.doesNotMatch(home, /accessibilityLabel="구독/, '홈 직접 진입 버튼은 사용자 승인 후 별도 변경');
 });
 

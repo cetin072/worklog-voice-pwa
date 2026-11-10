@@ -1,3 +1,7 @@
+import { HabitsScreen } from '@/src/features/habits/habits-screen';
+import { MyManagementScreen } from '@/src/features/management/my-management-screen';
+import { repeatHistory, repeatSummary } from '@/src/features/recurring/recurrence-model';
+import { shiftDay } from '@/src/features/home/home-calendar-model';
 import { recordRowStyles } from '@/src/ui/record-row-styles';
 import { findWorklogReminderLinks } from '@/src/features/schedule/worklog-reminder-adapter';
 import { RepeatFromRecord } from '@/src/features/recurring/repeat-from-record';
@@ -5,7 +9,7 @@ import { useRepeatingWork } from '@/src/features/recurring/use-repeating-work';
 import { RepeatOptions } from '@/src/features/recurring/repeat-options';
 import { RecurringDetail } from '@/src/features/recurring/recurring-detail';
 import { recurringHomeProjection } from '@/src/features/recurring/recurrence-home';
-import { newRepeatState, validDay, type RepeatRule, type RepeatOccurrence } from '@/src/features/recurring/recurrence-model';
+import { newRepeatState, validDay, validateRule, type RepeatRule, type RepeatOccurrence } from '@/src/features/recurring/recurrence-model';
 import type { ReactNode } from 'react';
 import { HomeCalendar } from '@/src/features/home/home-calendar';
 import { PersonalCalendarSheet } from '@/src/features/calendar/personal-calendar-sheet';
@@ -195,7 +199,16 @@ function HomeTaskRow(props: Parameters<typeof TaskRow>[0]) {
   const [expanded, setExpanded] = useState(false);
   return <View style={styles.homeTaskEntry}>
     <View style={styles.homeTaskLine}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 관리 펼치기`} accessibilityState={{ expanded }} style={styles.homeTaskOpen} onPress={() => setExpanded(value => !value)}><Text style={styles.taskTitle}>{props.task.title || '제목 없는 업무'}</Text></Pressable>
+      <View style={styles.taskMain}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 관리 펼치기`} accessibilityState={{ expanded }} style={styles.homeTaskOpen} onPress={() => setExpanded(value => !value)}>
+          <Text style={styles.taskTitle}>{props.task.title || '제목 없는 업무'}</Text>
+          <Text style={styles.taskMeta}>{taskNote(props.bucket, props.task)}{props.task.dueTime ? ` · ${props.task.dueTime}` : ''}</Text>
+        </Pressable>
+        {props.task.pageId ? <View style={styles.homeTaskUtilities}>
+          <ReminderShortcut id={props.task.pageId} title={props.task.title || '업무'} onPress={props.onReminder} disabled={props.completing} />
+          {!props.task.pageId.startsWith('repeat:') && props.task.dueKey ? <CalendarExportPreview compact recordId={props.task.pageId} title={props.task.title || '업무'} /> : null}
+        </View> : null}
+      </View>
       {props.task.pageId ? <View style={styles.taskActions}>
         <View style={styles.taskMinorActions}>
           {props.onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 수정`} disabled={props.completing} style={styles.inlineEdit} onPress={props.onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
@@ -204,10 +217,6 @@ function HomeTaskRow(props: Parameters<typeof TaskRow>[0]) {
         {props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
       </View> : null}
     </View>
-    {props.bucket !== 'today' ? <Text style={styles.taskMeta}>{taskNote(props.bucket, props.task)}</Text> : null}
-    {props.task.pageId ? <View style={styles.homeTaskUtilities}>
-      {props.task.pageId.startsWith('repeat:')?<Text style={styles.taskMeta}>{props.task.dueTime?`${props.task.dueTime} · 기기 알림 설정 확인`:'시간 미지정 · 알림 없음'}</Text>:<ReminderShortcut id={props.task.pageId} title={props.task.title || '업무'} onPress={props.onReminder} disabled={props.completing} />}
-    </View> : null}
     {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} onDelete={undefined} hideShortcuts /> : null}
   </View>;
 }
@@ -258,7 +267,7 @@ function NoteRow({ note, onEdit, onDelete, onAcknowledge, onReminder, acknowledg
         {onDelete ? <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 삭제`} disabled={acknowledging} style={styles.inlineDelete} onPress={onDelete}><Text style={styles.inlineDeleteText}>삭제</Text></Pressable> : null}
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 확인했어요 처리`} disabled={acknowledging} style={[styles.inlineComplete, acknowledging ? styles.inlineCompleteBusy : null]} onPress={onAcknowledge}>
-        <Text style={styles.inlineCompleteText}>{acknowledging ? '처리 중' : '확인했어요'}</Text>
+        <Text style={styles.inlineCompleteText}>{acknowledging ? '처리 중' : '완료'}</Text>
       </Pressable>
     </View> : null}
   </View>;
@@ -356,14 +365,15 @@ const ANDROID_TOUCH_SMOKE_PROVIDER = createConfiguredMobileTranscriptionProvider
 const ANDROID_TOUCH_SMOKE_BRIEFING: MobileBriefing = {
   today: seoulTodayKey(), generatedAt: new Date().toISOString(), completeness: 'complete', mode: 'data_core', scheduleEnabled: true, counts: { overdue: 0, today: 1, upcoming: 0, undated: 0, total: 1 },
   // Synthetic build only: exercise the real compact schedule/task layout without user data.
-  structure: { overdue: [], today: [{ pageId: '11111111-1111-4111-8111-111111111111', title: '검수용 업무: 일정과 알림 상태 확인', dueKey: seoulTodayKey(), dueTime: '10:00', status: '진행중' }], upcoming: [], undated: [] }, resurface: [], notes: [],
+  structure: { waitingCount: 0, followUpCount: 0, totalOpen: 1, overdue: [], today: [{ pageId: '11111111-1111-4111-8111-111111111111', title: '검수용 업무: 일정과 알림 상태 확인', dueKey: seoulTodayKey(), dueTime: '10:00', status: '진행중' }], upcoming: [], undated: [] }, resurface: [], notes: [],
   schedules: { today: [{ scheduleId: '22222222-2222-4222-8222-222222222222', title: '검수용 일정: 긴 제목 줄바꿈과 알림 버튼 확인', startsAt: `${seoulTodayKey()}T10:00:00+09:00`, status: 'confirmed' }], upcoming: [], total: 1 },
 };
 
-function HomeHeader({ onOpenRecordSearch, onOpenSettings }: { onOpenRecordSearch: () => void; onOpenSettings: () => void }) {
+function HomeHeader({ onOpenRecordSearch, onOpenSettings, onOpenManagement }: { onOpenRecordSearch: () => void; onOpenSettings: () => void; onOpenManagement: () => void }) {
   return <View style={styles.header}>
     <View style={styles.headerTitleWrap}><Text style={styles.headerTitle}>업무수첩</Text></View>
     <View style={styles.headerActions}>
+      <Pressable accessibilityRole="button" accessibilityLabel="내 관리 열기" accessibilityHint="정기지출, 반복업무, 습관" style={styles.headerButton} onPress={onOpenManagement}><Text style={styles.headerManagementText}>관리</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="과거 업무 검색" style={styles.headerButton} onPress={onOpenRecordSearch}><Text style={styles.headerButtonIcon}>⌕</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="설정 열기" style={styles.headerButton} onPress={onOpenSettings}><Text style={styles.headerButtonIcon}>⚙</Text></Pressable>
     </View>
@@ -382,7 +392,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   const session = platform.session;
   const client = platform.client;
   const config = platform.config;
+  useEffect(()=>{if(phase!=='ready')return;if (!session) { void cancelAllSubscriptionReminders().catch(() => undefined); return; }let current=true;void reconcileSubscriptionReminderOwner(session.user.id,()=>current).catch(()=>undefined);return()=>{current=false;};},[phase,session?.user.id]);
   const recurring = useRepeatingWork(config?.dataSchema === 'worklog' ? client : null, session?.user.id, phase === 'ready');
+  const [managementReturn,setManagementReturn]=useState<'home'|'settings'>('settings');
   const [repeatCreating,setRepeatCreating]=useState(false);
   const repeatCreateTarget=useRef<string|null>(null);
   const [repeatRule,setRepeatRule] = useState<RepeatRule|null>(null);
@@ -390,7 +402,6 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   useEffect(()=>{if(initialRepeatWorkId&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(initialRepeatWorkId))setRepeatDetail({workId:initialRepeatWorkId,focusDate:initialRepeatDate&&validDay(initialRepeatDate)?initialRepeatDate:undefined});},[initialRepeatWorkId,initialRepeatDate]);
   const [repeatUndo,setRepeatUndo] = useState<RepeatOccurrence|null>(null);
 
-  useEffect(()=>{if(phase!=='ready')return;if (!session) { void cancelAllSubscriptionReminders().catch(() => undefined); return; }let current=true;void reconcileSubscriptionReminderOwner(session.user.id,()=>current).catch(()=>undefined);return()=>{current=false;};},[phase,session?.user.id]);
   const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
   const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
   const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => session?.access_token || 'android-touch-smoke-token' : getFreshAccessToken;
@@ -419,6 +430,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     void manualVault.load().then((saved) => {
       if (!alive || manualDraftEdited.current || !saved) return;
       manualSaveSession.current.restore(saved.attempt);
+      if(saved.draft.repeatRule)validateRule(saved.draft.repeatRule);
+      setRepeatRule(saved.draft.repeatRule||null);
       setManualInput(saved.draft);
       if (saved.draft.transcript.trim()) setManualDraftNotice('이전에 작성하던 직접 입력을 복구했습니다.');
     }).catch(() => {
@@ -434,7 +447,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     const capturedEpoch = manualDraftEpoch.current;
     const keep = () => {
       if (capturedEpoch !== manualDraftEpoch.current || manualSaveInFlight.current) return Promise.resolve();
-      return manualVault.saveDraft(manualInput).catch(() => {
+      return manualVault.saveDraft({...manualInput,...(repeatRule?{repeatRule}:{})}).catch(() => {
         setManualDraftNotice('기기 임시 초안을 저장하지 못했습니다. 내용은 현재 화면에 보존됩니다.');
       });
     };
@@ -443,7 +456,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       if (state === 'background' && !manualSaveInFlight.current) void keep();
     });
     return () => { clearTimeout(timer); subscription.remove(); };
-  }, [manualDraftLoaded, manualInput, manualVault]);
+  }, [manualDraftLoaded, manualInput, manualVault, repeatRule]);
   const [briefingNow, setBriefingNow] = useState(Date.now());
   useEffect(() => {
     const updateClock = () => setBriefingNow(Date.now());
@@ -587,19 +600,19 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (quickVoiceNavigation.current) { warnPendingVoice(); return true; }
       if (screen === 'home') return false;
-      if (screen === 'subscriptions') { setScreen('settings'); return true; }
+      if (screen === 'subscriptions') { setScreen(managementReturn); return true; }
       setScreen(screen === 'journal' ? 'settings' : 'home');
       return true;
     });
     return () => subscription.remove();
-  }, [screen]);
+  }, [screen, managementReturn]);
   useEffect(() => {
     if (!session || !client) return;
     let alive = true;
     const openSchedule = (data: unknown) => {
       const payload = data as { target?: unknown; scheduleId?: unknown; workRecordId?: unknown; userId?: unknown };
       if (payload?.target === 'repeating-work' && payload.userId === session?.user.id && typeof payload.workRecordId === 'string') { setScreen('home');setRepeatDetail({workId:payload.workRecordId});return true; }
-      if (payload?.target === 'subscriptions') { setScreen('subscriptions'); return true; }
+      if (payload?.target === 'subscriptions') { setManagementReturn('home'); setScreen('subscriptions'); return true; }
       if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return false;
       setNotificationScheduleId(payload.scheduleId);
       setScheduleFocusReason('notification');
@@ -722,7 +735,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       const reminderGuard = reminderSessionEpoch.capture();
       const saved = await manualSaveSession.current.save(manualInput,
         async (text, options) => saveWorklog(await getFreshAccessToken(client), text, options),
-        manualVault ? (checkpoint) => manualVault.prepareSave(manualInput, checkpoint) : undefined);
+        manualVault ? (checkpoint) => manualVault.prepareSave({...manualInput,...(repeatRule?{repeatRule}:{})}, checkpoint) : undefined);
       if (repeatRule) {
         const id = saved.dataCoreWorkRecordId;
         if (!id) throw new Error('업무는 저장됐지만 반복 연결을 확인하지 못했습니다. 다시 저장하면 같은 업무에 연결을 재시도합니다.');
@@ -981,7 +994,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     const epoch = ++editReadEpoch.current;
     const cache = editDetailsCache.current;
     const cached = cache.get(pageId);
-    const completeSeed = cached || (typeof seedTime === 'string' ? { title: fallbackTitle, dueDate: fallbackDate, dueTime: seedTime } : null);
+    const completeSeed = (cached || typeof seedTime === 'string') ? { title: fallbackTitle, dueDate: fallbackDate, dueTime: seedTime ?? cached?.dueTime ?? '' } : null;
     // Cached/list fields are only a visual seed; a fresh owner-scoped read must
     // succeed before the edit can be saved (otherwise stale dates can overwrite).
     setEditLoading(true);
@@ -1057,7 +1070,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     setEditTaskId(task.pageId);
     setEditTitle(task.title || '');
     setEditDate(task.dueKey || '');
-    setEditTime('');
+    setEditTime(task.dueTime || '');
     setEditActionKind(undefined);
     setEditOriginalActionKind(undefined);
     setEditActionConversionAllowed(false);
@@ -1292,7 +1305,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   const matchingDirectReminder = lastDirectSave?.recordId &&
     savedReminder?.target.recordId === lastDirectSave.recordId ? savedReminder : null;
 
-  return <HomeReminderStatus client={client} briefing={briefing} scope={`${session.user.id}:${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} />
+  return <HomeReminderStatus client={client} briefing={briefing} scope={session.user.id} refreshKey={`${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} onOpenManagement={()=>{setManagementReturn('home');setScreen('subscriptions');}} />
     {savedReminder && !(screen === 'home' && matchingDirectReminder) ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
@@ -1320,7 +1333,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
         renderSchedule={schedule => <View>
           {schedule.scheduleId === notificationScheduleId ? <Text style={styles.helpText}>{scheduleFocusReason === 'created' ? '방금 생성된 일정' : '알림에서 연 일정'}</Text> : null}
           <ScheduleRows key={`${briefingNow}:${Boolean(reminderTarget)}`} schedules={[schedule]} empty="일정을 확인해주세요." onReminder={item => setReminderTarget({ scheduleId: item.scheduleId, title: item.title || '일정' })} />
-          <View style={styles.headerActions}><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => Alert.alert('이 기기의 알림', '예약됨은 이 기기의 예약을 확인한 상태입니다. 알림 없음은 미설정, 확인 필요는 아직 확인할 수 없는 상태입니다. 예약 확인은 실제 전달을 보장하지 않습니다.')}><Text style={styles.helpText}>이 기기 기준 · 알림 표시 도움말 ⓘ</Text></Pressable></View>
+          <View style={styles.headerActions}><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => Alert.alert('이 기기의 알림', '종 ✓ 초록: 이 기기 예약 확인\n종 − 회색: 알림 없음\n종 ! 빨강: 권한 필요\n종 ? 파랑: 확인 필요\n종을 누르면 예약 시점과 상세 상태를 확인합니다. 예약 확인은 실제 전달을 보장하지 않습니다.')}><Text style={styles.helpText}>이 기기 기준 · 알림 표시 도움말 ⓘ</Text></Pressable></View>
         </View>} />
 
       {briefing ? briefingBuckets.filter(bucket => bucket.key === activeFilter).map((bucket) => {
@@ -1364,6 +1377,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       </View>
       {config?.dataSchema === 'worklog' ? <Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarDate(undefined); setPersonalCalendarOpen(true); }}><Text style={styles.linkText}>내 캘린더 · 일정 등록 ›</Text></Pressable> : null}
 
+
       {message ? <Text style={[styles.message, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}
       {message === NETWORK_CONNECTION_MESSAGE ? <Button title="연결 다시 확인" disabled={busy} onPress={() => { clearMessage(); void refreshBriefing(); }} /> : null}
     </> : null}
@@ -1390,7 +1404,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
 
     {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><Button title="알림 설정" onPress={() => setReminderTarget({ recordId: selectedTask.task.pageId, title: selectedTask.task.title || '업무' })} /><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
-    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy || !manualDraftLoaded} onChange={(value) => { manualDraftEdited.current = true; manualDraftEpoch.current += 1; setManualInput(value); setManualDraftNotice(''); }} onSave={() => void persistDraft()}><RepeatOptions value={repeatRule} anchor={manualInput.dueDate} disabled={busy || !manualDraftLoaded} onChange={setRepeatRule}/></ManualWorkInput>{!manualDraftLoaded ? <Text style={styles.meta}>작성 중이던 기기 초안을 확인하는 중입니다.</Text> : null}{manualDraftNotice ? <Text style={styles.meta}>{manualDraftNotice}</Text> : null}{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
+    {screen === 'input' ? <View style={styles.card}><PanelHead eyebrow="새 기록" title="직접 입력" onClose={() => setScreen('home')} /><ManualWorkInput value={manualInput} busy={busy || !manualDraftLoaded} onChange={(value) => { manualDraftEdited.current = true; manualDraftEpoch.current += 1; setManualInput(value); setManualDraftNotice(''); }} onSave={() => void persistDraft()}><RepeatOptions value={repeatRule} anchor={manualInput.dueDate} disabled={busy || !manualDraftLoaded} onChange={rule=>{manualDraftEdited.current=true;manualDraftEpoch.current++;setRepeatRule(rule);}}/></ManualWorkInput>{!manualDraftLoaded ? <Text style={styles.meta}>작성 중이던 기기 초안을 확인하는 중입니다.</Text> : null}{manualDraftNotice ? <Text style={styles.meta}>{manualDraftNotice}</Text> : null}{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
     {screen === 'meeting' ? <View style={styles.panel}><PanelHead eyebrow="장시간 녹음" title="회의 녹음" onClose={() => setScreen('home')} /><VoiceRecorderCard mode="meeting" /></View> : null}
     {screen === 'settings' ? <View style={styles.settingsPanel}>
       <PanelHead eyebrow="내 업무공간" title="설정" onClose={() => setScreen('home')} />
@@ -1399,7 +1413,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
         <SettingsMenuItem title="과거 업무 검색" onPress={() => setScreen('recordSearch')} />
       </SettingsGroup>
       <SettingsGroup title="내 관리">
-        <SettingsMenuItem title="구독·정기결제" description="한 달 구독료를 한눈에 보고 계속 쓸지 판단" onPress={() => setScreen('subscriptions')} />
+        <SettingsMenuItem title="내 관리" description="정기지출 · 반복업무 · 습관" onPress={() => {setManagementReturn('settings');setScreen('subscriptions');}} />
       </SettingsGroup>
       <SettingsGroup title="알림">
         <SettingsMenuItem title="알림·리마인더" onPress={() => setScreen('reminderSettings')} />
@@ -1421,7 +1435,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
         <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
       </SettingsGroup>
     </View> : null}
-    {screen === 'subscriptions' ? <View style={styles.panel}><PanelHead eyebrow="내 관리" title="구독·정기결제" onClose={() => setScreen('settings')} />{client ? <SubscriptionsScreen client={client} ownerId={session.user.id} /> : <Text style={styles.errorText}>로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
+    {screen === 'subscriptions' ? <View style={styles.panel}><PanelHead eyebrow="내 업무공간" title="내 관리" onClose={() => setScreen(managementReturn)} />{client ? <MyManagementScreen expenses={<SubscriptionsScreen client={client} ownerId={session.user.id}/>} habits={<HabitsScreen client={client}/>} recurring={<View style={{gap:12}}>
+      {recurring.error?<View><Text accessibilityLiveRegion="polite" style={styles.errorText}>{recurring.error}</Text><Button title="반복 업무 다시 확인" disabled={recurring.busy} onPress={()=>void recurring.retry()}/></View>:null}
+      {recurring.notificationError?<Text style={styles.helpText}>{recurring.notificationError}</Text>:null}
+      {recurring.works.map(work=>{const revision=work.state.revisions.at(-1)!;const summary=repeatSummary(repeatHistory(work,shiftDay(seoulTodayKey(),90)),seoulTodayKey());return <Pressable key={work.workRecordId} accessibilityRole="button" accessibilityLabel={`${revision.title} 반복 상세`} style={[styles.card,{minHeight:48}]} onPress={()=>setRepeatDetail({workId:work.workRecordId})}><Text style={styles.taskTitle}>{revision.title}</Text><Text style={styles.taskMeta}>{work.state.endedOn?'종료됨 · 이력 보존':work.state.pauses.some(p=>!p.to)?'일시중지':`다음 예정 ${summary.nextDate||'기존 회차 처리 후 계산'}`}</Text><Text style={styles.taskMeta}>마지막 완료 {summary.lastCompleted||'없음'} · 지난 미완료 {summary.missed}건</Text></Pressable>;})}
+      {!recurring.loaded&&!recurring.error?<Text style={styles.helpText}>반복 업무를 불러오는 중…</Text>:null}
+      {recurring.loaded&&!recurring.error&&!recurring.works.length?<Text style={styles.helpText}>기존 업무나 직접 입력에서 반복을 한 번 설정하세요. 오늘 회차는 홈에서 완료할 수 있습니다.</Text>:null}
+      <Button title="반복업무 등록" onPress={()=>{setRepeatRule(r=>r||{kind:'weekly',anchor:manualInput.dueDate||seoulTodayKey(),interval:1,weekdays:[5],unit:'day'});setScreen('input');}}/>
+    </View>} /> : <Text style={styles.errorText}>로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
   </ScrollView>
@@ -1439,6 +1460,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   {personalCalendarOpen && config?.dataSchema === 'worklog' ? <PersonalCalendarSheet repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{setPersonalCalendarOpen(false);setRepeatDetail({workId:id.split(':')[1],focusDate:date});}} key={session.user.id} initialDate={personalCalendarDate} onClose={() => setPersonalCalendarOpen(false)} onSaved={() => { void refreshBriefing(); }} /> : null}
   <WorkRecordEditSheet
     allowTitleWhileLoading
+    allowFieldsWhileLoading
     visible={Boolean(editTaskId) && !repeatCreating}
     title={editTitle}
     date={editDate}
@@ -1451,8 +1473,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     statusText={editStatus}
     statusTone={editStatusTone}
     onTitle={(value) => { editDirty.current.title = true; setEditTitle(value); }}
-    onDate={(value) => { editDirty.current.date = true; editDirty.current.time = true; setEditDate(value); }}
-    onTime={(value) => { editDirty.current.time = true; editDirty.current.date = true; setEditTime(value); }}
+    onDate={(value) => { editDirty.current.date = true; setEditDate(value); }}
+    onTime={(value) => { editDirty.current.time = true; setEditTime(value); }}
     onActionKind={(value) => { editDirty.current.kind = true; setEditActionKind(value); }}
     onSave={() => void saveTaskEditor()}
     onCancel={closeTaskEditor}
@@ -1482,11 +1504,12 @@ const styles = StyleSheet.create({
   scroll: { padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section, paddingBottom: 28 },
   loginScroll: { flexGrow: 1, justifyContent: 'center', padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section },
   header: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 4 },
-  headerTitleWrap: { flexGrow: 1, minWidth: 140 },
+  headerTitleWrap: { flex: 1, minWidth: 0 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#17191d', flexShrink: 1 },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerButton: { width: mobileTheme.size.touchTarget, height: mobileTheme.size.touchTarget, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 14, backgroundColor: mobileTheme.colors.surface },
   headerButtonIcon: { fontSize: 21 },
+  headerManagementText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.text },
   loginHero: { gap: mobileTheme.spacing.compact, padding: mobileTheme.spacing.compact },
   welcomeCard: { gap: 8, padding: 18, borderRadius: mobileTheme.radius.card, backgroundColor: '#172b4d' },
   welcomeTitle: { fontSize: 21, fontWeight: '800', color: '#ffffff', lineHeight: 28 },
@@ -1548,7 +1571,7 @@ const styles = StyleSheet.create({
   moreButton: { minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
   moreButtonText: { fontSize: 12, fontWeight: '800', color: '#374151' },
   sectionCount: { minWidth: 26, height: 26, textAlign: 'center', textAlignVertical: 'center', borderRadius: 13, overflow: 'hidden', backgroundColor: '#e5e7eb', color: '#374151', fontSize: 12, fontWeight: '800' },
-  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.15)' },
+  taskRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.15)' },
   focusTaskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(107,114,128,0.15)' },
   focusMetaLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   focusReason: { fontSize: 13, fontWeight: '800', color: '#9a3412', lineHeight: 18 },
@@ -1614,9 +1637,9 @@ const styles = StyleSheet.create({
   homeRefresh: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   homeTaskCard: { padding: 14, gap: 6, borderRadius: 20, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
   homeTaskEntry: { paddingVertical: 8, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
-  homeTaskLine: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
+  homeTaskLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   homeTaskUtilities: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  homeTaskOpen: { flex: 1, minHeight: 46, justifyContent: 'center', paddingVertical: 8 },
+  homeTaskOpen: { minHeight: 44, justifyContent: 'center', gap: 3 },
   homeTaskTitle: { fontSize: 16, color: mobileTheme.colors.text },
   homeInputTools: { flexDirection: 'row', gap: 8 },
   homeInputTool: { flex: 1, minHeight: 52, borderRadius: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },

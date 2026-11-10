@@ -13,14 +13,15 @@ export function HabitsScreen({client}:{client:PlatformSupabaseClient}) {
  const [editing,setEditing]=useState<{id:string;draft:HabitDraft;version:number}|null>(null);
  const [clock,setClock]=useState(Date.now()),[notice,setNotice]=useState('');
  const alive=useRef(true),flight=useRef(false),attempt=useRef<{id:string;request:string;version:number;command:HabitCommand}|null>(null);
+ const reads=useRef(0);
  const today=seoulDate(clock),monday=weekStart(today);
- const load=useCallback(async()=>{try{const result=await loadHabits(client,monday,shiftDay(monday,6));if(alive.current){setHabits(result.habits);setChecks(result.checks);setError('');setLoaded(true);}}catch(e){if(alive.current)setError(e instanceof Error?e.message:'불러오기 확인 필요');}},[client,monday]);
- useEffect(()=>{alive.current=true;void load();const sub=AppState.addEventListener('change',state=>{if(state==='active'){setClock(Date.now());void load();}});const timer=setInterval(()=>setClock(Date.now()),60000);return()=>{alive.current=false;sub.remove();clearInterval(timer);};},[load]);
+ const load=useCallback(async()=>{const generation=++reads.current;try{const result=await loadHabits(client,monday,shiftDay(monday,6));if(alive.current&&generation===reads.current){setHabits(result.habits);setChecks(result.checks);setError('');setLoaded(true);}}catch(e){if(alive.current&&generation===reads.current)setError(e instanceof Error?e.message:'불러오기 확인 필요');}},[client,monday]);
+ useEffect(()=>{alive.current=true;void load();const sub=AppState.addEventListener('change',state=>{if(state==='active'){setClock(Date.now());void load();}});const timer=setInterval(()=>setClock(Date.now()),60000);return()=>{alive.current=false;reads.current++;sub.remove();clearInterval(timer);};},[load]);
  const send=async(id:string,version:number,command:HabitCommand)=>{
   if(flight.current)return false;
   if(attempt.current&&(attempt.current.id!==id||JSON.stringify(attempt.current.command)!==JSON.stringify(command))){setError('이전 저장 확인이 필요합니다. 같은 동작으로 다시 시도해주세요.');return false;}
   const a=attempt.current||{id,version,command,request:Crypto.randomUUID()};attempt.current=a;flight.current=true;setBusy(true);setError('');setNotice('');
-  try{const saved=await mutateHabit(client,a.id,a.request,a.version,a.command);attempt.current=null;if(alive.current){if('habit_id'in saved)setChecks(rows=>[...rows.filter(r=>r.habit_id!==saved.habit_id||r.day!==saved.day),saved]);else setHabits(rows=>[...rows.filter(h=>h.id!==saved.id),saved]);setNotice('저장 확인됨');}return true;}
+  try{const saved=await mutateHabit(client,a.id,a.request,a.version,a.command);attempt.current=null;reads.current++;if(alive.current){if('habit_id'in saved)setChecks(rows=>[...rows.filter(r=>r.habit_id!==saved.habit_id||r.day!==saved.day),saved]);else setHabits(rows=>[...rows.filter(h=>h.id!==saved.id),saved]);setNotice('저장 확인됨');}if(!loaded)await load();return true;}
   catch(e){if(alive.current)setError(e instanceof Error?e.message:'저장 확인 필요');if(e instanceof Error&&e.message.includes('다른 기기')){attempt.current=null;await load();}return false;}
   finally{flight.current=false;if(alive.current)setBusy(false);}
  };
@@ -46,7 +47,7 @@ export function HabitsScreen({client}:{client:PlatformSupabaseClient}) {
     {button(p.todayChecked?`${h.name} 오늘 체크 취소`:`${h.name} 오늘 체크`,()=>void send(h.id,check?.version??-1,{op:'check',day:today,checked:!p.todayChecked}),busy||!habitDue(h,today))}
     {!habitDue(h,today)?<Text style={s.meta}>오늘은 지정한 실천일이 아닙니다.</Text>:null}
    </View>;})}
-   {loaded&&!habits.some(h=>!h.archived_at)?<Text style={s.meta}>한 번 등록하고 오늘 실천만 체크하세요. 빠진 날은 밀린 업무로 쌓이지 않습니다.</Text>:null}
+   {loaded&&!error&&!habits.some(h=>!h.archived_at)?<Text style={s.meta}>한 번 등록하고 오늘 실천만 체크하세요. 빠진 날은 밀린 업무로 쌓이지 않습니다.</Text>:null}
    {button('+ 습관 등록',()=>start())}
   </>}
  </View>;

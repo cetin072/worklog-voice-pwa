@@ -1,0 +1,450 @@
+[
+  {
+    "fixture": "expenses",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-detail",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-detail",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expense-form",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expense-form",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habit-form",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habit-form",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-long",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-long",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-long",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-long",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-long",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-long",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-empty",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-empty",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-empty",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-empty",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-empty",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-empty",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-error",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-error",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-error",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-error",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-error",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-error",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-loading",
+    "fontScale": 1,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-loading",
+    "fontScale": 2,
+    "width": 320,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-detail",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-detail",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expense-form",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expense-form",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habit-form",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habit-form",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-long",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-long",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-long",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-long",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-long",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-long",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-empty",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-empty",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-empty",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-empty",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-empty",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-empty",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-error",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "expenses-error",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-error",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "habits-error",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-error",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-error",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-loading",
+    "fontScale": 1,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  },
+  {
+    "fixture": "recurring-loading",
+    "fontScale": 2,
+    "width": 390,
+    "overflow": false,
+    "bad": []
+  }
+]
