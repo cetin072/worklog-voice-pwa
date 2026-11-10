@@ -7,7 +7,7 @@ let next=0;const req=()=>`44444444-4444-4444-8444-${String(++next).padStart(12,'
 test('습관 실제 DB: 하루 한 건·확인/취소·동시 수정 충돌·과거 보존·종료·RLS',async()=>{
  const db=new PGlite();try{
   await db.exec(`create role anon;create role authenticated;create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create table auth.users(id uuid primary key);insert into auth.users values('${A}'),('${B}');grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;create schema worklog;grant usage on schema worklog to authenticated,anon;`);
-  await db.exec(fs.readFileSync('supabase/migrations/20261109234334_habits_v1.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261110065340_habits_v1.sql','utf8'));
   await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${A}',false)`);
   const today=(await db.query("select ((now() at time zone 'Asia/Seoul')::date)::text as today_key")).rows[0].today_key;
   const call=async(command,version,id=req())=>(await db.query('select worklog.mutate_habit($1,$2,$3,$4) value',[H,id,version,JSON.stringify(command)])).rows[0].value;

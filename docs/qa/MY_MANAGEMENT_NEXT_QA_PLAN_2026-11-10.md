@@ -1,6 +1,6 @@
 # 내 관리 — DB 적용 및 누적 QA APK 준비
 
-현재 승인 범위는 코드 보완·자동검수·적용 계획·빌드 준비다. 이 문서의 실행 명령은 준비 자료이며 원격 DB 적용·APK dispatch·설치·운영 배포는 실행하지 않았다.
+이 문서는 적용 전 계획이다. 이후 사용자 승인으로 신규 DB 3개를 적용했으며, 실제 결과는 [DB·APK 실행 기록](MY_MANAGEMENT_DB_APK_EXECUTION_2026-11-10.md)을 따른다. 아래 미적용/차단 상태는 계획 수립 시점의 기록이다. 파일 버전은 원격 실제 이력과 맞췄다.
 
 ## 이번 보완과 실행 근거
 
@@ -20,9 +20,9 @@
 
 | 적용 순서 | 파일 | SHA-256 |
 |---|---|---|
-| 1 | 20261109232907_regular_expenses_v1.sql | 9365d350db197797ab17a3eedca82bcee8c4f8477fff63be9600aa926396c53e |
-| 2 | 20261109233147_repeating_work_v1.sql | e4278a4a83d756bf099ee18d11a5ae2315912c91a37a1a6199192cb2f8836a53 |
-| 3 | 20261109234334_habits_v1.sql | 2dd21b8b6403ddf151bfeb6480fdc2d30e7e11f4ef72971554295323c314a0dc |
+| 1 | 20261110065304_regular_expenses_v1.sql | 9365d350db197797ab17a3eedca82bcee8c4f8477fff63be9600aa926396c53e |
+| 2 | 20261110065316_repeating_work_v1.sql | e4278a4a83d756bf099ee18d11a5ae2315912c91a37a1a6199192cb2f8836a53 |
+| 3 | 20261110065340_habits_v1.sql | 2dd21b8b6403ddf151bfeb6480fdc2d30e7e11f4ef72971554295323c314a0dc |
 
 1은 기존 subscriptions에 유형/예상액 필드와 납부 영수증을 추가한다. 2는 반복 규칙·요청 영수증·읽기/변경 RPC와 기존 work_records 보호 trigger 2개를 추가한다. 3은 독립 습관·체크·요청 영수증을 추가한다. 과거 기록 일괄 변환/삭제와 미래 회차 사전 생성은 없다. 종료는 보관이며 계정 삭제의 cascade와 구분한다.
 

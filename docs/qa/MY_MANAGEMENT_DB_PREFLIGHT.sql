@@ -3,7 +3,7 @@
 begin read only;
 set local statement_timeout = '15s';
 select version, name from supabase_migrations.schema_migrations
-where version in ('20261109125845','20261109144344','20261109232907','20261109233147','20261109234334') order by version;
+where version in ('20261109125845','20261109144344','20261110065304','20261110065316','20261110065340') order by version;
 select table_name,column_name,data_type,is_nullable,column_default
 from information_schema.columns where table_schema='worklog'
 and table_name in ('subscriptions','work_records') order by table_name,ordinal_position;
