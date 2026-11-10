@@ -1,5 +1,10 @@
 export const BRIEFING_TASK_LIMIT = 500;
 
+// A fallback/probe uses the same known Task/Schedule metadata classification.
+ // The fast RPC additionally excludes active Schedule links without metadata.
+export const BRIEFING_OPEN_TASK_REST_FILTER =
+  '(or(action_kind.is.null,action_kind.eq.task),or(metadata->actionEngine->>kind.is.null,metadata->actionEngine->>kind.neq.schedule))';
+
 /** Boundaries are explicit: no SQL changes or elevated keys, only the same user's RLS read. */
 export async function briefingCompleteness({ client, workspaceId, sourceCount, displayedCount, rpcBounded = false }) {
   const filteredTaskCount = Math.max(0, Math.min(sourceCount, BRIEFING_TASK_LIMIT) - displayedCount);
@@ -11,6 +16,7 @@ export async function briefingCompleteness({ client, workspaceId, sourceCount, d
     if (!client || typeof client.select !== 'function') throw new Error('no pagination probe');
     const next = await client.select('work_records', {
       select: 'id', workspace_id: `eq.${workspaceId}`, status: 'in.(in_progress,waiting,needs_review)',
+      and: BRIEFING_OPEN_TASK_REST_FILTER,
       order: 'updated_at.desc', offset: String(sourceCount), limit: '1',
     });
     if (!Array.isArray(next)) throw new Error('invalid pagination result');
