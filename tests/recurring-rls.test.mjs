@@ -9,14 +9,17 @@ const request=()=>`44444444-4444-4444-8444-${String(++next).padStart(12,'0')}`;
 test('반복 업무 실제 SQL: 원본 소유자·회차 검증·완료/Undo·중복 요청·버전 충돌·종료 이력',async()=>{
  const db=new PGlite();
  try {
-  await db.exec(`create role anon;create role authenticated;create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create table auth.users(id uuid primary key);insert into auth.users values('${A}'),('${B}');grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;create schema worklog;grant usage on schema worklog to authenticated,anon;create table worklog.work_records(id uuid primary key,created_by_user_id uuid not null);insert into worklog.work_records values('${W}','${A}'),('${W2}','${A}');alter table worklog.work_records enable row level security;grant select,update on worklog.work_records to authenticated;create policy owner on worklog.work_records for all to authenticated using(created_by_user_id=auth.uid()) with check(created_by_user_id=auth.uid());`);
+  await db.exec(`create role anon;create role authenticated;create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create table auth.users(id uuid primary key);insert into auth.users values('${A}'),('${B}');grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;create schema worklog;grant usage on schema worklog to authenticated,anon;create table worklog.work_records(id uuid primary key,created_by_user_id uuid references auth.users(id) on delete set null,title text default '원본',status text default '진행중',due_at timestamptz,action_kind text default 'task',completed_at timestamptz,next_attention_at timestamptz);insert into worklog.work_records values('${W}','${A}'),('${W2}','${A}');alter table worklog.work_records enable row level security;grant select,update on worklog.work_records to authenticated;create policy owner on worklog.work_records for all to authenticated using(created_by_user_id=auth.uid() and coalesce(current_setting('qa.access',true),'')<>'revoked') with check(created_by_user_id=auth.uid());`);
   await db.exec(fs.readFileSync('supabase/migrations/20261109233147_repeating_work_v1.sql','utf8'));
   await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${A}',false)`);
   const call=async(cmd,version,id=request(),workId=W)=>(await db.query('select worklog.mutate_repeating_work($1,$2,$3,$4) value',[workId,id,version,JSON.stringify(cmd)])).rows[0].value;
+  await db.query("update worklog.work_records set title='원본 유지 확인' where id=$1",[W]);
   const rev={title:'청소',time:'',rule:{kind:'weekly',anchor:'2026-01-02',interval:1,weekdays:[5],unit:'day'}};
   const createId=request();let row=await call({op:'create',revision:rev},-1,createId);assert.equal(row.version,0);
   assert.deepEqual(await call({op:'create',revision:rev},-1,createId),row);
   assert.deepEqual(await call({op:'create',revision:rev},-1),row,'앱 재시작의 새 요청도 같은 원본에 중복 규칙을 만들지 않음');
+  await assert.rejects(db.query("update worklog.work_records set status='완료' where id=$1",[W]),/REPEATING_WORK_USE_OCCURRENCE/,'이전 기기의 일반 완료는 반복 부모를 변경할 수 없음');
+  await assert.rejects(db.query("update worklog.work_records set title='잘못된 일반 수정' where id=$1",[W]),/REPEATING_WORK_USE_OCCURRENCE/);
   const complete={op:'complete',key:'v1:2026-01-02',originalDate:'2026-01-02'};const id=request();row=await call(complete,0,id);assert.equal(row.version,1);assert.equal(row.state.occurrences[complete.key].status,'completed');
   for(let i=0;i<10;i++)assert.deepEqual(await call(complete,0,id),row);
   await assert.rejects(call({...complete,key:'v1:2026-01-03',originalDate:'2026-01-03'},1),/INVALID_OCCURRENCE/);
@@ -39,9 +42,20 @@ test('반복 업무 실제 SQL: 원본 소유자·회차 검증·완료/Undo·�
   intervalRow=await call({...firstInterval,op:'next-date',nextDate:plus14},4,request(),W2);
   intervalRow=await call({op:'complete',key:'v1:i1',originalDate:plus14},5,request(),W2);
   await assert.rejects(call({...firstInterval,op:'undo'},6,request(),W2),/LATER_OCCURRENCE_EXISTS/);
+  const before=(await db.query('select count(*)::integer n from worklog.repeating_work_requests')).rows[0].n;
+  const feed=(await db.query("select worklog.get_my_repeating_work_month('2026-01-01') value")).rows[0].value;
+  assert.equal(feed.readonly,true);assert.ok(feed.events.length>0);assert.ok(feed.events.every(e=>e.editable===false&&e.app_path.startsWith('repeating-work?id=')));
+  assert.equal((await db.query('select count(*)::integer n from worklog.repeating_work_requests')).rows[0].n,before,'달력 읽기는 회차를 저장하지 않음');
+  await db.exec("select set_config('qa.access','revoked',false)");
+  assert.equal((await db.query('select * from worklog.repeating_work')).rows.length,0);
+  assert.equal((await db.query('select * from worklog.repeating_work_requests')).rows.length,0);
+  assert.equal((await db.query("select worklog.get_my_repeating_work_month('2026-01-01') value")).rows[0].value.events.length,0);
+  await db.exec("select set_config('qa.access','',false)");
   await db.exec(`select set_config('request.jwt.claim.sub','${B}',false)`);
   assert.equal((await db.query('select * from worklog.repeating_work')).rows.length,0);
   await assert.rejects(call({op:'end'},4),/RECORD_NOT_AVAILABLE/);
   await db.exec('reset role;set role anon;');await assert.rejects(db.query('select * from worklog.repeating_work'),/permission denied/);
+  await db.exec('reset role');await db.query('delete from auth.users where id=$1',[A]);
+  assert.equal((await db.query('select * from worklog.repeating_work')).rows.length,0);assert.equal((await db.query('select * from worklog.repeating_work_requests')).rows.length,0);
  } finally {await db.close();}
 });

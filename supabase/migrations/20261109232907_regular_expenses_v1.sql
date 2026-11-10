@@ -5,8 +5,8 @@ alter table worklog.subscriptions
 
 -- Append-only acknowledgements. The unique occurrence key makes retries idempotent.
 create table worklog.subscription_payments (
-  subscription_id uuid not null references worklog.subscriptions(id),
-  user_id uuid not null default auth.uid() references auth.users(id),
+  subscription_id uuid not null references worklog.subscriptions(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   due_date date not null,
   amount_krw integer not null check (amount_krw > 0 and amount_krw <= 100000000),
   name text not null check (char_length(btrim(name)) between 1 and 60),
@@ -47,3 +47,6 @@ begin
 end $$;
 revoke all on function worklog.confirm_subscription_payment(uuid,date) from public, anon;
 grant execute on function worklog.confirm_subscription_payment(uuid,date) to authenticated;
+
+-- Support the existing owner-filtered list/week queries.
+create index subscription_payments_owner_due on worklog.subscription_payments(user_id,due_date desc);

@@ -157,5 +157,7 @@ test('납부 회차 중복 방지·본인 격리·종료 후 이력 보존·임�
     assert.deepEqual((await paid()).rows, first.rows);
     await assert.rejects(asUser(db, USER_A, 'select worklog.confirm_subscription_payment($1,$2)', [id,'2026-12-15']), /EXPENSE_NOT_AVAILABLE/);
     await assert.rejects(asUser(db, USER_A, 'delete from worklog.subscription_payments'), /permission denied/);
+    await db.query('delete from auth.users where id=$1',[USER_A]);
+    assert.equal((await db.query('select * from worklog.subscription_payments')).rows.length,0,'명시적 계정 삭제의 기존 cascade 계약 유지');
   } finally { /* afterEach closes the isolated database. */ }
 });

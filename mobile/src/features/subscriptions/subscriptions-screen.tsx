@@ -1,3 +1,4 @@
+import { recordRowStyles } from '@/src/ui/record-row-styles';
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -58,10 +59,11 @@ const todayKey = () => seoulDateKeyFromIso(new Date().toISOString()) as string;
 const shortDate = (key: string) => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
 const dayLabel = (days: number) => (days === 0 ? '오늘' : days === 1 ? '내일' : `${days}일 뒤`);
 
-export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient }) {
+export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupabaseClient; ownerId:string }) {
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const mutation = useRef(false);
   const receiptsRef=useRef<PaymentReceipt[]>([]);
+  const snapshotReady=useRef(false);
   const createId = useRef<string | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,16 +84,18 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
   }, []);
 
   const syncReminders = useCallback((next: Subscription[], paid=receiptsRef.current) => {
-    void syncSubscriptionReminders(next, todayKey(), Date.now(), paid, ()=>alive.current).then((r) => {
+    if(!snapshotReady.current)return;
+    void syncSubscriptionReminders(next, todayKey(), Date.now(), paid, ()=>alive.current, ownerId).then((r) => {
       if (alive.current && r.status === 'permission-needed') setPermission((p) => (p === 'granted' ? 'undetermined' : p));
     }).catch(() => undefined);
-  }, []);
+  }, [ownerId]);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const [next, paid] = await Promise.all([listSubscriptions(client), listPaymentReceipts(client)]);
       if (!alive.current) return;
+      snapshotReady.current=true;
       setSubs(next);
       receiptsRef.current=paid;
       setReceipts(paid);
@@ -112,7 +116,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
   const rows = useMemo(() => buildSubscriptionRows(subs, filter, today), [subs, filter, today]);
   const urgent = useMemo(() => urgentItems(visible, today), [visible, today]);
 
-  function applyChange(next: Subscription[]) { setSubs(next); syncReminders(next); }
+  function applyChange(next: Subscription[]) { setSubs(next); if(snapshotReady.current)syncReminders(next);else void load(); }
 
   function openFromQuickText() {
     const text = quickText.replace(/\s+/g, ' ').trim();
@@ -249,7 +253,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
       <Text style={styles.summaryLabel}>{filter === 'all' ? '이번 달 예상 지출' : `이번 달 ${SCOPE_LABEL[filter]} 예상 지출`}</Text>
       <Text style={styles.summaryAmount}>{formatWon(expectedExpenseForMonth(visible, today))}</Text>
       <Text style={styles.summarySub}>월 환산 {formatWon(summary.monthlyTotalKrw)} · 연 환산 {formatWon(summary.yearlyTotalKrw)} · {summary.count}개</Text>
-      {filter === 'all' && subs.length > 0 ? <Text style={styles.summarySplit}>사업 {formatWon(allSummary.byScope.business.monthlyTotalKrw)} · 개인 {formatWon(allSummary.byScope.personal.monthlyTotalKrw)}</Text> : null}
+      {filter === 'all' && subs.length > 0 ? <Text style={styles.summarySplit}>사업 {formatWon(expectedExpenseForMonth(filterByScope(subs,'business'),today))} · 개인 {formatWon(expectedExpenseForMonth(filterByScope(subs,'personal'),today))}</Text> : null}
     </View>
 
     <View style={styles.filters}>
@@ -334,10 +338,10 @@ const styles = StyleSheet.create({
   row: { backgroundColor: c.surface, borderRadius: mobileTheme.radius.card, padding: 16, gap: 4, borderWidth: 1, borderColor: c.borderSubtle },
   rowCandidate: { borderColor: c.overdueBorder, backgroundColor: c.overdueBackground },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  rowName: { flex: 1, fontSize: 17, fontWeight: '700', color: c.text },
+  rowName: { ...recordRowStyles.taskTitle, flex: 1 },
   rowAmount: { fontSize: 17, fontWeight: '700', color: c.text },
   rowAmountUnit: { fontSize: 12, fontWeight: '400', color: c.textMuted },
-  rowMeta: { fontSize: 13, color: c.textSecondary, lineHeight: 19 },
+  rowMeta: recordRowStyles.taskMeta,
   candidateText: { color: c.danger, fontWeight: '600' },
   rowActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   rowButton: { flex: 1, minHeight: mobileTheme.size.touchTarget, borderRadius: mobileTheme.radius.control, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface },

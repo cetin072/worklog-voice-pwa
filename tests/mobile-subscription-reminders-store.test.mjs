@@ -93,10 +93,12 @@ function fakeClient(result) {
   return { from: (table) => { calls.push(['from', table]); return builder; }, calls };
 }
 
-test('목록은 보관되지 않은 구독만 조회하고 잘못된 행은 걸러낸다', async () => {
-  const client = fakeClient({ data: [validRow(), validRow({ id: 'bad', amount_krw: -1 })], error: null });
+test('목록은 보관되지 않은 구독의 전체 조회를 확인하고 잘못된 행은 성공 처리하지 않는다', async () => {
+  const client = fakeClient({ data: [validRow()], count:1, error: null });
   const list = await store.listSubscriptions(client);
   assert.deepEqual(list.map((s) => s.id), ['a']);
+  await assert.rejects(store.listSubscriptions(fakeClient({data:[validRow()],count:2,error:null})),/전체 목록/);
+  await assert.rejects(store.listSubscriptions(fakeClient({data:[validRow({amount_krw:-1})],count:1,error:null})),/데이터 확인/);
   assert.deepEqual(client.calls.find((c) => c[0] === 'is'), ['is', 'archived_at', null]);
   assert.deepEqual(client.calls[0], ['from', 'subscriptions']);
 });

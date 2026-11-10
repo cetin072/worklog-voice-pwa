@@ -9,7 +9,7 @@ export function nativeComponentHarness(file,name,imports={},seed=[]) {
  const native={View:'View',Text:'Text',TextInput:'TextInput',Pressable:'Pressable',Platform:{OS:'android'},StyleSheet:{create:s=>s},AppState:{addEventListener:()=>({remove(){}})},Alert:{alert(){}}};
  const exp={};const js=ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
  new Function('React','require','exports',js)(React,n=>n==='react'?React:n==='react-native'?native:imports[n]??(()=>{throw Error('Missing boundary '+n)})(),exp);
- return {render(props={}){si=ri=ci=ei=0;return exp[name](props)},async effects(){pending.splice(0).forEach(fn=>fn());await new Promise(r=>setImmediate(r));},close(){effects.forEach(e=>e.cleanup?.());},states};
+ return {call(...args){si=ri=ci=ei=0;return exp[name](...args)},render(props={}){si=ri=ci=ei=0;return exp[name](props)},async effects(){pending.splice(0).forEach(fn=>fn());await new Promise(r=>setImmediate(r));},close(){effects.forEach(e=>e.cleanup?.());},states};
 }
 export const nativeNodes=tree=>Array.isArray(tree)?tree.flatMap(nativeNodes):tree&&typeof tree==='object'?[tree,...nativeNodes(tree.props?.children)]:[];
 export const nativeWords=tree=>Array.isArray(tree)?tree.map(nativeWords).join(' '):tree&&typeof tree==='object'?nativeWords(tree.props?.children):String(tree??'');

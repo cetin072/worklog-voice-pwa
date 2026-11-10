@@ -29,14 +29,14 @@ async function ensureChannel() {
   });
 }
 
-function requestFor(reminder: PlannedSubscriptionReminder) {
+function requestFor(reminder: PlannedSubscriptionReminder, userId:string) {
   return {
     identifier: reminder.identifier,
     content: {
       title: reminder.title,
       body: reminder.body,
       sound: 'default' as const,
-      data: { owner: SUBSCRIPTION_REMINDER_OWNER, target: 'subscriptions', subscriptionId: reminder.subscriptionId, kind: reminder.kind, date: reminder.date },
+      data: { userId, owner: SUBSCRIPTION_REMINDER_OWNER, target: 'subscriptions', subscriptionId: reminder.subscriptionId, kind: reminder.kind, date: reminder.date },
     },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(reminder.triggerAt), channelId: CHANNEL_ID },
   };
@@ -60,7 +60,7 @@ export async function requestSubscriptionReminderPermission() {
  * 구독 알림만 전부 지우고 현재 목록 기준으로 다시 건다. 권한을 새로 묻지 않는다
  * (권한 요청은 사용자가 '알림 켜기'를 누를 때만). 실행은 한 번에 하나씩 순서대로.
  */
-export function syncSubscriptionReminders(subs: readonly Subscription[], todayKey: string, nowMs = Date.now(), paid: readonly {subscription_id:string;due_date:string}[] = [], current:()=>boolean = ()=>true): Promise<SubscriptionReminderSyncResult> {
+export function syncSubscriptionReminders(subs: readonly Subscription[], todayKey: string, nowMs = Date.now(), paid: readonly {subscription_id:string;due_date:string}[] = [], current:()=>boolean = ()=>true, userId=''): Promise<SubscriptionReminderSyncResult> {
   const token=generation;
   const active=()=>current()&&token===generation;
   const run = async (): Promise<SubscriptionReminderSyncResult> => {
@@ -72,7 +72,7 @@ export function syncSubscriptionReminders(subs: readonly Subscription[], todayKe
     const existing = await Notifications.getAllScheduledNotificationsAsync();
     for(const r of existing.filter(isSubscriptionReminderRequest)){if(!active())return {status:'superseded'};await Notifications.cancelScheduledNotificationAsync(r.identifier);}
     const plan = planSubscriptionReminders(subs, todayKey, nowMs, paid);
-    for (const reminder of plan){if(!active())return {status:'superseded'};await Notifications.scheduleNotificationAsync(requestFor(reminder));}
+    for (const reminder of plan){if(!active())return {status:'superseded'};await Notifications.scheduleNotificationAsync(requestFor(reminder,userId));}
     return { status: 'synced', scheduled: plan.length };
   };
   const result = queue.then(run, run);
@@ -91,4 +91,18 @@ export function cancelAllSubscriptionReminders() {
   const result = queue.then(run, run);
   queue = result.catch(() => undefined);
   return result;
+}
+
+
+/** Only a known current owner keeps reservations across restart. Legacy unowned entries are rebuilt on opening 내 관리. */
+export function reconcileSubscriptionReminderOwner(userId:string,current:()=>boolean) {
+ const token=generation;
+ const run=async()=>{
+  if(Platform.OS==='web'||!current()||token!==generation)return;
+  for(const request of await Notifications.getAllScheduledNotificationsAsync()){
+   if(!current()||token!==generation)return;
+   if(isSubscriptionReminderRequest(request)&&request.content.data?.userId!==userId)await Notifications.cancelScheduledNotificationAsync(request.identifier);
+  }
+ };
+ const result=queue.then(run,run);queue=result.catch(()=>undefined);return result;
 }

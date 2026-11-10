@@ -4,11 +4,12 @@ import {register} from 'node:module';
 import {nativeComponentHarness,nativeNodes,nativeWords} from './helpers/native-component-harness.mjs';
 register('./helpers/mobile-ts-loader.mjs',import.meta.url);
 const model=await import('../mobile/src/features/habits/habit-model.ts'),date=await import('../mobile/src/features/home/home-calendar-model.ts'),theme=await import('../mobile/src/ui/theme.ts');
+const rowStyles=await import('../mobile/src/ui/record-row-styles.ts');
 const today=date.seoulDate(),habit={id:'h',name:'독서',frequency:'weekly-target',weekdays:[],target:3,start_date:today,archived_at:null,version:0};
 test('실제 습관 화면 10회 터치는 체크 요청 하나, 저장 확인 후 표시와 실행 취소, 실패 시 낙관적 성공 없음',async()=>{
  let resolve,calls=0,fail=false;const request=new Promise(r=>{resolve=r});
  const h=nativeComponentHarness('mobile/src/features/habits/habits-screen.tsx','HabitsScreen',{
-  'expo-crypto':{randomUUID:()=> 'request'},'@/src/ui/theme':theme,'../home/home-calendar-model':date,'./habit-model':model,'./habit-store':{loadHabits:async()=>({habits:[habit],checks:[]}),mutateHabit:async(_client,_id,_request,version,command)=>{calls++;if(fail)throw Error('저장 확인 필요');await request;return{habit_id:'h',day:today,checked:command.checked,version:version+1};}},
+  '@/src/ui/record-row-styles':rowStyles,'expo-crypto':{randomUUID:()=> 'request'},'@/src/ui/theme':theme,'../home/home-calendar-model':date,'./habit-model':model,'./habit-store':{loadHabits:async()=>({habits:[habit],checks:[]}),mutateHabit:async(_client,_id,_request,version,command)=>{calls++;if(fail)throw Error('저장 확인 필요');await request;return{habit_id:'h',day:today,checked:command.checked,version:version+1};}},
  });
  const props={client:{}};h.render(props);await h.effects();
  const button=label=>nativeNodes(h.render(props)).find(n=>n.props?.accessibilityLabel===label);

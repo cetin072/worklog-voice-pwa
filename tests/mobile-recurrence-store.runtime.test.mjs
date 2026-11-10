@@ -24,3 +24,10 @@ test('응답 유실 후 동일 요청 읽기, jsonb 키 순서 변화 허용, �
  b.maybeSingle=async()=>({data:null,error:null});await assert.rejects(mutateRepeatingWork(client,'w','id',0,command),/저장 확인 필요/);
  client.rpc=async()=>{owner='B';return {data:saved,error:null}};await assert.rejects(mutateRepeatingWork(client,'w','id',0,command),/계정이 바뀌어/);
 });
+
+test('ERP 읽기 계약은 월별 RPC만 호출하고 반환 행은 읽기 전용이며 잘못된 월은 요청하지 않음',async()=>{
+ const {readRepeatingMonth}=await import('../mobile/src/features/recurring/recurrence-read-api.ts');let calls=0;
+ const client={rpc:async(name,args)=>{calls++;assert.equal(name,'get_my_repeating_work_month');assert.equal(args.p_month,'2026-11-01');return {data:{events:[{editable:false}],limited:false,readonly:true},error:null}}};
+ assert.equal((await readRepeatingMonth(client,'2026-11')).readonly,true);
+ await assert.rejects(readRepeatingMonth(client,'invalid'));assert.equal(calls,1);
+});

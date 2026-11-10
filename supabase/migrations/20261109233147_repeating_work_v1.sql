@@ -2,14 +2,14 @@
 -- A repeating series attaches to the existing canonical WorkRecord, never a second copy.
 create table worklog.repeating_work (
   work_record_id uuid primary key references worklog.work_records(id),
-  user_id uuid not null default auth.uid() references auth.users(id),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   version integer not null default 0 check (version >= 0),
   state jsonb not null check (jsonb_typeof(state) = 'object')
 );
 create table worklog.repeating_work_requests (
-  user_id uuid not null default auth.uid() references auth.users(id),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   request_id uuid not null,
-  work_record_id uuid not null references worklog.repeating_work(work_record_id),
+  work_record_id uuid not null references worklog.repeating_work(work_record_id) on delete cascade,
   command jsonb not null,
   created_at timestamptz not null default now(),
   result jsonb not null,
@@ -21,11 +21,11 @@ revoke all on worklog.repeating_work,worklog.repeating_work_requests from anon,a
 grant select,insert,update on worklog.repeating_work to authenticated;
 grant select,insert on worklog.repeating_work_requests to authenticated;
 create policy repeating_work_owner on worklog.repeating_work for all to authenticated
-  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()) and exists (
+  using (user_id = (select auth.uid()) and exists(select 1 from worklog.work_records w where w.id=work_record_id and w.created_by_user_id=(select auth.uid()))) with check (user_id = (select auth.uid()) and exists (
     select 1 from worklog.work_records w where w.id=work_record_id and w.created_by_user_id=(select auth.uid())
   ));
 create policy repeating_work_requests_owner on worklog.repeating_work_requests for all to authenticated
-  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()) and exists (
+  using (user_id = (select auth.uid()) and exists(select 1 from worklog.repeating_work w where w.work_record_id=repeating_work_requests.work_record_id)) with check (user_id = (select auth.uid()) and exists (
     select 1 from worklog.repeating_work w where w.work_record_id=repeating_work_requests.work_record_id and w.user_id=(select auth.uid())
   ));
 
@@ -34,7 +34,7 @@ language plpgsql immutable security invoker set search_path='' as $$
 declare d date; n integer; w jsonb;
 begin
   d := (r->'rule'->>'anchor')::date; n := (r->'rule'->>'interval')::integer;
-  if d is null or d < date '1900-01-01' or d > date '2199-12-31' or n is null or n not between 1 and 365
+  if jsonb_typeof(r->'title') is distinct from 'string' or (r->>'time' is not null and jsonb_typeof(r->'time') is distinct from 'string') or d is null or d < date '1900-01-01' or d > date '2199-12-31' or n is null or n not between 1 and 365
     or coalesce(r->'rule'->>'kind','') not in ('daily','weekly','monthly','yearly','after-completion')
     or coalesce(r->'rule'->>'unit','') not in ('day','week')
     or coalesce(jsonb_typeof(r->'rule'->'weekdays'),'') <> 'array'
@@ -128,7 +128,8 @@ begin
     if p_expected_version is distinct from -1 then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
     rev:=p_command->'revision';
     if not worklog.validate_repeat_revision(rev) then raise exception 'INVALID_REPEAT_RULE'; end if;
-    rev:=rev || jsonb_build_object('version',1,'from',rev->'rule'->>'anchor');
+    rev:=jsonb_set(rev,'{rule,anchor}',to_jsonb((rev->'rule'->>'anchor')::date::text));
+    rev:=rev || jsonb_build_object('version',1,'from',rev->'rule'->>'anchor','time',coalesce(rev->>'time',''));
     s:=jsonb_build_object('revisions',jsonb_build_array(rev),'pauses','[]'::jsonb,'endedOn',null,'occurrences','{}'::jsonb);
     insert into worklog.repeating_work(work_record_id,state) values(p_work_record_id,s) returning * into current_row;
   else
@@ -168,8 +169,9 @@ begin
       s:=jsonb_set(s,array['occurrences',k],item);
     elsif op='revise' then
       rev:=p_command->'revision';
-      if not worklog.validate_repeat_revision(rev) or rev->>'from' is null or (rev->>'from')::date<today or (rev->>'from')::date <= (s->'revisions'->-1->>'from')::date then raise exception 'INVALID_FUTURE_REVISION'; end if;
-      rev:=rev || jsonb_build_object('version',jsonb_array_length(s->'revisions')+1);
+      if not worklog.validate_repeat_revision(rev) or jsonb_typeof(rev->'from') is distinct from 'string' or rev->>'from' is null or (rev->>'from')::date<today or (rev->>'from')::date <= (s->'revisions'->-1->>'from')::date then raise exception 'INVALID_FUTURE_REVISION'; end if;
+      rev:=jsonb_set(rev,'{rule,anchor}',to_jsonb((rev->'rule'->>'anchor')::date::text));
+      rev:=rev || jsonb_build_object('version',jsonb_array_length(s->'revisions')+1,'from',(rev->>'from')::date::text,'time',coalesce(rev->>'time',''));
       s:=jsonb_set(s,'{revisions}',s->'revisions'||jsonb_build_array(rev));
     elsif op='pause' then
       if s->>'endedOn' is not null or exists(select 1 from jsonb_array_elements(s->'pauses') v where v->>'to' is null) then raise exception 'ALREADY_STOPPED'; end if;
@@ -188,3 +190,77 @@ begin
 end $$;
 revoke all on function worklog.mutate_repeating_work(uuid,uuid,integer,jsonb) from public,anon;
 grant execute on function worklog.mutate_repeating_work(uuid,uuid,integer,jsonb) to authenticated;
+
+-- ERP consumes this read-only projection and opens the existing app for changes.
+-- No future WorkRecords or Schedule rows are created. Both series and canonical parent RLS apply.
+create function worklog.get_my_repeating_work_month(p_month date) returns jsonb
+language plpgsql stable security invoker set search_path='' as $$
+declare first_day date:=date_trunc('month',p_month)::date; last_day date:=(date_trunc('month',p_month)+interval '1 month - 1 day')::date; result jsonb;
+begin
+ if auth.uid() is null then raise exception 'AUTH_REQUIRED' using errcode='42501'; end if;
+ if first_day is null or first_day<date '1900-01-01' or last_day>date '2199-12-31' then raise exception 'INVALID_MONTH'; end if;
+ with revisions as (
+  select w.work_record_id,w.state,r.value as revision from worklog.repeating_work w
+  join worklog.work_records original on original.id=w.work_record_id and original.created_by_user_id=auth.uid()
+  cross join lateral jsonb_array_elements(w.state->'revisions') r
+ ), candidates as (
+  select r.*, 'v'||(revision->>'version')||':'||d::date::text as key from revisions r
+  cross join lateral generate_series(first_day::timestamp,last_day::timestamp,interval '1 day') d where revision->'rule'->>'kind'<>'after-completion'
+  union all
+  select r.*, 'v'||(revision->>'version')||':i'||i from revisions r
+  cross join lateral generate_series(0,(select count(*)::integer from jsonb_object_keys(state->'occurrences'))) i where revision->'rule'->>'kind'='after-completion'
+  union all
+  select r.*, k from revisions r cross join lateral jsonb_object_keys(state->'occurrences') k where split_part(k,':',1)='v'||(revision->>'version')
+ ), resolved as (
+  select distinct on(work_record_id,key) *,state->'occurrences'->key as saved,
+   coalesce((state->'occurrences'->key->>'originalDate')::date,worklog.repeat_occurrence_date(state,key)) as original_date
+  from candidates order by work_record_id,key
+ ), rows as (
+  select *,coalesce((saved->>'dueDate')::date,original_date) as due_date,coalesce(saved->>'status','pending') as status from resolved
+ ), visible as (
+  select *,coalesce(saved->>'time',revision->>'time') as time from rows
+  where original_date is not null and due_date between first_day and last_day
+  and ((status<>'pending') or (
+   worklog.repeat_occurrence_date(state,key) is not null
+   and (state->>'endedOn' is null or original_date<(state->>'endedOn')::date)
+   and not exists(select 1 from jsonb_array_elements(state->'pauses') p where original_date>=(p->>'from')::date and (p->>'to' is null or original_date<(p->>'to')::date))
+  ))
+ ), bounded as (select * from visible order by due_date,work_record_id,key limit 2001)
+ select jsonb_build_object('events',coalesce((select jsonb_agg(jsonb_build_object(
+   'work_record_id',work_record_id,'key',key,'title',coalesce(saved->>'title',revision->>'title'),
+   'date',due_date::text,'time',time,'status',status,'editable',false,
+   'app_path','repeating-work?id='||work_record_id::text||'&date='||due_date::text
+ ) order by due_date,work_record_id,key) from (select * from bounded limit 2000) b),'[]'::jsonb),
+ 'limited',(select count(*)>2000 from bounded),'readonly',true) into result;
+ return result;
+end $$;
+revoke all on function worklog.get_my_repeating_work_month(date) from public,anon;
+grant execute on function worklog.get_my_repeating_work_month(date) to authenticated;
+
+-- Support the existing owner-filtered list/week queries.
+create index repeating_work_owner_id on worklog.repeating_work(user_id,work_record_id);
+
+-- A stale Home/ERP client must not complete/edit the canonical series parent as a one-off task.
+-- Existing atomic Core RPCs retain their implementation and roll back on this guard.
+create function worklog.guard_repeating_work_parent() returns trigger
+language plpgsql volatile security invoker set search_path='' as $$
+declare changed boolean;
+begin
+ if tg_op='DELETE' then changed:=true;
+ else changed:= old.title is distinct from new.title or old.status is distinct from new.status
+   or old.due_at is distinct from new.due_at or old.action_kind is distinct from new.action_kind
+   or old.completed_at is distinct from new.completed_at or old.next_attention_at is distinct from new.next_attention_at;
+ end if;
+ if changed and exists(select 1 from worklog.repeating_work r where r.work_record_id=old.id) then
+  raise exception 'REPEATING_WORK_USE_OCCURRENCE: 반복 업무는 회차 상세에서 처리해주세요.' using errcode='P0001';
+ end if;
+ if tg_op='DELETE' then return old; end if;
+ return new;
+end $$;
+revoke all on function worklog.guard_repeating_work_parent() from public,anon;
+grant execute on function worklog.guard_repeating_work_parent() to authenticated;
+create trigger repeating_work_parent_update_guard
+ before update of title,status,due_at,action_kind,completed_at,next_attention_at on worklog.work_records
+ for each row execute function worklog.guard_repeating_work_parent();
+create trigger repeating_work_parent_delete_guard
+ before delete on worklog.work_records for each row execute function worklog.guard_repeating_work_parent();

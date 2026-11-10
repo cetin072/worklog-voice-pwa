@@ -18,3 +18,11 @@ test('실제 알림 reconcile은 중복 예약 없이 변경·중지·로그아�
  await r.syncRepeatReminders([{...w,state:{...w.state,endedOn:today}}],'A',today,()=>true);assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
  const pending=r.syncRepeatReminders([w],'A',today,()=>true);const cleanup=r.cancelAllRepeatReminders();await Promise.all([pending,cleanup]);assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
 });
+
+test('시작 시 같은 계정 예약은 유지하고 다른 계정 예약만 정리',async()=>{
+ const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10),future=new Date(Date.parse(today+'T12:00:00Z')+86400000).toISOString().slice(0,10);
+ const work={workRecordId:'w',version:0,state:m.newRepeatState('청소',{kind:'daily',anchor:future,interval:1,weekdays:[],unit:'day'},'09:00')};
+ const other={identifier:'schedule.other',content:{data:{owner:'schedule'}}};n.seed([other]);await r.syncRepeatReminders([work],'A',today,()=>true);
+ const count=(await n.getAllScheduledNotificationsAsync()).length;await r.reconcileRepeatReminderOwner('A',()=>true);assert.equal((await n.getAllScheduledNotificationsAsync()).length,count);
+ await r.reconcileRepeatReminderOwner('B',()=>true);assert.deepEqual(await n.getAllScheduledNotificationsAsync(),[other]);
+});
