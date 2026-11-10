@@ -13,6 +13,7 @@ export function CalendarSettings() {
       <Text style={styles.title}>Google 캘린더</Text>
       <Text style={styles.connectionStatus}>{info ? info.expired ? '연결 만료' : '연결됨' : '연결 안 됨'}</Text>
     </View>
+    <Text style={styles.hint}>연결만으로 자동 등록되지 않습니다. 일정의 Google 아이콘을 눌러 한 건씩 추가합니다.</Text>
     {info?.email ? <Text selectable style={styles.hint}>{info.email}</Text> : null}
     <View style={styles.actions}>
     <Pressable accessibilityRole="button" accessibilityLabel="Google 캘린더 연결" disabled={!connection || status?.connecting} onPress={() => { void connection?.connect().catch(() => undefined); }} style={styles.button}>

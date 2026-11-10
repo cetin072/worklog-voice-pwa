@@ -15,7 +15,7 @@ test('Mobile work status reuses the authenticated Data Core briefing mutation co
 
 test('Mobile work parity exposes completion, undo, and one-tap editing from the home briefing', () => {
   assert.match(homeSource, /completeTaskInline/);
-  assert.match(homeSource, /onComplete=\{\(\) => void completeTaskInline\(task\)\}/);
+  assert.match(homeSource, /onComplete=\{\(\) => repeatRow\(task\)\?void completeRepeat\(task\):void completeTaskInline\(task\)\}/);
   assert.match(homeSource, /undoCompletedTask/);
   assert.match(homeSource, /실행 취소/);
   assert.match(homeSource, /const accessToken = await getFreshAccessToken\(client\)/);

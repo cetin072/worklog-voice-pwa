@@ -1,8 +1,9 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { requireMeetingOwner } from './meeting-owner';
+import { File, Paths } from 'expo-file-system';
 
 import type { MobileRecordingAudioInput } from './audio-input';
 
-const INDEX_FILE_NAME = 'meeting-recordings-v1.json';
+
 
 
 export type MeetingRecordingEntry = Readonly<{
@@ -16,8 +17,8 @@ export type MeetingRecordingEntry = Readonly<{
   title: string;
 }>;
 
-function indexFile() {
-  return new File(Paths.document, INDEX_FILE_NAME);
+function indexFile(owner = requireMeetingOwner()) {
+  return new File(Paths.document, `meeting-recordings-owned-${owner}.json`);
 }
 
 function normalizedDate(value: unknown) {
@@ -55,14 +56,14 @@ function normalizedEntry(value: unknown): MeetingRecordingEntry | null {
   });
 }
 
-function writeIndex(entries: readonly MeetingRecordingEntry[]) {
+function writeIndex(entries: readonly MeetingRecordingEntry[], owner = requireMeetingOwner()) {
   // Validate a new index before replacing the old one. Never truncate older records.
-  const target = indexFile();
+  const target = indexFile(owner);
   const pending = new File(Paths.document,
     `meeting-recordings-v1.${Date.now()}.${Math.floor(Math.random() * 1_000_000_000)}.pending`);
   let movedToTarget = false;
   try {
-    const text = JSON.stringify({ version: 1, items: entries });
+    const text = JSON.stringify({ version: 1, ownerUserId: owner, items: entries });
     pending.create();
     pending.write(text);
     const verified = JSON.parse(pending.textSync()) as { version: number; items: unknown[] };
@@ -74,7 +75,7 @@ function writeIndex(entries: readonly MeetingRecordingEntry[]) {
     // Expo File.moveSync mutates pending.uri to the destination.
     // It is no longer a disposable temporary file after this point.
     movedToTarget = true;
-    const committed = readIndexRaw();
+    const committed = readIndexRaw(owner);
     if (committed.length !== entries.length || entries.some((row) =>
       !committed.some((saved) => saved.id === row.id && saved.uri === row.uri && saved.title === row.title))) {
       throw new Error('INDEX_COMMIT_VERIFICATION_FAILED');
@@ -88,12 +89,12 @@ function writeIndex(entries: readonly MeetingRecordingEntry[]) {
   }
 }
 
-function readIndexRaw(): MeetingRecordingEntry[] {
-  const file = indexFile();
+function readIndexRaw(owner = requireMeetingOwner()): MeetingRecordingEntry[] {
+  const file = indexFile(owner);
   if (!file.exists) return [];
   try {
-    const parsed = JSON.parse(file.textSync()) as { version?: unknown; items?: unknown[] };
-    if (parsed?.version !== 1 || !Array.isArray(parsed.items)) {
+    const parsed = JSON.parse(file.textSync()) as { version?: unknown; ownerUserId?: unknown; items?: unknown[] };
+    if (parsed?.version !== 1 || parsed.ownerUserId !== owner || !Array.isArray(parsed.items)) {
       throw new Error('INVALID_MEETING_INDEX');
     }
     const entries = parsed.items.map((item) => normalizedEntry(item));
@@ -130,52 +131,20 @@ function entryId(recording: MobileRecordingAudioInput) {
   return `meeting-${stamp}-${safeFile}`;
 }
 
-/** Recover only Expo's own M4A recordings from the app documents directory.
- * This never changes audio content and never overwrites an invalid index.
- * File creation/modification time is used for sorting; recovered duration is unknown.
- */
-function findUnindexedMeetingAudio(existing: readonly MeetingRecordingEntry[]): MeetingRecordingEntry[] {
-  const known = new Set(existing.map((row) => row.uri));
-  const found: MeetingRecordingEntry[] = [];
-  const dir = new Directory(Paths.document);
-  for (const entry of dir.list()) {
-    if (!(entry instanceof File) || !/^recording-[0-9a-f-]{36}\.m4a$/i.test(entry.name) ||
-        !entry.exists || known.has(entry.uri)) continue;
-    const time = entry.creationTime ?? entry.modificationTime;
-    if (typeof time !== 'number' || !Number.isFinite(time) || time <= 0) continue;
-    const createdAt = new Date(time).toISOString();
-    const id = entryId({ createdAt, fileName: entry.name } as MobileRecordingAudioInput);
-    if (existing.some((row) => row.id === id) || found.some((row) => row.uri === entry.uri)) continue;
-    found.push(Object.freeze({
-      id, uri: entry.uri, fileName: entry.name, mimeType: 'audio/mp4',
-      durationMs: 0, createdAt, sizeBytes: entry.size, title: '',
-    }));
-    known.add(entry.uri);
-  }
-  return found;
-}
-
 export function listMeetingRecordings() {
   // An invalid index is an error; never treat it as a fresh empty history.
   const stored = readIndexRaw();
-  let recovered: MeetingRecordingEntry[] = [];
-  try {
-    recovered = findUnindexedMeetingAudio(stored);
-  } catch {
-    // Filesystem enumeration is optional recovery. A transient scan failure
-    // must never hide the already verified recording index or rewrite it.
-    return Object.freeze(stored.sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
-  }
-  if (recovered.length > 0) writeIndex([...stored, ...recovered]);
-  return Object.freeze((recovered.length > 0 ? readIndexRaw() : stored).sort((left, right) =>
-    right.createdAt.localeCompare(left.createdAt)));
+  // Never scan or attribute pre-existing unowned M4A/JSON files.
+  return Object.freeze(stored.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
 }
 
 export function isMeetingRecordingFileAvailable(recording: MeetingRecordingEntry): boolean {
+  assertMeetingRecordingOwned(recording.id, recording.uri);
   return fileExists(recording.uri);
 }
 
-export function rememberMeetingRecording(recording: MobileRecordingAudioInput) {
+export function rememberMeetingRecording(recording: MobileRecordingAudioInput, owner = requireMeetingOwner()) {
+  if (!/^[a-zA-Z0-9-]{8,80}$/.test(owner)) throw Error('MEETING_OWNER_INVALID');
   if (!fileExists(recording.uri)) {
     throw new Error('저장된 회의 녹음 파일을 기기에서 확인하지 못했습니다.');
   }
@@ -188,14 +157,14 @@ export function rememberMeetingRecording(recording: MobileRecordingAudioInput) {
     durationMs: recording.durationMs,
     createdAt: recording.createdAt,
     sizeBytes: fileSize(recording.uri),
-    title: '',
+    title: readIndexRaw(owner).find(entry => entry.uri === recording.uri)?.title || '',
   } satisfies MeetingRecordingEntry);
 
-  const existing = readIndexRaw().filter((entry) => entry.uri !== next.uri && entry.id !== next.id);
+  const existing = readIndexRaw(owner).filter((entry) => entry.uri !== next.uri && entry.id !== next.id);
   const merged = [next, ...existing]
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-  writeIndex(merged);
-  if (!readIndexRaw().some((entry) => entry.id === next.id && entry.uri === next.uri)) {
+  writeIndex(merged, owner);
+  if (!readIndexRaw(owner).some((entry) => entry.id === next.id && entry.uri === next.uri)) {
     throw new Error('녹음 목록 저장을 확인하지 못했습니다. 원본 녹음 파일은 보존합니다.');
   }
   return next;
@@ -258,4 +227,12 @@ export function searchMeetingRecordings(
     return [entry.title, entry.fileName, localDate, localDate.replace(/[^0-9]/g, '')]
       .some((value) => value.toLocaleLowerCase('ko-KR').includes(term));
   });
+}
+
+/** Every sensitive boundary re-resolves the row in the current account index. */
+export function assertMeetingRecordingOwned(id: string, uri?: string) {
+  requireMeetingOwner();
+  const row = readIndexRaw().find(item => item.id === id && (!uri || item.uri === uri));
+  if (!row) throw Error('이 계정에서 접근할 수 없는 녹음입니다. 원본은 보존했습니다.');
+  return row;
 }

@@ -14,11 +14,22 @@ export function useCalendarScheduleId(recordId?: string) {
 export function useReminderStatus(id?: string, record = false) {
   return useContext(Labels)[`${record ? 'record' : 'schedule'}:${id}`] || '알림 확인 필요';
 }
-/** Context adds no layout node and resets evidence on navigation, edits, refresh and session changes. */
-export function HomeReminderStatus({ client, briefing, scope, children }: {
-  client: PlatformSupabaseClient | null; briefing: MobileBriefing | null; scope: string; children: ReactNode;
+/** Keep unchanged evidence during a refresh; edits, owner changes and sync invalidation hide stale evidence immediately. */
+export function HomeReminderStatus({ client, briefing, scope, refreshKey, children }: {
+  client: PlatformSupabaseClient | null; briefing: MobileBriefing | null; scope: string; refreshKey?: string; children: ReactNode;
 }) {
-  const [result, setResult] = useState<{ scope: string; briefing: MobileBriefing | null; labels: Record<string, string>; calendarLinks: Record<string, string> } | null>(null);
+  // Object identity / generatedAt change on every refresh, even when visible records do not.
+  // The server also puts numeric summary counters in structure. Only these four
+  // named buckets contain task rows; never enumerate every structure value.
+  const records = [
+    ...(['overdue', 'today', 'upcoming', 'undated'] as const).flatMap(bucket => briefing?.structure?.[bucket] || []),
+    ...(briefing?.resurface || []), ...(briefing?.notes || []),
+  ].filter(row => row !== null && typeof row === 'object' && !Array.isArray(row));
+  const fingerprint = JSON.stringify([
+    records.map(row => [row.pageId, row.title, 'dueKey' in row ? row.dueKey : null, 'dueTime' in row ? row.dueTime : null, 'status' in row ? row.status : null]),
+    [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])],
+  ]);
+  const [result, setResult] = useState<{ scope: string; client: PlatformSupabaseClient; fingerprint: string; valid(): boolean; labels: Record<string, string>; calendarLinks: Record<string, string> } | null>(null);
   useEffect(() => {
     let alive = true;
     const session = reminderSessionEpoch.capture();
@@ -26,10 +37,9 @@ export function HomeReminderStatus({ client, briefing, scope, children }: {
     const current = () => alive && session() && sync();
     if (!client || !briefing) return;
     async function read() {
-      const records = [...Object.values(briefing!.structure || {}).flat(), ...(briefing!.resurface || []), ...(briefing!.notes || [])]
-        .map(row => row.pageId).filter((id): id is string => Boolean(id));
+      const recordIds = records.map(row => row.pageId).filter((id): id is string => Boolean(id));
       // Failure of linkage must not suppress independently verifiable schedule rows.
-      const links = await findWorklogReminderLinks(client!, records, current).catch(() => ({} as Record<string, string[]>));
+      const links = await findWorklogReminderLinks(client!, recordIds, current).catch(() => ({} as Record<string, string[]>));
       const ids = [...new Set([...(briefing!.schedules?.today || []), ...(briefing!.schedules?.upcoming || [])]
         .map(row => row.scheduleId).filter((id): id is string => Boolean(id)).concat(Object.values(links).flat()))];
       const snapshots = await readOwnedReminderSnapshots(client!, ids, current);
@@ -49,11 +59,11 @@ export function HomeReminderStatus({ client, briefing, scope, children }: {
         if (linked.length === 1) labels[`record:${record}`] = labels[`schedule:${linked[0]}`] || '알림 확인 필요';
         if (linked.length === 1 && snapshots.rows.some(row => row.id === linked[0] && row.status === 'confirmed')) calendarLinks[record] = linked[0];
       }
-      if (current()) setResult({ scope, briefing, labels, calendarLinks });
+      if (current()) setResult({ scope, client: client!, fingerprint, valid: () => session() && sync(), labels, calendarLinks });
     }
-    void read().catch(() => { if (current()) setResult({ scope, briefing, labels: {}, calendarLinks: {} }); });
+    void read().catch(() => { if (current()) setResult({ scope, client: client!, fingerprint, valid: () => session() && sync(), labels: {}, calendarLinks: {} }); });
     return () => { alive = false; };
-  }, [client, briefing, scope]);
-  const current = result?.scope === scope && result.briefing === briefing;
+  }, [client, briefing, scope, refreshKey, fingerprint]);
+  const current = !!briefing && result?.scope === scope && result.client === client && result.fingerprint === fingerprint && result.valid();
   return <Labels.Provider value={current ? result.labels : {}}><CalendarLinks.Provider value={current ? result.calendarLinks : {}}>{children}</CalendarLinks.Provider></Labels.Provider>;
 }

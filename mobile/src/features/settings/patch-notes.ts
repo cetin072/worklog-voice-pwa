@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-11',
+    title: '내 관리와 간결한 업무 목록',
+    summary: '정기지출·반복업무·습관을 한곳에서 관리하고 업무 목록을 정리했습니다.',
+    items: ['구독·보험·자동이체의 결제수단과 납부 이력을 기록합니다.', '반복업무의 다음 예정과 습관의 주간 목표를 확인하고 체크합니다.', '업무명 아래 날짜·시간을 붙이고 수정·삭제·완료 버튼을 통일했습니다.', '알림 상태를 작은 아이콘으로 표시하고 Google 일정 전송 버튼을 복원했습니다.', '수정창을 바로 편집할 수 있게 하고 앱 시작 오류를 수정했습니다.'],
+  },
+  {
     date: '2026-11-09',
     title: '목록의 연필 수정 버튼 복원',
     summary: '업무를 펼치지 않아도 완료 버튼 옆에서 바로 수정할 수 있습니다.',

@@ -38,3 +38,27 @@ test('direct delete remains a single action that forwards to the existing confir
  assert.ok(remove); assert.doesNotMatch(words(tree), /•••|닫기/);
  assert.equal(confirmations, 0); remove.props.onPress(); assert.equal(confirmations, 1);
 });
+
+
+test('upcoming task keeps title, date and a single Google shortcut together before the action column', () => {
+ const data=fixture('empty'); data.structure.upcoming=[{pageId:'dated',title:'Friday visit',dueKey:'2026-11-13',dueTime:'09:30'}];
+ const h=homeHarness({...data,activeFilter:'upcoming',CalendarExportPreview:props=>({type:'CalendarExportPreview',props})});
+ const tree=h.render();
+ const line=nodes(tree).find(n=>n.props?.style==='homeTaskLine');
+ const columns=line.props.children.filter(Boolean);
+ const left=columns[0];
+ assert.match(words(left),/Friday visit.*2026-11-13.*09:30/s);
+ assert.equal(nodes(left).filter(n=>n.type==='CalendarExportPreview').length,1);
+ assert.equal(nodes(left).find(n=>n.type==='CalendarExportPreview').props.compact,true);
+ assert.equal(nodes(columns[1]).filter(n=>n.props?.accessibilityLabel?.endsWith('완료 처리')).length,1);
+});
+
+test('memo uses the same visible completion label while preserving acknowledgement and undo semantics', () => {
+ let acknowledgements=0;
+ const note={pageId:'note-1',title:'Synthetic memo'};
+ const h=homeHarness({...fixture('empty'),notes:[note],visibleNotes:[note],acknowledgeNote:()=>acknowledgements++});
+ const tree=h.render();
+ const button=nodes(tree).find(n=>n.props?.accessibilityLabel==='Synthetic memo 확인했어요 처리');
+ assert.ok(button); assert.equal(words(button).trim(),'완료');
+ button.props.onPress(); assert.equal(acknowledgements,1);
+});

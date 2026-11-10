@@ -26,8 +26,9 @@ test('Android DNS and fetch failures become actionable Korean, without exposing 
 });
 test('failed real direct-save handler preserves input and does not retry mutations automatically', async () => {
   let attempts = 0, cleared = 0, refreshed = 0, displayed, busy = false;
-  const scope = { session: { access_token: 'expired-token' }, client: {}, getFreshAccessToken: async () => 'synthetic', manualInput: { transcript: '합성 입력', dueDate: '', dueTime: '' }, busy: false,
+  const scope = { repeatRule:null, session: { access_token: 'expired-token' }, client: {}, getFreshAccessToken: async () => 'synthetic', manualInput: { transcript: '합성 입력', dueDate: '', dueTime: '' }, busy: false,
     manualSaveSession: { current: createManualWorkSaveSession() }, manualSaveInFlight: { current: false },
+    manualDraftEpoch: { current: 0 }, manualDraftLoaded: true, manualVault: null, setManualDraftNotice() {},
     manualScheduleText: () => '', reminderSessionEpoch: { capture: () => () => true },
     saveWorklog: async () => { attempts++; throw new Error('Network request failed'); },
     setBusy: value => { busy = value; }, clearMessage: () => {}, messageOf,

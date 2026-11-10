@@ -96,3 +96,15 @@ test('seeded Home editor visibly waits for fresh details before Save is enabled'
   assert.equal(h.state.loading, false);
   assert.equal(h.state.ready, true);
 });
+
+
+test('changing only the date during background read preserves draft date and loads the existing server time', async () => {
+  const h = harness();
+  h.scope.editDirty.current = { title: false, date: true, time: false, kind: false };
+  h.state.date = '2026-11-20';
+  h.scope.readWorklogDetails = async () => ({ title: 'Stored', dueDate: '2026-11-12', dueTime: '15:00', actionKind: 'task' });
+  await h.load('record-1', 'Listed', '2026-11-10', '09:00');
+  assert.equal(h.state.date, '2026-11-20');
+  assert.equal(h.state.time, '15:00', 'date editing must not discard a time that was missing from the list');
+  assert.equal(h.state.ready, true);
+});

@@ -39,24 +39,29 @@ dump_window() {
 }
 
 find_node_center() {
-  python3 - "$1" "$2" <<'PY'
+  python3 - "$1" "$2" "${3:-first}" <<'PYSELECT'
 import re
 import sys
 import xml.etree.ElementTree as ET
 
 root = ET.parse(sys.argv[1]).getroot()
 needle = sys.argv[2]
+candidates = []
 for node in root.iter("node"):
+    if node.attrib.get("enabled") == "false":
+        continue
     if node.attrib.get("text", "") != needle and node.attrib.get("content-desc", "") != needle:
         continue
     match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
     if not match:
         continue
     x1, y1, x2, y2 = map(int, match.groups())
-    print((x1 + x2) // 2, (y1 + y2) // 2)
-    raise SystemExit(0)
-raise SystemExit(1)
-PY
+    if x2 > x1 and y2 > y1:
+        candidates.append(((x1 + x2) // 2, (y1 + y2) // 2))
+if not candidates:
+    raise SystemExit(1)
+print(*candidates[-1] if sys.argv[3] == "last" else candidates[0])
+PYSELECT
 }
 
 find_quickstep_wait_center() {
@@ -183,6 +188,14 @@ if ! grep -q '음성 기록 시작' /tmp/worklog-home-after-manual.xml; then
   exit 1
 fi
 
+# Preserve the real synthetic Home before later checks (including microphone)
+# can fail. This fixture includes the server's numeric structure counters.
+if [[ "${CI:-}" == "true" && -n "${RUNNER_TEMP:-}" ]]; then
+  mkdir -p "$RUNNER_TEMP/launcher-evidence"
+  adb exec-out screencap -p > "$RUNNER_TEMP/launcher-evidence/home-before-recording.png"
+  cp /tmp/worklog-home-after-manual.xml "$RUNNER_TEMP/launcher-evidence/home-before-recording.xml"
+fi
+
 # Tap the actual Quick Voice Pressable. Audio streaming keeps React Native busy
 # enough that uiautomator may not produce a post-tap XML dump, so verify the
 # VoiceRecorderCard's state transition through the release runtime log instead.
@@ -207,13 +220,22 @@ fi
 # The CI-only timer freeze keeps this rendered state idle. Require the actual
 # mic accessibility node to change; a click/console event alone is insufficient.
 dump_window /sdcard/worklog-mic-after.xml /tmp/worklog-mic-after.xml
+if [[ "${CI:-}" == "true" && -n "${RUNNER_TEMP:-}" ]]; then
+  mkdir -p "$RUNNER_TEMP/launcher-evidence"
+  cp /tmp/worklog-mic-after.xml "$RUNNER_TEMP/launcher-evidence/recording-controls.xml"
+  adb exec-out screencap -p > "$RUNNER_TEMP/launcher-evidence/recording-controls.png"
+fi
 if ! grep -Eq '음성 기록 종료 후 바로 저장|녹음 중' /tmp/worklog-mic-after.xml; then
   echo "HomeScreenApp Quick Voice recording UI did not render after Android tap."
   cat /tmp/worklog-mic-after.xml
   exit 1
 fi
 
-CANCEL_COORDS="$(find_node_center /tmp/worklog-mic-after.xml "녹음 취소")"
+if ! CANCEL_COORDS="$(find_node_center /tmp/worklog-mic-after.xml "녹음 취소")"; then
+  echo "Recording cancel control is absent, disabled or has no touch bounds."
+  cat /tmp/worklog-mic-after.xml
+  exit 1
+fi
 read -r CANCEL_X CANCEL_Y <<<"$CANCEL_COORDS"
 adb shell input tap "$CANCEL_X" "$CANCEL_Y"
 sleep 1
@@ -247,7 +269,7 @@ adb shell input keyevent KEYCODE_BACK
 GALLERY_COORDS=""
 for attempt in 1 2 3 4 5; do
   dump_window /sdcard/worklog-gallery-home.xml /tmp/worklog-gallery-home.xml
-  GALLERY_COORDS="$(find_node_center /tmp/worklog-gallery-home.xml "사진 · 캡처 가져오기" || true)"
+  GALLERY_COORDS="$(find_node_center /tmp/worklog-gallery-home.xml "사진 · 캡처 가져오기" last || true)"
   if [[ -n "$GALLERY_COORDS" ]]; then break; fi
   adb shell input swipe 500 1500 500 500 300
 done

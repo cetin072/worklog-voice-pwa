@@ -14,6 +14,7 @@ type WorkRecordEditSheetProps = Readonly<{
   saving: boolean;
   ready: boolean;
   allowTitleWhileLoading?: boolean;
+  allowFieldsWhileLoading?: boolean;
   actionKind?: 'task' | 'note';
   actionConversionAllowed?: boolean;
   statusText?: string;
@@ -25,6 +26,7 @@ type WorkRecordEditSheetProps = Readonly<{
   onSave(): void;
   onCancel(): void;
   onRetry?(): void;
+  onRepeat?(): void;
 }>;
 
 function pickerValue(date: string, time: string) {
@@ -63,6 +65,7 @@ export function WorkRecordEditSheet({
   saving,
   ready,
   allowTitleWhileLoading = false,
+  allowFieldsWhileLoading = false,
   actionKind,
   actionConversionAllowed = false,
   statusText = '',
@@ -74,12 +77,14 @@ export function WorkRecordEditSheet({
   onSave,
   onCancel,
   onRetry,
+  onRepeat,
 }: WorkRecordEditSheetProps) {
   const insets = useSafeAreaInsets();
   const titleInput = useRef<TextInput>(null);
   const titleFocused = useRef(false);
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const inputBlocked = loading || saving;
+  const fieldsBlocked = saving || (!ready && !allowFieldsWhileLoading);
 
   useEffect(() => {
     if (!visible) {
@@ -127,7 +132,7 @@ export function WorkRecordEditSheet({
           </Pressable>
         </View>
 
-        {loading ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.status}>{allowTitleWhileLoading ? '목록에 없는 시간·종류 정보를 불러오는 중입니다. 제목은 바로 수정할 수 있어요.' : '시간·종류 정보를 불러오는 중입니다.'}</Text></View> : null}
+        {loading && !allowFieldsWhileLoading ? <View style={styles.loading}><ActivityIndicator /><Text style={styles.status}>{allowTitleWhileLoading ? '목록에 없는 시간·종류 정보를 불러오는 중입니다. 제목은 바로 수정할 수 있어요.' : '시간·종류 정보를 불러오는 중입니다.'}</Text></View> : null}
 
         <Text style={styles.label}>업무명</Text>
         <TextInput
@@ -174,8 +179,8 @@ export function WorkRecordEditSheet({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="수정할 날짜 선택"
-              disabled={!ready || inputBlocked}
-              style={[styles.pickerTrigger, !ready || inputBlocked ? styles.disabled : null]}
+              disabled={fieldsBlocked}
+              style={[styles.pickerTrigger, fieldsBlocked ? styles.disabled : null]}
               onPress={() => setPickerMode((current) => current === 'date' ? null : 'date')}
             >
               <Text style={[styles.pickerText, date ? null : styles.placeholder]}>{dateLabel(date)}</Text>
@@ -186,8 +191,8 @@ export function WorkRecordEditSheet({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="수정할 시간 선택"
-              disabled={!ready || inputBlocked || !date}
-              style={[styles.pickerTrigger, !ready || inputBlocked || !date ? styles.disabled : null]}
+              disabled={fieldsBlocked || !date}
+              style={[styles.pickerTrigger, fieldsBlocked || !date ? styles.disabled : null]}
               onPress={() => setPickerMode((current) => current === 'time' ? null : 'time')}
             >
               <Text style={[styles.pickerText, time ? null : styles.placeholder]}>{time || '시간 선택'}</Text>
@@ -195,7 +200,7 @@ export function WorkRecordEditSheet({
           </View>
         </View>
 
-        {pickerMode && ready ? <View style={styles.pickerBox}>
+        {pickerMode && !fieldsBlocked ? <View style={styles.pickerBox}>
           <DateTimePicker
             value={pickerValue(date, time)}
             mode={pickerMode}
@@ -212,13 +217,15 @@ export function WorkRecordEditSheet({
 
         <View style={styles.helpRow}>
           <Text style={styles.help}>{date ? '기한을 변경하거나 없앨 수 있습니다.' : '현재 기한 없음'}</Text>
-          {date || time ? <Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={!ready || inputBlocked} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDue}>기한 없음</Text></Pressable> : null}
+          {date || time ? <Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={fieldsBlocked} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDue}>기한 없음</Text></Pressable> : null}
         </View>
         <Text style={styles.help}>음성 원문은 그대로 보존됩니다.</Text>
 
         {statusText ? <Text accessibilityLiveRegion="polite" style={[styles.status, statusTone === 'success' ? styles.statusSuccess : statusTone === 'error' ? styles.statusError : null]}>{statusText}</Text> : null}
         {!ready && !loading && onRetry ? <Pressable accessibilityRole="button" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>다시 불러오기</Text></Pressable> : null}
 
+        {onRepeat && ready && actionKind === 'task' ? <Pressable accessibilityRole="button" disabled={inputBlocked} style={styles.retry} onPress={onRepeat}><Text style={styles.retryText}>반복으로 관리</Text></Pressable> : null}
+        {loading && allowFieldsWhileLoading ? <Text style={styles.help}>수정할 수 있습니다. 저장 전 최신 정보를 확인하고 있습니다.</Text> : null}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" disabled={saving} style={[styles.secondary, saving ? styles.disabled : null]} onPress={close}><Text style={styles.secondaryText}>취소</Text></Pressable>
           <Pressable accessibilityRole="button" disabled={!ready || inputBlocked || !title.trim()} style={[styles.primary, !ready || inputBlocked || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : statusTone === 'success' ? '✓ 저장 완료' : '저장'}</Text></Pressable>

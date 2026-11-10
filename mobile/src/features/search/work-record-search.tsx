@@ -1,3 +1,6 @@
+import { synchronizeEditedWorklogReminder } from '@/src/features/schedule/schedule-reminder-post-save';
+import { reminderSessionEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
+import { reminderFailureMessage } from '@/src/features/schedule/reminder-feedback';
 import { useRef, useState } from 'react';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { ActivityIndicator, Button, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -175,6 +178,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
     setEditStatus('');
     setEditStatusTone('neutral');
     try {
+      const reminderGuard = reminderSessionEpoch.capture();
       const result = await updateWorklogDetails(await getFreshAccessToken(client), {
         pageId: recordId,
         title,
@@ -184,6 +188,13 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
           ? { actionKind: editActionKind }
           : {}),
       });
+      let reminderWarning = '';
+      try {
+        await synchronizeEditedWorklogReminder(client, {
+          recordId, schedule: result.schedule, dueDate: editDate, dueTime: editTime,
+        }, reminderGuard);
+      } catch (error) { reminderWarning = reminderFailureMessage(error); }
+      if (!reminderGuard()) return;
       const visibleTitle = result.title?.trim() || title;
       setItems((current) => current.map((item) => item.workRecordId === recordId ? { ...item, title: visibleTitle } : item));
       setEditReady(false);
@@ -199,6 +210,7 @@ export function WorkRecordSearch({ client, accessToken }: { client: PlatformSupa
       setEditStatus('');
       setEditStatusTone('neutral');
       await search(true);
+      if (reminderGuard() && reminderWarning) setMessage(`기록은 수정됐지만 알림은 미확인 · ${reminderWarning}`);
     } catch (error) {
       setEditStatus(error instanceof Error ? error.message : '업무 수정에 실패했습니다.');
       setEditStatusTone('error');
