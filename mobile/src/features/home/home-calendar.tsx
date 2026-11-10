@@ -57,11 +57,12 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
       <Pressable accessibilityRole="button" accessibilityLabel={expanded ? '다음 달' : '다음 주'} disabled={selected >= '2099-12-25'} style={styles.nav} onPress={() => setSelected(expanded ? shiftMonth(selected, 1) : shiftDay(selected, 7))}><Text style={styles.link}>›</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded }} style={styles.action} onPress={() => setExpanded(v => !v)}><Text style={styles.link}>{expanded ? '주 보기 ⌃' : '월 보기 ⌄'}</Text></Pressable>
     </View>
-    <View style={styles.grid}>{['월', '화', '수', '목', '금', '토', '일'].map(d => <View key={d} style={styles.weekday}><Text style={styles.muted}>{d}</Text></View>)}
-      {days.map((day, index) => day ? <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${day}${day === today ? ' 오늘' : ''}${eventsOnDay(events, day).length ? ' 일정 있음' : ''}`} accessibilityState={{ selected: day === selected }} disabled={day < '2000-01-01' || day > '2099-12-31'} onPress={() => { setSelected(day); setOpened(null); }} style={styles.day}>
-        <Text style={[styles.dayNumber, day === selected && styles.selected, day === today && day !== selected && styles.today]}>{Number(day.slice(8))}</Text><Text style={styles.dot}>{eventsOnDay(events, day).length ? '•' : ' '}</Text>
+    <View style={styles.week}>{['월', '화', '수', '목', '금', '토', '일'].map(d => <View key={d} style={styles.weekday}><Text style={styles.muted}>{d}</Text></View>)}</View>
+    {Array.from({length: Math.ceil(days.length / 7)}, (_, week) => <View key={week} style={styles.week}>
+      {days.slice(week * 7, week * 7 + 7).map((day, index) => day ? <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${day}${day === today ? ' 오늘' : ''}${eventsOnDay(events, day).length ? ' 일정 있음' : ''}`} accessibilityState={{ selected: day === selected }} disabled={day < '2000-01-01' || day > '2099-12-31'} onPress={() => { setSelected(day); setOpened(null); }} style={styles.day}>
+        <Text numberOfLines={1} style={[styles.dayNumber, day === selected && styles.selected, day === today && day !== selected && styles.today]}>{Number(day.slice(8))}</Text><Text style={styles.dot}>{eventsOnDay(events, day).length ? '•' : ' '}</Text>
       </Pressable> : <View key={`blank-${index}`} style={styles.day} />)}
-    </View>
+    </View>)}
     <View style={styles.divider} />
     <View style={styles.row}><Text accessibilityRole="header" style={styles.subtitle}>{selected === today ? '오늘 일정' : `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8))}일 일정`}</Text>{integrated ? action('일정 관리', () => onOpenCalendar(selected)) : null}</View>
     {!integrated ? <Text style={styles.muted}>브리핑에서 확인된 일정만 표시합니다. 월 전체 일정은 포함되지 않습니다.</Text> : null}
@@ -84,8 +85,8 @@ const styles = StyleSheet.create({
   monthTitle: { flex: 1, minHeight: 44, justifyContent: 'center' }, nav: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 17, fontWeight: '800', color: mobileTheme.colors.text }, subtitle: { fontSize: 17, fontWeight: '700', color: mobileTheme.colors.text },
   action: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }, link: { fontSize: 13, color: mobileTheme.colors.link },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' }, weekday: { width: '14.285714%', alignItems: 'center', paddingVertical: 4 },
-  day: { width: '14.285714%', minHeight: 48, alignItems: 'center', justifyContent: 'center' }, dayNumber: { textAlign: 'center', minWidth: 32, padding: 5, fontSize: 16, color: mobileTheme.colors.text, borderRadius: 20 },
+  week: { flexDirection: 'row' }, weekday: { flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 4 },
+  day: { flex: 1, minWidth: 0, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, dayNumber: { textAlign: 'center', minWidth: 32, paddingVertical: 5, fontSize: 16, color: mobileTheme.colors.text, borderRadius: 20 },
   selected: { backgroundColor: mobileTheme.colors.link, color: '#ffffff', fontWeight: '800' }, today: { color: mobileTheme.colors.link, fontWeight: '800' }, dot: { fontSize: 12, lineHeight: 14, color: mobileTheme.colors.link },
   divider: { height: 1, backgroundColor: mobileTheme.colors.borderSubtle, marginVertical: 6 },
   event: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }, time: { fontSize: 14, color: mobileTheme.colors.link, minWidth: 44 }, eventMain: { flex: 1, minWidth: 0, gap: 3 },

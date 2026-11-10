@@ -85,3 +85,18 @@ test('다가오는 업무 날짜는 펼치지 않아도 작은 보조 글자로 
  assert.equal(nodes(tree).filter(n=>n.props?.accessibilityLabel==='합성 방문 일정 수정').length,1);
  assert.equal(nodes(tree).filter(n=>n.props?.accessibilityLabel==='합성 방문 일정 삭제').length,1);
 });
+
+ test('native calendar keeps all seven weekday/date columns in one row and month boundaries aligned', () => {
+ const h=calendarHarness(async()=>({events:[],limited:false}));
+ for(const expanded of [false,true]) {
+   if(expanded)button(h,'월 보기 ⌄').props.onPress();
+   const tree=h.render(),all=nodes(tree);
+   const weeks=all.filter(n=>n.type==='View'&&n.props.style?.flexDirection==='row'&&!n.props.style.flexWrap&&Array.isArray(n.props.children?.[0])&&n.props.children[0].length===7);
+   assert.equal(weeks.length,expanded?7:2,'weekday header plus complete date weeks');
+   for(const row of weeks)for(const cell of row.props.children[0]){assert.equal(cell.props.style.flex,1);assert.equal(cell.props.style.width,undefined);}
+   const dates=all.filter(n=>n.type==='Pressable'&&/^2026-/.test(n.props.accessibilityLabel||''));
+   assert.equal(dates.length,expanded?30:7);
+   for(const date of dates){const text=nodes(date).find(n=>n.type==='Text');assert.equal(text.props.numberOfLines,1);}
+ }
+ h.close();
+});

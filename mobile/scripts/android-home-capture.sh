@@ -30,6 +30,22 @@ for spec in '320 1.0' '390 1.0' '320 1.4'; do
   grep -q '이번 주' "$output/$name-top.xml"
   grep -q '음성 기록 시작' "$output/$name-top.xml"
   adb exec-out screencap -p > "$output/$name-top.png"
+  # Real native bounds catch percentage rounding that can wrap the seventh column.
+  python3 - "$output/$name-top.xml" <<'PYCALENDAR'
+import re, sys, xml.etree.ElementTree as ET
+nodes = list(ET.parse(sys.argv[1]).iter('node'))
+def bounds(n):
+    return tuple(map(int, re.findall(r'\d+', n.get('bounds', ''))))
+weekdays = [next(n for n in nodes if n.get('text') == label) for label in ['월','화','수','목','금','토','일']]
+dates = [n for n in nodes if re.match(r'^\d{4}-\d{2}-\d{2}(?: |$)', n.get('content-desc', ''))]
+assert len(dates) == 7, 'Weekly calendar must expose seven dates'
+assert len({bounds(n)[1] for n in weekdays}) == 1, 'Weekday label wrapped'
+assert len({bounds(n)[1] for n in dates}) == 1, 'Date column wrapped'
+for weekday, date in zip(weekdays, dates):
+    wb, db = bounds(weekday), bounds(date)
+    assert abs((wb[0]+wb[2])-(db[0]+db[2])) <= 4, 'Date/weekday column misaligned'
+print('Android seven-column calendar alignment PASS')
+PYCALENDAR
   for page in 1 2 3; do
     adb shell input swipe "$((width / 2))" 660 "$((width / 2))" 220 500
     adb shell uiautomator dump /sdcard/home-capture.xml >/dev/null
