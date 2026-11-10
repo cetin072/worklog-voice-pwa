@@ -77,7 +77,7 @@ test('home snapshot shares one device read and drops late responses after accoun
  let tree=HomeReminderStatus(props);
  assert.equal(tree.props.value[`record:${rid}`],'이 기기 알림 없음 · 설정');
  assert.equal(tree.props.value[`record:${rid}`],tree.props.value[`schedule:${sid}`]);assert.equal(nativeReads,1);assert.equal(tree.children[0].props.value[rid],sid);
- const identical={...props,briefing:structuredClone(briefing),refreshKey:'home:2'};
+ const identical={...props,briefing:structuredClone(briefing),refreshKey:'settings-return:2'};
  tree=HomeReminderStatus(identical);
  assert.equal(tree.props.value[`record:${rid}`],'이 기기 알림 없음 · 설정','same records retain verified status during refresh');
  assert.equal(tree.children[0].props.value[rid],sid);
