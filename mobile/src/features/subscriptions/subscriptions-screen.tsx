@@ -1,3 +1,4 @@
+import { recordRowStyles } from '@/src/ui/record-row-styles';
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -249,7 +250,7 @@ export function SubscriptionsScreen({ client }: { client: PlatformSupabaseClient
       <Text style={styles.summaryLabel}>{filter === 'all' ? '이번 달 예상 지출' : `이번 달 ${SCOPE_LABEL[filter]} 예상 지출`}</Text>
       <Text style={styles.summaryAmount}>{formatWon(expectedExpenseForMonth(visible, today))}</Text>
       <Text style={styles.summarySub}>월 환산 {formatWon(summary.monthlyTotalKrw)} · 연 환산 {formatWon(summary.yearlyTotalKrw)} · {summary.count}개</Text>
-      {filter === 'all' && subs.length > 0 ? <Text style={styles.summarySplit}>사업 {formatWon(allSummary.byScope.business.monthlyTotalKrw)} · 개인 {formatWon(allSummary.byScope.personal.monthlyTotalKrw)}</Text> : null}
+      {filter === 'all' && subs.length > 0 ? <Text style={styles.summarySplit}>사업 {formatWon(expectedExpenseForMonth(filterByScope(subs,'business'),today))} · 개인 {formatWon(expectedExpenseForMonth(filterByScope(subs,'personal'),today))}</Text> : null}
     </View>
 
     <View style={styles.filters}>
@@ -334,10 +335,10 @@ const styles = StyleSheet.create({
   row: { backgroundColor: c.surface, borderRadius: mobileTheme.radius.card, padding: 16, gap: 4, borderWidth: 1, borderColor: c.borderSubtle },
   rowCandidate: { borderColor: c.overdueBorder, backgroundColor: c.overdueBackground },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  rowName: { flex: 1, fontSize: 17, fontWeight: '700', color: c.text },
+  rowName: { ...recordRowStyles.taskTitle, flex: 1 },
   rowAmount: { fontSize: 17, fontWeight: '700', color: c.text },
   rowAmountUnit: { fontSize: 12, fontWeight: '400', color: c.textMuted },
-  rowMeta: { fontSize: 13, color: c.textSecondary, lineHeight: 19 },
+  rowMeta: recordRowStyles.taskMeta,
   candidateText: { color: c.danger, fontWeight: '600' },
   rowActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   rowButton: { flex: 1, minHeight: mobileTheme.size.touchTarget, borderRadius: mobileTheme.radius.control, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface },
