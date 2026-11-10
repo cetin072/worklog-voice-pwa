@@ -31,7 +31,7 @@ function calendarHarness(request) {
  const platform={client:{},config:{dataSchema:'worklog'},session:{user:{id:'owner'}}};
  const props={today:'2026-11-30',revision:0,fallback:[],onOpenCalendar:()=>{},onTodayCount:()=>{},renderSchedule:s=>element('Text',{},s.title)};
  const exp={},code=ts.transpileModule(readFileSync('mobile/src/features/home/home-calendar.tsx','utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
- new Function('React','require','exports',code)(React,name=>name==='react'?React:name==='react-native'?native:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:{mobileTheme:{colors:{}}},exp);
+ new Function('React','require','exports',code)(React,name=>name==='react'?React:name==='react-native'?native:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:name.includes('record-row-styles')?{recordRowStyles:{taskTitle:'memoTitle',taskMeta:'memoMeta'}}:{mobileTheme:{colors:{}}},exp);
  return {props,platform,render(){cursor=0;const tree=exp.HomeCalendar(props);const run=pending;pending=[];run.forEach(f=>f());return tree;},close(){effects.forEach(e=>e?.cleanup?.());}};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -41,7 +41,7 @@ test('actual Home calendar loads both months of a crossing week, selects dates, 
  let count;h.props.onTodayCount=value=>count=value;
  h.render();assert.deepEqual(calls.map(c=>c.body.p_month),['2026-11-01','2026-12-01']);
  waiting[0]({events:[event('seam','2026-11-30T10:00+09:00')],limited:false});waiting[1]({events:[event('dec','2026-12-01T10:00+09:00')],limited:false});await flush();h.render();h.render();assert.equal(count,1);assert.match(words(h.render()),/seam/);
- button(h,'2026-12-01 일정 있음').props.onPress();assert.match(words(h.render()),/dec/);
+ button(h,'2026-12-01 일정 있음').props.onPress();assert.match(words(h.render()),/dec/);assert.match(words(h.render()),/2026\. 12\. 01/);
  // Selecting inside the same week needs no new RPC.
  assert.equal(calls.length,2);
  button(h,'월 보기 ⌄').props.onPress();h.render();assert.equal(calls.length,3);
@@ -64,15 +64,24 @@ test('actual Home shows schedule before actionable tasks and moves tools after t
  assert.ok(idx('견적서 검토 완료 처리')<all.findIndex(n=>n.props?.label==='캡처 등록'));
  const action=label=>nodes(h.render()).find(n=>n.props?.accessibilityLabel===label);
  assert.equal(words(action('견적서 검토 완료 처리')).trim(),'완료');
- assert.equal(words(action('견적서 검토 수정')).trim(),'✏️ 수정');
+ assert.equal(words(action('견적서 검토 수정')).trim(),'✏️');
  action('견적서 검토 수정').props.onPress();assert.equal(edit,1);
  assert.doesNotMatch(words(h.render()),/□/);
  action('견적서 검토 알림 확인 필요').props.onPress();assert.equal(reminders,1);
  assert.equal(nodes(h.render()).filter(n=>n.type==='CalendarExportPreview').length,0);assert.equal(settings,0);
  action('견적서 검토 완료 처리').props.onPress();assert.equal(complete,1);
- assert.equal(action('견적서 검토 삭제'),undefined);action('견적서 검토 관리 펼치기').props.onPress();
+ assert.ok(action('견적서 검토 삭제'));action('견적서 검토 관리 펼치기').props.onPress();
  assert.equal(nodes(h.render()).filter(n=>n.type==='CalendarExportPreview').length,0);
  assert.equal(nodes(h.render()).filter(n=>n.props?.accessibilityLabel==='견적서 검토 수정').length,1);
  action('견적서 검토 삭제').props.onPress();assert.equal(edit,1);assert.equal(remove,1);
  const undoButton=nodes(h.render()).find(n=>n.type==='Pressable'&&words(n).trim()==='실행 취소');undoButton.props.onPress();assert.equal(undo,1);
+});
+
+test('다가오는 업무 날짜는 펼치지 않아도 작은 보조 글자로 보인다',()=>{
+ const task={pageId:'future',title:'합성 방문 일정',dueKey:'2026-12-01',daysUntil:22};
+ const h=homeHarness({briefing:{today:'2026-11-09'},structure:{today:[],overdue:[],upcoming:[task],undated:[]},activeFilter:'upcoming'});
+ const tree=h.render();assert.match(words(tree),/2026-12-01 · 22일 후/);
+ const date=nodes(tree).find(n=>n.type==='Text'&&words(n)==='2026-12-01 · 22일 후');assert.equal(date.props.style,'taskMeta');
+ assert.equal(nodes(tree).filter(n=>n.props?.accessibilityLabel==='합성 방문 일정 수정').length,1);
+ assert.equal(nodes(tree).filter(n=>n.props?.accessibilityLabel==='합성 방문 일정 삭제').length,1);
 });

@@ -1,3 +1,4 @@
+import { recordRowStyles } from '@/src/ui/record-row-styles';
 import type { ReactNode } from 'react';
 import { HomeCalendar } from '@/src/features/home/home-calendar';
 import { PersonalCalendarSheet } from '@/src/features/calendar/personal-calendar-sheet';
@@ -8,6 +9,8 @@ import { captureChanges } from '@/src/features/capture/capture-runtime';
 import { firstNonEmptyTaskBucket, homeOverview } from '@/src/features/home/home-overview';
 import { HomeReminderStatus } from '@/src/features/home/home-reminder-status';
 import { CompactReminderLabel, ScheduleReminderLabel } from '@/src/features/home/schedule-reminder-label';
+import { SubscriptionsScreen } from '@/src/features/subscriptions/subscriptions-screen';
+import { cancelAllSubscriptionReminders, reconcileSubscriptionReminderOwner } from '@/src/features/subscriptions/subscription-reminders';
 import { notificationResponseHandler } from '@/src/features/startup/notification-response-gate';
 import { StartupScreen } from '@/src/features/startup/startup-screen';
 import { initialBriefingState } from '@/src/features/startup/briefing-startup';
@@ -49,7 +52,7 @@ import { mobileTheme } from '@/src/ui/theme';
 
 const QUICK_VOICE_SPEECH_RECOGNITION = createExpoSpeechRecognitionAdapter();
 const APP_BUILD_INFO = appBuildInfo(Constants.expoConfig);
-type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes';
+type AppScreen = 'home' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes' | 'subscriptions';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
 type AuthMode = 'signIn' | 'signUp';
@@ -183,14 +186,20 @@ function HomeTaskRow(props: Parameters<typeof TaskRow>[0]) {
   const [expanded, setExpanded] = useState(false);
   return <View style={styles.homeTaskEntry}>
     <View style={styles.homeTaskLine}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 관리 펼치기`} accessibilityState={{ expanded }} style={styles.homeTaskOpen} onPress={() => setExpanded(value => !value)}><Text style={styles.homeTaskTitle}>{props.task.title || '제목 없는 업무'}</Text></Pressable>
-      {props.task.pageId && props.onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 수정`} disabled={props.completing} style={styles.inlineEdit} onPress={props.onEdit}><Text style={styles.inlineEditText}>✏️ 수정</Text></Pressable> : null}
-      {props.task.pageId && props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 관리 펼치기`} accessibilityState={{ expanded }} style={styles.homeTaskOpen} onPress={() => setExpanded(value => !value)}><Text style={styles.taskTitle}>{props.task.title || '제목 없는 업무'}</Text></Pressable>
+      {props.task.pageId ? <View style={styles.taskActions}>
+        <View style={styles.taskMinorActions}>
+          {props.onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 수정`} disabled={props.completing} style={styles.inlineEdit} onPress={props.onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
+          {props.onDelete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 삭제`} disabled={props.completing} style={styles.inlineDelete} onPress={props.onDelete}><Text style={styles.inlineDeleteText}>삭제</Text></Pressable> : null}
+        </View>
+        {props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+      </View> : null}
     </View>
+    {props.bucket !== 'today' ? <Text style={styles.taskMeta}>{taskNote(props.bucket, props.task)}</Text> : null}
     {props.task.pageId ? <View style={styles.homeTaskUtilities}>
       <ReminderShortcut id={props.task.pageId} title={props.task.title || '업무'} onPress={props.onReminder} disabled={props.completing} />
     </View> : null}
-    {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} hideShortcuts /> : null}
+    {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} onDelete={undefined} hideShortcuts /> : null}
   </View>;
 }
 
@@ -364,6 +373,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
   const session = platform.session;
   const client = platform.client;
   const config = platform.config;
+  useEffect(()=>{if(phase!=='ready')return;if (!session) { void cancelAllSubscriptionReminders().catch(() => undefined); return; }let current=true;void reconcileSubscriptionReminderOwner(session.user.id,()=>current).catch(()=>undefined);return()=>{current=false;};},[phase,session?.user.id]);
   const loadHomeBriefing = androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_BRIEFING : loadBriefing;
   const loadHomeJournal = androidTouchSmoke ? async (_token: string, date: string): Promise<WorkJournalDay> => ({ targetDate: date, today: date, schedules: [], completed: [], notes: [], openTasks: [] }) : loadWorkJournalDay;
   const freshHomeAccessToken = androidTouchSmoke ? async (_client: PlatformSupabaseClient) => session?.access_token || 'android-touch-smoke-token' : getFreshAccessToken;
@@ -518,6 +528,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (quickVoiceNavigation.current) { warnPendingVoice(); return true; }
       if (screen === 'home') return false;
+      if (screen === 'subscriptions') { setScreen('settings'); return true; }
       setScreen(screen === 'journal' ? 'settings' : 'home');
       return true;
     });
@@ -528,6 +539,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
     let alive = true;
     const openSchedule = (data: unknown) => {
       const payload = data as { target?: unknown; scheduleId?: unknown };
+      if (payload?.target === 'subscriptions') { setScreen('subscriptions'); return true; }
       if (payload?.target !== 'schedule' || typeof payload.scheduleId !== 'string') return false;
       setNotificationScheduleId(payload.scheduleId);
       setScheduleFocusReason('notification');
@@ -1297,6 +1309,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         <SettingsMenuItem title="업무일지" accessibilityLabel="업무일지 열기" onPress={openJournal} />
         <SettingsMenuItem title="과거 업무 검색" onPress={() => setScreen('recordSearch')} />
       </SettingsGroup>
+      <SettingsGroup title="내 관리">
+        <SettingsMenuItem title="구독·정기결제" description="한 달 구독료를 한눈에 보고 계속 쓸지 판단" onPress={() => setScreen('subscriptions')} />
+      </SettingsGroup>
       <SettingsGroup title="알림">
         <SettingsMenuItem title="알림·리마인더" onPress={() => setScreen('reminderSettings')} />
       </SettingsGroup>
@@ -1317,6 +1332,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home' }: { 
         <SettingsMenuItem title="로그아웃" destructive onPress={confirmSignOut} />
       </SettingsGroup>
     </View> : null}
+    {screen === 'subscriptions' ? <View style={styles.panel}><PanelHead eyebrow="내 관리" title="구독·정기결제" onClose={() => setScreen('settings')} />{client ? <SubscriptionsScreen client={client} ownerId={session.user.id} /> : <Text style={styles.errorText}>로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
   </ScrollView>
@@ -1448,16 +1464,16 @@ const styles = StyleSheet.create({
   taskActions: { flexShrink: 0, gap: 6, alignItems: 'stretch' },
   focusTaskActions: { flexShrink: 0, gap: 6, alignItems: 'stretch' },
   taskMinorActions: { flexDirection: 'row', gap: 6 },
-  taskTitle: { fontSize: 15, fontWeight: '700', color: '#30343b', lineHeight: 21 },
-  taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 },
+  taskTitle: recordRowStyles.taskTitle,
+  taskMeta: recordRowStyles.taskMeta,
   taskBadge: { alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', color: '#374151', backgroundColor: '#e5e7eb', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   followUp: { fontSize: 13, color: '#4b515c', lineHeight: 18 },
   reminderShortcut: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 11, marginTop: 8, borderRadius: 10, borderWidth: 1, borderColor: '#93b5e6', backgroundColor: '#eaf3ff' },
   reminderShortcutText: { color: '#20599a', fontSize: 12, fontWeight: '900' },
-  inlineEdit: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db' },
-  inlineEditText: { fontSize: 18 },
-  inlineDelete: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff7f7', borderWidth: 1, borderColor: '#fecaca' },
-  inlineDeleteText: { color: mobileTheme.colors.danger, fontSize: 12, fontWeight: '900' },
+  inlineEdit: recordRowStyles.inlineEdit,
+  inlineEditText: recordRowStyles.inlineEditText,
+  inlineDelete: recordRowStyles.inlineDelete,
+  inlineDeleteText: recordRowStyles.inlineDeleteText,
   inlineComplete: { minHeight: 48, minWidth: 60, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#111827' },
   inlineCompleteBusy: { opacity: 0.55 },
   inlineCompleteText: { color: '#fff', fontSize: 12, fontWeight: '800' },

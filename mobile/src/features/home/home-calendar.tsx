@@ -1,3 +1,4 @@
+import { recordRowStyles } from '@/src/ui/record-row-styles';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -66,7 +67,7 @@ export function HomeCalendar({ revision, today, fallback, onOpenCalendar, render
     {rows.map(event => {
       const known = fallback.find(s => s.scheduleId === event.id);
       return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => setOpened(id => id === event.id ? null : event.id)}>
-        <Text style={styles.time}>{calendarTime(event, selected)}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.muted}>›</Text>
+        <Text style={styles.time}>{calendarTime(event, selected)}</Text><View style={styles.eventMain}><Text style={recordRowStyles.taskTitle}>{event.title}</Text>{selected !== today ? <Text style={recordRowStyles.taskMeta}>{seoulDate(event.starts_at).replaceAll('-', '. ')}</Text> : null}</View><Text style={styles.muted}>›</Text>
       </Pressable>{opened === event.id ? known ? renderSchedule(known) : <View style={styles.details}>{event.location ? <Text>{event.location}</Text> : null}{event.description ? <Text>{event.description}</Text> : null}{integrated ? action('내 캘린더에서 확인·수정', () => onOpenCalendar(selected)) : null}</View> : null}</View>;
     })}
     {focusId && !busy && !rows.some(row => row.id === focusId) ? <View style={styles.details}>{fallback.find(s => s.scheduleId === focusId) ? renderSchedule(fallback.find(s => s.scheduleId === focusId)!) : <Text style={styles.muted}>선택한 일정은 해당 날짜의 업무일지 또는 내 캘린더에서 확인해주세요.</Text>}</View> : null}
@@ -82,6 +83,6 @@ const styles = StyleSheet.create({
   day: { width: '14.285714%', minHeight: 48, alignItems: 'center', justifyContent: 'center' }, dayNumber: { textAlign: 'center', minWidth: 32, padding: 5, fontSize: 16, color: mobileTheme.colors.text, borderRadius: 20 },
   selected: { backgroundColor: mobileTheme.colors.link, color: '#ffffff', fontWeight: '800' }, today: { color: mobileTheme.colors.link, fontWeight: '800' }, dot: { fontSize: 12, lineHeight: 14, color: mobileTheme.colors.link },
   divider: { height: 1, backgroundColor: mobileTheme.colors.borderSubtle, marginVertical: 6 },
-  event: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }, time: { fontSize: 14, color: mobileTheme.colors.link, minWidth: 44 }, eventTitle: { flex: 1, fontSize: 16, color: mobileTheme.colors.text },
+  event: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }, time: { fontSize: 14, color: mobileTheme.colors.link, minWidth: 44 }, eventMain: { flex: 1, minWidth: 0, gap: 3 },
   muted: { fontSize: 13, color: mobileTheme.colors.textSecondary }, error: { fontSize: 13, color: mobileTheme.colors.danger }, details: { padding: 10, gap: 4, backgroundColor: mobileTheme.colors.neutralBackground },
 });
