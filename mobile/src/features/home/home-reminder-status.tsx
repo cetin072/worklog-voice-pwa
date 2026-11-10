@@ -19,9 +19,14 @@ export function HomeReminderStatus({ client, briefing, scope, refreshKey, childr
   client: PlatformSupabaseClient | null; briefing: MobileBriefing | null; scope: string; refreshKey?: string; children: ReactNode;
 }) {
   // Object identity / generatedAt change on every refresh, even when visible records do not.
+  // The server also puts numeric summary counters in structure. Only these four
+  // named buckets contain task rows; never enumerate every structure value.
+  const records = [
+    ...(['overdue', 'today', 'upcoming', 'undated'] as const).flatMap(bucket => briefing?.structure?.[bucket] || []),
+    ...(briefing?.resurface || []), ...(briefing?.notes || []),
+  ].filter(row => row !== null && typeof row === 'object' && !Array.isArray(row));
   const fingerprint = JSON.stringify([
-    [...Object.values(briefing?.structure || {}).flat(), ...(briefing?.resurface || []), ...(briefing?.notes || [])]
-      .map(row => [row.pageId, row.title, 'dueKey' in row ? row.dueKey : null, 'dueTime' in row ? row.dueTime : null, 'status' in row ? row.status : null]),
+    records.map(row => [row.pageId, row.title, 'dueKey' in row ? row.dueKey : null, 'dueTime' in row ? row.dueTime : null, 'status' in row ? row.status : null]),
     [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])],
   ]);
   const [result, setResult] = useState<{ scope: string; client: PlatformSupabaseClient; fingerprint: string; valid(): boolean; labels: Record<string, string>; calendarLinks: Record<string, string> } | null>(null);
@@ -32,10 +37,9 @@ export function HomeReminderStatus({ client, briefing, scope, refreshKey, childr
     const current = () => alive && session() && sync();
     if (!client || !briefing) return;
     async function read() {
-      const records = [...Object.values(briefing!.structure || {}).flat(), ...(briefing!.resurface || []), ...(briefing!.notes || [])]
-        .map(row => row.pageId).filter((id): id is string => Boolean(id));
+      const recordIds = records.map(row => row.pageId).filter((id): id is string => Boolean(id));
       // Failure of linkage must not suppress independently verifiable schedule rows.
-      const links = await findWorklogReminderLinks(client!, records, current).catch(() => ({} as Record<string, string[]>));
+      const links = await findWorklogReminderLinks(client!, recordIds, current).catch(() => ({} as Record<string, string[]>));
       const ids = [...new Set([...(briefing!.schedules?.today || []), ...(briefing!.schedules?.upcoming || [])]
         .map(row => row.scheduleId).filter((id): id is string => Boolean(id)).concat(Object.values(links).flat()))];
       const snapshots = await readOwnedReminderSnapshots(client!, ids, current);

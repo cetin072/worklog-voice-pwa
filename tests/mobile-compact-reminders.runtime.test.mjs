@@ -105,3 +105,30 @@ test('installed Supabase query keeps exact count, creator scope and both stable 
  client.auth.getUser=async()=>({data:{user:{id:owner}},error:null});
  assert.deepEqual(await findWorklogReminderLinks(client,[rid,rid,'invalid'],()=>true),{[rid]:[sid]});assert.equal(reads,1);
 });
+
+test('actual server classifier -> mobile parser -> Home accepts numeric structure counters and only reads task identities',async()=>{
+ const {classifyBriefingTasks,briefingV2Counts}=await import('../netlify/shared/briefing-v2.mjs');
+ const {parseMobileBriefing}=await import('../mobile/src/platform/worklog-api.ts');
+ for(const tasks of [[],[{pageId:rid,title:'Synthetic task',status:'대기',dueKey:'2026-11-13'}]]){
+  const structure=classifyBriefingTasks(tasks,'2026-11-10');
+  assert.equal(typeof structure.totalOpen,'number');
+  assert.equal(typeof structure.waitingCount,'number');
+  assert.equal(typeof structure.followUpCount,'number');
+  const briefing=parseMobileBriefing({today:'2026-11-10',structure,counts:briefingV2Counts(structure),notes:[]});
+  let state=null,effect,ids;
+  const React={createElement:(type,props,...children)=>({type,props,children})};
+  const {HomeReminderStatus}=compile('mobile/src/features/home/home-reminder-status.tsx',{
+   React,react:{createContext:()=>({Provider:'Provider'}),useState:()=>[state,value=>{state=value;}],useEffect:fn=>{effect=fn;}},
+   '../schedule/worklog-reminder-adapter':{findWorklogReminderLinks:async(_client,records)=>{ids=records;return {}; }},
+   '../schedule/schedule-reminder-snapshot':{reminderSessionEpoch:{capture:()=>()=>true},reminderSyncEpoch:{capture:()=>()=>true},readOwnedReminderSnapshots:async()=>({rows:[]})},
+   '../schedule/local-notifications':{readScheduleReminderEvidenceBatch:async()=>({})},'./reminder-label':{reminderLabel},
+  });
+  const props={client:{},briefing,scope:owner,children:null};
+  assert.doesNotThrow(()=>HomeReminderStatus(props));
+  const cleanup=effect();await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(ids,tasks.length?[rid]:[],'summary counters must never become task records');
+  assert.ok(state,'successful effect must finish instead of swallowing a bad record access');
+  assert.doesNotThrow(()=>HomeReminderStatus({...props,briefing:structuredClone(briefing)}));
+  cleanup();
+ }
+});

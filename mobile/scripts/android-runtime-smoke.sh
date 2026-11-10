@@ -188,6 +188,14 @@ if ! grep -q '음성 기록 시작' /tmp/worklog-home-after-manual.xml; then
   exit 1
 fi
 
+# Preserve the real synthetic Home before later checks (including microphone)
+# can fail. This fixture includes the server's numeric structure counters.
+if [[ "${CI:-}" == "true" && -n "${RUNNER_TEMP:-}" ]]; then
+  mkdir -p "$RUNNER_TEMP/launcher-evidence"
+  adb exec-out screencap -p > "$RUNNER_TEMP/launcher-evidence/home-before-recording.png"
+  cp /tmp/worklog-home-after-manual.xml "$RUNNER_TEMP/launcher-evidence/home-before-recording.xml"
+fi
+
 # Tap the actual Quick Voice Pressable. Audio streaming keeps React Native busy
 # enough that uiautomator may not produce a post-tap XML dump, so verify the
 # VoiceRecorderCard's state transition through the release runtime log instead.

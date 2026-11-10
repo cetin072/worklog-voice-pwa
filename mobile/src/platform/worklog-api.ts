@@ -45,7 +45,7 @@ export type MobileBriefing = {
   queryLimit?: number;
   filteredTaskCount?: number;
   counts?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated' | 'total', number>>;
-  structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>>;
+  structure?: Partial<Record<'overdue' | 'today' | 'upcoming' | 'undated', BriefingTask[]>> & { waitingCount?: number; followUpCount?: number; totalOpen?: number };
   resurface?: BriefingTask[];
   notes?: BriefingNote[];
   schedules?: { today?: BriefingSchedule[]; upcoming?: BriefingSchedule[]; total?: number };
