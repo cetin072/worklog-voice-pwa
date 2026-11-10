@@ -371,7 +371,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   const session = platform.session;
   const client = platform.client;
   const config = platform.config;
-  const recurring = useRepeatingWork(config?.dataSchema === 'worklog' ? client : null, session?.user.id);
+  const recurring = useRepeatingWork(config?.dataSchema === 'worklog' ? client : null, session?.user.id, phase === 'ready');
   const [repeatCreating,setRepeatCreating]=useState(false);
   const repeatCreateTarget=useRef<string|null>(null);
   const [repeatRule,setRepeatRule] = useState<RepeatRule|null>(null);

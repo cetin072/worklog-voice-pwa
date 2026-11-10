@@ -239,3 +239,28 @@ grant execute on function worklog.get_my_repeating_work_month(date) to authentic
 
 -- Support the existing owner-filtered list/week queries.
 create index repeating_work_owner_id on worklog.repeating_work(user_id,work_record_id);
+
+-- A stale Home/ERP client must not complete/edit the canonical series parent as a one-off task.
+-- Existing atomic Core RPCs retain their implementation and roll back on this guard.
+create function worklog.guard_repeating_work_parent() returns trigger
+language plpgsql volatile security invoker set search_path='' as $$
+declare changed boolean;
+begin
+ if tg_op='DELETE' then changed:=true;
+ else changed:= old.title is distinct from new.title or old.status is distinct from new.status
+   or old.due_at is distinct from new.due_at or old.action_kind is distinct from new.action_kind
+   or old.completed_at is distinct from new.completed_at or old.next_attention_at is distinct from new.next_attention_at;
+ end if;
+ if changed and exists(select 1 from worklog.repeating_work r where r.work_record_id=old.id) then
+  raise exception 'REPEATING_WORK_USE_OCCURRENCE: 반복 업무는 회차 상세에서 처리해주세요.' using errcode='P0001';
+ end if;
+ if tg_op='DELETE' then return old; end if;
+ return new;
+end $$;
+revoke all on function worklog.guard_repeating_work_parent() from public,anon;
+grant execute on function worklog.guard_repeating_work_parent() to authenticated;
+create trigger repeating_work_parent_update_guard
+ before update of title,status,due_at,action_kind,completed_at,next_attention_at on worklog.work_records
+ for each row execute function worklog.guard_repeating_work_parent();
+create trigger repeating_work_parent_delete_guard
+ before delete on worklog.work_records for each row execute function worklog.guard_repeating_work_parent();

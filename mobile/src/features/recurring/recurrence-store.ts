@@ -14,9 +14,9 @@ function fromRow(row: Record<string, unknown>): RepeatingWork {
   return { workRecordId: row.work_record_id, version: row.version as number, state };
 }
 export async function listRepeatingWork(client: PlatformSupabaseClient) {
-  const { data, error } = await client.from('repeating_work').select('work_record_id,version,state').order('work_record_id').limit(500);
+  const { data, error, count } = await client.from('repeating_work').select('work_record_id,version,state',{count:'exact'}).order('work_record_id').limit(500);
   if (error) throw new Error('반복 업무를 불러오지 못했습니다. 연결 또는 서버 준비 상태를 확인해주세요.');
-  if(data?.length===500)throw Error('반복 업무 전체를 확인하지 못했습니다. 조회 범위 점검이 필요합니다.');
+  if(!Array.isArray(data)||count!==data.length)throw Error('반복 업무 전체를 확인하지 못했습니다. 조회 범위 점검이 필요합니다.');
   return (data || []).map(fromRow);
 }
 /** Retry the exact immutable command and UUID, including after ambiguous network failure. */

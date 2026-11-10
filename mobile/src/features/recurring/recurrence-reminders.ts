@@ -29,3 +29,15 @@ export function cancelAllRepeatReminders() {
  generation++;
  const run=queue.catch(()=>undefined).then(async()=>{if(Platform.OS==='web')return;for(const r of await Notifications.getAllScheduledNotificationsAsync())if(own(r))await Notifications.cancelScheduledNotificationAsync(r.identifier);});queue=run;return run;
 }
+
+/** Preserve this owner's existing reservations while a remote snapshot is still unavailable. */
+export function reconcileRepeatReminderOwner(owner:string,current:()=>boolean) {
+ const token=generation;
+ const run=queue.catch(()=>undefined).then(async()=>{
+  if(Platform.OS==='web'||!current()||token!==generation)return;
+  for(const r of await Notifications.getAllScheduledNotificationsAsync()){
+   if(!current()||token!==generation)return;
+   if(own(r)&&r.content.data?.userId!==owner)await Notifications.cancelScheduledNotificationAsync(r.identifier);
+  }
+ });queue=run;return run;
+}

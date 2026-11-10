@@ -186,6 +186,7 @@ export default async (req:Request,_context:Context)=>{
         result=await statusWriter.updateStatusFast({recordId:body.recordId,status:body.status});
         fastPath=true;
       }catch(fastError:any){
+        if(/REPEATING_WORK_USE_OCCURRENCE/.test(String(fastError?.message||""))) throw fastError;
         if(fastError?.code==="WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID" || fastError?.code==="WORKLOG_DATA_CORE_STATUS_INVALID" || fastError?.code==="WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN") throw fastError;
         if(statusFastWorkspaceMissing(fastError)){
           workspaceContext=await resolver.resolve(accessToken);
@@ -193,6 +194,7 @@ export default async (req:Request,_context:Context)=>{
             result=await statusWriter.updateStatusFast({recordId:body.recordId,status:body.status});
             fastPath=true;
           }catch(retryError:any){
+        if(/REPEATING_WORK_USE_OCCURRENCE/.test(String(retryError?.message||""))) throw retryError;
             if(retryError?.code==="WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID" || retryError?.code==="WORKLOG_DATA_CORE_STATUS_INVALID" || retryError?.code==="WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN") throw retryError;
             if(!statusFastRpcUnavailable(retryError)) throw retryError;
             console.warn("Data Core briefing status fast retry failed; using legacy path",String(retryError?.message || "unknown").slice(0,120));
@@ -210,6 +212,7 @@ export default async (req:Request,_context:Context)=>{
       }
       return json(200,{ok:true,mode:"data_core",...result,dataCoreFastPath:fastPath});
     }catch(error:any){
+      if(/REPEATING_WORK_USE_OCCURRENCE/.test(String(error?.message||'')))return json(409,{error:'반복 업무입니다. 새로고침한 뒤 해당 회차에서 처리해주세요.'});
       if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED") return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 상태를 변경해주세요."});
       if(error?.code==="WORKLOG_DATA_CORE_STATUS_RECORD_ID_INVALID" || error?.code==="WORKLOG_DATA_CORE_STATUS_INVALID") return json(400,{error:error.message});
       if(error?.code==="WORKLOG_DATA_CORE_STATUS_NOT_FOUND_OR_FORBIDDEN") return json(404,{error:error.message});
