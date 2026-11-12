@@ -9,11 +9,12 @@ const {recurringCalendarEvents}=await import('../mobile/src/features/recurring/r
 const {planRepeatReminders}=await import('../mobile/src/features/recurring/recurrence-reminder-plan.ts');
 const state=newRepeatState('청소',{kind:'weekly',anchor:'2026-11-06',interval:1,weekdays:[5],unit:'day'},'09:00');
 const work={workRecordId:'w',version:0,state};
-test('홈은 일반 업무와 반복 회차를 합치고 원본 중복 숨김, 달력/알림은 동일 계산 소비',()=>{
+test('홈은 일반 업무와 다음 반복 회차를 표시하고 달력/알림은 전체 계산을 사용',()=>{
  const p=recurringHomeProjection({today:[{pageId:'normal',title:'원래 업무'},{pageId:'w',title:'원본'}],overdue:[],upcoming:[],undated:[]},[work],'2026-11-13');
- assert.equal(p.structure.today.length,2);assert.equal(p.structure.today[0].pageId,'normal');assert.equal(p.structure.overdue.length,1);assert.equal(p.occurrences.size,14);
+ assert.equal(p.structure.today.length,2);assert.equal(p.structure.today[0].pageId,'normal');assert.equal(p.structure.overdue.length,1);assert.equal(p.occurrences.size,3);
+ assert.deepEqual(p.structure.upcoming.map(row=>row.dueKey),['2026-11-20']);
  assert.equal(recurringCalendarEvents([work],'2026-11').length,4);
- const plan=planRepeatReminders([work],'A','2026-11-13',Date.parse('2026-11-13T00:00:00+09:00'));assert.ok(plan.length);assert.equal(new Set(plan.map(p=>p.identifier)).size,plan.length);
+ const plan=planRepeatReminders([work],'A','2026-11-13',Date.parse('2026-11-13T00:00:00+09:00'));assert.ok(plan.length > 1);assert.equal(new Set(plan.map(p=>p.identifier)).size,plan.length);
  assert.equal(planRepeatReminders([{...work,state:{...state,revisions:state.revisions.map(r=>({...r,time:''}))}}],'A','2026-11-13',0).length,0);
 });
 test('응답 유실 후 동일 요청 읽기, jsonb 키 순서 변화 허용, 불명확한 저장/계정 변경 실패',async()=>{
