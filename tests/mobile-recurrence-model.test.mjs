@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 register('./helpers/mobile-ts-loader.mjs', import.meta.url);
 const m = await import('../mobile/src/features/recurring/recurrence-model.ts');
+const home = await import('../mobile/src/features/recurring/recurrence-home.ts');
 const rule = (patch={}) => ({kind:'weekly',anchor:'2026-11-06',interval:1,weekdays:[5],unit:'day',...patch});
 const work = r => ({workRecordId:'w1',version:0,state:m.newRepeatState('청소',r)});
 const dates = (w,from,to) => m.repeatOccurrences(w,from,to).map(r=>r.dueDate);
@@ -60,4 +61,32 @@ test('이번 회차 시간만 변경하면 다음 회차 시간 불변·논리 �
  w.state.occurrences[row.key]={...row,time:'15:30'};
  const rows=m.repeatOccurrences(w,'2026-11-01','2026-11-30');
  assert.equal(rows[0].key,row.key);assert.equal(rows[0].time,'15:30');assert.equal(rows[1].time,'09:00');
+});
+
+test('홈 다가오는 업무는 반복 업무별 다음 미완료 회차만 표시한다', () => {
+ const { recurringHomeProjection } = home;
+ const monthly = work(rule({kind:'monthly',anchor:'2026-10-30'}));
+ const today = '2026-11-12';
+ const daily = {...work(rule({kind:'daily',anchor:'2026-11-11'})),workRecordId:'w2'};
+ const ordinary = {pageId:'ordinary',title:'단발 업무',dueKey:'2027-01-04'};
+ const structure = {overdue:[],today:[],upcoming:[ordinary],undated:[]};
+ const project = () => recurringHomeProjection(structure,[monthly,daily],today);
+ const visible = result => result.structure.upcoming.map(row=>[row.pageId,row.dueKey]);
+ const initial = project();
+ assert.deepEqual(visible(initial),[
+   ['repeat:w2:v1:2026-11-13','2026-11-13'],
+   ['repeat:w1:v1:2026-11-30','2026-11-30'],
+   ['ordinary','2027-01-04'],
+ ]);
+ assert.equal(initial.structure.today.length,1);
+ assert.equal(initial.structure.overdue.length,2);
+ assert.equal(initial.occurrences.size,5);
+ const next = m.repeatOccurrences(monthly,'2026-11-30','2026-11-30')[0];
+ monthly.state.occurrences[next.key] = {...next,status:'completed',completedOn:today};
+ assert.deepEqual(visible(project()),[
+   ['repeat:w2:v1:2026-11-13','2026-11-13'],
+   ['repeat:w1:v1:2026-12-30','2026-12-30'],
+   ['ordinary','2027-01-04'],
+ ]);
+ assert.equal(m.repeatOccurrences(monthly,'2026-11-30','2027-01-30').length,3);
 });

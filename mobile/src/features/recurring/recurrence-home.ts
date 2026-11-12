@@ -8,10 +8,16 @@ export function recurringHomeProjection(structure: Record<'today'|'overdue'|'upc
   const result=Object.fromEntries(Object.entries(structure).map(([bucket,rows])=>[bucket,rows.filter(r=>!r.pageId||!ids.has(r.pageId))])) as typeof structure;
   const occurrences=new Map<string,RepeatOccurrence>();
   for (const work of works) {
+    let upcomingShown = false;
     for (const row of repeatHistory(work,shiftDay(today,90))) {
       if(row.status!=='pending')continue;
-      const id=`repeat:${work.workRecordId}:${row.key}`;occurrences.set(id,row);
       const bucket=row.dueDate<today?'overdue':row.dueDate===today?'today':'upcoming';
+      // repeatHistory is ordered by due date. Home shows one future occurrence per work.
+      if (bucket === 'upcoming') {
+        if (upcomingShown) continue;
+        upcomingShown = true;
+      }
+      const id=`repeat:${work.workRecordId}:${row.key}`;occurrences.set(id,row);
       (result[bucket] ||= []).push({pageId:id,title:row.title,dueKey:row.dueDate,dueTime:row.time,status:'진행중',reason:bucket});
     }
   }

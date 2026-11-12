@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-12',
+    title: '다가오는 반복 업무 간결하게 보기',
+    summary: '다가오는 업무에는 반복 업무마다 가장 가까운 미완료 회차 한 건만 표시합니다.',
+    items: ['다음 회차를 완료하면 그다음 예정이 표시됩니다.'],
+  },
+  {
     date: '2026-11-11',
     title: '내 관리와 간결한 업무 목록',
     summary: '정기지출·반복업무·습관을 한곳에서 관리하고 업무 목록을 정리했습니다.',
