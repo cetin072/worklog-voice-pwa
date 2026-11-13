@@ -4,6 +4,7 @@ test('full adapted RPCs save/read/search/edit/complete under active imported own
  const db=new PGlite({extensions:{pg_trgm}});try{
  await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create table public.profiles(id uuid primary key references auth.users(id),account_status text);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;create extension pg_trgm;`);
  for(const file of ['unified-worklog-catalog.sql','unified-worklog-rpcs.sql'])try{await db.exec(await readFile(new URL('../supabase/rehearsal/'+file,import.meta.url),'utf8'));}catch(e){throw Error(file+': '+e.message);}
+ await db.exec(await readFile(new URL('../supabase/migrations/20261113042235_sync_worklog_reminder_on_edit.sql', import.meta.url), 'utf8'));
  await db.query('insert into auth.users values($1),($2)',[actor,other]);await db.query("insert into public.profiles values($1,'active'),($2,'active')",[actor,other]);await db.query("insert into worklog.workspaces(id,name,owner_user_id,created_by_user_id) values($1,'합성 공간',$2,$2)",[space,actor]);await db.query("insert into worklog.workspace_members(workspace_id,user_id,role) values($1,$2,'owner')",[space,actor]);
  await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${actor}',false)`);
  assert.equal((await db.query('select * from worklog.bootstrap_personal_workspace()')).rows[0].workspace_id,space);
@@ -12,6 +13,29 @@ test('full adapted RPCs save/read/search/edit/complete under active imported own
  assert.equal((await db.query('select * from worklog.get_my_briefing_source()')).rows.length,1);
  assert.ok((await db.query("select * from worklog.search_my_work_records('합성')")).rows.length>0);
  assert.equal((await db.query('select * from worklog.get_my_work_record_edit_v2($1)',[id])).rows[0].record_id,id);
+ const task = (await db.query("select * from worklog.save_my_worklog_with_schedule_v2(p_client_request_id=>'synthetic-reminder-0002',p_title=>'방문 업무',p_content=>'합성 내용',p_original_text=>'합성 원문',p_record_type=>'task',p_status=>'in_progress')")).rows[0];
+ const taskId = task.work_record_id;
+ const oldStart = '2099-11-02T01:00:00.000Z';
+ const newStart = '2099-11-02T04:20:00.000Z';
+ const reminderId = (await db.query('select * from worklog.confirm_my_worklog_reminder($1,$2)', [taskId, oldStart])).rows[0].schedule_id;
+ const edit = async () => (await db.query('select * from worklog.update_my_work_record_details_v3($1,$2,$3,true,null)', [taskId, '방문 업무 수정', newStart])).rows[0];
+ const edited = await edit();
+ assert.equal(edited.due_at_value.toISOString(), newStart);
+ assert.equal(edited.schedule_updated, true);
+ assert.equal(edited.schedule_id, reminderId);
+ assert.equal(edited.schedule_starts_at.toISOString(), newStart);
+ const linked = await db.query("select id,title,starts_at from worklog.schedules where metadata->>'reminderWorkRecordId'=$1", [taskId]);
+ assert.deepEqual(linked.rows, [{id:reminderId,title:'방문 업무 수정',starts_at:new Date(newStart)}]);
+ assert.equal((await edit()).schedule_id, reminderId);
+ assert.equal((await db.query('select starts_at from worklog.schedules where id=$1',[saved.rows[0].schedule_id])).rows[0].starts_at.toISOString(), oldStart);
+ const cleared = (await db.query('select * from worklog.update_my_work_record_details_v3($1,$2,null,false,null)', [taskId, '방문 업무 수정'])).rows[0];
+ assert.equal(cleared.schedule_id, reminderId);
+ assert.equal(cleared.schedule_status, 'cancelled');
+ await edit();
+ assert.equal((await db.query('select status from worklog.schedules where id=$1', [reminderId])).rows[0].status, 'cancelled');
+ const directEdit = (await db.query('select * from worklog.update_my_work_record_details_v3($1,$2,$3,true,null)', [id, '직접 연결 일정 수정', newStart])).rows[0];
+ assert.equal(directEdit.schedule_id, saved.rows[0].schedule_id);
+ assert.equal(directEdit.schedule_starts_at.toISOString(), newStart);
  await db.query("select * from worklog.update_my_work_record_status($1,'completed')",[id]);
  assert.equal((await db.query('select status from worklog.work_records where id=$1',[id])).rows[0].status,'completed');
  await db.exec(`select set_config('request.jwt.claim.sub','${other}',false)`);
