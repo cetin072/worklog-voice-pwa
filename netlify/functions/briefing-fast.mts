@@ -127,6 +127,12 @@ export default async (req:Request,_context:Context)=>{
       fastPath:source.fastPath
     });
   }catch(error:any){
+    if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" && error.accessNotProvisioned){
+      return json(403,{
+        code:"WORKLOG_ACCESS_NOT_PROVISIONED",
+        error:"이 계정에 업무수첩 사용 권한이 아직 설정되지 않았습니다. 관리자에게 문의하거나 다른 계정으로 로그인해주세요."
+      });
+    }
     if(error?.code==="SUPABASE_WORKSPACE_AUTH_FAILED" || error?.code==="SUPABASE_WORKSPACE_ACCESS_TOKEN_REQUIRED"){
       return json(401,{error:"Platform 로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 브리핑을 열어주세요."});
     }
