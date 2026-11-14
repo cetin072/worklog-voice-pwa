@@ -5,6 +5,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { mobileTheme } from '@/src/ui/theme';
 import {
   CYCLE_LABEL,
+  CURRENCY_LABEL,
   EXPENSE_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   SCOPE_LABEL,
@@ -14,6 +15,7 @@ import {
   type Subscription,
   type SubscriptionDraft,
   type SubscriptionDraftErrors,
+  type SubscriptionCurrency,
   type SubscriptionScope,
 } from './subscription-model';
 import type { SubscriptionInput } from './subscription-store';
@@ -31,7 +33,7 @@ function dateToKey(date: Date) {
 
 export function draftFromSubscription(sub: Subscription | null, todayKey: string, defaultScope: SubscriptionScope): SubscriptionDraft {
   return sub
-    ? { name: sub.name, amountText: String(sub.amountKrw), cycle: sub.cycle, scope: sub.scope, billingAnchorDate: sub.billingAnchorDate, cancelDeadline: sub.cancelDeadline || '', paymentMethod: sub.paymentMethod || '', paymentName: sub.paymentName || '', expenseKind: sub.expenseKind || 'subscription', variableAmount: !!sub.variableAmount }
+    ? { name: sub.name, amountText: sub.amountUsdCents === undefined ? String(sub.amountKrw) : (sub.amountUsdCents / 100).toFixed(2), currency: sub.amountUsdCents === undefined ? 'KRW' : 'USD', cycle: sub.cycle, scope: sub.scope, billingAnchorDate: sub.billingAnchorDate, cancelDeadline: sub.cancelDeadline || '', paymentMethod: sub.paymentMethod || '', paymentName: sub.paymentName || '', expenseKind: sub.expenseKind || 'subscription', variableAmount: !!sub.variableAmount }
     : { name: '', amountText: '', cycle: 'monthly', scope: defaultScope, billingAnchorDate: todayKey, cancelDeadline: '', paymentMethod: '', paymentName: '', expenseKind: 'subscription', variableAmount: false };
 }
 
@@ -61,7 +63,7 @@ function DateField({ label, value, placeholder, optional, error, onChange }: {
   </View>;
 }
 
-function Choice<T extends string>({ label, options, value, labels, onChange }: { label: string; options: readonly T[]; value: T; labels: Record<T, string>; onChange: (next: T) => void }) {
+function Choice<T extends string>({ label, options, value, labels, onChange }: { label: string; options: readonly T[]; value: T | ''; labels: Record<T, string>; onChange: (next: T) => void }) {
   return <View style={styles.field}>
     <Text style={styles.label}>{label}</Text>
     <View style={styles.choiceRow}>
@@ -111,9 +113,10 @@ export function SubscriptionForm({ initial, busy, isNew, assist, sourceText, onS
       </View> : null}
       {errors.name ? <Text accessibilityLiveRegion="polite" style={styles.error}>{errors.name}</Text> : null}
     </View>
+    <Choice<SubscriptionCurrency> label="결제 통화" options={['KRW', 'USD']} value={draft.currency ?? 'KRW'} labels={CURRENCY_LABEL} onChange={(v) => set('currency', v)} />
     <View style={styles.field}>
-      <Text style={styles.label}>{draft.cycle === 'yearly' ? '1년 결제 금액(원)' : '1회 결제 금액(원)'}</Text>
-      <TextInput accessibilityLabel="결제 금액" style={styles.input} value={draft.amountText} keyboardType="number-pad" placeholder="예: 12000" onChangeText={(v) => set('amountText', v)} />
+      <Text style={styles.label}>{draft.cycle === 'yearly' ? '1년 결제 금액' : '1회 결제 금액'} ({draft.currency === 'USD' ? 'USD' : '원'})</Text>
+      <TextInput accessibilityLabel="결제 금액" style={styles.input} value={draft.amountText} keyboardType={draft.currency === 'USD' ? 'decimal-pad' : 'number-pad'} placeholder={draft.currency === 'USD' ? '예: 19.99' : '예: 12000'} onChangeText={(v) => set('amountText', v)} />
       {errors.amount ? <Text accessibilityLiveRegion="polite" style={styles.error}>{errors.amount}</Text> : null}
     </View>
     <Choice label="결제수단 (선택)" options={['', 'card', 'bank_transfer', 'other'] as const} value={draft.paymentMethod || ''} labels={PAYMENT_METHOD_LABEL} onChange={(v) => setDraft(d => ({ ...d, paymentMethod: v, paymentName: v === d.paymentMethod ? d.paymentName : '' }))} />
@@ -124,6 +127,7 @@ export function SubscriptionForm({ initial, busy, isNew, assist, sourceText, onS
       {errors.paymentName ? <Text style={styles.error}>{errors.paymentName}</Text> : null}
     </View> : null}
     <Choice label="결제 주기" options={CYCLES} value={draft.cycle} labels={CYCLE_LABEL} onChange={(v) => set('cycle', v)} />
+    {errors.cycle ? <Text accessibilityLiveRegion="polite" style={styles.error}>{errors.cycle}</Text> : null}
     <DateField label="다음 결제일" value={draft.billingAnchorDate} placeholder="날짜 선택" error={errors.billingAnchorDate} onChange={(v) => set('billingAnchorDate', v)} />
     <DateField label="해지기한 (선택)" value={draft.cancelDeadline} placeholder="없으면 비워두세요" optional error={errors.cancelDeadline} onChange={(v) => set('cancelDeadline', v)} />
     <View style={styles.actions}>

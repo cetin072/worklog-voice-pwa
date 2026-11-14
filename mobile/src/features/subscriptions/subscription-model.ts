@@ -15,11 +15,16 @@ export const EXPENSE_KIND_LABEL: Record<ExpenseKind, string> = { subscription: '
 export type BillingCycle = 'monthly' | 'yearly';
 export type ScopeFilter = 'all' | SubscriptionScope;
 
-export type Subscription = {
+export type SubscriptionCurrency = 'KRW' | 'USD';
+export const CURRENCY_LABEL = { KRW: '원화 (KRW)', USD: '달러 (USD)' } as const;
+
+export type SubscriptionAmount =
+  | { amountKrw: number; amountUsdCents?: never }
+  | { amountKrw?: never; amountUsdCents: number };
+
+export type Subscription = SubscriptionAmount & {
   id: string;
   name: string;
-  /** 결제 1회당 금액(원, 정수). 연 결제면 1년치 금액. */
-  amountKrw: number;
   cycle: BillingCycle;
   scope: SubscriptionScope;
   /** 사용자가 입력한 '다음 결제일'. 이후 결제일은 이 날짜를 기준으로 계산한다. */
@@ -136,12 +141,18 @@ export function upcomingPaymentDates(anchorKey: string, cycle: BillingCycle, tod
 }
 
 /** 월 환산 금액(원 단위 반올림). 연 결제는 12로 나눈다. */
-export function monthlyAmountKrw(sub: Pick<Subscription, 'amountKrw' | 'cycle'>) {
-  return sub.cycle === 'yearly' ? Math.round(sub.amountKrw / 12) : sub.amountKrw;
+export function monthlyAmountKrw(sub: SubscriptionAmount & { cycle: BillingCycle }) {
+  const amount = sub.amountKrw ?? 0;
+  return sub.cycle === 'yearly' ? Math.round(amount / 12) : amount;
 }
 
-function yearlyAmountKrw(sub: Pick<Subscription, 'amountKrw' | 'cycle'>) {
-  return sub.cycle === 'yearly' ? sub.amountKrw : sub.amountKrw * 12;
+function yearlyAmountKrw(sub: SubscriptionAmount & { cycle: BillingCycle }) {
+  const amount = sub.amountKrw ?? 0;
+  return sub.cycle === 'yearly' ? amount : amount * 12;
+}
+
+function yearlyAmountUsdCents(sub: Subscription) {
+  return (sub.amountUsdCents ?? 0) * (sub.cycle === 'yearly' ? 1 : 12);
 }
 
 export function filterByScope<T extends Pick<Subscription, 'scope'>>(subs: readonly T[], filter: ScopeFilter) {
@@ -152,11 +163,14 @@ export type SubscriptionSummary = {
   count: number;
   monthlyTotalKrw: number;
   yearlyTotalKrw: number;
+  monthlyTotalUsdCents: number;
+  yearlyTotalUsdCents: number;
   byScope: Record<SubscriptionScope, { count: number; monthlyTotalKrw: number }>;
 };
 
 export function summarizeSubscriptions(subs: readonly Subscription[]): SubscriptionSummary {
   const yearly = subs.reduce((sum, s) => sum + yearlyAmountKrw(s), 0);
+  const yearlyUsd = subs.reduce((sum, s) => sum + yearlyAmountUsdCents(s), 0);
   const scopeSummary = (scope: SubscriptionScope) => {
     const scoped = subs.filter((s) => s.scope === scope);
     return {
@@ -168,13 +182,19 @@ export function summarizeSubscriptions(subs: readonly Subscription[]): Subscript
     count: subs.length,
     monthlyTotalKrw: Math.round(yearly / 12),
     yearlyTotalKrw: yearly,
+    monthlyTotalUsdCents: Math.round(yearlyUsd / 12),
+    yearlyTotalUsdCents: yearlyUsd,
     byScope: { business: scopeSummary('business'), personal: scopeSummary('personal') },
   };
 }
 
 /** 기본 정렬: 월 환산 금액 큰 순, 같으면 이름순. */
-export function sortByMonthlyAmountDesc<T extends Pick<Subscription, 'amountKrw' | 'cycle' | 'name'>>(subs: readonly T[]) {
-  return [...subs].sort((a, b) => monthlyAmountKrw(b) - monthlyAmountKrw(a) || a.name.localeCompare(b.name, 'ko'));
+export function sortByMonthlyAmountDesc<T extends Subscription>(subs: readonly T[]) {
+  return [...subs].sort((a, b) =>
+    Number(a.amountUsdCents !== undefined) - Number(b.amountUsdCents !== undefined)
+    || monthlyAmountKrw(b) - monthlyAmountKrw(a)
+    || yearlyAmountUsdCents(b) - yearlyAmountUsdCents(a)
+    || a.name.localeCompare(b.name, 'ko'));
 }
 
 export type UrgentKind = 'payment' | 'cancel-deadline';
@@ -213,6 +233,7 @@ export function isCancelCandidate(sub: Subscription, todayKey: string, rule = CA
 export type SubscriptionRow = {
   subscription: Subscription;
   monthlyAmountKrw: number;
+  monthlyAmountUsdCents: number;
   nextPayment: string;
   daysToPayment: number;
   idleDays: number | null;
@@ -227,6 +248,7 @@ export function buildSubscriptionRows(subs: readonly Subscription[], filter: Sco
     return {
       subscription,
       monthlyAmountKrw: monthlyAmountKrw(subscription),
+      monthlyAmountUsdCents: Math.round(yearlyAmountUsdCents(subscription) / 12),
       nextPayment,
       daysToPayment: daysBetween(todayKey, nextPayment),
       idleDays: daysSinceUse(subscription, todayKey),
@@ -250,10 +272,27 @@ export function parseAmountInput(text: string) {
   return Number.isSafeInteger(value) ? value : null;
 }
 
+export function formatUsd(cents: number) {
+  const dollars = Math.floor(cents / 100).toLocaleString('en-US');
+  return `$${dollars}.${String(cents % 100).padStart(2, '0')}`;
+}
+
+export function formatSubscriptionAmount(amount: SubscriptionAmount) {
+  return amount.amountUsdCents === undefined ? formatWon(amount.amountKrw) : formatUsd(amount.amountUsdCents);
+}
+
+export function parseUsdCents(text: string) {
+  const match = /^\$?(\d+|\d{1,3}(?:,\d{3})+)(?:\.(\d{1,2}))?$/.exec(text.trim());
+  if (!match) return null;
+  const cents = Number(match[1].replace(/,/g, '')) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+
 export type SubscriptionDraft = {
   name: string;
   amountText: string;
-  cycle: BillingCycle;
+  currency?: SubscriptionCurrency;
+  cycle: BillingCycle | '';
   scope: SubscriptionScope;
   billingAnchorDate: string;
   cancelDeadline: string;
@@ -263,16 +302,18 @@ export type SubscriptionDraft = {
   variableAmount?: boolean;
 };
 
-export type SubscriptionDraftErrors = Partial<Record<'name' | 'amount' | 'billingAnchorDate' | 'cancelDeadline' | 'paymentMethod' | 'paymentName' | 'expenseKind', string>>;
+export type SubscriptionDraftErrors = Partial<Record<'name' | 'amount' | 'cycle' | 'billingAnchorDate' | 'cancelDeadline' | 'paymentMethod' | 'paymentName' | 'expenseKind', string>>;
 
-export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true; value: Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> } | { ok: false; errors: SubscriptionDraftErrors } {
+export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true; value: SubscriptionAmount & Omit<Subscription, keyof SubscriptionAmount | 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> } | { ok: false; errors: SubscriptionDraftErrors } {
   const errors: SubscriptionDraftErrors = {};
   const name = draft.name.trim();
   if (!name) errors.name = '서비스 이름을 입력해주세요.';
   else if (name.length > MAX_NAME_LENGTH) errors.name = `이름은 ${MAX_NAME_LENGTH}자 이하로 입력해주세요.`;
-  const amount = parseAmountInput(draft.amountText);
-  if (amount === null || amount <= 0) errors.amount = '금액을 숫자로 입력해주세요.';
+  const isUsd = draft.currency === 'USD';
+  const amount = isUsd ? parseUsdCents(draft.amountText) : parseAmountInput(draft.amountText);
+  if (amount === null || amount <= 0) errors.amount = isUsd ? '달러 금액을 소수점 둘째 자리까지 입력해주세요.' : '금액을 숫자로 입력해주세요.';
   else if (amount > MAX_AMOUNT_KRW) errors.amount = '금액이 너무 큽니다. 다시 확인해주세요.';
+  if (!draft.cycle) errors.cycle = '결제 주기를 선택해주세요.';
   if (!isValidDateKey(draft.billingAnchorDate)) errors.billingAnchorDate = '결제일을 2026-11-15 형식으로 입력해주세요.';
   const deadline = draft.cancelDeadline.trim();
   if (deadline && !isValidDateKey(deadline)) errors.cancelDeadline = '해지기한을 2026-11-15 형식으로 입력하거나 비워주세요.';
@@ -281,13 +322,13 @@ export function validateSubscriptionDraft(draft: SubscriptionDraft): { ok: true;
   const paymentName = (draft.paymentName || '').trim();
   if (!Object.hasOwn(PAYMENT_METHOD_LABEL, method)) errors.paymentMethod = '결제수단을 다시 선택해주세요.';
   if (paymentName.length > 60) errors.paymentName = '결제수단 이름은 60자 이하로 입력해주세요.';
-  if (Object.keys(errors).length) return { ok: false, errors };
+  if (Object.keys(errors).length || !draft.cycle) return { ok: false, errors };
   return {
     ok: true,
     value: {
       name,
       ...(draft.expenseKind !== undefined ? { expenseKind: draft.expenseKind, variableAmount: !!draft.variableAmount } : {}),
-      amountKrw: amount as number,
+      ...(isUsd ? { amountUsdCents: amount as number } : { amountKrw: amount as number }),
       cycle: draft.cycle,
       scope: draft.scope,
       billingAnchorDate: draft.billingAnchorDate,
@@ -303,9 +344,13 @@ export function subscriptionPaymentLabel(sub: Pick<Subscription, 'paymentMethod'
 }
 
 /** 월 환산과 구별: 해당 월에 실제 청구 예정인 1회 금액의 합. */
-export function expectedExpenseForMonth(subs: readonly Subscription[], monthKey: string) {
-  const first = `${monthKey.slice(0, 7)}-01`;
-  return subs.reduce((sum, s) => nextPaymentDate(s.billingAnchorDate, s.cycle, first).slice(0, 7) === first.slice(0, 7) ? sum + s.amountKrw : sum, 0);
+export function expectedExpenseForMonth(subs: readonly Subscription[], monthKey: string, currency: SubscriptionCurrency = 'KRW') {
+  const month = monthKey.slice(0, 7);
+  const first = `${month}-01`;
+  return subs.reduce((sum, sub) => {
+    if (nextPaymentDate(sub.billingAnchorDate, sub.cycle, first).slice(0, 7) !== month) return sum;
+    return sum + (currency === 'USD' ? sub.amountUsdCents ?? 0 : sub.amountKrw ?? 0);
+  }, 0);
 }
 /** 납부 확인 대상: 시작 전에는 첫 회차, 이후에는 가장 최근 도래한 회차. 미납을 자동 완료하지 않는다. */
 export function paymentConfirmationDate(sub: Subscription, today: string) {

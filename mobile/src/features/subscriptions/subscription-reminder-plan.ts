@@ -1,6 +1,6 @@
 import {
   addDaysToKey,
-  formatWon,
+  formatSubscriptionAmount,
   upcomingPaymentDates,
   type Subscription,
 } from './subscription-model';
@@ -47,7 +47,7 @@ export function planSubscriptionReminders(subs: readonly Subscription[], todayKe
         identifier: `${SUBSCRIPTION_REMINDER_ID_PREFIX}payment.${sub.id}.${date}`,
         triggerAt: triggerAtFor(date),
         title: '내일 결제 예정',
-        body: `${sub.name} ${formatWon(sub.amountKrw)} · ${date.slice(5).replace('-', '/')}`,
+        body: `${sub.name} ${formatSubscriptionAmount(sub)} · ${date.slice(5).replace('-', '/')}`,
         subscriptionId: sub.id,
         kind: 'payment',
         date,

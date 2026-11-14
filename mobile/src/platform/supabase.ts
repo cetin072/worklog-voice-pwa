@@ -24,6 +24,13 @@ export function createPlatformSupabaseClient(config: PublicPlatformConfig) {
         throw new Error('WORKLOG_AUTH_PROJECT_MISMATCH');
       }
     }
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    const project = new URL(config.supabaseUrl);
+    if (url.origin === project.origin && /^\/rest\/v1\/(?:subscriptions|subscription_payments|rpc\/confirm_subscription_payment)$/.test(url.pathname)) {
+      // Older app versions expect every subscription and payment to have a won amount.
+      headers.set('x-worklog-subscription-currency', 'usd-v1');
+      return fetch(input, { ...init, headers });
+    }
     return fetch(input, init);
   };
   return createClient(config.supabaseUrl, config.publishableKey, {
