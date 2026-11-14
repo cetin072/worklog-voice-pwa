@@ -164,3 +164,25 @@ test('an explicit USD renewal is prefilled and conflicting or unlabelled amounts
   assert.equal(subscriptionReceiptDraft('결제금액:\n결제금액: 8500\n잔액충전: 10000원'), null);
   assert.equal(subscriptionReceiptDraft('결제금액: 8,500원\n결제금액: $19.99'), null);
 });
+
+test('Google Play receipt table reads wrapped product, monthly grand total and KakaoPay', () => {
+  const text = [
+    'Google Play', '감사합니다.', '주문 날짜: 2026. 8. 18.',
+    '내 계정: sample@example.test', '상품', '가격',
+    'Claude Pro Subscription (Claude', 'by Anthropic)', '매월', '₩30,000',
+    '자동 갱신되는 정기 결제', '합계: 매월 ₩30,000', '(VAT ₩2,727 포함)',
+    '결제 방법:', 'kakaopay: sample@example.test', 'Play 포인트 적립',
+  ].join('\n');
+  const expected = { name: 'Claude Pro Subscription (Claude by Anthropic)', amountText: '30000',
+    cycle: 'monthly', paymentMethod: 'other', paymentName: '카카오페이' };
+  assert.deepEqual(subscriptionReceiptDraft(text), expected);
+  assert.deepEqual(subscriptionReceiptDraft(text.replace('상품\n가격', '상품 가격').replace('합계: 매월', '합계:\n매월')), expected);
+  const noisy = text.replace('상품\n가격', '상품       인식오류')
+    .replace('Claude\nby Anthropic)\n매월\n₩30,000', 'Claude       매월\nby Anthropic)      430,000')
+    .replace('합계: 매월 ₩30,000', '합계: 매월 \\30,000');
+  assert.deepEqual(subscriptionReceiptDraft(noisy), expected);
+  const conflicting = subscriptionReceiptDraft(text + '\n합계: 매월 ₩40,000');
+  assert.equal(conflicting.amountText, undefined);
+  assert.equal(conflicting.billingAnchorDate, undefined);
+  assert.equal(subscriptionReceiptDraft('Google Play\nPlay 포인트\n합계: ₩30,000'), null);
+});

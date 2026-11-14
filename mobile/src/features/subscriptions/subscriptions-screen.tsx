@@ -163,10 +163,11 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
       const image = await importPickedCaptureImage(uri);
       try {
         if (!alive.current) return;
-        const receipt = subscriptionReceiptDraft(await recognizeCapture(image.uri));
+        const text = await recognizeCapture(image.uri);
         if (!alive.current) return;
+        const receipt = subscriptionReceiptDraft(text);
         if (!receipt) {
-          setError('구독 정보를 읽지 못했어요. 글자가 선명한 사진을 고르거나 직접 입력해주세요.');
+          setError(text ? '이 영수증에서 구독 정보를 찾지 못했어요. 다른 결제 내역을 고르거나 직접 입력해주세요.' : '사진에서 글자를 읽지 못했어요. 다른 사진을 고르거나 직접 입력해주세요.');
           return;
         }
         setEditing({ kind: 'new', receipt });
