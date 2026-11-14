@@ -249,6 +249,10 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
   }
 
   return <View style={styles.root}>
+    <Pressable accessibilityRole="button" accessibilityLabel="구독 추가" style={styles.addButton} onPress={openCompose}>
+      <Text style={styles.addText}>+ 구독 추가</Text>
+    </Pressable>
+
     <View style={styles.summaryCard} accessibilityRole="summary">
       <Text style={styles.summaryLabel}>{filter === 'all' ? '이번 달 예상 지출' : `이번 달 ${SCOPE_LABEL[filter]} 예상 지출`}</Text>
       <Text style={styles.summaryAmount}>{formatWon(expectedExpenseForMonth(visible, today))}</Text>
@@ -277,15 +281,12 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
     </View> : null}
 
     {loading && subs.length === 0 ? <Text style={styles.empty}>불러오는 중…</Text> : null}
-    {!loading && !error && subs.length === 0 ? <Text style={styles.empty}>등록된 구독이 없어요. 아래 버튼으로 첫 구독을 추가해보세요.</Text> : null}
+    {!loading && !error && subs.length === 0 ? <Text style={styles.empty}>등록된 구독이 없어요.</Text> : null}
     {!loading && subs.length > 0 && rows.length === 0 ? <Text style={styles.empty}>이 구분에는 등록된 구독이 없어요.</Text> : null}
 
     {rows.map((row) => <Row paid={receipts.some(r => r.subscription_id === row.subscription.id && r.due_date === paymentConfirmationDate(row.subscription, today))} due={paymentConfirmationDate(row.subscription, today)} onPaid={() => void confirmPaid(row.subscription)} key={row.subscription.id} row={row} busy={busyId === row.subscription.id} onUsed={() => void markUsed(row.subscription.id)} onEdit={() => setEditing({ kind: 'edit', id: row.subscription.id })} />)}
 
     {receipts.length ? <View style={styles.urgentBox}><Text style={styles.urgentTitle}>납부 이력</Text>{receipts.slice(0, 20).map(r => <Text key={`${r.subscription_id}:${r.due_date}`} style={styles.rowMeta}>{r.due_date} · {r.name} · {formatWon(r.amount_krw)}{r.variable_amount ? ' (예상액 기준)' : ''} · 확인됨</Text>)}</View> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="구독 추가" style={styles.addButton} onPress={openCompose}>
-      <Text style={styles.addText}>+ 구독 추가</Text>
-    </Pressable>
   </View>;
 }
 
