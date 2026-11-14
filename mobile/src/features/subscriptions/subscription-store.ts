@@ -16,6 +16,27 @@ export type SubscriptionInput = SubscriptionAmount & Omit<Subscription, keyof Su
 
 const TABLE = 'subscriptions';
 const COLUMNS = 'id,name,amount_krw,amount_usd_cents,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at,payment_method,payment_name,expense_kind,variable_amount';
+const PAYMENT_COLUMNS = 'subscription_id,due_date,amount_krw,amount_usd_cents,name,confirmed_at,variable_amount';
+
+function missingUsdColumn(error: { code?: string; message?: string } | null) {
+  return !!error && ['42703', 'PGRST204'].includes(error.code ?? '') && /\bamount_usd_cents\b/.test(error.message ?? '');
+}
+
+async function withCurrencyColumns<T extends { error: { code?: string; message?: string } | null }>(
+  columns: string,
+  request: (columns: string, supportsUsd: boolean) => PromiseLike<T>,
+  requiresUsd = false,
+): Promise<T> {
+  const result = await request(columns, true);
+  if (!missingUsdColumn(result.error)) return result;
+  if (requiresUsd) return result;
+  return request(columns.replace('amount_usd_cents,', ''), false);
+}
+
+class UsdUnavailableError extends Error {
+  constructor() { super('달러 저장은 서버 업데이트 후 사용할 수 있습니다. 입력은 유지했습니다.'); }
+}
+
 const LIST_LIMIT = 500;
 
 type Row = Record<string, unknown>;
@@ -92,12 +113,12 @@ function fail(error: { code?: string; message?: string } | null): never {
 }
 
 export async function listSubscriptions(client: PlatformSupabaseClient): Promise<Subscription[]> {
-  const { data, error, count } = await client
+  const { data, error, count } = await withCurrencyColumns(COLUMNS, columns => client
     .from(TABLE)
-    .select(COLUMNS,{count:'exact'})
+    .select(columns,{count:'exact'})
     .is('archived_at', null)
     .order('created_at', { ascending: true })
-    .limit(LIST_LIMIT);
+    .limit(LIST_LIMIT));
   if (error) fail(error);
   if(!Array.isArray(data)||count!==data.length)throw new Error('정기지출 전체 목록 확인이 필요합니다. 기존 알림은 유지했습니다.');
   const rows=data.map(subscriptionFromRow);
@@ -107,24 +128,29 @@ export async function listSubscriptions(client: PlatformSupabaseClient): Promise
 
 export async function createSubscription(client: PlatformSupabaseClient, input: SubscriptionInput, requestId?: string): Promise<Subscription> {
   try {
-    const { data, error } = await client.from(TABLE).insert({ ...inputToRow(input, { withSource: true }), ...(requestId ? { id: requestId } : {}) }).select(COLUMNS).single();
+    const { data, error } = await withCurrencyColumns(COLUMNS, columns => client.from(TABLE).insert({ ...inputToRow(input, { withSource: true }), ...(requestId ? { id: requestId } : {}) }).select(columns).single(), input.amountUsdCents !== undefined);
     if (!error) {
       const created = subscriptionFromRow(data);
       if (created) return created;
     }
+    if (input.amountUsdCents !== undefined && missingUsdColumn(error)) throw new UsdUnavailableError();
     if (!requestId) fail(error);
-  } catch (error) { if (!requestId) throw error; }
+  } catch (error) { if (!requestId || error instanceof UsdUnavailableError) throw error; }
   // Keep the same identifier until confirmed, including after a lost successful response.
-  const { data, error } = await client.from(TABLE).select(COLUMNS).eq('id', requestId!).maybeSingle();
+  const { data, error } = await withCurrencyColumns(COLUMNS, columns => client.from(TABLE).select(columns).eq('id', requestId!).maybeSingle());
   const confirmed = !error ? subscriptionFromRow(data) : null;
-  if (confirmed && data && Object.entries(inputToRow(input,{withSource:true})).every(([key,value]) => (data as Row)[key] === value)) return confirmed;
+  if (confirmed && data && Object.entries(inputToRow(input,{withSource:true})).every(([key,value]) => (data as unknown as Row)[key] === value)) return confirmed;
   if (confirmed) throw new Error('이 요청은 이전 내용으로 저장됐습니다. 목록에서 확인한 뒤 수정해주세요.');
   throw new Error('저장 확인 필요 · 입력을 유지했습니다. 같은 내용으로 다시 시도해주세요.');
 }
 
 async function updateOwned(client: PlatformSupabaseClient, id: string, patch: Row): Promise<Subscription> {
   // RLS가 본인 행만 허용한다. 갱신된 행이 없으면(남의 행·이미 보관됨) 성공으로 보지 않는다.
-  const { data, error } = await client.from(TABLE).update(patch).eq('id', id).is('archived_at', null).select(COLUMNS).maybeSingle();
+  const { amount_usd_cents, ...legacyPatch } = patch;
+  const requiresUsd = typeof amount_usd_cents === 'number';
+  const { data, error } = await withCurrencyColumns(COLUMNS, (columns, supportsUsd) =>
+    client.from(TABLE).update(supportsUsd ? patch : legacyPatch).eq('id', id).is('archived_at', null).select(columns).maybeSingle(), requiresUsd);
+  if (requiresUsd && missingUsdColumn(error)) throw new UsdUnavailableError();
   if (error) fail(error);
   const updated = subscriptionFromRow(data);
   if (!updated) throw new Error('이미 삭제되었거나 수정할 수 없는 구독입니다. 목록을 새로고침해주세요.');
@@ -151,10 +177,10 @@ export async function listPaymentReceipts(client: PlatformSupabaseClient): Promi
   const rows:PaymentReceipt[]=[];
   let total:number|null=null;
   for(let from=0;;from+=500){
-    const {data,error,count}=await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,amount_usd_cents,name,confirmed_at,variable_amount',{count:'exact'}).order('due_date',{ascending:false}).order('subscription_id',{ascending:true}).range(from,from+499);
+    const {data,error,count}=await withCurrencyColumns(PAYMENT_COLUMNS, columns => client.from('subscription_payments').select(columns,{count:'exact'}).order('due_date',{ascending:false}).order('subscription_id',{ascending:true}).range(from,from+499));
     if(error)fail(error);
     if(!Array.isArray(data)||count===null||count>5000||(total!==null&&count!==total)||data.length!==Math.min(500,count-from))throw new Error('납부 이력 전체 확인이 필요합니다. 기록과 기존 알림은 유지했습니다.');
-    total=count;rows.push(...data as PaymentReceipt[]);
+    total=count;rows.push(...data as unknown as PaymentReceipt[]);
     if(rows.length===count)return rows;
   }
 }
@@ -163,12 +189,12 @@ export async function listPaymentReceipts(client: PlatformSupabaseClient): Promi
 export async function confirmSubscriptionPayment(client: PlatformSupabaseClient, id: string, due: string): Promise<PaymentReceipt> {
   if (!isValidDateKey(due)) throw new Error('결제일을 확인해주세요.');
   const read = async () => {
-    const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,amount_usd_cents,name,confirmed_at,variable_amount').eq('subscription_id', id).eq('due_date', due).maybeSingle();
-    return !error && data ? data as PaymentReceipt : null;
+    const { data, error } = await withCurrencyColumns(PAYMENT_COLUMNS, columns => client.from('subscription_payments').select(columns).eq('subscription_id', id).eq('due_date', due).maybeSingle());
+    return !error && data ? data as unknown as PaymentReceipt : null;
   };
   try {
     const { data, error } = await client.rpc('confirm_subscription_payment', { p_subscription_id: id, p_due_date: due });
-    if (!error && data) return data as PaymentReceipt;
+    if (!error && data) return data as unknown as PaymentReceipt;
   } catch { /* May already have committed. Read the same occurrence. */ }
   const found = await read().catch(() => null);
   if (found) return found;

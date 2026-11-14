@@ -157,3 +157,21 @@ test('원문(source_text)은 새로 만들 때만 보내고, 수정·사용기�
   await store.createSubscription(long, { ...input, sourceText: '가'.repeat(500) });
   assert.equal(long.calls.find((c) => c[0] === 'insert')[1].source_text.length, 300);
 });
+
+test('QA without the USD column keeps legacy KRW access and never falls back for USD writes', async () => {
+  const missing = { code: '42703', message: 'column subscriptions.amount_usd_cents does not exist' };
+  const modern = fakeClient({ data: null, error: missing });
+  const legacy = fakeClient({ data: [validRow()], count: 1, error: null });
+  let attempts = 0;
+  const client = { from: (table) => (++attempts === 1 ? modern : legacy).from(table) };
+  assert.equal((await store.listSubscriptions(client))[0].amountKrw, 12000);
+  assert.doesNotMatch(legacy.calls.find(c => c[0] === 'select')[1], /amount_usd_cents/);
+
+  const rejected = fakeClient({ data: null, error: missing });
+  await assert.rejects(store.createSubscription(rejected, {
+    name: 'Cloud', amountUsdCents: 1999, cycle: 'monthly', scope: 'business',
+    billingAnchorDate: '2026-11-15', cancelDeadline: null,
+  }, 'same-request'), /달러 저장은 서버 업데이트 후/);
+  assert.equal(rejected.calls.filter(c => c[0] === 'from').length, 1);
+  assert.equal(rejected.calls.find(c => c[0] === 'insert')[1].amount_krw, null);
+});
