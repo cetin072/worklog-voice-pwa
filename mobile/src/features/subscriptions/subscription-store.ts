@@ -8,13 +8,14 @@ import {
   type BillingCycle,
   type Subscription,
   type SubscriptionScope,
+  type SubscriptionAmount,
 } from './subscription-model';
 
 /** 입력 폼에서 검증을 통과한 값. id/사용일/등록일은 서버가 정한다. sourceText는 새로 만들 때만 보낸다. */
-export type SubscriptionInput = Omit<Subscription, 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> & { sourceText?: string | null };
+export type SubscriptionInput = SubscriptionAmount & Omit<Subscription, keyof SubscriptionAmount | 'id' | 'lastUsedDate' | 'createdAt' | 'sourceText'> & { sourceText?: string | null };
 
 const TABLE = 'subscriptions';
-const COLUMNS = 'id,name,amount_krw,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at,payment_method,payment_name,expense_kind,variable_amount';
+const COLUMNS = 'id,name,amount_krw,amount_usd_cents,billing_cycle,scope,billing_anchor_date,cancel_deadline,last_used_date,source_text,created_at,payment_method,payment_name,expense_kind,variable_amount';
 const LIST_LIMIT = 500;
 
 type Row = Record<string, unknown>;
@@ -29,13 +30,22 @@ function dateOrNull(value: unknown) {
   return typeof value === 'string' && isValidDateKey(value.slice(0, 10)) ? value.slice(0, 10) : null;
 }
 
+export function amountFromRow(row: { amount_krw?: unknown; amount_usd_cents?: unknown }): SubscriptionAmount | null {
+  const krw = row.amount_krw;
+  const usd = row.amount_usd_cents;
+  if (usd == null && typeof krw === 'number' && Number.isSafeInteger(krw) && krw > 0) return { amountKrw: krw };
+  if (krw == null && typeof usd === 'number' && Number.isSafeInteger(usd) && usd > 0) return { amountUsdCents: usd };
+  return null;
+}
+
 /** 서버 행 → 앱 모델. 형식이 맞지 않는 행은 조용히 고치지 않고 버린다(null). */
 export function subscriptionFromRow(row: unknown): Subscription | null {
   if (!row || typeof row !== 'object') return null;
   const r = row as Row;
   const anchor = dateOrNull(r.billing_anchor_date);
   if (typeof r.id !== 'string' || typeof r.name !== 'string' || !r.name.trim()) return null;
-  if (typeof r.amount_krw !== 'number' || !Number.isInteger(r.amount_krw) || r.amount_krw <= 0) return null;
+  const amount = amountFromRow(r);
+  if (!amount) return null;
   if (!isCycle(r.billing_cycle) || !isScope(r.scope) || !anchor) return null;
   if (r.payment_method != null && (typeof r.payment_method !== 'string' || !r.payment_method || !Object.hasOwn(PAYMENT_METHOD_LABEL, r.payment_method))) return null;
   return {
@@ -44,7 +54,7 @@ export function subscriptionFromRow(row: unknown): Subscription | null {
     variableAmount: r.variable_amount === true,
     id: r.id,
     name: r.name,
-    amountKrw: r.amount_krw,
+    ...amount,
     cycle: r.billing_cycle,
     scope: r.scope,
     billingAnchorDate: anchor,
@@ -61,7 +71,8 @@ function inputToRow(input: SubscriptionInput, { withSource = false } = {}) {
     ...(input.paymentMethod !== undefined ? { payment_method: input.paymentMethod, payment_name: input.paymentMethod ? input.paymentName || null : null } : {}),
     ...(input.expenseKind !== undefined ? { expense_kind: input.expenseKind, variable_amount: !!input.variableAmount } : {}),
     name: input.name,
-    amount_krw: input.amountKrw,
+    amount_krw: input.amountKrw ?? null,
+    ...(input.amountUsdCents === undefined ? {} : { amount_usd_cents: input.amountUsdCents }),
     billing_cycle: input.cycle,
     scope: input.scope,
     billing_anchor_date: input.billingAnchorDate,
@@ -121,7 +132,7 @@ async function updateOwned(client: PlatformSupabaseClient, id: string, patch: Ro
 }
 
 export function updateSubscription(client: PlatformSupabaseClient, id: string, input: SubscriptionInput) {
-  return updateOwned(client, id, inputToRow(input));
+  return updateOwned(client, id, { ...inputToRow(input), amount_usd_cents: input.amountUsdCents ?? null });
 }
 
 /** '최근 썼음' 한 번 탭. 날짜는 서울 기준 오늘(호출부에서 전달). */
@@ -135,12 +146,12 @@ export async function archiveSubscription(client: PlatformSupabaseClient, id: st
   await updateOwned(client, id, { archived_at: now.toISOString() });
 }
 
-export type PaymentReceipt = { subscription_id: string; due_date: string; amount_krw: number; name: string; confirmed_at: string; variable_amount?: boolean };
+export type PaymentReceipt = { subscription_id: string; due_date: string; amount_krw: number | null; amount_usd_cents?: number | null; name: string; confirmed_at: string; variable_amount?: boolean };
 export async function listPaymentReceipts(client: PlatformSupabaseClient): Promise<PaymentReceipt[]> {
   const rows:PaymentReceipt[]=[];
   let total:number|null=null;
   for(let from=0;;from+=500){
-    const {data,error,count}=await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at,variable_amount',{count:'exact'}).order('due_date',{ascending:false}).order('subscription_id',{ascending:true}).range(from,from+499);
+    const {data,error,count}=await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,amount_usd_cents,name,confirmed_at,variable_amount',{count:'exact'}).order('due_date',{ascending:false}).order('subscription_id',{ascending:true}).range(from,from+499);
     if(error)fail(error);
     if(!Array.isArray(data)||count===null||count>5000||(total!==null&&count!==total)||data.length!==Math.min(500,count-from))throw new Error('납부 이력 전체 확인이 필요합니다. 기록과 기존 알림은 유지했습니다.');
     total=count;rows.push(...data as PaymentReceipt[]);
@@ -152,7 +163,7 @@ export async function listPaymentReceipts(client: PlatformSupabaseClient): Promi
 export async function confirmSubscriptionPayment(client: PlatformSupabaseClient, id: string, due: string): Promise<PaymentReceipt> {
   if (!isValidDateKey(due)) throw new Error('결제일을 확인해주세요.');
   const read = async () => {
-    const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,name,confirmed_at,variable_amount').eq('subscription_id', id).eq('due_date', due).maybeSingle();
+    const { data, error } = await client.from('subscription_payments').select('subscription_id,due_date,amount_krw,amount_usd_cents,name,confirmed_at,variable_amount').eq('subscription_id', id).eq('due_date', due).maybeSingle();
     return !error && data ? data as PaymentReceipt : null;
   };
   try {

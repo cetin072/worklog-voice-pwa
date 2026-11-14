@@ -161,3 +161,32 @@ test('납부 회차 중복 방지·본인 격리·종료 후 이력 보존·임�
     assert.equal((await db.query('select * from worklog.subscription_payments')).rows.length,0,'명시적 계정 삭제의 기존 cascade 계약 유지');
   } finally { /* afterEach closes the isolated database. */ }
 });
+
+test('USD migration preserves won receipts and snapshots the original currency after edits', async () => {
+  const db = await freshDb();
+  const krw = await asUser(db, USER_A, insertSql, ['기존 원화', 8500, 'monthly', 'personal']);
+  const confirm = async (user, id, date) => (await asUser(db, user,
+    'select worklog.confirm_subscription_payment($1,$2) as receipt', [id, date])).rows[0].receipt;
+  await confirm(USER_A, krw.rows[0].id, '2026-11-15');
+
+  await db.exec(fs.readFileSync('supabase/migrations/20261114054647_subscription_usd_amounts.sql', 'utf8'));
+  const won = await confirm(USER_A, krw.rows[0].id, '2026-11-15');
+  assert.equal(won.amount_krw, 8500);
+  assert.equal(won.amount_usd_cents, null);
+
+  const addUsd = `insert into worklog.subscriptions (name, amount_krw, amount_usd_cents, billing_cycle, scope, billing_anchor_date)
+    values ('달러 구독', $1, $2, 'monthly', 'personal', '2026-11-15') returning id`;
+  const { id } = (await asUser(db, USER_A, addUsd, [null, 1999])).rows[0];
+  await assert.rejects(asUser(db, USER_A, addUsd, [8500, 1999]), /one_currency/);
+  await assert.rejects(asUser(db, USER_A, addUsd, [null, null]), /one_currency/);
+  await assert.rejects(confirm(USER_B, id, '2026-11-15'), /EXPENSE_NOT_AVAILABLE/);
+  const usd = await confirm(USER_A, id, '2026-11-15');
+  assert.equal(usd.amount_krw, null);
+  assert.equal(usd.amount_usd_cents, 1999);
+  await assert.rejects(asUser(db, USER_A, `insert into worklog.subscription_payments
+    (subscription_id,due_date,amount_krw,name,variable_amount)
+    values ($1,'2026-12-15',1999,'달러 구독',false)`, [id]), /row-level security/);
+  await asUser(db, USER_A, 'update worklog.subscriptions set amount_krw=25000, amount_usd_cents=null where id=$1', [id]);
+  assert.deepEqual(await confirm(USER_A, id, '2026-11-15'), usd);
+  assert.equal((await confirm(USER_A, id, '2026-12-15')).amount_krw, 25000);
+});

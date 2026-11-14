@@ -128,3 +128,39 @@ test('입력 검증: 금액·날짜는 임의로 고치지 않고 오류로 돌�
   assert.equal(m.validateSubscriptionDraft({ ...draft, amountText: '999999999' }).ok, false);
   assert.equal(m.validateSubscriptionDraft({ ...draft, name: 'a'.repeat(61) }).ok, false);
 });
+
+test('USD keeps cents and has independent month and year totals', () => {
+  const usd = sub({ amountKrw: undefined, amountUsdCents: 1999 });
+  const annual = sub({ amountKrw: undefined, amountUsdCents: 12000, cycle: 'yearly', billingAnchorDate: '2026-12-15' });
+  const items = [sub({ amountKrw: 8500 }), usd, annual];
+  assert.equal(m.parseUsdCents('$19.99'), 1999);
+  assert.equal(m.parseUsdCents('19.999'), null);
+  assert.equal(m.parseUsdCents('1,99'), null);
+  assert.equal(m.formatSubscriptionAmount(usd), '$19.99');
+  assert.equal(m.expectedExpenseForMonth(items, '2026-12-01'), 8500);
+  assert.equal(m.expectedExpenseForMonth(items, '2026-12-01', 'USD'), 13999);
+  const summary = m.summarizeSubscriptions(items);
+  assert.equal(summary.monthlyTotalKrw, 8500);
+  assert.equal(summary.monthlyTotalUsdCents, 2999);
+  assert.equal(summary.yearlyTotalUsdCents, 35988);
+});
+
+const { subscriptionReceiptDraft } = await import('../mobile/src/features/subscriptions/subscription-receipt-draft.ts');
+
+test('a receipt uses the charge and provider, leaving renewal fields for confirmation', () => {
+  const draft = subscriptionReceiptDraft([
+    '- 구매처 : Google', '- 상품명 : Example Subscription', '- 결제일시 : 2026. 11. 14. 12:37',
+    '- 결제금액 : 8,500원', '- 결제수단 : 카카오페이머니', '- 잔액충전 : 10,000원',
+    '- 충전계좌 : 은행***1234', '- 가맹점 주문번호 : example-id',
+  ].join('\n'));
+  assert.deepEqual(draft, { name: 'Example Subscription', amountText: '8500', paymentMethod: 'other', paymentName: '카카오페이머니' });
+  assert.equal(m.validateSubscriptionDraft({ scope: 'personal', cycle: '', billingAnchorDate: '', cancelDeadline: '', ...draft }).ok, false);
+});
+
+test('an explicit USD renewal is prefilled and conflicting or unlabelled amounts stay blank', () => {
+  assert.deepEqual(subscriptionReceiptDraft('상품명: Cloud\n결제금액: USD 19.99\n결제 주기: monthly\n갱신일: 2026. 12. 14.'), {
+    name: 'Cloud', currency: 'USD', amountText: '19.99', cycle: 'monthly', billingAnchorDate: '2026-12-14',
+  });
+  assert.equal(subscriptionReceiptDraft('결제금액:\n결제금액: 8500\n잔액충전: 10000원'), null);
+  assert.equal(subscriptionReceiptDraft('결제금액: 8,500원\n결제금액: $19.99'), null);
+});

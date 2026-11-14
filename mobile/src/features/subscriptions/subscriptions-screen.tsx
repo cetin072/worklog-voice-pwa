@@ -1,9 +1,14 @@
 import { recordRowStyles } from '@/src/ui/record-row-styles';
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
+import { importPickedCaptureImage, removeCaptureImage } from '@/src/features/capture/capture-files';
+import { pickCaptureImage } from '@/src/features/capture/capture-gallery-picker';
+import { captureImportState } from '@/src/features/capture/capture-runtime';
+import { recognizeCapture } from '@/src/features/capture/capture-ocr';
+import { subscriptionReceiptDraft } from './subscription-receipt-draft';
 import { mobileTheme } from '@/src/ui/theme';
 import { draftFromSubscription, SubscriptionForm, type FormAssist } from './subscription-form';
 import {
@@ -16,11 +21,14 @@ import {
   buildSubscriptionRows,
   filterByScope,
   formatWon,
+  formatUsd,
+  formatSubscriptionAmount,
   seoulDateKeyFromIso,
   summarizeSubscriptions,
   urgentItems,
   type ScopeFilter,
   type Subscription,
+  type SubscriptionDraft,
   type SubscriptionRow,
 } from './subscription-model';
 import {
@@ -35,6 +43,7 @@ import {
   type UtteranceParse,
 } from './subscription-utterance';
 import {
+  amountFromRow,
   archiveSubscription,
   confirmSubscriptionPayment,
   listPaymentReceipts,
@@ -52,8 +61,22 @@ const FILTERS: { key: ScopeFilter; label: string }[] = [
   { key: 'personal', label: '개인' },
 ];
 
-type Editing = { kind: 'compose' } | { kind: 'new'; parse?: UtteranceParse } | { kind: 'edit'; id: string } | null;
+type Editing = { kind: 'compose' } | { kind: 'new'; parse?: UtteranceParse; receipt?: Partial<SubscriptionDraft> } | { kind: 'edit'; id: string } | null;
 type PermissionState = 'checking' | 'granted' | 'undetermined' | 'denied' | 'unsupported';
+
+function formatTotals(krw: number, usd: number, showUsd = usd > 0) {
+  if (showUsd) return krw > 0 ? `${formatWon(krw)} + ${formatUsd(usd)}` : formatUsd(usd);
+  return formatWon(krw);
+}
+
+function monthlyExpenseLabel(subs: readonly Subscription[], today: string) {
+  return formatTotals(expectedExpenseForMonth(subs, today), expectedExpenseForMonth(subs, today, 'USD'), subs.some(sub => sub.amountUsdCents !== undefined));
+}
+
+function receiptAmountLabel(receipt: PaymentReceipt) {
+  const amount = amountFromRow(receipt);
+  return amount ? formatSubscriptionAmount(amount) : '금액 확인 필요';
+}
 
 const todayKey = () => seoulDateKeyFromIso(new Date().toISOString()) as string;
 const shortDate = (key: string) => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
@@ -71,6 +94,7 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
   const [filter, setFilter] = useState<ScopeFilter>('all');
   const [editing, setEditing] = useState<Editing>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [readingReceipt, setReadingReceipt] = useState(false);
   const [quickText, setQuickText] = useState('');
   const [permission, setPermission] = useState<PermissionState>('checking');
   const alive = useRef(true);
@@ -127,6 +151,35 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
   }
 
   function openCompose() { createId.current = Crypto.randomUUID(); setError(''); setQuickText(''); setEditing({ kind: 'compose' }); }
+
+  async function importReceipt() {
+    if (captureImportState.galleryActive) return;
+    captureImportState.galleryActive = true;
+    setReadingReceipt(true);
+    setError('');
+    try {
+      const uri = await pickCaptureImage();
+      if (!uri) return;
+      const image = await importPickedCaptureImage(uri);
+      try {
+        if (!alive.current) return;
+        const receipt = subscriptionReceiptDraft(await recognizeCapture(image.uri));
+        if (!alive.current) return;
+        if (!receipt) {
+          setError('구독 정보를 읽지 못했어요. 글자가 선명한 사진을 고르거나 직접 입력해주세요.');
+          return;
+        }
+        setEditing({ kind: 'new', receipt });
+      } finally {
+        await removeCaptureImage(image.uri).catch(() => undefined);
+      }
+    } catch {
+      if (alive.current) setError('사진을 읽지 못했어요. 다른 사진을 고르거나 직접 입력해주세요.');
+    } finally {
+      captureImportState.galleryActive = false;
+      if (alive.current) setReadingReceipt(false);
+    }
+  }
 
   async function save(input: SubscriptionInput) {
     if (!editing || editing.kind === 'compose' || mutation.current) return;
@@ -211,21 +264,27 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
 
   if (editing?.kind === 'compose') {
     return <View style={styles.root}>
+      {Platform.OS === 'android' ? <Pressable accessibilityRole="button" disabled={readingReceipt} accessibilityState={{ busy: readingReceipt, disabled: readingReceipt }} style={styles.quickButton} onPress={() => void importReceipt()}>
+        <Text style={styles.quickButtonText}>{readingReceipt ? '결제 내역 읽는 중…' : '결제 캡처 가져오기'}</Text>
+      </Pressable> : null}
       <View style={styles.quickCard}>
         <Text style={styles.quickTitle}>말하거나 한 줄로 적기</Text>
-        <TextInput accessibilityLabel="구독을 한 줄로 입력" autoFocus multiline style={[styles.quickInput, styles.quickInputBig]} value={quickText} maxLength={300} placeholder="예: 사업 클라우드 매달 1만 2천원 15일" onChangeText={setQuickText} />
+        <TextInput accessibilityLabel="구독을 한 줄로 입력" autoFocus={Platform.OS !== 'android'} multiline editable={!readingReceipt} style={[styles.quickInput, styles.quickInputBig]} value={quickText} maxLength={300} placeholder="예: 사업 클라우드 매달 1만 2천원 15일" onChangeText={setQuickText} />
         <Text style={styles.quickHelp}>키보드의 마이크 버튼으로 말해도 돼요. 읽은 내용은 저장 전에 꼭 확인할 수 있어요.</Text>
         {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="한 줄 내용 확인하기" style={styles.addButton} onPress={openFromQuickText}><Text style={styles.addText}>내용 확인하기</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="한 줄 내용 확인하기" disabled={readingReceipt} style={styles.addButton} onPress={openFromQuickText}><Text style={styles.addText}>내용 확인하기</Text></Pressable>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="폼에 직접 입력하기" style={styles.quickButton} onPress={() => { setError(''); setEditing({ kind: 'new' }); }}><Text style={styles.quickButtonText}>직접 입력하기</Text></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="목록으로 돌아가기" style={styles.linkButton} onPress={() => { setEditing(null); setError(''); setQuickText(''); }}><Text style={styles.link}>목록으로</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="폼에 직접 입력하기" disabled={readingReceipt} style={styles.quickButton} onPress={() => { setError(''); setEditing({ kind: 'new' }); }}><Text style={styles.quickButtonText}>직접 입력하기</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="목록으로 돌아가기" disabled={readingReceipt} style={styles.linkButton} onPress={() => { setEditing(null); setError(''); setQuickText(''); }}><Text style={styles.link}>목록으로</Text></Pressable>
     </View>;
   }
 
   if (editing && (editing.kind === 'new' || editingSub)) {
     const parse = editing.kind === 'new' ? editing.parse : undefined;
+    const receipt = editing.kind === 'new' ? editing.receipt : undefined;
     const defaultScope = filter === 'all' ? lastScope.current : filter;
+    const initial = parse ? draftFromUtterance(parse, defaultScope) : draftFromSubscription(editingSub, today, defaultScope);
+    if (receipt) Object.assign(initial, { cycle: '', billingAnchorDate: '', ...receipt });
     const assist: FormAssist | undefined = parse ? {
       rawText: parse.rawText,
       missingLabels: parse.missing.map((field) => UTTERANCE_FIELD_LABEL[field]),
@@ -233,10 +292,11 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
       nameCandidates: parse.nameCandidates,
     } : undefined;
     return <View style={styles.root}>
+      {receipt ? <Text style={styles.noticeText}>사진에서 읽은 내용입니다. 금액과 결제 주기, 다음 결제일을 확인한 뒤 저장해주세요.</Text> : null}
       {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
       <SubscriptionForm
         key={editing.kind === 'new' ? `new:${parse?.rawText || ''}` : editing.id}
-        initial={parse ? draftFromUtterance(parse, defaultScope) : draftFromSubscription(editingSub, today, defaultScope)}
+        initial={initial}
         assist={assist}
         sourceText={editingSub?.sourceText}
         isNew={editing.kind === 'new'}
@@ -255,9 +315,9 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
 
     <View style={styles.summaryCard} accessibilityRole="summary">
       <Text style={styles.summaryLabel}>{filter === 'all' ? '이번 달 예상 지출' : `이번 달 ${SCOPE_LABEL[filter]} 예상 지출`}</Text>
-      <Text style={styles.summaryAmount}>{formatWon(expectedExpenseForMonth(visible, today))}</Text>
-      <Text style={styles.summarySub}>월 환산 {formatWon(summary.monthlyTotalKrw)} · 연 환산 {formatWon(summary.yearlyTotalKrw)} · {summary.count}개</Text>
-      {filter === 'all' && subs.length > 0 ? <Text style={styles.summarySplit}>사업 {formatWon(expectedExpenseForMonth(filterByScope(subs,'business'),today))} · 개인 {formatWon(expectedExpenseForMonth(filterByScope(subs,'personal'),today))}</Text> : null}
+      <Text style={styles.summaryAmount}>{monthlyExpenseLabel(visible, today)}</Text>
+      <Text style={styles.summarySub}>월 환산 {formatTotals(summary.monthlyTotalKrw, summary.monthlyTotalUsdCents)} · 연 환산 {formatTotals(summary.yearlyTotalKrw, summary.yearlyTotalUsdCents)} · {summary.count}개</Text>
+      {filter === 'all' && subs.length > 0 ? <Text style={styles.summarySplit}>사업 {monthlyExpenseLabel(filterByScope(subs,'business'),today)} · 개인 {monthlyExpenseLabel(filterByScope(subs,'personal'),today)}</Text> : null}
     </View>
 
     <View style={styles.filters}>
@@ -276,7 +336,7 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
     {urgent.length > 0 ? <View style={styles.urgentBox}>
       <Text style={styles.urgentTitle}>이번 주 확인</Text>
       {urgent.map((item) => <Text key={`${item.kind}-${item.subscription.id}`} style={styles.urgentRow}>
-        {item.kind === 'payment' ? '결제' : '해지기한'} {shortDate(item.date)} ({dayLabel(item.daysUntil)}) · {item.subscription.name}{item.kind === 'payment' ? ` ${formatWon(item.subscription.amountKrw)}` : ''}
+        {item.kind === 'payment' ? '결제' : '해지기한'} {shortDate(item.date)} ({dayLabel(item.daysUntil)}) · {item.subscription.name}{item.kind === 'payment' ? ` ${formatSubscriptionAmount(item.subscription)}` : ''}
       </Text>)}
     </View> : null}
 
@@ -286,7 +346,7 @@ export function SubscriptionsScreen({ client, ownerId }: { client: PlatformSupab
 
     {rows.map((row) => <Row paid={receipts.some(r => r.subscription_id === row.subscription.id && r.due_date === paymentConfirmationDate(row.subscription, today))} due={paymentConfirmationDate(row.subscription, today)} onPaid={() => void confirmPaid(row.subscription)} key={row.subscription.id} row={row} busy={busyId === row.subscription.id} onUsed={() => void markUsed(row.subscription.id)} onEdit={() => setEditing({ kind: 'edit', id: row.subscription.id })} />)}
 
-    {receipts.length ? <View style={styles.urgentBox}><Text style={styles.urgentTitle}>납부 이력</Text>{receipts.slice(0, 20).map(r => <Text key={`${r.subscription_id}:${r.due_date}`} style={styles.rowMeta}>{r.due_date} · {r.name} · {formatWon(r.amount_krw)}{r.variable_amount ? ' (예상액 기준)' : ''} · 확인됨</Text>)}</View> : null}
+    {receipts.length ? <View style={styles.urgentBox}><Text style={styles.urgentTitle}>납부 이력</Text>{receipts.slice(0, 20).map(r => <Text key={`${r.subscription_id}:${r.due_date}`} style={styles.rowMeta}>{r.due_date} · {r.name} · {receiptAmountLabel(r)}{r.variable_amount ? ' (예상액 기준)' : ''} · 확인됨</Text>)}</View> : null}
   </View>;
 }
 
@@ -296,10 +356,10 @@ function Row({ row, busy, onUsed, onEdit, paid, due, onPaid }: { paid: boolean; 
   return <View style={[styles.row, row.cancelCandidate ? styles.rowCandidate : null]}>
     <View style={styles.rowTop}>
       <Text style={styles.rowName} numberOfLines={2}>{s.name}</Text>
-      <Text style={styles.rowAmount}>{formatWon(row.monthlyAmountKrw)}<Text style={styles.rowAmountUnit}> /월</Text></Text>
+      <Text style={styles.rowAmount}>{s.amountUsdCents === undefined ? formatWon(row.monthlyAmountKrw) : formatUsd(row.monthlyAmountUsdCents)}<Text style={styles.rowAmountUnit}> /월</Text></Text>
     </View>
     <Text style={styles.rowMeta}>
-      {EXPENSE_KIND_LABEL[s.expenseKind || 'subscription']} · {SCOPE_LABEL[s.scope]} · {s.variableAmount ? '예상 ' : ''}{CYCLE_LABEL[s.cycle]} {formatWon(s.amountKrw)} · 다음 결제 {shortDate(row.nextPayment)} ({dayLabel(row.daysToPayment)})
+      {EXPENSE_KIND_LABEL[s.expenseKind || 'subscription']} · {SCOPE_LABEL[s.scope]} · {s.variableAmount ? '예상 ' : ''}{CYCLE_LABEL[s.cycle]} {formatSubscriptionAmount(s)} · 다음 결제 {shortDate(row.nextPayment)} ({dayLabel(row.daysToPayment)})
     </Text>
     {subscriptionPaymentLabel(s) ? <Text style={styles.rowMeta}>{subscriptionPaymentLabel(s)}</Text> : null}
     {(!s.expenseKind || s.expenseKind === 'subscription') ? <Text style={[styles.rowMeta, row.cancelCandidate ? styles.candidateText : null]}>{row.cancelCandidate ? `해지 후보 · ${idle}` : idle}</Text> : null}
@@ -318,7 +378,7 @@ const styles = StyleSheet.create({
   root: { gap: 12 },
   summaryCard: { backgroundColor: c.primary, borderRadius: mobileTheme.radius.card, padding: mobileTheme.spacing.card, gap: 4 },
   summaryLabel: { color: '#cbd5e1', fontSize: 13 },
-  summaryAmount: { color: c.primaryText, fontSize: 32, fontWeight: '800' },
+  summaryAmount: { color: c.primaryText, fontSize: 28, fontWeight: '800' },
   summarySub: { color: '#e2e8f0', fontSize: 14 },
   summarySplit: { color: '#e2e8f0', fontSize: 14, marginTop: 4 },
   filters: { flexDirection: 'row', gap: 8 },
