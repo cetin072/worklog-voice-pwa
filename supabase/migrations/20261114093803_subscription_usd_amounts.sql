@@ -9,6 +9,19 @@ alter table worklog.subscription_payments
   add column amount_usd_cents integer check (amount_usd_cents between 1 and 100000000),
   add constraint subscription_payments_one_currency check (num_nonnulls(amount_krw, amount_usd_cents) = 1);
 
+-- Keep won-only clients working. The capability marker does not grant owner access.
+create policy subscriptions_supported_currency on worklog.subscriptions
+  as restrictive for select to authenticated
+  using (amount_usd_cents is null or (
+    select nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-worklog-subscription-currency'
+  ) = 'usd-v1');
+
+create policy subscription_payments_supported_currency on worklog.subscription_payments
+  as restrictive for select to authenticated
+  using (amount_usd_cents is null or (
+    select nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-worklog-subscription-currency'
+  ) = 'usd-v1');
+
 alter policy subscription_payments_insert_owner on worklog.subscription_payments
   with check (user_id = (select auth.uid()) and exists (
     select 1 from worklog.subscriptions s where s.id = subscription_id and s.user_id = (select auth.uid()) and s.archived_at is null
