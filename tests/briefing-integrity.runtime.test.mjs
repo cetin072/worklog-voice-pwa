@@ -72,3 +72,52 @@ test('real fast and v2 handlers propagate completeness through HTTP JSON, includ
     }
   } finally { globalThis.fetch = originalFetch; globalThis.Netlify = originalNetlify; }
 });
+
+test('fast briefing distinguishes missing workspace access from an invalid login session', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalNetlify = globalThis.Netlify;
+  globalThis.Netlify = { env: { get: (name) => ({
+    WORKLOG_DATA_CORE_BRIEFING_ENABLED: 'true',
+    SUPABASE_URL: 'https://example.invalid',
+    SUPABASE_PUBLISHABLE_KEY: 'test-only',
+    WORKLOG_DATA_SCHEMA: 'worklog',
+  })[name] } };
+  try {
+    for (const authenticated of [true, false]) {
+      const calls = [];
+      globalThis.fetch = async (input, init) => {
+        const path = new URL(input).pathname;
+        calls.push(path);
+        assert.equal(init.headers.authorization, 'Bearer test-token');
+        if (path.endsWith('/get_my_briefing_source')) {
+          return Response.json({ workspace_id: null });
+        }
+        if (path === '/auth/v1/user') {
+          return authenticated
+            ? Response.json({ id: workspace.userId })
+            : Response.json({ message: 'invalid session' }, { status: 401 });
+        }
+        assert.equal(path, '/rest/v1/rpc/bootstrap_personal_workspace');
+        assert.equal(init.headers['Content-Profile'], 'worklog');
+        return Response.json({ code: 'P0001', message: 'WORKLOG_ACCESS_NOT_PROVISIONED' }, { status: 400 });
+      };
+      const response = await fast(new Request('https://app.invalid/api/briefing-fast', {
+        headers: { authorization: 'Bearer test-token' },
+      }), {});
+      const body = await response.json();
+      if (authenticated) {
+        assert.equal(response.status, 403);
+        assert.equal(body.code, 'WORKLOG_ACCESS_NOT_PROVISIONED');
+        assert.match(body.error, /업무수첩 사용 권한/);
+        assert.equal(calls.at(-1), '/rest/v1/rpc/bootstrap_personal_workspace');
+      } else {
+        assert.equal(response.status, 401);
+        assert.match(body.error, /로그인 세션/);
+        assert.equal(calls.at(-1), '/auth/v1/user');
+      }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.Netlify = originalNetlify;
+  }
+});
