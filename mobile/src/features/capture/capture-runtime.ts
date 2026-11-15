@@ -61,7 +61,10 @@ export function processCapture(entry: CaptureEntry, client: PlatformSupabaseClie
     if (!entry.saved) {
       const decision = entry.decision!;
       await current();
-      const result = await saveWorklog(await captureToken(client, owner), decision.transcript, { sourceType: 'capture', clientRequestId: entry.requestId, recordedAt: entry.recordedAt, status: decision.status, followUp: decision.followUp });
+      const result = await saveWorklog(await captureToken(client, owner), decision.transcript, {
+        sourceType: 'capture', clientRequestId: entry.requestId, recordedAt: entry.recordedAt, status: decision.status, followUp: decision.followUp,
+        ...(decision.reason === 'labeled_event' ? { type: '회의·통화', dueDate: decision.date, dueTime: decision.time } : {}),
+      });
       const id = result.dataCoreWorkRecordId || result.pageId;
       if (!id) throw new Error('CAPTURE_SAVE_UNCONFIRMED');
       // Persist the receipt even if the account changed during the request.

@@ -20,6 +20,22 @@ test('relative day uses chat date, never capture date or message clock', () => {
   assert.equal(value.kind,'schedule');assert.equal(value.date,'2026-11-03');assert.equal(value.time,'15:00');
   assert.equal(captureScheduleInput('오후 11:30\n내일 오후 3시 회의',now).kind,'review');
 });
+test('labeled announcement uses the event time, with check-in and venue as details',()=>{
+ const announcement='2026 지역 상생 포럼\n참가 신청이 접수되었습니다.\n■ 행사 일시:\n2026년 11월 16일(월) 14:00\n■ 등록 시간: 13:30부터\n■ 행사 장소: 시민회관 301호\n■ 주소: 중앙대로 100\n양식이 의심스러운가요? 보고서';
+ const event=captureScheduleInput(announcement,now);
+ assert.equal(event.kind,'schedule');
+ assert.equal(event.title,'2026 지역 상생 포럼');
+ assert.equal(event.startsAt,'2026-11-16T14:00:00+09:00');
+ assert.equal(event.description,'시민회관 301호 · 주소: 중앙대로 100 · 등록 13:30부터');
+ for(const text of [announcement+'\n행사가 취소되었습니다.',announcement+'\n행사 일시: 2026년 11월 17일 15:30',announcement+'\n다른 모임은 15:30',
+   announcement.replace('16일(월)','16일(화)'),announcement.replace('16일(월)','31일'),announcement.replace('14:00','14:00~16:00'),
+   announcement.replace('14:00','25:00'),announcement.replace('14:00',''),announcement.replace('2026년 11월 16일(월)','내일')]){
+   const decision=captureScheduleInput(text,now);
+   assert.equal(decision.kind,'review',text);
+   assert.equal(decision.startsAt,undefined);
+ }
+ assert.equal(captureScheduleInput(announcement,'2026-11-16T06:00:00Z').reason,'past_event');
+});
 test('redundant afternoon with a 24-hour clock is normalized without guessing the conversation date',()=>{
  const value=captureScheduleInput('2026년 11월 3일 오후 13시 거래처 방문',now);
  assert.equal(value.kind,'schedule');assert.equal(value.time,'13:00');
