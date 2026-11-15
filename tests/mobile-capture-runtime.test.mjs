@@ -4,6 +4,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createRequire, register } from 'node:module';
 import { captureScheduleInput } from '../netlify/shared/capture-schedule-input.mjs';
+import { classifyWorklogAction } from '../netlify/shared/action-engine-v1.mjs';
+import { worklogSchedule } from '../netlify/shared/manual-worklog-schedule.mjs';
+import { quickWorklogSchedule } from '../netlify/shared/worklog-data-core-adapter.mjs';
 register('./helpers/mobile-ts-loader.mjs',import.meta.url);
 const {createCaptureInbox}=await import('../mobile/src/features/capture/capture-inbox.ts');
 const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
@@ -47,6 +50,22 @@ test('automatic save has no confirmation; two overlapping runs share the persist
  assert.equal(a.saved.pageId,b.saved.pageId);assert.equal(h.calls.filter(x=>x[0]==='save').length,1);
  const call=h.calls.find(x=>x[0]==='save');assert.equal(call[3].sourceType,'capture');assert.ok(call[2].includes('약속:'));
  assert.equal(a.details.title,'서버 회의 제목');assert.equal(a.uri,undefined);
+});
+test('a labeled event reaches the existing server schedule path with its clean title and explicit start',async()=>{
+ const h=harness({ocrText:'2099 지역 상생 포럼\n참가 신청이 접수되었습니다.\n■ 행사 일시: 2099년 11월 4일 14:00\n■ 등록 시간: 13:30부터\n■ 행사 장소: 시민회관 301호\n양식이 의심스러운가요? 보고서'});
+ const result=await h.api.processCapture(await h.receive(),h.client,'alice');
+ const [, , transcript, options]=h.calls.find(x=>x[0]==='save');
+ assert.equal(result.decision.kind,'schedule');
+ assert.equal(transcript,'2099 지역 상생 포럼');
+ assert.equal(options.followUp,'시민회관 301호 · 등록 13:30부터');
+ const schedule=worklogSchedule(transcript, options.recordedAt, options.dueDate, options.dueTime);
+ assert.equal(classifyWorklogAction({transcript,recordedAt:options.recordedAt,explicitType:options.type,schedule}).kind,'schedule');
+ const saved=quickWorklogSchedule({transcript,type:options.type,dueStart:schedule.dueStart},
+   {title:schedule.text,dueAt:schedule.dueStart,recordType:'meeting_call'});
+ assert.equal(saved.startsAt,'2099-11-04T14:00:00+09:00');
+ assert.equal(saved.title,'2099 지역 상생 포럼');
+ assert.equal(h.calls.filter(x=>x[0]==='save').length,1);
+ assert.ok(h.calls.some(x=>x[0]==='reminders'));
 });
 test('the reported relative-date capture is a saved undated review, and editing resolves canonical schedule status',async()=>{
  const h=harness({ocrText:'오늘 오후 13시 담당자 거래처 방문',review:true,linkAfterEdit:true}),changes=[];
