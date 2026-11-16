@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-16',
+    title: '구글 캘린더 연결 복원',
+    summary: '앱을 다시 열어도 유효한 구글 캘린더 연결을 복원합니다.',
+    items: ['연결 정보를 기기 보안 저장소에 보관합니다.', '로그아웃·계정 변경·연결 해제 시 삭제하며, 인증 만료 후에는 다시 연결해야 합니다.'],
+  },
+  {
     date: '2026-11-14',
     title: '구독 목록 상단에서 바로 추가',
     summary: '정기지출 화면 맨 위에서 새 구독을 등록할 수 있습니다.',

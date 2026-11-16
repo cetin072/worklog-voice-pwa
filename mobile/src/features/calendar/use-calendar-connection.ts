@@ -13,6 +13,7 @@ export function useCalendarConnection() {
     const unsubscribe = connection?.subscribe(update);
     const listener = AppState.addEventListener('change', state => { if (state === 'active') update(); });
     // Also read completion which may have happened before this screen mounted.
+    void connection?.restore();
     update();
     return () => { unsubscribe?.(); listener.remove(); };
   }, [connection]);

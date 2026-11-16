@@ -2,12 +2,13 @@ import { providerFailure, calendarReceiptMatches, calendarEventId, createCalenda
 import { confirmedCalendarDraft, sameCalendarSource, type CalendarSource } from './calendar-source';
 
 export type CalendarConnection = {
-  target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter;
+  target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter; persist?(): Promise<void>;
 };
 
-/** One in-memory connection. No token fields enter UI, app sessions or storage. */
+/** Connection state exposes no token fields to UI or app sessions. */
 export function createCalendarConnection(deps: {
   authorize(): Promise<CalendarConnection | null>; now?(): number;
+  restore?(): Promise<CalendarConnection | null>; clear?(): Promise<void>;
 }) {
   let connection: CalendarConnection | null = null;
   let epoch = 0;
@@ -18,19 +19,39 @@ export function createCalendarConnection(deps: {
   const notify = () => { for (const listener of listeners) listener(); };
   const now = deps.now || Date.now;
   const pending = new Map<string, Promise<CalendarExportResult>>();
-  const disconnect = () => { epoch++; connection = null; exporter = null; message = ''; notify(); };
+  const disconnect = () => {
+    epoch++; connection = null; exporter = null; message = '';
+    void deps.clear?.().catch(() => { message = '연결 정보 삭제에 실패했습니다. 다시 연결 해제를 눌러주세요.'; notify(); });
+    notify();
+  };
+  let restoring: Promise<void> | null = null;
   return {
     disconnect,
+    restore() {
+      if (restoring) return restoring;
+      if (connection || connecting || !deps.restore) return Promise.resolve();
+      const captured = epoch;
+      restoring = deps.restore().then(next => {
+        if (captured !== epoch || connection || connecting) return;
+        if (next) { connection = next; exporter = createCalendarExporter(next.adapter); }
+      }).catch(() => {
+        if (captured === epoch) message = '저장된 연결을 확인하지 못했습니다. 다시 시도해주세요.';
+      }).finally(() => { restoring = null; notify(); });
+      notify();
+      return restoring;
+    },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    status() { return { connecting: !!connecting, message }; },
+    status() { return { connecting: !!connecting || !!restoring, message }; },
     info() { return connection ? { email: connection.email, target: { ...connection.target }, expired: now() >= connection.expiresAt } : null; },
     connect() {
       if (connecting) return connecting;
       disconnect();
       const captured = epoch;
-      connecting = deps.authorize().then(next => {
+      connecting = deps.authorize().then(async next => {
         if (captured !== epoch) return false;
         if (!next || next.expiresAt <= now()) { message = '연결을 취소했거나 연결 시간이 만료되었습니다.'; return false; }
+        await next.persist?.();
+        if (captured !== epoch) return false;
         connection = next; exporter = createCalendarExporter(next.adapter); message = '연결되었습니다.'; return true;
       }).catch(error => {
         if (captured === epoch) message = (error as Error).message === 'CALENDAR_AUTH_DENIED'
