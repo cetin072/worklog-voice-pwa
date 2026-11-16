@@ -1,6 +1,7 @@
 import type { PublicPlatformConfig } from '../../platform/config';
 import type { CalendarConnection } from './calendar-connection';
 import { createGoogleCalendarAdapter } from './google-calendar-adapter';
+import type { CalendarCredential } from './calendar-credential-store';
 import { withRequestDeadline } from '../../platform/request-deadline';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.owned';
@@ -19,13 +20,15 @@ export async function createCalendarPkce(randomBytes: () => Promise<Uint8Array>,
 
 /** Public Supabase Auth PKCE protocol, with a native S256 proof. This adapter
  * deliberately never constructs an app/temporary session client or invokes a
- * storage API. JWT/refresh fields in the response are discarded, not installed.
+ * app-session storage API. Only the Google access credential can be saved
+ * through the separate encrypted Calendar store. JWT/refresh fields in the response are discarded, not installed.
  * SDK 2.116 falls back to weak/plain PKCE when native WebCrypto is absent; using
  * the existing Expo Crypto primitive avoids both that fallback and global shims.
  */
 export async function authorizeGoogleCalendar(config: PublicPlatformConfig, callback: string,
   openBrowser: (url: string, redirect: string) => Promise<{ type: string; url?: string }>,
   makePkce: () => Promise<CalendarPkce>, fetchImpl: typeof fetch = fetch,
+  persist?: (credential: CalendarCredential) => Promise<void>,
 ): Promise<CalendarConnection | null> {
   const boundedFetch: typeof fetch = (url, options) => withRequestDeadline(signal => fetchImpl(url, { ...options, signal }));
   const redirect = `${callback}?purpose=calendar`;
@@ -64,7 +67,9 @@ export async function authorizeGoogleCalendar(config: PublicPlatformConfig, call
   const identity = await response.json();
   if (typeof identity.id !== 'string' || typeof identity.email !== 'string' || identity.verified_email !== true) throw Error('CALENDAR_AUTH_FAILED');
   const target = { accountId: identity.id, calendarId: 'primary' };
-  return { target, email: identity.email, expiresAt: Date.now() + 50 * 60000,
+  const credential = { target, email: identity.email, expiresAt: Date.now() + 50 * 60000, token };
+  return { target, email: credential.email, expiresAt: credential.expiresAt,
+    persist: persist ? () => persist(credential) : undefined,
     adapter: createGoogleCalendarAdapter(target, token, fetchImpl) };
 }
 
