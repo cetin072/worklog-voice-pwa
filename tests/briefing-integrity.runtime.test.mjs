@@ -121,3 +121,29 @@ test('fast briefing distinguishes missing workspace access from an invalid login
     globalThis.Netlify = originalNetlify;
   }
 });
+
+test('workspace access classification requires the bootstrap RPC and exact database error', async () => {
+  const { createSupabaseWorkspaceContextResolver } = await import('../netlify/shared/platform/supabase-workspace-context.mjs');
+  for (const [failAuth, code, message, expected] of [
+    [false, 'P0001', 'WORKLOG_ACCESS_NOT_PROVISIONED', true],
+    [true, 'P0001', 'WORKLOG_ACCESS_NOT_PROVISIONED', false],
+    [false, '42501', 'WORKLOG_ACCESS_NOT_PROVISIONED', false],
+    [false, 'P0001', 'OTHER_DATABASE_FAILURE', false],
+  ]) {
+    const calls=[];
+    const resolver=createSupabaseWorkspaceContextResolver({
+      supabaseUrl:'https://example.invalid',publishableKey:'synthetic',dataSchema:'worklog',
+      fetchImpl:async url=>{
+        const path=new URL(url).pathname;calls.push(path);
+        if(path==='/auth/v1/user'&&!failAuth)return Response.json({id:'synthetic'});
+        return Response.json({code,message},{status:400});
+      },
+    });
+    await assert.rejects(resolver.resolve('synthetic-token'),error=>{
+      assert.equal(error.code,'SUPABASE_WORKSPACE_AUTH_FAILED');
+      assert.equal(error.accessNotProvisioned,expected);
+      return true;
+    });
+    assert.equal(calls.length,failAuth?1:2);
+  }
+});
