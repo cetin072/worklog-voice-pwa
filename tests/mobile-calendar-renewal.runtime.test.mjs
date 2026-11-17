@@ -29,14 +29,14 @@ test('renewal network failure preserves connection and next attempt succeeds', a
   const h = harness(conn => { if (fail) throw Error('network'); return conn(300); });
   await h.service.connect(); h.expire();
   await assert.rejects(h.service.readEvents(range),/network/);
-  assert.equal(h.service.info().expired,false); assert.equal(h.stats().clears,1);
+  assert.equal(h.service.info().expired,false); assert.equal(h.stats().clears,0);
   fail=false; assert.deepEqual(await h.service.readEvents(range),data);
 });
 test('invalid grant requests consent, clears saved grant and does not loop', async () => {
   const h=harness(()=>{throw Error('CALENDAR_REAUTH_REQUIRED');}); await h.service.connect();h.expire();
   await assert.rejects(h.service.readEvents(range),/REAUTH_REQUIRED/);
   await assert.rejects(h.service.readEvents(range),/REAUTH_REQUIRED/);
-  assert.equal(h.stats().renews,1);assert.equal(h.service.info().expired,true);assert.equal(h.stats().clears,2);
+  assert.equal(h.stats().renews,1);assert.equal(h.service.info().expired,true);assert.equal(h.stats().clears,1);
 });
 test('disconnect during refresh cannot persist or resurrect a grant', async () => {
   let finish;const h=harness(()=>new Promise(resolve=>{finish=resolve;}));await h.service.connect();h.expire();
@@ -123,4 +123,54 @@ test('disconnect while export renewal waits prevents any Google write',async()=>
 test('server transport failure is retryable and does not echo request tokens',async()=>{
   const handle=createGoogleRefreshHandler({env:k=>settings[k],fetchImpl:async()=>{throw Error('synthetic-refresh');}});
   const response=await handle(request());assert.equal(response.status,502);assert.deepEqual(await response.json(),{error:'CALENDAR_REFRESH_FAILED'});
+});
+
+const { authorizeGoogleCalendar } = await import('../mobile/src/features/calendar/google-calendar-authorization.ts');
+async function rolloutConnection(renew, save) {
+  return authorizeGoogleCalendar({supabaseUrl:'https://synthetic.invalid',publishableKey:'public'}, 'worklog-qa://google-auth',
+    async()=>({type:'success',url:'worklog-qa://google-auth?purpose=calendar&code=synthetic'}),
+    async()=>({verifier:'a'.repeat(64),challenge:'b'.repeat(43)}),
+    async url=>String(url).includes('/token?') ? Response.json({provider_token:'fresh-access',provider_refresh_token:'offline-grant'})
+      : Response.json({id:target.accountId,email:'s@example.invalid',verified_email:true}), save, renew);
+}
+test('unconfigured, undeployed or temporarily unavailable renewal server preserves new access and offline grant across restart', async()=>{
+  for (const mode of ['unconfigured','undeployed','network']) {
+    const map=new Map();const storage={getItem:async k=>map.get(k),setItem:async(k,v)=>map.set(k,v),removeItem:async k=>map.delete(k)};
+    let ready=false;
+    const renew=createGoogleCalendarRenewer('owner',async()=>'app',async()=>{
+      if(ready)return Response.json({accessToken:'renewed',expiresIn:3600,accountId:target.accountId});
+      if(mode==='network')throw Error('offline');
+      return mode==='undeployed'?new Response('not deployed',{status:404}):Response.json({error:'CALENDAR_REFRESH_NOT_CONFIGURED'},{status:503});
+    },'https://synthetic.invalid');
+    const store=createCalendarCredentialStore(storage,'project','owner',async()=>Response.json({items:[]}),Date.now,renew);
+    const service=createCalendarConnection({authorize:()=>rolloutConnection(renew,store.save),clear:store.clear});
+    assert.equal(await service.connect(),true);assert.equal(service.info().renewalVerified,false);
+    assert.ok(service.info().expiresAt>Date.now());assert.equal(map.size,1);
+    assert.equal(JSON.parse([...map.values()][0]).refreshToken,'offline-grant');
+    const restored=createCalendarConnection({authorize:async()=>null,restore:store.restore});await restored.restore();
+    assert.equal(restored.info().renewalVerified,false);
+    await assert.rejects(restored.ensureReady(true),/CALENDAR_REFRESH_/);assert.equal(map.size,1);
+    ready=true;await restored.ensureReady(true);assert.equal(restored.info().renewalVerified,true);
+    assert.equal(JSON.parse([...map.values()][0]).refreshToken,'offline-grant');
+  }
+});
+test('cancelled or failed reconnect preserves previous connection and saved grant',async()=>{
+  let action='ok',clears=0,saves=0;
+  const grant={target,email:'old@example.invalid',expiresAt:Date.now()+60000,adapter:{target},persist:async()=>{saves++;}};
+  const s=createCalendarConnection({authorize:async()=>{if(action==='cancel')return null;if(action==='fail')throw Error('CALENDAR_AUTH_FAILED');return grant;},clear:async()=>{clears++;}});
+  await s.connect();action='cancel';assert.equal(await s.connect(),false);
+  action='fail';await assert.rejects(s.connect(),/AUTH_FAILED/);
+  assert.equal(s.info().email,grant.email);assert.equal(saves,1);assert.equal(clears,0);
+});
+test('invalid grant during initial authorization never becomes compatibility success',async()=>{
+  await assert.rejects(rolloutConnection(async()=>{throw Error('CALENDAR_REAUTH_REQUIRED');}),/REAUTH_REQUIRED/);
+});
+
+test('reconnect isolates the retained grant from reads and refresh until authorization settles',async()=>{
+  let finish,first=true,renews=0;
+  const old={target,email:'old@example.invalid',expiresAt:Date.now()+60000,adapter:{target},renew:async()=>{renews++;return old;}};
+  const s=createCalendarConnection({authorize:()=>first?(first=false,Promise.resolve(old)):new Promise(r=>{finish=r;})});
+  await s.connect();const pending=s.connect();
+  await assert.rejects(s.ensureReady(true),/CALENDAR_CONNECTING/);assert.equal(renews,0);
+  finish(null);await pending;assert.equal(s.info().email,old.email);
 });

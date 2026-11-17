@@ -3,7 +3,7 @@ import { providerFailure, calendarReceiptMatches, calendarEventId, createCalenda
 import { confirmedCalendarDraft, sameCalendarSource, type CalendarSource } from './calendar-source';
 
 export type CalendarConnection = {
-  target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter & Partial<CalendarReadAdapter>; persist?(): Promise<void>; renew?(): Promise<CalendarConnection>;
+  renewalVerified?: boolean; target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter & Partial<CalendarReadAdapter>; persist?(): Promise<void>; renew?(): Promise<CalendarConnection>;
 };
 
 /** Connection state exposes no token fields to UI or app sessions. */
@@ -28,6 +28,7 @@ export function createCalendarConnection(deps: {
     notify();
   };
   async function ensureReady(force = false) {
+    if (connecting) throw Error('CALENDAR_CONNECTING');
     const active = connection;
     const captured = epoch;
     if (!active) throw Error('CALENDAR_NOT_CONNECTED');
@@ -75,17 +76,19 @@ export function createCalendarConnection(deps: {
     },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     status() { return { generation: epoch, connecting: !!connecting || !!restoring || renewing?.epoch === epoch, message }; },
-    info() { return connection ? { email: connection.email, target: { ...connection.target }, expiresAt: connection.expiresAt, expired: reauthRequired || (!connection.renew && now() >= connection.expiresAt) } : null; },
+    info() { return connection ? { email: connection.email, target: { ...connection.target }, expiresAt: connection.expiresAt, renewalVerified: connection.renewalVerified, expired: reauthRequired || (!connection.renew && now() >= connection.expiresAt) } : null; },
     connect() {
       if (connecting) return connecting;
-      disconnect();
+      // Invalidate in-flight work without deleting a usable saved grant.
+      // Replace it only after authorization and persistence both succeed.
+      epoch++; message = '';
       const captured = epoch;
       connecting = deps.authorize().then(async next => {
         if (captured !== epoch) return false;
         if (!next || next.expiresAt <= now()) { message = '연결을 취소했거나 연결 시간이 만료되었습니다.'; return false; }
         await next.persist?.();
         if (captured !== epoch) return false;
-        connection = next; exporter = createCalendarExporter(next.adapter); message = '연결되었습니다.'; return true;
+        connection = next; reauthRequired = false; exporter = createCalendarExporter(next.adapter); message = '연결되었습니다.'; return true;
       }).catch(error => {
         if (captured === epoch) message = (error as Error).message === 'CALENDAR_AUTH_DENIED'
           ? '구글 권한 동의가 거부되었습니다.' :

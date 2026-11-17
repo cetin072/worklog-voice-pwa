@@ -14,7 +14,7 @@ test('connection completion notifies the replacement screen; disconnect rejects 
   const connect=service.connect(); assert.equal(service.status().connecting,true);
   unsubscribe();service.subscribe(()=>newUpdates++);
   resolve(grant);await connect;
-  assert.equal(oldUpdates,2);assert.equal(newUpdates,1);
+  assert.equal(oldUpdates,1);assert.equal(newUpdates,1);
   assert.equal(service.info().email,grant.email);assert.equal(service.status().connecting,false);
   const second=service.connect();service.disconnect();resolve(grant);
   assert.equal(await second,false);assert.equal(service.info(),null);

@@ -3,7 +3,7 @@ import type { CalendarConnection } from './calendar-connection';
 import { createGoogleCalendarAdapter } from './google-calendar-adapter';
 
 export type CalendarCredential = {
-  target: { accountId: string; calendarId: string }; email: string; expiresAt: number; token: string; refreshToken?: string;
+  target: { accountId: string; calendarId: string }; email: string; expiresAt: number; token: string; refreshToken?: string; renewalVerified?: boolean;
 };
 
 /** Dedicated encrypted key; never reuse the application's login session.
@@ -36,7 +36,7 @@ export function createCalendarCredentialStore(storage: NativeStringStore, projec
 export type CalendarRenewer = (credential: CalendarCredential) => Promise<CalendarCredential>;
 export function credentialConnection(credential: CalendarCredential, fetchImpl: typeof fetch,
   save?: (credential: CalendarCredential) => Promise<void>, renew?: CalendarRenewer): CalendarConnection {
-  return { target: credential.target, email: credential.email, expiresAt: credential.expiresAt,
+  return { target: credential.target, email: credential.email, expiresAt: credential.expiresAt, renewalVerified: credential.renewalVerified,
     adapter: createGoogleCalendarAdapter(credential.target, credential.token, fetchImpl),
     persist: save ? () => save(credential) : undefined,
     renew: credential.refreshToken && renew ? async () => credentialConnection(await renew(credential), fetchImpl, save, renew) : undefined };

@@ -12,7 +12,7 @@ export function createGoogleCalendarRenewer(owner: string, getSessionToken: () =
     const response = await withRequestDeadline(signal => fetchImpl(`${baseUrl}/api/google-calendar-refresh`, {
       method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${appToken}` },
       body: JSON.stringify({ ownerId: owner, accountId: credential.target.accountId, refreshToken: credential.refreshToken }),
-    }));
+    })).catch(() => { throw Error('CALENDAR_REFRESH_FAILED'); });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       const allowed = ['CALENDAR_REAUTH_REQUIRED', 'CALENDAR_REFRESH_NOT_CONFIGURED', 'CALENDAR_APP_LOGIN_REQUIRED'];
@@ -20,7 +20,7 @@ export function createGoogleCalendarRenewer(owner: string, getSessionToken: () =
     }
     if (result.accountId !== credential.target.accountId || typeof result.accessToken !== 'string' || !result.accessToken
       || !Number.isFinite(result.expiresIn) || result.expiresIn <= 60) throw Error('CALENDAR_REFRESH_FAILED');
-    return { ...credential, token: result.accessToken, expiresAt: Date.now() + (result.expiresIn - 60) * 1000,
+    return { ...credential, renewalVerified: true, token: result.accessToken, expiresAt: Date.now() + (result.expiresIn - 60) * 1000,
       refreshToken: typeof result.refreshToken === 'string' && result.refreshToken ? result.refreshToken : credential.refreshToken };
   };
 }

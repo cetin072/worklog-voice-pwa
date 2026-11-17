@@ -70,9 +70,15 @@ export async function authorizeGoogleCalendar(config: PublicPlatformConfig, call
   const refreshToken = payload?.provider_refresh_token;
   if (typeof refreshToken !== 'string' || !refreshToken) throw Error('CALENDAR_AUTH_REFRESH_MISSING');
   // Supabase expires_in describes its own JWT, not the Google credential.
-  // Refresh immediately to verify the server path and obtain Google's real expiry.
-  let credential: CalendarCredential = { target, email: identity.email, expiresAt: Date.now(), token, refreshToken };
-  if (renew) credential = await renew(credential);
+  // The legacy access-only lifetime is a conservative compatibility window, not
+  // proof of automatic renewal. Preserve the offline grant while servers roll out.
+  let credential: CalendarCredential = { target, email: identity.email, expiresAt: Date.now() + 50 * 60000, token, refreshToken, renewalVerified: false };
+  if (renew) {
+    try { credential = await renew(credential); }
+    catch (error) {
+      if (!['CALENDAR_REFRESH_NOT_CONFIGURED', 'CALENDAR_REFRESH_FAILED'].includes((error as Error).message)) throw error;
+    }
+  }
   return credentialConnection(credential, fetchImpl, persist, renew);
 }
 

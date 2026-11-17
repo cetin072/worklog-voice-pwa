@@ -33,7 +33,7 @@ test('source changed before send or while remote GET waits never inserts',async(
 test('expiry, cancellation, disconnect during canonical read and failure are not success',async()=>{
   const {service,posts,expire}=connection();await service.connect();expire();
   assert.equal((await service.send(source,'',async()=>source,()=>true)).state,'expired');assert.equal(posts(),0);
-  await service.connect(); assert.equal(service.info(),null);
+  await service.connect(); assert.equal(service.info().expired,true);
   const c=connection();await c.service.connect();
   const result=await c.service.send(source,'',async()=>{c.service.disconnect();return source;},()=>true);
   assert.equal(result.state,'cancelled');assert.equal(c.posts(),0);
