@@ -58,3 +58,17 @@ test('납부 성공 응답 유실 후 서버의 동일 회차를 읽어 확인�
  assert.deepEqual(await store.confirmSubscriptionPayment(client,'s','2026-11-15'),receipt);assert.equal(writes,1);
  b.maybeSingle=async()=>({data:null,error:null});await assert.rejects(store.confirmSubscriptionPayment(client,'s','2026-11-15'),/확인 필요/);
 });
+
+test('USD form accepts two decimals, rejects excess precision and restores the saved currency', () => {
+ const h=form();
+ const button=text=>nodes(h.render()).find(n=>n.type==='Pressable'&&words(n).trim()===text);
+ button('달러 (USD)').props.onPress();
+ const amount=()=>nodes(h.render()).find(n=>n.props?.accessibilityLabel==='결제 금액');
+ assert.equal(amount().props.keyboardType,'decimal-pad');
+ amount().props.onChangeText('19.999');button('저장').props.onPress();
+ assert.equal(h.saved(),undefined);
+ amount().props.onChangeText('19.99');button('저장').props.onPress();
+ assert.equal(h.saved().amountUsdCents,1999);assert.equal(h.saved().amountKrw,undefined);
+ const restored=h.draftFrom({...h.saved(),id:'synthetic',lastUsedDate:null,createdAt:null,sourceText:null},'2026-11-17','personal');
+ assert.equal(restored.currency,'USD');assert.equal(restored.amountText,'19.99');
+});

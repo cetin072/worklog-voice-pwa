@@ -157,3 +157,38 @@ test('원문(source_text)은 새로 만들 때만 보내고, 수정·사용기�
   await store.createSubscription(long, { ...input, sourceText: '가'.repeat(500) });
   assert.equal(long.calls.find((c) => c[0] === 'insert')[1].source_text.length, 300);
 });
+
+test('QA without the USD column keeps legacy KRW access and never falls back for USD writes', async () => {
+  const missing = { code: '42703', message: 'column subscriptions.amount_usd_cents does not exist' };
+  const modern = fakeClient({ data: null, error: missing });
+  const legacy = fakeClient({ data: [validRow()], count: 1, error: null });
+  let attempts = 0;
+  const client = { from: (table) => (++attempts === 1 ? modern : legacy).from(table) };
+  assert.equal((await store.listSubscriptions(client))[0].amountKrw, 12000);
+  assert.doesNotMatch(legacy.calls.find(c => c[0] === 'select')[1], /amount_usd_cents/);
+
+  const rejected = fakeClient({ data: null, error: missing });
+  await assert.rejects(store.createSubscription(rejected, {
+    name: 'Cloud', amountUsdCents: 1999, cycle: 'monthly', scope: 'business',
+    billingAnchorDate: '2026-11-15', cancelDeadline: null,
+  }, 'same-request'), /달러 저장은 서버 업데이트 후/);
+  assert.equal(rejected.calls.filter(c => c[0] === 'from').length, 1);
+  assert.equal(rejected.calls.find(c => c[0] === 'insert')[1].amount_krw, null);
+});
+
+test('USD creation reads back a lost response and rejects changed-content retries without a second write', async () => {
+  let saved, writes=0;
+  const builder={
+    insert(value){writes++;saved??={...validRow(),...value};return this;},
+    select(){return this;},eq(_key,id){assert.equal(id,'synthetic-request');return this;},
+    async single(){throw new Error('lost response');},
+    async maybeSingle(){return {data:saved,error:null};},
+  };
+  const client={from:()=>builder};
+  const input={name:'Synthetic USD',amountUsdCents:1999,cycle:'monthly',scope:'business',billingAnchorDate:'2026-11-15',cancelDeadline:null};
+  const result=await store.createSubscription(client,input,'synthetic-request');
+  assert.equal(writes,1);assert.equal(result.amountUsdCents,1999);assert.equal(saved.amount_krw,null);
+  await assert.rejects(store.createSubscription(client,{...input,amountUsdCents:2999},'synthetic-request'),/이전 내용/);
+  assert.equal(writes,2,'one insert per explicit attempt; no automatic second insert');
+  assert.equal(saved.amount_usd_cents,1999);
+});
