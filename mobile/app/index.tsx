@@ -1,3 +1,4 @@
+import { workspaceStyles } from '@/src/ui/workspace-styles';
 import { WorkFolders } from '@/src/features/work/work-folders';
 import { HabitsScreen } from '@/src/features/habits/habits-screen';
 import { MyManagementScreen } from '@/src/features/management/my-management-screen';
@@ -474,7 +475,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     Alert.alert('음성 기록을 먼저 확인해주세요', '녹음을 마치고 전사문을 저장하거나 버리면 다른 화면으로 이동할 수 있습니다.');
   }
   function setScreen(next: AppScreen) {
-    if (next !== 'home' && quickVoiceNavigation.current) { warnPendingVoice(); return; }
+    if (next !== screen && quickVoiceNavigation.current) { warnPendingVoice(); return; }
     applyScreen(next);
   }
   const [personalCalendarOpen, setPersonalCalendarOpen] = useState(false);
@@ -1454,7 +1455,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   <View style={[styles.bottomTabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
     {(['home', 'work'] as const).map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityLabel={tab === 'home' ? '홈' : '업무'} accessibilityState={{ selected: screen === tab }} style={styles.bottomTab} onPress={() => setScreen(tab)}><Text style={[styles.bottomTabText, screen === tab && styles.bottomTabSelected]}>{tab === 'home' ? '홈' : '업무'}</Text></Pressable>)}
   </View>
-  {screen === 'home' ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { bottom: 60 + Math.max(insets.bottom, 8), paddingBottom: 0 }]}>
+  {(screen === 'home' || screen === 'work') ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { bottom: 60 + Math.max(insets.bottom, 8), paddingBottom: 0 }]}>
     <VoiceRecorderCard mode="quick" onOpenMeetingRecording={() => setScreen('meeting')} renderPhotoAction={disabled => <CaptureImportButton compact disabled={disabled} />} navigationGuard={quickVoiceNavigation} onOpenWorklogInput={(recognizedText) => {
       const recovered = recognizedText?.trim() || '';
       if (recovered) setManualInput((current) => current.transcript.trim() ? current : { ...current, transcript: recovered });
@@ -1501,8 +1502,8 @@ const styles = StyleSheet.create({
   reminderHelpTitle: { fontSize: 15, color: '#334155', fontWeight: '700' },
   reminderHelpText: { fontSize: 14, color: '#475569' },
   homeFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  homeFilter: { minHeight: 44, justifyContent: 'center', padding: 10, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12 },
-  homeFilterActive: { backgroundColor: '#dbeafe', borderColor: '#2563eb' },
+  homeFilter: workspaceStyles.filter,
+  homeFilterActive: workspaceStyles.filterActive,
   page: { flex: 1, backgroundColor: mobileTheme.colors.background },
   flex: { flex: 1 },
   authenticatedShell: { flex: 1, position: 'relative' },
@@ -1538,7 +1539,7 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   sectionHeadText: { flex: 1, minWidth: 0 },
   closeButton: { flexShrink: 0, minWidth: 48, alignItems: 'center' },
-  linkText: { color: '#275daf', fontWeight: '800', padding: 8 },
+  linkText: workspaceStyles.link,
   loadingInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16 },
   errorPanel: { gap: 10 },
   saveFeedback: { gap: 8, padding: 14, borderRadius: mobileTheme.radius.control, backgroundColor: '#eef8f0', borderWidth: 1, borderColor: '#bbdfc2' },
@@ -1555,7 +1556,7 @@ const styles = StyleSheet.create({
   errorText: { color: mobileTheme.colors.danger, lineHeight: 20 },
   successText: { color: mobileTheme.colors.success, lineHeight: 20, backgroundColor: '#eaf4ea', padding: 10, borderRadius: mobileTheme.radius.compact },
   infoText: { color: mobileTheme.colors.textSecondary, lineHeight: 20, backgroundColor: mobileTheme.colors.neutralBackground, padding: 10, borderRadius: mobileTheme.radius.compact },
-  emptyText: { color: mobileTheme.colors.textMuted, lineHeight: 20, paddingVertical: 4 },
+  emptyText: workspaceStyles.empty,
   helpText: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   emptyAction: { gap: 10, paddingTop: 8 },
   journalScreen: { gap: 14 },
@@ -1578,8 +1579,8 @@ const styles = StyleSheet.create({
   sectionWarning: { backgroundColor: mobileTheme.colors.todayBackground, borderColor: mobileTheme.colors.todayBorder },
   sectionInfo: { backgroundColor: mobileTheme.colors.upcomingBackground, borderColor: mobileTheme.colors.upcomingBorder },
   sectionNeutral: { backgroundColor: mobileTheme.colors.neutralBackground, borderColor: mobileTheme.colors.neutralBorder },
-  briefingSectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  briefingSectionTitle: { fontSize: 17, fontWeight: '800', color: '#1f2937' },
+  briefingSectionHead: workspaceStyles.heading,
+  briefingSectionTitle: workspaceStyles.title,
   moreButton: { minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
   moreButtonText: { fontSize: 12, fontWeight: '800', color: '#374151' },
   sectionCount: { minWidth: 26, height: 26, textAlign: 'center', textAlignVertical: 'center', borderRadius: 13, overflow: 'hidden', backgroundColor: '#e5e7eb', color: '#374151', fontSize: 12, fontWeight: '800' },
@@ -1646,8 +1647,8 @@ const styles = StyleSheet.create({
   homeDate: { flex: 1, fontSize: 22, fontWeight: '800', color: mobileTheme.colors.text },
   homeSummary: { fontSize: 15, lineHeight: 23, color: mobileTheme.colors.textSecondary },
   homeOverdue: { color: mobileTheme.colors.danger },
-  homeRefresh: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
-  homeTaskCard: { padding: 14, gap: 6, borderRadius: 20, borderWidth: 1, borderColor: mobileTheme.colors.border, backgroundColor: mobileTheme.colors.surface },
+  homeRefresh: workspaceStyles.refresh,
+  homeTaskCard: workspaceStyles.card,
   homeTaskEntry: { paddingVertical: 8, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
   homeTaskLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   homeTaskUtilities: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },

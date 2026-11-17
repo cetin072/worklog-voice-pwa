@@ -1,3 +1,5 @@
+import { workspaceStyles } from '@/src/ui/workspace-styles';
+import { recordRowStyles } from '@/src/ui/record-row-styles';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { randomUUID } from 'expo-crypto';
@@ -73,10 +75,10 @@ export function WorkFolders({ client, userId, home = false, revision, busy: exte
   const button = (label: string, action: () => void, off = disabled, text = label) => <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={off} style={[styles.button, off && styles.disabled]} onPress={action}><Text style={styles.buttonText}>{text}</Text></Pressable>;
   const currentFolder = folders.find(item => item.id === folder);
   return <View style={styles.card}>
-    <View style={styles.actions}><Text style={styles.title}>{home ? '오늘 하기' : '업무'}</Text>{button('새로고침', () => setRefresh(n => n + 1), busy || externalBusy)}</View>
-    <Text style={styles.help}>{home ? TODAY_POLICY : '날짜 없이 먼저 등록하세요. 폴더는 나중에 정해도 됩니다.'}</Text>
+    <View style={styles.heading}><Text style={styles.title}>{home ? '오늘 하기' : '업무'}</Text><Pressable accessibilityRole="button" accessibilityLabel="새로고침" disabled={busy || externalBusy || loading} style={styles.refresh} onPress={() => setRefresh(n => n + 1)}><Text style={styles.link}>새로고침</Text></Pressable></View>
+    <Text style={styles.help}>{home ? TODAY_POLICY : '아래 음성 기록으로 등록하세요. 새 기록은 미분류에서 폴더로 옮길 수 있어요.'}</Text>
     {!home ? <>
-      {button('업무·메모 등록', onInput, busy || externalBusy)}
+      <Pressable accessibilityRole="button" accessibilityLabel="업무·메모 등록" disabled={busy || externalBusy} style={styles.refresh} onPress={onInput}><Text style={styles.link}>직접 입력 ›</Text></Pressable>
       <Text style={styles.path}>{folder ? folderPath(folders, folder) : '내 폴더 / 미분류'}</Text>
       {folder ? button('상위 폴더', () => { setFolder(currentFolder?.parent_id || null); setExpanded(null); }) : null}
       <View style={styles.actions}>
@@ -127,18 +129,21 @@ export function WorkFolders({ client, userId, home = false, revision, busy: exte
   </View>;
 }
 const styles = StyleSheet.create({
-  card: { padding: 16, gap: 12, backgroundColor: mobileTheme.colors.surface, borderRadius: mobileTheme.radius.card, borderWidth: 1, borderColor: mobileTheme.colors.border },
-  title: { fontSize: 19, fontWeight: '700', color: mobileTheme.colors.text },
-  text: { color: mobileTheme.colors.text, fontSize: 16, lineHeight: 24 },
-  help: { color: mobileTheme.colors.textSecondary, fontSize: 13, lineHeight: 20 },
+  card: workspaceStyles.card,
+  heading: workspaceStyles.heading,
+  refresh: workspaceStyles.refresh,
+  link: workspaceStyles.link,
+  title: workspaceStyles.title,
+  text: recordRowStyles.taskTitle,
+  help: recordRowStyles.taskMeta,
   path: { fontSize: 15, color: mobileTheme.colors.text, fontWeight: '600' },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  button: { minHeight: mobileTheme.size.touchTarget, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.primary, maxWidth: '100%' },
-  buttonText: { color: mobileTheme.colors.primaryText, fontSize: 14 },
+  button: { minHeight: mobileTheme.size.touchTarget, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border, maxWidth: '100%' },
+  buttonText: { color: mobileTheme.colors.link, fontSize: 13, fontWeight: '700' },
   disabled: { opacity: 0.5 },
   folder: { minHeight: 46, justifyContent: 'center', padding: 10, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, maxWidth: '100%' },
-  tab: { padding: 12, minHeight: 46, borderRadius: 12, backgroundColor: mobileTheme.colors.background },
-  active: { backgroundColor: mobileTheme.colors.primary }, activeText: { color: mobileTheme.colors.primaryText, fontSize: 16 },
+  tab: workspaceStyles.filter,
+  active: workspaceStyles.filterActive, activeText: { ...recordRowStyles.taskTitle, color: mobileTheme.colors.link },
   editorOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   editorScroll: { flex: 1 },
   editorContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
