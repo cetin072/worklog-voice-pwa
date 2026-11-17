@@ -1,11 +1,13 @@
+import { folderPath, type WorkFolder } from './work-folders-store';
+import type { WorkDestination } from './work-record-destination';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { mobileTheme } from '@/src/ui/theme';
 
-type WorkRecordEditSheetProps = Readonly<{
+export type WorkRecordEditSheetProps = Readonly<{
   visible: boolean;
   title: string;
   date: string;
@@ -27,6 +29,7 @@ type WorkRecordEditSheetProps = Readonly<{
   onCancel(): void;
   onRetry?(): void;
   onRepeat?(): void;
+  folderDestination?: { value: WorkDestination | null; folders: WorkFolder[]; onChange(kind: 'task' | 'note' | null): void; onFolder(id: string | null): void };
 }>;
 
 function pickerValue(date: string, time: string) {
@@ -78,6 +81,7 @@ export function WorkRecordEditSheet({
   onCancel,
   onRetry,
   onRepeat,
+  folderDestination,
 }: WorkRecordEditSheetProps) {
   const insets = useSafeAreaInsets();
   const titleInput = useRef<TextInput>(null);
@@ -121,7 +125,7 @@ export function WorkRecordEditSheet({
   >
     <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Pressable accessibilityLabel="업무 수정 닫기" style={StyleSheet.absoluteFill} disabled={saving} onPress={close} />
-      <View style={[styles.sheet, { paddingBottom: 18 + insets.bottom }]} accessibilityViewIsModal>
+      <ScrollView style={{maxHeight: '90%'}} contentContainerStyle={[styles.sheet, { paddingBottom: 18 + insets.bottom }]} keyboardShouldPersistTaps="handled" accessibilityViewIsModal>
         <View style={styles.dragHandle} />
         <View style={styles.head}>
           <View style={styles.headCopy}>
@@ -148,7 +152,16 @@ export function WorkRecordEditSheet({
           onChangeText={onTitle}
         />
 
-        {actionKind ? <View style={styles.kindSection}>
+        {folderDestination ? <View style={styles.kindSection}>
+          <Text style={styles.label}>보관 방식</Text>
+          <View style={styles.kindRow}>{([[null,'현재 유지'],['task','할 일'],['note','메모·자료']] as const).map(([kind,label])=><Pressable key={label} accessibilityRole="button" accessibilityLabel={`${label} 선택`} accessibilityState={{selected:(folderDestination.value?.kind || null)===kind}} disabled={!ready || inputBlocked} style={[styles.kindChoice,(folderDestination.value?.kind || null)===kind && styles.kindChoiceActive]} onPress={()=>{setPickerMode(null);folderDestination.onChange(kind);}}><Text style={styles.kindChoiceText}>{label}</Text></Pressable>)}</View>
+          {folderDestination.value ? <>
+            <Text style={styles.help}>날짜·시간을 없애고 업무 탭으로 옮깁니다. 앱 일정과 알림은 취소되며 원문은 보존됩니다. 구글에 전송한 일정은 별도로 확인해주세요.</Text>
+            <Text style={styles.label}>폴더</Text>
+            <View style={[styles.kindRow,{flexWrap:'wrap'}]}>{[null,...folderDestination.folders.map(folder=>folder.id)].map(id=><Pressable key={id || 'unclassified'} accessibilityRole="button" accessibilityLabel={`${folderPath(folderDestination.folders,id)} 폴더 선택`} accessibilityState={{selected:folderDestination.value?.folderId===id}} disabled={inputBlocked} style={[styles.kindChoice,{flex:0,paddingHorizontal:12},folderDestination.value?.folderId===id && styles.kindChoiceActive]} onPress={()=>folderDestination.onFolder(id)}><Text style={styles.kindChoiceText}>{folderPath(folderDestination.folders,id)}</Text></Pressable>)}</View>
+          </> : null}
+        </View> : null}
+        {!folderDestination && actionKind ? <View style={styles.kindSection}>
           <Text style={styles.label}>종류</Text>
           <View style={styles.kindRow}>
             <Pressable
@@ -173,6 +186,7 @@ export function WorkRecordEditSheet({
           <Text style={styles.help}>{actionConversionAllowed ? '종류를 바꾸면 저장할 때 함께 반영됩니다.' : '일정과 연결된 기록은 종류를 바꿀 수 없습니다.'}</Text>
         </View> : null}
 
+        {!folderDestination?.value ? <>
         <View style={styles.dateRow}>
           <View style={styles.field}>
             <Text style={styles.label}>날짜</Text>
@@ -219,18 +233,19 @@ export function WorkRecordEditSheet({
           <Text style={styles.help}>{date ? '기한을 변경하거나 없앨 수 있습니다.' : '현재 기한 없음'}</Text>
           {date || time ? <Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={fieldsBlocked} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDue}>기한 없음</Text></Pressable> : null}
         </View>
+        </> : null}
         <Text style={styles.help}>음성 원문은 그대로 보존됩니다.</Text>
 
         {statusText ? <Text accessibilityLiveRegion="polite" style={[styles.status, statusTone === 'success' ? styles.statusSuccess : statusTone === 'error' ? styles.statusError : null]}>{statusText}</Text> : null}
         {!ready && !loading && onRetry ? <Pressable accessibilityRole="button" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>다시 불러오기</Text></Pressable> : null}
 
-        {onRepeat && ready && actionKind === 'task' ? <Pressable accessibilityRole="button" disabled={inputBlocked} style={styles.retry} onPress={onRepeat}><Text style={styles.retryText}>반복으로 관리</Text></Pressable> : null}
+        {!folderDestination?.value && onRepeat && ready && actionKind === 'task' ? <Pressable accessibilityRole="button" disabled={inputBlocked} style={styles.retry} onPress={onRepeat}><Text style={styles.retryText}>반복으로 관리</Text></Pressable> : null}
         {loading && allowFieldsWhileLoading ? <Text style={styles.help}>수정할 수 있습니다. 저장 전 최신 정보를 확인하고 있습니다.</Text> : null}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" disabled={saving} style={[styles.secondary, saving ? styles.disabled : null]} onPress={close}><Text style={styles.secondaryText}>취소</Text></Pressable>
           <Pressable accessibilityRole="button" disabled={!ready || inputBlocked || !title.trim()} style={[styles.primary, !ready || inputBlocked || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : statusTone === 'success' ? '✓ 저장 완료' : '저장'}</Text></Pressable>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   </Modal>;
 }

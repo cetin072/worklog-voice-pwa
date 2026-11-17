@@ -32,6 +32,7 @@ test('personal folders SQL: nesting, move, RLS, canonical completion/Undo, persi
    insert into worklog.repeating_work values('${R}');
    insert into worklog.schedules(workspace_id,created_by_user_id,title,starts_at,metadata) values('${WA}','${A}','appointment','2030-01-01','{"workRecordId":"${S}"}');`);
   await db.exec(fs.readFileSync('supabase/migrations/20261117112533_personal_work_folders.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261118003000_work_record_destination.sql','utf8'));
   let owner=A;
   const login = async who => { owner=who; return db.exec(`reset role;set role authenticated;select set_config('request.jwt.claim.sub','${who}',false)`); };
   const save = (fid,name,parent,version) => db.query('select worklog.save_my_work_folder($1,$2,$3,$4,$5)',[owner,fid,name,parent,version]);
@@ -84,5 +85,30 @@ test('personal folders SQL: nesting, move, RLS, canonical completion/Undo, persi
   await db.exec('reset role');
   for(let n=100;n<155;n++)await db.query('insert into worklog.work_records(id,workspace_id,created_by_user_id,title,journal_date) values($1,$2,$3,$4,$5)',[id(n),WA,A,`task ${n}`,'2020-01-01']);
   await login(A);assert.equal((await list()).length,50);assert.equal((await list(null,'tasks',50)).length,7);
+  // Explicit date-free conversion: atomic folder choice, source preservation,
+  // cancellation of both source and reminder schedules, stale/foreign rejection.
+  await db.query("update worklog.work_records set due_at='2030-01-01',next_attention_at='2030-01-02',content='keep body',original_text='keep voice',metadata='{\"actionEngine\":{\"kind\":\"schedule\"}}' where id=$1",[S]);
+  await db.query("update worklog.schedules set metadata=metadata || '{\"externalEventId\":\"keep-google-id\"}'::jsonb where metadata->>'workRecordId'=$1",[S]);
+  await db.query("insert into worklog.schedules(workspace_id,created_by_user_id,title,starts_at,metadata) values($1,$2,'reminder','2030-01-01',jsonb_build_object('reminderWorkRecordId',$3::text))",[WA,A,S]);
+  const snapshot=async()=> (await db.query('select worklog.get_my_work_record_destination($1) value',[S])).rows[0].value;
+  const move=(snap,folder=CHILD,kind='task',who=A)=>db.query('select worklog.move_my_work_record_to_folder($1,$2,$3,$4,$5,$6,$7) value',[who,S,'Moved work',kind,folder,snap.updatedAt,snap.version]);
+  const snap=await snapshot();
+  await assert.rejects(move(snap,FOREIGN),/FOLDER_NOT_AVAILABLE/);
+  assert.equal((await db.query("select count(*)::int n from worklog.schedules where status='cancelled'")).rows[0].n,0,'bad folder rolls back everything');
+  await assert.rejects(move(snap,CHILD,'other'),/INVALID_DESTINATION/);
+  const result=(await move(snap)).rows[0].value;assert.equal(result.cancelledScheduleIds.length,2);
+  const converted=(await db.query('select * from worklog.work_records where id=$1',[S])).rows[0];
+  assert.equal(converted.original_text,'keep voice');assert.equal(converted.content,'keep body');assert.equal(converted.due_at,null);assert.equal(converted.next_attention_at,null);assert.equal(converted.status,'in_progress');
+  assert.equal(converted.metadata.actionEngine.kind,'task');assert.ok(converted.metadata.lastWorkDestination.previousDueAt);
+  assert.ok((await list(CHILD)).some(row=>row.id===S));
+  assert.equal((await db.query("select metadata->>'externalEventId' value from worklog.schedules where metadata->>'workRecordId'=$1",[S])).rows[0].value,'keep-google-id');
+  await assert.rejects(move(snap),e=>e.code==='PT409');
+  await move(await snapshot(),null,'note');assert.ok((await list(null,'notes')).some(row=>row.id===S));
+  await login(B);assert.equal(await snapshot(),null);await assert.rejects(move(snap),/AUTH_REQUIRED/);
+  await assert.rejects(move(snap,null,'task',B),/WORK_NOT_AVAILABLE/);
+  await login(A);
+  await db.query("update worklog.work_records set status='completed' where id=$1",[S]);
+  assert.equal(await snapshot(),null);await assert.rejects(move(snap),/WORK_NOT_AVAILABLE/);
+  assert.equal((await db.query('select worklog.get_my_work_record_destination($1) value',[R])).rows[0].value,null,'repeating work remains independent');
  } finally { await db.close(); }
 });

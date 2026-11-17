@@ -7,6 +7,7 @@ function editor() {
   '@react-native-community/datetimepicker':{__esModule:true,default:'DateTimePicker'},
   'react-native-safe-area-context':{useSafeAreaInsets:()=>({bottom:0})},
   '@/src/ui/theme':{mobileTheme:theme},
+  './work-folders-store':{folderPath:(_folders,id)=>id || '미분류'},
  });
 }
 const props={visible:true,title:'Existing work',date:'2026-11-13',time:'14:30',loading:true,saving:false,ready:false,onTitle(){},onDate(){},onTime(){},onSave(){},onCancel(){}};
@@ -34,4 +35,17 @@ test('shared edit sheet keeps callers without immediate-field opt-in guarded',()
  assert.equal(byLabel(tree,'수정할 업무명').props.editable,false);
  assert.equal(byLabel(tree,'수정할 날짜 선택').props.disabled,true);
  assert.equal(byLabel(tree,'수정할 시간 선택').props.disabled,true);
+});
+
+
+test('work destination shows folder picker and hides dates without erasing the original edit draft',()=>{
+ const h=editor();let selected,folder;
+ const choice={value:null,folders:[{id:'salt',name:'소금'}],onChange:kind=>selected=kind,onFolder:id=>folder=id};
+ const p={...props,loading:false,ready:true,folderDestination:choice};
+ let tree=h.render(p);byLabel(tree,'할 일 선택').props.onPress();assert.equal(selected,'task');
+ tree=h.render({...p,folderDestination:{...choice,value:{kind:'task',folderId:null}}});
+ assert.equal(byLabel(tree,'수정할 날짜 선택'),undefined);assert.match(nativeWords(tree),/구글/);
+ byLabel(tree,'salt 폴더 선택').props.onPress();assert.equal(folder,'salt');
+ byLabel(tree,'현재 유지 선택').props.onPress();assert.equal(selected,null);
+ tree=h.render(p);assert.match(nativeWords(tree),/14:30/);h.close();
 });

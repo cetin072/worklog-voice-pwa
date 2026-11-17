@@ -52,7 +52,7 @@ import { ManualWorkInput, type ManualWorkInputValue } from '@/src/features/work/
 import { createManualWorkSaveSession } from '@/src/features/work/manual-work-save';
 import { createManualWorkDraftStorage } from '@/src/features/work/manual-work-draft';
 import { secureSessionStorage } from '@/src/platform/secure-storage';
-import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
+import { WorkRecordFolderEditor as WorkRecordEditSheet } from '@/src/features/work/work-record-folder-editor';
 import { TaskReminderActions } from '@/src/features/work/task-reminder-actions';
 import { cancelSavedScheduleReminders, recoverSavedScheduleReminders, synchronizeBriefingScheduleReminders, synchronizeSavedScheduleReminders, synchronizeUpdatedScheduleReminder, synchronizeEditedWorklogReminder } from '@/src/features/schedule/schedule-reminder-post-save';
 import { markExactAlarmPermissionGuided, openExactAlarmPermissionSettings, shouldGuideExactAlarmPermission } from '@/src/features/schedule/local-notifications';
@@ -1469,6 +1469,14 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   {repeatDetail && recurring.works.some(w=>w.workRecordId===repeatDetail.workId) ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatDetail(null)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><RecurringDetail key={repeatDetail.workId} work={recurring.works.find(w=>w.workRecordId===repeatDetail.workId)!} today={seoulTodayKey()} busy={recurring.busy} selected={repeatDetail.row} focusDate={repeatDetail.focusDate} onClose={()=>setRepeatDetail(null)} onMutate={command=>recurring.mutate(repeatDetail.workId,command)}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
   {personalCalendarOpen && config?.dataSchema === 'worklog' ? <PersonalCalendarSheet repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{setPersonalCalendarOpen(false);setRepeatDetail({workId:id.split(':')[1],focusDate:date});}} key={session.user.id} initialDate={personalCalendarDate} onClose={() => setPersonalCalendarOpen(false)} onSaved={() => { void refreshBriefing(); }} /> : null}
   <WorkRecordEditSheet
+    key={`${session.user.id}:${editTaskId || 'closed'}`}
+    client={config?.dataSchema === 'worklog' ? client : null}
+    recordId={editTaskId}
+    ownerId={session.user.id}
+    onMoved={(feedback) => {
+      if (editTaskId) { editDetailsCache.current.delete(editTaskId); removeVisibleRecordForConversion(editTaskId); }
+      setEditTaskId(null); setScreen('work'); showMessage(feedback,'info'); void refreshBriefing();
+    }}
     allowTitleWhileLoading
     allowFieldsWhileLoading
     visible={Boolean(editTaskId) && !repeatCreating}
