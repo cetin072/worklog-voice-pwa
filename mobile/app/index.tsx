@@ -1,4 +1,3 @@
-import { measureStartup } from '@/src/features/startup/startup-timing';
 import { HabitsScreen } from '@/src/features/habits/habits-screen';
 import { MyManagementScreen } from '@/src/features/management/my-management-screen';
 import { repeatHistory, repeatSummary } from '@/src/features/recurring/recurrence-model';
@@ -34,6 +33,7 @@ import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { measureStartup } from '@/src/features/startup/startup-timing';
 import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Modal, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
