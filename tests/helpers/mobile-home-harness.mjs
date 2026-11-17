@@ -1,3 +1,4 @@
+import { nativeComponentHarness } from './native-component-harness.mjs';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../../mobile/package.json', import.meta.url));
@@ -41,6 +42,9 @@ export function homeHarness(context) {
  base.setTaskFilter = key => { base.activeFilter = key; };
  base.setUpcomingExpanded = update => { base.upcomingExpanded = update(base.upcomingExpanded); };
  base.setExpandedBuckets = update => { base.expandedBuckets = update(base.expandedBuckets); };
+ const complete=nativeComponentHarness('mobile/src/ui/record-complete-button.tsx','RecordCompleteButton',{'./record-row-styles':{recordRowStyles:{complete:'inlineComplete',completeText:'inlineCompleteText'}}});
+ base.RecordCompleteButton=props=>complete.render(props);
+ base.setWorkDestination=()=>{};
  const api = new Function('scope', `with(scope) { ${compiled} }`)(base);
  function expand(value) {
   if (Array.isArray(value)) return value.flatMap(expand);

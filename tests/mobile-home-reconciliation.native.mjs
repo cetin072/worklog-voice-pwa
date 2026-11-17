@@ -8,7 +8,7 @@ const { create, act } = require('react-test-renderer');
 
 // Run the actual home JSX through React reconciliation, not the static tree
 // expander. Native/network boundaries are stubs; this is not a device test.
-test('home count updates retain calendar and folder instances; account changes reset both', async () => {
+test('home count updates retain calendar without mounting duplicate Work; account changes reset calendar', async () => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   let calendarMounts = 0, folderMounts = 0;
   function Calendar() {
@@ -34,10 +34,10 @@ test('home count updates retain calendar and folder instances; account changes r
       await act(() => { h.context.homeScheduleCount = count; tree.update(h.element()); });
     }
     assert.equal(calendarMounts, 1, 'count feedback must not remount and refetch the calendar');
-    assert.equal(folderMounts, 1);
+    assert.equal(folderMounts, 0, 'Home must not refetch Work or completion history');
     await act(() => { h.context.session = { user: { id: 'another-owner' } }; tree.update(h.element()); });
     assert.equal(calendarMounts, 2, 'a different account must start a fresh calendar');
-    assert.equal(folderMounts, 2);
+    assert.equal(folderMounts, 0);
   } finally {
     if (tree) await act(() => tree.unmount());
     delete globalThis.IS_REACT_ACT_ENVIRONMENT;

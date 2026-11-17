@@ -150,11 +150,7 @@ test("mobile briefing contract accepts notes and exposes acknowledge API",()=>{
   assert.match(mobileApi,/state: 'active' \| 'acknowledged'/);
 });
 
-test("mobile UX shows at most three Notes, visible 완료, acknowledgement, and Undo",()=>{
-  assert.match(mobileHome,/const visibleNotes = notesExpanded \? notes : notes\.slice\(0, 3\)/);
-  assert.match(mobileHome,/📝 메모 · 참고/);
-  assert.match(mobileHome,/확인했어요 처리/);
-  assert.match(mobileHome,/acknowledging \? '처리 중' : '완료'/);
+test("mobile memo completion retains acknowledgement and Undo after Work consolidation",()=>{
   assert.match(mobileHome,/updateBriefingNoteState\(await getFreshAccessToken\(client\), note\.pageId, 'acknowledged'\)/);
   assert.match(mobileHome,/removeVisibleNote\(note\.pageId\)/);
   assert.match(mobileHome,/메모를 완료했습니다\./);

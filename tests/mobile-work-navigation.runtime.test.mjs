@@ -13,7 +13,7 @@ test('actual bottom navigation has only Home/Work, calls guarded navigation and 
  assert.ok(tabs);
  const js=ts.transpileModule(`return (${tabs});`,{compilerOptions:{jsx:ts.JsxEmit.React}}).outputText;
  const visited=[];
- const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',Text:'Text',Pressable:'Pressable',styles:{},screen:'work',insets:{bottom:20},setScreen:screen=>visited.push(screen)};
+ const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',Text:'Text',Pressable:'Pressable',styles:{},screen:'work',insets:{bottom:20},setWorkDestination:()=>{},setScreen:screen=>visited.push(screen)};
  const tree=new Function('scope',`with(scope){${js}}`)(scope);
  const buttons=nativeNodes(tree).filter(n=>n.props?.accessibilityRole==='tab');
  assert.deepEqual(buttons.map(n=>nativeWords(n).trim()),['홈','업무']);
@@ -21,8 +21,8 @@ test('actual bottom navigation has only Home/Work, calls guarded navigation and 
  buttons.forEach(n=>n.props.onPress());assert.deepEqual(visited,['home','work']);
  assert.equal(tree.props.style[1].paddingBottom,20);
 
- assert.match(source,/bottom: 60 \+ Math\.max\(insets\.bottom, 8\)/);
- assert.match(source,/paddingBottom: QUICK_VOICE_LAYOUT\.dockReserveHeight \+ 60 \+ Math\.max\(insets\.bottom, 8\)/);
+ assert.match(source,/bottomTabs: \{ flexShrink: 0/);
+ assert.match(source,/paddingBottom: 16/);
  assert.match(source,/onOpenManagement=\{\(\)=>\{setManagementReturn\('home'\);setScreen\('subscriptions'\);\}\}/);
 });
 

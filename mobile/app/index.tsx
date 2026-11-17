@@ -4,7 +4,8 @@ import { WorkFolders } from '@/src/features/work/work-folders';
 import { HabitsScreen } from '@/src/features/habits/habits-screen';
 import { MyManagementScreen } from '@/src/features/management/my-management-screen';
 import { repeatHistory, repeatSummary } from '@/src/features/recurring/recurrence-model';
-import { shiftDay } from '@/src/features/home/home-calendar-model';
+import { seoulDate, shiftDay } from '@/src/features/home/home-calendar-model';
+import { RecordCompleteButton } from '@/src/ui/record-complete-button';
 import { recordRowStyles } from '@/src/ui/record-row-styles';
 import { findWorklogReminderLinks } from '@/src/features/schedule/worklog-reminder-adapter';
 import { RepeatFromRecord } from '@/src/features/recurring/repeat-from-record';
@@ -42,7 +43,6 @@ import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { VoiceRecorderCard } from '@/src/features/voice/voice-recorder-card';
-import { QUICK_VOICE_LAYOUT } from '@/src/features/voice/quick-voice-layout';
 import { createConfiguredMobileTranscriptionProvider } from '@/src/features/voice/transcription-provider';
 import { MeetingRecordingBanner } from '@/src/features/voice/meeting-recording-banner';
 import { prepareQuickVoiceWhisperProvider } from '@/src/features/voice/providers/whisper-rn-quick-voice-runtime';
@@ -218,7 +218,7 @@ function HomeTaskRow(props: Parameters<typeof TaskRow>[0]) {
           {props.onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 수정`} disabled={props.completing} style={styles.inlineEdit} onPress={props.onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
           {props.onDelete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 삭제`} disabled={props.completing} style={styles.inlineDelete} onPress={props.onDelete}><Text style={styles.inlineDeleteText}>삭제</Text></Pressable> : null}
         </View>
-        {props.onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${props.task.title || '업무'} 완료 처리`} disabled={props.completing} onPress={props.onComplete} style={[styles.inlineComplete, props.completing ? styles.inlineCompleteBusy : null]}><Text style={styles.inlineCompleteText}>{props.completing ? '처리 중' : '완료'}</Text></Pressable> : null}
+        {props.onComplete ? <RecordCompleteButton label={`${props.task.title || '업무'} 완료 처리`} pending={props.completing} onPress={props.onComplete} /> : null}
       </View> : null}
     </View>
     {expanded ? <TaskRow {...props} onComplete={undefined} onEdit={undefined} onDelete={undefined} hideShortcuts /> : null}
@@ -245,34 +245,7 @@ function TaskRow({ bucket, task, onOpen, onReminder, onEdit, onDelete, onComplet
         {onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 수정`} disabled={completing} style={styles.inlineEdit} onPress={onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
         {onDelete ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 삭제`} disabled={completing} style={styles.inlineDelete} onPress={onDelete}><Text style={styles.inlineDeleteText}>삭제</Text></Pressable> : null}
       </View>
-      {onComplete ? <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 완료 처리`} disabled={completing} style={[styles.inlineComplete, completing ? styles.inlineCompleteBusy : null]} onPress={onComplete}><Text style={styles.inlineCompleteText}>{completing ? '처리 중' : '완료'}</Text></Pressable> : null}
-    </View> : null}
-  </View>;
-}
-
-function formatNoteJournalDate(value?: string) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
-  const date = new Date(`${value}T00:00:00+09:00`);
-  if (!Number.isFinite(date.getTime())) return '';
-  return `${new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(date)} 기록`;
-}
-
-function NoteRow({ note, onEdit, onDelete, onAcknowledge, onReminder, acknowledging = false }: { note: BriefingNote; onReminder(): void; onEdit?: () => void; onDelete?: () => void; onAcknowledge: () => void; acknowledging?: boolean }) {
-  return <View style={styles.taskRow}>
-    <View style={styles.taskMain}>
-      <Text style={styles.taskTitle}>{note.title || '제목 없는 메모'}</Text>
-      {formatNoteJournalDate(note.journalDate) ? <Text style={styles.taskMeta}>{formatNoteJournalDate(note.journalDate)}</Text> : null}
-      {note.institution ? <Text style={styles.taskBadge}>{note.institution}</Text> : null}
-      {note.pageId ? <ReminderShortcut id={note.pageId} title={note.title || '메모'} onPress={onReminder} disabled={acknowledging} /> : null}
-    </View>
-    {note.pageId ? <View style={styles.taskActions}>
-      <View style={styles.taskMinorActions}>
-        {onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 수정`} disabled={acknowledging} style={styles.inlineEdit} onPress={onEdit}><Text style={styles.inlineEditText}>✏️</Text></Pressable> : null}
-        {onDelete ? <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 삭제`} disabled={acknowledging} style={styles.inlineDelete} onPress={onDelete}><Text style={styles.inlineDeleteText}>삭제</Text></Pressable> : null}
-      </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${note.title || '메모'} 확인했어요 처리`} disabled={acknowledging} style={[styles.inlineComplete, acknowledging ? styles.inlineCompleteBusy : null]} onPress={onAcknowledge}>
-        <Text style={styles.inlineCompleteText}>{acknowledging ? '처리 중' : '완료'}</Text>
-      </Pressable>
+      {onComplete ? <RecordCompleteButton label={`${task.title || '업무'} 완료 처리`} pending={completing} onPress={onComplete} /> : null}
     </View> : null}
   </View>;
 }
@@ -398,7 +371,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   const config = platform.config;
   useEffect(()=>{if(phase!=='ready')return;if (!session) { void cancelAllSubscriptionReminders().catch(() => undefined); return; }let current=true;void reconcileSubscriptionReminderOwner(session.user.id,()=>current).catch(()=>undefined);return()=>{current=false;};},[phase,session?.user.id]);
   const recurring = useRepeatingWork(config?.dataSchema === 'worklog' ? client : null, session?.user.id, phase === 'ready');
-  const [workDestination,setWorkDestination] = useState<{ownerId:string;folderId:string|null;kind:'task'|'note'}|null>(null);
+  const [workDestination,setWorkDestination] = useState<{ownerId:string;folderId:string|null|undefined;kind:'task'|'note'|'completed'}|null>(null);
   const [managementReturn,setManagementReturn]=useState<'home'|'settings'>('settings');
   const [repeatCreating,setRepeatCreating]=useState(false);
   const repeatCreateTarget=useRef<string|null>(null);
@@ -539,7 +512,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   const [taskFiltersExpanded, setTaskFiltersExpanded] = useState(false);
   const [taskFilter, setTaskFilter] = useState<BriefingBucket | null>(null);
 
-  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [journalReturn, setJournalReturn] = useState<AppScreen>('settings');
+  const [searchReturn, setSearchReturn] = useState<AppScreen>('home');
   const [patchNotesExpanded, setPatchNotesExpanded] = useState(false);
   const [lastDirectSave, setLastDirectSave] = useState<DirectSaveFeedback | null>(null);
 
@@ -654,6 +628,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
 
   function openJournal() {
     setJournalDate(seoulTodayKey());
+    setJournalReturn(screen === 'work' ? 'work' : 'settings');
     setScreen('journal');
   }
 
@@ -1300,22 +1275,19 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   const openRepeat = (task: BriefingTask) => { const row=repeatRow(task); if(row)setRepeatDetail({workId:row.workRecordId,row}); };
   async function completeRepeat(task: BriefingTask) { const row=repeatRow(task); if(row&&await recurring.mutate(row.workRecordId,{op:'complete',key:row.key,originalDate:row.originalDate})) setRepeatUndo(row); }
 
-  const activeFilter = taskFilter || firstNonEmptyTaskBucket(structure);
-  const notes = briefing?.notes || [];
-  const visibleNotes = notesExpanded ? notes : notes.slice(0, 3);
-  const extraNotes = Math.max(0, notes.length - 3);
+  const activeFilter = taskFilter && taskFilter !== 'undated' ? taskFilter : firstNonEmptyTaskBucket({ ...structure, undated: [] });
   const allSchedules = [...(briefing?.schedules?.today || []), ...(briefing?.schedules?.upcoming || [])];
   // Match feedback by the saved record, not by whichever notice happens to be
   // latest: Quick Voice and edited tasks must never be hidden by an old draft.
   const matchingDirectReminder = lastDirectSave?.recordId &&
     savedReminder?.target.recordId === lastDirectSave.recordId ? savedReminder : null;
 
-  return <HomeReminderStatus client={client} briefing={briefing} scope={session.user.id} refreshKey={`${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + 60 + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} onOpenManagement={()=>{setManagementReturn('home');setScreen('subscriptions');}} />
+  return <HomeReminderStatus client={client} briefing={briefing} scope={session.user.id} refreshKey={`${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: 16 }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenRecordSearch={() => { setSearchReturn(screen === 'work' ? 'work' : 'home'); setScreen('recordSearch'); }} onOpenSettings={() => setScreen('settings')} onOpenManagement={()=>{setManagementReturn('home');setScreen('subscriptions');}} />
     {savedReminder && !(screen === 'home' && matchingDirectReminder) ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
     {undoTask ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoTask.title} 완료 처리</Text><Pressable accessibilityRole="button" disabled={Boolean(taskBusyId)} onPress={() => void undoCompletedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
       {undoNote ? <View style={styles.undoBar}><Text style={styles.undoText}>메모를 완료했습니다. 기록은 업무일지에 남습니다.</Text><Pressable accessibilityRole="button" disabled={Boolean(noteBusyId)} onPress={() => void undoAcknowledgedNote()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
     {screen === 'work' && message ? <Text accessibilityLiveRegion="polite" style={[styles.messageInline, messageTone === 'error' ? styles.messageError : styles.messageInfo]}>{message}</Text> : null}
-    {screen === 'work' && client ? <WorkFolders initialFolder={workDestination?.ownerId === session.user.id ? workDestination.folderId : null} initialSection={workDestination?.ownerId === session.user.id && workDestination.kind === 'note' ? 'notes' : 'tasks'} userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={() => setScreen('journal')} onSearch={() => setScreen('recordSearch')} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
+    {screen === 'work' && client ? <WorkFolders initialFolder={workDestination?.ownerId === session.user.id ? workDestination.folderId : undefined} initialSection={workDestination?.ownerId === session.user.id && workDestination.kind === 'note' ? 'notes' : workDestination?.ownerId === session.user.id && workDestination.kind === 'completed' ? 'completed' : 'tasks'} onViewChange={(scope, section) => setWorkDestination({ ownerId: session.user.id, folderId: scope === 'all' ? undefined : scope, kind: section === 'notes' ? 'note' : section === 'completed' ? 'completed' : 'task' })} userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={openJournal} onSearch={() => { setSearchReturn('work'); setScreen('recordSearch'); }} onComplete={completeTaskInline} onEdit={record => record.action_kind === 'note' ? void openNoteEditor({ pageId: record.id, title: record.title }) : void openTaskEditor({ pageId: record.id, title: record.title, dueKey: record.due_at ? seoulDate(record.due_at) : undefined })} onDelete={record => confirmDeleteRecord(record.id, record.title, record.action_kind === 'note' ? 'note' : 'task')} onReminder={record => setReminderTarget({ recordId: record.id, title: record.title })} /> : null}
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
@@ -1345,21 +1317,20 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
           <View style={styles.headerActions}><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => Alert.alert('이 기기의 알림', '종 ✓ 초록: 이 기기 예약 확인\n종 − 회색: 알림 없음\n종 ! 빨강: 권한 필요\n종 ? 파랑: 확인 필요\n종을 누르면 예약 시점과 상세 상태를 확인합니다. 예약 확인은 실제 전달을 보장하지 않습니다.')}><Text style={styles.helpText}>이 기기 기준 · 알림 표시 도움말 ⓘ</Text></Pressable></View>
         </View>} />
 
-      {client && !androidTouchSmoke ? <WorkFolders userId={session.user.id} key={`home-folders:${session.user.id}`} home client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={() => setScreen('journal')} onSearch={() => setScreen('recordSearch')} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
-      {briefing ? briefingBuckets.filter(bucket => bucket.key === activeFilter).map((bucket) => {
+      {briefing ? briefingBuckets.filter(bucket => bucket.key !== 'undated' && bucket.key === activeFilter).map((bucket) => {
         const tasks = structure[bucket.key] || [];
         const expanded = expandedBuckets[bucket.key] === true;
         const visibleTasks = expanded ? tasks : tasks.slice(0, 3);
         const extra = Math.max(0, tasks.length - 3);
         return <View key={bucket.key} style={styles.homeTaskCard}>
           <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>{bucket.key === 'today' ? '오늘 마감' : bucket.label}</Text><Pressable accessibilityRole="button" accessibilityState={{ expanded: taskFiltersExpanded }} style={styles.homeRefresh} onPress={() => setTaskFiltersExpanded(value => !value)}><Text style={styles.linkText}>{taskFiltersExpanded ? '접기' : '전체 보기 ›'}</Text></Pressable></View>
-          {taskFiltersExpanded ? <View style={styles.homeFilters}>{briefingBuckets.map(bucket => <Pressable key={bucket.key} accessibilityRole="button" accessibilityState={{ selected: activeFilter === bucket.key }} style={[styles.homeFilter, activeFilter === bucket.key ? styles.homeFilterActive : null]} onPress={() => setTaskFilter(bucket.key)}><Text>{bucket.label} {structure[bucket.key].length}</Text></Pressable>)}</View> : null}
+          {taskFiltersExpanded ? <View style={styles.homeFilters}>{briefingBuckets.filter(bucket => bucket.key !== 'undated').map(bucket => <Pressable key={bucket.key} accessibilityRole="button" accessibilityState={{ selected: activeFilter === bucket.key }} style={[styles.homeFilter, activeFilter === bucket.key ? styles.homeFilterActive : null]} onPress={() => setTaskFilter(bucket.key)}><Text>{bucket.label} {structure[bucket.key].length}</Text></Pressable>)}</View> : null}
           {tasks.length ? visibleTasks.map((task, index) => <View key={task.pageId || `${bucket.key}-${index}`}>
             <HomeTaskRow bucket={bucket.key} task={task} onOpen={() => { if(repeatRow(task)){openRepeat(task);return;} setSelectedTask({ bucket: bucket.key, task }); setScreen('task'); }} onReminder={() => repeatRow(task)?openRepeat(task):setReminderTarget({ recordId: task.pageId, title: task.title || '업무' })} onEdit={() => repeatRow(task)?openRepeat(task):void openTaskEditor(task)} onDelete={repeatRow(task)?undefined:() => task.pageId ? confirmDeleteRecord(task.pageId, task.title || '업무', 'task') : undefined} onComplete={() => repeatRow(task)?void completeRepeat(task):void completeTaskInline(task)} completing={taskBusyId === task.pageId || (recurring.busy && !!repeatRow(task))} />
           </View>) : <Text style={styles.emptyText}>{bucket.key === 'today' ? '오늘 기한인 업무가 없습니다. 다른 기한은 전체 보기에서 확인하세요.' : '이 기한의 업무가 없습니다.'}</Text>}
           {extra ? <Pressable accessibilityRole="button" accessibilityLabel={expanded ? `${bucket.label} 접기` : `${bucket.label} ${extra}개 더 보기`} style={styles.moreButton} onPress={() => setExpandedBuckets((value) => ({ ...value, [bucket.key]: !expanded }))}><Text style={styles.moreButtonText}>{expanded ? '접기' : `${extra}개 더 보기`}</Text></Pressable> : null}
           {bucket.key !== 'overdue' && structure.overdue.length ? <Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => { setTaskFilter('overdue'); setTaskFiltersExpanded(true); }}><Text style={styles.helpText}>기한 지난 업무 {structure.overdue.length}건 ›</Text></Pressable> : null}
-          {!tasks.length && (structure.upcoming.length || structure.undated.length) ? <Text style={styles.helpText}>다가오는 업무 {structure.upcoming.length}건 · 기한 없는 업무 {structure.undated.length}건</Text> : null}
+          {!tasks.length && structure.upcoming.length ? <Text style={styles.helpText}>다가오는 업무 {structure.upcoming.length}건</Text> : null}
         </View>;
       }) : null}
 
@@ -1369,20 +1340,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       {undoPostpone ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoPostpone.title} 미루기</Text><Pressable accessibilityRole="button" disabled={Boolean(reminderBusyId)} onPress={() => void undoPostponedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
       {undoAttention ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoAttention.title} 다시 알림</Text><Pressable accessibilityRole="button" disabled={Boolean(reminderBusyId)} onPress={() => void undoTaskAttention()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
 
-      {notes.length ? <View style={[styles.briefingSection, styles.sectionNeutral]}>
-        <View style={styles.briefingSectionHead}><Text style={styles.briefingSectionTitle}>📝 메모 · 참고</Text><Text style={styles.sectionCount}>{notes.length}</Text></View>
-        {visibleNotes.map((note, index) => <NoteRow key={note.pageId || `note-${index}`} note={note} onReminder={() => setReminderTarget({ recordId: note.pageId, title: note.title || '메모' })} onEdit={() => void openNoteEditor(note)} onDelete={() => note.pageId ? confirmDeleteRecord(note.pageId, note.title || '메모', 'note') : undefined} onAcknowledge={() => void acknowledgeNote(note)} acknowledging={noteBusyId === note.pageId} />)}
-        {extraNotes ? <Pressable accessibilityRole="button" accessibilityLabel={notesExpanded ? '메모 · 참고 접기' : `메모 · 참고 ${extraNotes}개 더 보기`} style={styles.moreButton} onPress={() => setNotesExpanded((value) => !value)}><Text style={styles.moreButtonText}>{notesExpanded ? '접기' : `${extraNotes}개 더 보기`}</Text></Pressable> : null}
-      </View> : null}
-
-
-
-
-      <View style={styles.homeInputTools}>
-        <Pressable accessibilityRole="button" style={styles.homeInputTool} accessibilityHint="업무 · 메모 · 일정" onPress={() => setScreen('input')}><Text style={styles.homeInputLabel}>직접 입력</Text></Pressable>
-        <View style={styles.homeInputTool}><CaptureImportButton compact disabled={quickVoiceNavigation.current} label="캡처 등록" /></View>
-        <Pressable accessibilityRole="button" style={styles.homeInputTool} onPress={() => setScreen('meeting')}><Text style={styles.homeInputLabel}>회의 녹음</Text></Pressable>
-      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="전체 업무 보기" accessibilityHint="업무 · 메모 · 일정 중 할 일과 메모 관리" style={styles.homeRefresh} onPress={() => { setWorkDestination(null); setScreen('work'); }}><Text style={styles.linkText}>전체 할 일·메모는 업무 탭에서 ›</Text></Pressable>
       {config?.dataSchema === 'worklog' ? <Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarDate(undefined); setPersonalCalendarOpen(true); }}><Text style={styles.linkText}>내 캘린더 · 일정 등록 ›</Text></Pressable> : null}
 
 
@@ -1391,8 +1349,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     </> : null}
 
     {screen === 'journal' ? <View style={styles.journalScreen}>
-      <PanelHead eyebrow="자동 기록" title="업무일지" onClose={() => setScreen('settings')} />
-      <Button title="과거 기록 검색" onPress={() => setScreen('recordSearch')} />
+      <PanelHead eyebrow="자동 기록" title="업무일지" onClose={() => setScreen(journalReturn)} />
+      <Button title="과거 기록 검색" onPress={() => { setSearchReturn('journal'); setScreen('recordSearch'); }} />
       <View style={styles.journalDateNav}>
         <Pressable accessibilityRole="button" accessibilityLabel="이전 날짜 업무일지" style={styles.journalNavButton} onPress={() => moveJournalDay(-1)}><Text style={styles.journalNavText}>‹ 이전</Text></Pressable>
         <View style={styles.journalDateTitleWrap}><Text style={styles.journalDateTitle}>{formatJournalDate(journalTarget)}</Text><Pressable accessibilityRole="button" disabled={journalTarget === journalToday} onPress={() => setJournalDate(seoulTodayKey())}><Text style={[styles.journalTodayLink, journalTarget === journalToday ? styles.journalTodayLinkDisabled : null]}>{journalTarget === journalToday ? '오늘' : '오늘로'}</Text></Pressable></View>
@@ -1409,7 +1367,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       </> : null}
     </View> : null}
 
-    {screen === 'recordSearch' ? <View style={styles.card}><PanelHead eyebrow="업무" title="과거 기록 전체 검색" onClose={() => setScreen('home')} />{client ? <WorkRecordSearch client={client} accessToken={session.access_token} /> : <Text style={styles.errorText}>검색 세션을 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
+    {screen === 'recordSearch' ? <View style={styles.card}><PanelHead eyebrow="업무" title="과거 기록 전체 검색" onClose={() => setScreen(searchReturn)} />{client ? <WorkRecordSearch client={client} accessToken={session.access_token} /> : <Text style={styles.errorText}>검색 세션을 확인하지 못했습니다. 다시 로그인해 주세요.</Text>}</View> : null}
 
     {screen === 'task' && selectedTask ? <View style={styles.card}><PanelHead eyebrow="업무 상세" title={selectedTask.task.title || '제목 없는 업무'} onClose={() => setScreen('home')} /><Text style={styles.taskMeta}>{taskNote(selectedTask.bucket, selectedTask.task)}{selectedTask.task.status ? ` · 현재 ${selectedTask.task.status}` : ''}</Text>{selectedTask.task.institution ? <Text style={styles.body}>{selectedTask.task.institution}</Text> : null}{selectedTask.task.followUp ? <Text style={styles.body}>다음 조치: {selectedTask.task.followUp}</Text> : null}<Text style={styles.detailTitle}>상태 변경</Text><View style={styles.statusActions}>{(['완료', '진행중', '대기', '확인필요'] as const).map((status) => <Pressable key={status} accessibilityRole="button" style={[styles.statusButton, selectedTask.task.status === status ? styles.statusButtonActive : null]} disabled={busy || selectedTask.task.status === status} onPress={() => void changeTaskStatus(status)}><Text style={styles.statusButtonText}>{status}</Text></Pressable>)}</View><Button title="알림 설정" onPress={() => setReminderTarget({ recordId: selectedTask.task.pageId, title: selectedTask.task.title || '업무' })} /><TaskReminderActions busy={reminderBusyId === selectedTask.task.pageId} hasAttention={Boolean(selectedTask.task.nextAttentionAt)} onPostpone={(date) => void postponeSelectedTask(date)} onAttention={(date) => void remindSelectedTask(date)} onClearAttention={() => void remindSelectedTask(null)} />{message ? <Text style={[styles.messageInline, messageTone === 'error' ? styles.messageError : messageTone === 'info' ? styles.messageInfo : null]}>{message}</Text> : null}</View> : null}
 
@@ -1455,16 +1413,16 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     {screen === 'reminderSettings' ? <View style={styles.panel}><PanelHead eyebrow="설정" title="알림·리마인더" onClose={() => setScreen('settings')} /><ReminderSettings /></View> : null}
     {screen === 'patchNotes' ? <View style={styles.card}><PanelHead eyebrow="업데이트" title="패치노트" onClose={() => setScreen('settings')} /><Text style={styles.helpText}>{APP_BUILD_INFO.help}</Text><Text style={styles.body}>이 앱에 포함된 변경사항입니다. 최근 3건부터 확인할 수 있습니다.</Text>{MOBILE_PATCH_NOTES.slice(0, patchNotesExpanded ? undefined : 3).map((note) => <View key={`${note.date}-${note.title}`} style={styles.detailSection}><Text style={styles.meta}>{note.date}</Text><Text style={styles.detailTitle}>{note.title}</Text><Text style={styles.body}>{note.summary}</Text>{note.items.map((item) => <Text key={item} style={styles.patchNoteItem}>• {item}</Text>)}</View>)}{MOBILE_PATCH_NOTES.length > 3 ? <Pressable accessibilityRole="button" accessibilityLabel={patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`} style={styles.moreButton} onPress={() => setPatchNotesExpanded(value => !value)}><Text style={styles.moreButtonText}>{patchNotesExpanded ? '이전 업데이트 접기' : `이전 업데이트 ${MOBILE_PATCH_NOTES.length - 3}건 더 보기`}</Text></Pressable> : null}</View> : null}
   </ScrollView>
-  <View style={[styles.bottomTabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    {(['home', 'work'] as const).map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityLabel={tab === 'home' ? '홈' : '업무'} accessibilityState={{ selected: screen === tab }} style={styles.bottomTab} onPress={() => setScreen(tab)}><Text style={[styles.bottomTabText, screen === tab && styles.bottomTabSelected]}>{tab === 'home' ? '홈' : '업무'}</Text></Pressable>)}
-  </View>
-  {(screen === 'home' || screen === 'work') ? <View pointerEvents="box-none" style={[styles.quickVoiceFooter, { bottom: 60 + Math.max(insets.bottom, 8), paddingBottom: 0 }]}>
+  {(screen === 'home' || screen === 'work') ? <View pointerEvents="box-none" style={styles.quickVoiceFooter}>
     <VoiceRecorderCard mode="quick" onOpenMeetingRecording={() => setScreen('meeting')} renderPhotoAction={disabled => <CaptureImportButton compact disabled={disabled} />} navigationGuard={quickVoiceNavigation} onOpenWorklogInput={(recognizedText) => {
       const recovered = recognizedText?.trim() || '';
       if (recovered) setManualInput((current) => current.transcript.trim() ? current : { ...current, transcript: recovered });
       setScreen('input');
     }} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { if (!client) throw new Error('로그인 연결을 확인한 뒤 다시 시도해주세요.'); const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(await getFreshAccessToken(client), transcript, { ...options, sourceType: 'voice' }); let reminderMessage: string; try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard, client); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); } catch (nextError) { reminderMessage = reminderFailureMessage(nextError); } const folderMessage = (saved.scheduleDetected || saved.scheduleCreated || saved.scheduleId) ? '일정은 캘린더에서 확인해주세요.' : (saved.dataCoreWorkRecordIds?.length || 0) > 1 ? '여러 기록을 저장했습니다. 폴더는 업무 탭에서 확인해주세요.' : await organizeVoiceRecord(client, session.user.id, transcript, saved.dataCoreWorkRecordId, reminderGuard); if (folderMessage) reminderMessage = `${folderMessage} ${reminderMessage}`; if (reminderGuard()) setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage }); if (reminderGuard() && saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing: refreshQuickVoiceBriefing }} />
   </View> : null}
+  <View style={[styles.bottomTabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    {(['home', 'work'] as const).map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityLabel={tab === 'home' ? '홈' : '업무'} accessibilityState={{ selected: screen === tab }} style={styles.bottomTab} onPress={() => setScreen(tab)}><Text style={[styles.bottomTabText, screen === tab && styles.bottomTabSelected]}>{tab === 'home' ? '홈' : '업무'}</Text></Pressable>)}
+  </View>
     {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
   {repeatCreating && editTaskId ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatCreating(false)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><PanelHead eyebrow="기존 업무" title="반복 설정" onClose={()=>setRepeatCreating(false)}/><RepeatFromRecord initial={{transcript:editTitle,dueDate:editDate||seoulTodayKey(),dueTime:editTime}} busy={recurring.busy} onSave={async revision=>{try{const guard=reminderSessionEpoch.capture();const links=await findWorklogReminderLinks(client!,[editTaskId],guard);if(!guard()||repeatCreateTarget.current!==editTaskId)return false;if(await recurring.mutate(editTaskId,{op:'create',revision:{...revision,sourceScheduleIds:[...new Set(links[editTaskId]||[])].sort()}})){setRepeatCreating(false);setEditTaskId(null);return true;}}catch{showMessage('연결된 일정 확인 필요 · 입력을 유지했습니다. 다시 시도해주세요.','error');}return false;}}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
   {repeatDetail && recurring.loaded && !recurring.works.some(w=>w.workRecordId===repeatDetail.workId)?<Modal visible onRequestClose={()=>setRepeatDetail(null)}><View style={[styles.scroll,{paddingTop:insets.top+24}]}><Text style={styles.body}>반복 업무를 찾지 못했거나 접근할 수 없습니다.</Text><Button title="닫기" onPress={()=>setRepeatDetail(null)}/></View></Modal>:null}
@@ -1520,11 +1478,11 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   authenticatedShell: { flex: 1, position: 'relative' },
   contentScroll: { flex: 1 },
-  bottomTabs: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: mobileTheme.colors.surface, borderTopWidth: 1, borderTopColor: mobileTheme.colors.border },
+  bottomTabs: { flexShrink: 0, flexDirection: 'row', backgroundColor: mobileTheme.colors.surface, borderTopWidth: 1, borderTopColor: mobileTheme.colors.border },
   bottomTab: { flex: 1, minHeight: 60, alignItems: 'center', justifyContent: 'center' },
   bottomTabText: { fontSize: 16, color: mobileTheme.colors.textMuted },
   bottomTabSelected: { color: mobileTheme.colors.primary, fontWeight: '800' },
-  quickVoiceFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
+  quickVoiceFooter: { flexShrink: 0, paddingVertical: 6, backgroundColor: mobileTheme.colors.background, borderTopWidth: 1, borderTopColor: mobileTheme.colors.border },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: mobileTheme.spacing.section, padding: 24, backgroundColor: mobileTheme.colors.background },
   scroll: { padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section, paddingBottom: 28 },
   loginScroll: { flexGrow: 1, justifyContent: 'center', padding: mobileTheme.spacing.page, gap: mobileTheme.spacing.section },

@@ -1,12 +1,12 @@
 export const QUICK_VOICE_LAYOUT = Object.freeze({
   minScreenWidth: 320,
   dockWidth: 292,
-  dockHeight: 196,
-  dockReserveHeight: 208,
-  micSize: 116,
+  dockHeight: 132,
+  dockReserveHeight: 144,
+  micSize: 80,
   sideActionSize: 56,
   timerSize: 48,
-  sideActionBottom: 30,
+  sideActionBottom: 12,
 });
 
 type Bounds = Readonly<{ left: number; top: number; width: number; height: number }>;

@@ -10,7 +10,7 @@ const deleteMigration = fs.readFileSync('supabase/migrations/20260922103000_work
 
 test('mobile briefing exposes confirmed delete directly for tasks and notes without using completion', () => {
   assert.match(home, /accessibilityLabel=\{`\$\{task.title \|\| '업무'\} 삭제`\}/);
-  assert.match(home, /accessibilityLabel=\{`\$\{note.title \|\| '메모'\} 삭제`\}/);
+  assert.match(home, /onDelete=\{record => confirmDeleteRecord\(record.id, record.title, record.action_kind === 'note'/);
   assert.match(home, /style: 'destructive'/);
   assert.match(home, /완료 기록이나 업무일지에는 남기지 않습니다/);
   assert.match(home, /deleteWorklog\(client, recordId\)/);
