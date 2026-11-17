@@ -10,6 +10,12 @@ export type PatchNoteEntry = {
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
     date: '2026-11-17',
+    title: '폴더 이름 입력 편의 개선',
+    summary: '폴더 만들기와 이름 변경을 작은 편집창에서 진행합니다.',
+    items: ['키보드가 열린 상태에서도 이름·저장·취소를 같은 창에서 확인할 수 있도록 바꿨습니다.', '키보드 완료 버튼으로 저장하며, 저장 실패 시 입력한 이름을 유지합니다.'],
+  },
+  {
+    date: '2026-11-17',
     title: '홈 일정 표시 안정화',
     summary: '홈 일정 숫자가 깜빡이고 목록이 위아래로 움직이는 원인을 수정했습니다.',
     items: ['일정 건수를 표시할 때 달력이 다시 생성되어 조회가 반복되는 문제를 수정했습니다.'],
@@ -482,3 +488,4 @@ export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
     ],
   },
 ];
+
