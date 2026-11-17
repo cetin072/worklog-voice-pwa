@@ -27,3 +27,20 @@ test('unified mobile SDK rejects an old-project callback token before any networ
   assert.equal(result.error,null);assert.equal(calls.length,1,'same-project token reaches the real Auth boundary');
  }finally{await client.auth.stopAutoRefresh();globalThis.fetch=saved;}
 });
+
+test('USD capability reaches subscription tables and payment RPC without changing unrelated requests',async()=>{
+ const saved=globalThis.fetch,calls=[];
+ globalThis.fetch=async(u,o)=>{calls.push({path:new URL(String(u)).pathname,headers:new Headers(o?.headers)});return Response.json([]);};
+ const client=createPlatformSupabaseClient({configured:true,supabaseUrl:'https://newproject.supabase.co',publishableKey:'sb_publishable_fixture',dataCorePrimaryEnabled:true,dataSchema:'worklog'});
+ try{
+  await client.auth.initialize();
+  await client.from('subscriptions').select('id');
+  await client.from('subscription_payments').select('subscription_id');
+  await client.rpc('confirm_subscription_payment',{p_subscription_id:'synthetic',p_due_date:'2026-11-15'});
+  await client.from('schedules').select('id');
+  assert.deepEqual(calls.map(c=>c.headers.get('x-worklog-subscription-currency')),['usd-v1','usd-v1','usd-v1',null]);
+  assert.equal(calls[0].headers.get('Accept-Profile'),'worklog');
+  assert.equal(calls[2].headers.get('Content-Profile'),'worklog');
+  assert.ok(calls.every(c=>c.headers.get('apikey')==='sb_publishable_fixture'));
+ }finally{await client.auth.stopAutoRefresh();globalThis.fetch=saved;}
+});
