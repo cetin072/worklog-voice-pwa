@@ -30,7 +30,12 @@ export function createSupabaseWorkspaceContextResolver({ supabaseUrl, publishabl
       headers: { ...(path.startsWith("/rest/v1/") ? profile : {}), apikey: key, authorization: `Bearer ${token}`, ...(options.headers || {}) },
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw resolverError("SUPABASE_WORKSPACE_AUTH_FAILED", String(data?.msg || data?.message || "Platform 계정을 확인하지 못했습니다."));
+    if (!response.ok) {
+      const error = resolverError("SUPABASE_WORKSPACE_AUTH_FAILED", String(data?.msg || data?.message || "Platform 계정을 확인하지 못했습니다."));
+      error.accessNotProvisioned = path === "/rest/v1/rpc/bootstrap_personal_workspace"
+        && data?.code === "P0001" && data?.message === "WORKLOG_ACCESS_NOT_PROVISIONED";
+      throw error;
+    }
     return data;
   }
 
