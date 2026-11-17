@@ -175,3 +175,20 @@ test('QA without the USD column keeps legacy KRW access and never falls back for
   assert.equal(rejected.calls.filter(c => c[0] === 'from').length, 1);
   assert.equal(rejected.calls.find(c => c[0] === 'insert')[1].amount_krw, null);
 });
+
+test('USD creation reads back a lost response and rejects changed-content retries without a second write', async () => {
+  let saved, writes=0;
+  const builder={
+    insert(value){writes++;saved??={...validRow(),...value};return this;},
+    select(){return this;},eq(_key,id){assert.equal(id,'synthetic-request');return this;},
+    async single(){throw new Error('lost response');},
+    async maybeSingle(){return {data:saved,error:null};},
+  };
+  const client={from:()=>builder};
+  const input={name:'Synthetic USD',amountUsdCents:1999,cycle:'monthly',scope:'business',billingAnchorDate:'2026-11-15',cancelDeadline:null};
+  const result=await store.createSubscription(client,input,'synthetic-request');
+  assert.equal(writes,1);assert.equal(result.amountUsdCents,1999);assert.equal(saved.amount_krw,null);
+  await assert.rejects(store.createSubscription(client,{...input,amountUsdCents:2999},'synthetic-request'),/이전 내용/);
+  assert.equal(writes,2,'one insert per explicit attempt; no automatic second insert');
+  assert.equal(saved.amount_usd_cents,1999);
+});
