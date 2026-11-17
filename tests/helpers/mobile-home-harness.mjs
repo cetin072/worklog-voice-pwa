@@ -48,7 +48,7 @@ export function homeHarness(context) {
   if (typeof value.type === 'function') return expand(value.type(value.props));
   return { ...value, props: { ...value.props, children: expand(value.props.children) } };
  }
- return { context: base, photo(disabled = false) { return expand(api.renderPhoto(disabled)); }, render() { cursor = 0; return expand(api.renderHome()); }, back() { return back?.(); } };
+ return { element: () => api.renderHome(), context: base, photo(disabled = false) { return expand(api.renderPhoto(disabled)); }, render() { cursor = 0; return expand(api.renderHome()); }, back() { return back?.(); } };
 }
 export function nodes(tree) { return Array.isArray(tree) ? tree.flatMap(nodes) : tree && typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : []; }
 export function words(tree) { return Array.isArray(tree) ? tree.map(words).join(' ') : tree && typeof tree === 'object' ? words(tree.props?.children) : String(tree ?? ''); }
