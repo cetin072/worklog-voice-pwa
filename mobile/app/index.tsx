@@ -1333,7 +1333,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
       </View>
-      <HomeCalendar repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{const parts=id.split(':');setRepeatDetail({workId:parts[1],focusDate:date});}} key={session.user.id} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
+      <HomeCalendar repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{const parts=id.split(':');setRepeatDetail({workId:parts[1],focusDate:date});}} key={`home-calendar:${session.user.id}`} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
         onOpenCalendar={day => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarDate(day); setPersonalCalendarOpen(true); }}
         renderSchedule={schedule => <View>
           {schedule.scheduleId === notificationScheduleId ? <Text style={styles.helpText}>{scheduleFocusReason === 'created' ? '방금 생성된 일정' : '알림에서 연 일정'}</Text> : null}
@@ -1341,7 +1341,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
           <View style={styles.headerActions}><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => Alert.alert('이 기기의 알림', '종 ✓ 초록: 이 기기 예약 확인\n종 − 회색: 알림 없음\n종 ! 빨강: 권한 필요\n종 ? 파랑: 확인 필요\n종을 누르면 예약 시점과 상세 상태를 확인합니다. 예약 확인은 실제 전달을 보장하지 않습니다.')}><Text style={styles.helpText}>이 기기 기준 · 알림 표시 도움말 ⓘ</Text></Pressable></View>
         </View>} />
 
-      {client && !androidTouchSmoke ? <WorkFolders userId={session.user.id} key={session.user.id} home client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || busy} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
+      {client && !androidTouchSmoke ? <WorkFolders userId={session.user.id} key={`home-folders:${session.user.id}`} home client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || busy} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
       {briefing ? briefingBuckets.filter(bucket => bucket.key === activeFilter).map((bucket) => {
         const tasks = structure[bucket.key] || [];
         const expanded = expandedBuckets[bucket.key] === true;
