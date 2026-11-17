@@ -1,8 +1,9 @@
+import type { CalendarReadAdapter, CalendarReadRange } from './calendar-read';
 import { providerFailure, calendarReceiptMatches, calendarEventId, createCalendarExporter, type CalendarExportAdapter, type CalendarExportResult, type CalendarTarget } from './calendar-export';
 import { confirmedCalendarDraft, sameCalendarSource, type CalendarSource } from './calendar-source';
 
 export type CalendarConnection = {
-  target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter; persist?(): Promise<void>;
+  target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter & Partial<CalendarReadAdapter>; persist?(): Promise<void>;
 };
 
 /** Connection state exposes no token fields to UI or app sessions. */
@@ -41,8 +42,8 @@ export function createCalendarConnection(deps: {
       return restoring;
     },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    status() { return { connecting: !!connecting || !!restoring, message }; },
-    info() { return connection ? { email: connection.email, target: { ...connection.target }, expired: now() >= connection.expiresAt } : null; },
+    status() { return { generation: epoch, connecting: !!connecting || !!restoring, message }; },
+    info() { return connection ? { email: connection.email, target: { ...connection.target }, expiresAt: connection.expiresAt, expired: now() >= connection.expiresAt } : null; },
     connect() {
       if (connecting) return connecting;
       disconnect();
@@ -63,6 +64,16 @@ export function createCalendarConnection(deps: {
       }).finally(() => { connecting = null; notify(); });
       notify();
       return connecting;
+    },
+    async readEvents(range: CalendarReadRange, callerCurrent = () => true) {
+      const captured = epoch;
+      const active = connection;
+      if (!active?.adapter.list) throw Error('CALENDAR_NOT_CONNECTED');
+      if (now() >= active.expiresAt) throw Error('CALENDAR_EXPIRED');
+      const current = () => callerCurrent() && captured === epoch && connection === active && now() < active.expiresAt;
+      const result = await active.adapter.list(range, current);
+      if (!current()) throw Error('CALENDAR_OWNER_CHANGED');
+      return result;
     },
     send(source: CalendarSource, end: string, read: () => Promise<CalendarSource>, current: () => boolean) {
       const key = source.scheduleId;
