@@ -45,7 +45,7 @@ test('personal folders SQL: nesting, move, RLS, canonical completion/Undo, persi
   await assert.rejects(db.query('update worklog.work_folders set parent_id=$1 where id=$2',[CHILD,F]),/FOLDER_CYCLE/);
   await assert.rejects(save(F,'Projects',F,0),/FOLDER_CYCLE|check constraint/);
   await save(CHILD,'Renamed',null,0);await save(CHILD,'Renamed',F,1);
-  await assert.rejects(save(CHILD,'stale',null,0),/VERSION_CONFLICT/);
+  await assert.rejects(save(CHILD,'stale',null,0),error=>error.code==='PT409' && /VERSION_CONFLICT/.test(error.message));
   const before=(await db.query('select * from worklog.work_records where id=$1',[T])).rows[0];
   const schedules=(await db.query('select * from worklog.schedules')).rows;
   await organize(T,-1,{folder:CHILD});await organize(T,0,{today:true});

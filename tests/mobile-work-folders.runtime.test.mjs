@@ -38,6 +38,7 @@ test('real RPC adapter sends only organization intent and version, never due_at 
  assert.ok(calls.every(c=>c.name==='organize_my_work_record'));
  await assert.rejects(store.loadFolders({rpc:()=>({abortSignal:async()=>({error:{code:'PGRST202'}})})}),/서버 준비 중/);
  await assert.rejects(store.loadFolders({rpc:()=>({abortSignal:async()=>({data:null,error:null})})}),/응답/);
+ await assert.rejects(store.organizeRecord({rpc:()=>({abortSignal:async()=>({error:{code:'PT409'}})})},record,{today:true},'owner'),/다른 화면에서 변경/);
 });
 test('actual folder screen: unclassified task, nested folder create/rename/move, no seeded example folders',async()=>{
  let created,inputs=0;const h=harness({saveFolder:async(_client,row)=>{created=row;}});

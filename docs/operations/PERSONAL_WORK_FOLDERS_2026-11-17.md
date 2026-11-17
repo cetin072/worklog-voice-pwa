@@ -62,3 +62,31 @@
 3. 320/390px 및 긴 업무명/폴더 경로·50건 이상 목록·키보드·홈/업무 왕복·완료/Undo·미적용 DB fallback, 기존 음성 도크/직접 입력/검색/일정/반복/설정/내 관리 사용자 수용 검수.
 4. 운영 DB migration 적용은 별도 승인 후에만 수행. 앱/server 배포 및 요청된 QA APK/Play 출시도 별도 승인. main 병합만으로 운영 활성화를 완료했다고 보고하지 않는다.
 5. 웹 대상이 Expo web인지 기존 PWA인지 확정하고 해당 실행 검수를 완료한다. Expo web 지원 확대는 이번 PR 범위를 넘는 의존성 검토가 필요하다.
+
+## 2026-11-17 후속 안전검수와 승인 갱신
+
+사용자가 ‘나머지도 다하고 병합’, ‘그리고 apk까지 해보자’라고 승인했다. 최신 main `7abce5f`(#549 부팅 개선 포함)을 통합했다. 최초 1,370건은 같은 HEAD로 반복하지 않았고 통합 지점과 새로 발견한 결함의 관련 26건을 실행해 모두 통과했다. 통합 TypeScript도 통과했다.
+
+GitHub connector의 전체/수동 workflow 목록을 확인했다. 이번 변경의 기존 Mobile App #883/UAR #1061 성공을 재사용했고, 착수 시 진행 중인 APK 작업은 없었다. 가장 최근 수동 Mobile App 빌드는 2026-11-14 `43581566334`, SHA `f4b53f2`로 이번 폴더 변경을 포함하지 않는다.
+
+### 실제 PostgreSQL/PostgREST 검사 — 16 PASS
+
+독립 로컬 Docker network + tmpfs PostgreSQL 17.12 + PostgREST 12.2.12를 사용했다. HTTP는 localhost에만 노출했으며, 가상의 두 계정 JWT와 실제 authenticated/anon DB role을 사용했다. 호스팅 DB 생성, 운영 계정·기록 사용 없음.
+
+- 실제 HTTP에서 anonymous 접근 거절, 각 사용자 목록 격리, 타인 폴더/업무 접근 및 직접 REST insert 거절, 계정 전환 후 이전 요청 거절.
+- 동시에 반대 방향으로 이동하는 두 RPC 중 하나만 성공하고 나머지는 FOLDER_CYCLE로 거절. 직접 REST PATCH로 같은 경쟁을 일으켜도 하나만 성공.
+- 같은 WorkRecord/version에 동시에 두 이동 요청을 보내 한 건 성공·한 건 HTTP 409 충돌을 확인.
+- 오늘 선택, 폴더 이동, 원본 due_at 불변, 다른 사용자 today 목록 격리 확인.
+- 결과: `docs/operations/evidence/work-folders-postgrest-2026-11-17.json`.
+
+**발견/수정한 실제 결함:** 업무 버전 충돌에 SQLSTATE `40001`을 쓰면 PostgREST 12.2.12가 transaction 재시도를 계속하여 HTTP 요청이 timeout됐다. 저장 덮어쓰기는 거절됐지만 충돌 안내가 지연됐다. 새 폴더 RPC의 업무 충돌만 `PT409`로 바꾸고 모바일에서 이를 구분하도록 수정했다. 동일 동시 요청은 즉시 204/409로 종료했다. 실제 DB와 adapter 테스트에서 PT409를 고정한다. [PostgREST custom HTTP errors](https://docs.postgrest.org/en/v12/references/errors.html#raise-errors-with-http-status-codes).
+
+### 화면 실행 제한
+
+Android emulator/adb는 이 환경에 없다. Chromium은 설치돼 있지만 sandbox를 켠 실행이 `SUID sandbox helper ... not configured correctly`로 중단됐다. `--no-sandbox`, 시스템 권한 변경, 보안 우회는 하지 않았다. 따라서 320/390px 시각·키보드·긴 목록에서의 Undo 접근성은 여전히 실측 미검증이다. TSX harness와 safe-area 정적 계약 통과를 실기기 PASS로 바꾸지 않는다.
+
+### 운영 DB 사전 확인
+
+공유 프로젝트 `jgsxpdflgkqroecfjzxq`에서 카탈로그만 읽었다. 대상 `work_folders`, `work_organization`, `save_my_work_folder`는 아직 존재하지 않고, 원본 `work_records`와 `repeating_work`는 존재한다. migration은 기존 데이터/함수 수정 없이 새 테이블·함수만 추가한다. 기존 보안 advisor를 조회했지만 공유 DB 전체의 기존 경고를 이 기능의 새 결함으로 분류하거나 타 서비스 권한을 변경하지 않는다.
+
+운영 backup/PITR 상태는 연결된 도구에서 확인할 수 없어 확인을 요청했다. 복구 지점이 확인되기 전 운영 migration은 적용하지 않는다. 그동안 코드 병합과 QA APK 준비는 독립 진행 가능하며, DB 미적용이면 새 폴더 기능은 준비 중 안내로 남는다. Play 업로드/출시는 실제 기기 QA 전 실행하지 않는다.

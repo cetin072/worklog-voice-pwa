@@ -70,12 +70,12 @@ begin
  perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text,551));
  select * into f from worklog.work_folders where id=p_id for update;
  if f.id is null then
-  if p_version is distinct from -1 then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+  if p_version is distinct from -1 then raise exception 'VERSION_CONFLICT' using errcode='PT409'; end if;
   insert into worklog.work_folders(id,name,parent_id) values(p_id,btrim(p_name),p_parent);
  else
   -- Same immutable creation ID can be retried after a lost response.
   if p_version=-1 and f.name=btrim(p_name) and f.parent_id is not distinct from p_parent then return; end if;
-  if f.version is distinct from p_version then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+  if f.version is distinct from p_version then raise exception 'VERSION_CONFLICT' using errcode='PT409'; end if;
   update worklog.work_folders set name=btrim(p_name),parent_id=p_parent where id=p_id;
  end if;
 end $$;
@@ -93,7 +93,7 @@ begin
   and not exists(select 1 from worklog.schedules s where s.workspace_id=wr.workspace_id and s.metadata->>'workRecordId'=wr.id::text and s.status<>'cancelled');
  if r.id is null then raise exception 'WORK_NOT_AVAILABLE' using errcode='42501'; end if;
  select * into o from worklog.work_organization where work_record_id=p_id for update;
- if coalesce(o.version,-1) is distinct from p_version then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+ if coalesce(o.version,-1) is distinct from p_version then raise exception 'VERSION_CONFLICT' using errcode='PT409'; end if;
  target=o.folder_id; selected=o.selected_on;
  if jsonb_typeof(p_command)='object' and p_command ? 'folder' and p_command - 'folder'='{}'::jsonb then
   target=(p_command->>'folder')::uuid;

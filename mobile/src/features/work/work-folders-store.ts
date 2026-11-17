@@ -37,7 +37,7 @@ function check(error: { code?: string; message?: string } | null) {
   if (['PGRST202', 'PGRST205', '42883', '42P01'].includes(error.code || '')) {
     throw new Error('개인 폴더 기능은 서버 준비 중입니다. 기존 입력·홈·업무일지는 계속 사용할 수 있습니다.');
   }
-  if (error.code === '40001') throw new Error('다른 화면에서 변경됐습니다. 새로고침 후 다시 시도해주세요.');
+  if (error.code === 'PT409' || error.code === '40001') throw new Error('다른 화면에서 변경됐습니다. 새로고침 후 다시 시도해주세요.');
   throw new Error('폴더 처리를 확인하지 못했습니다. 입력은 유지됩니다. 새로고침 후 확인해주세요.');
 }
 export async function loadFolders(client: PlatformSupabaseClient): Promise<WorkFolder[]> {
