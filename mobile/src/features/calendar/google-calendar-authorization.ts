@@ -1,6 +1,6 @@
 import type { PublicPlatformConfig } from '../../platform/config';
 import type { CalendarConnection } from './calendar-connection';
-import { createGoogleCalendarAdapter } from './google-calendar-adapter';
+import { credentialConnection, type CalendarRenewer } from './calendar-credential-store';
 import type { CalendarCredential } from './calendar-credential-store';
 import { withRequestDeadline } from '../../platform/request-deadline';
 
@@ -21,14 +21,14 @@ export async function createCalendarPkce(randomBytes: () => Promise<Uint8Array>,
 /** Public Supabase Auth PKCE protocol, with a native S256 proof. This adapter
  * deliberately never constructs an app/temporary session client or invokes a
  * app-session storage API. Only the Google access credential can be saved
- * through the separate encrypted Calendar store. JWT/refresh fields in the response are discarded, not installed.
+ * through the separate encrypted Calendar store. Supabase JWT/refresh fields are discarded; the Google provider refresh token is kept separately.
  * SDK 2.116 falls back to weak/plain PKCE when native WebCrypto is absent; using
  * the existing Expo Crypto primitive avoids both that fallback and global shims.
  */
 export async function authorizeGoogleCalendar(config: PublicPlatformConfig, callback: string,
   openBrowser: (url: string, redirect: string) => Promise<{ type: string; url?: string }>,
   makePkce: () => Promise<CalendarPkce>, fetchImpl: typeof fetch = fetch,
-  persist?: (credential: CalendarCredential) => Promise<void>,
+  persist?: (credential: CalendarCredential) => Promise<void>, renew?: CalendarRenewer,
 ): Promise<CalendarConnection | null> {
   const boundedFetch: typeof fetch = (url, options) => withRequestDeadline(signal => fetchImpl(url, { ...options, signal }));
   const redirect = `${callback}?purpose=calendar`;
@@ -39,7 +39,7 @@ export async function authorizeGoogleCalendar(config: PublicPlatformConfig, call
   const authBase = config.supabaseUrl.replace(/\/$/, '') + '/auth/v1';
   const url = new URL(authBase + '/authorize');
   const params = { provider: 'google', redirect_to: redirect, scopes: `openid email profile ${CALENDAR_SCOPE}`,
-    code_challenge: proof.challenge, code_challenge_method: 's256', access_type: 'online', prompt: 'select_account consent' };
+    code_challenge: proof.challenge, code_challenge_method: 's256', access_type: 'offline', prompt: 'select_account consent' };
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   // Android Expo matches the return URL with startsWith. OAuth may reorder
   // query parameters (code before purpose), so match only the callback base.
@@ -67,9 +67,12 @@ export async function authorizeGoogleCalendar(config: PublicPlatformConfig, call
   const identity = await response.json();
   if (typeof identity.id !== 'string' || typeof identity.email !== 'string' || identity.verified_email !== true) throw Error('CALENDAR_AUTH_FAILED');
   const target = { accountId: identity.id, calendarId: 'primary' };
-  const credential = { target, email: identity.email, expiresAt: Date.now() + 50 * 60000, token };
-  return { target, email: credential.email, expiresAt: credential.expiresAt,
-    persist: persist ? () => persist(credential) : undefined,
-    adapter: createGoogleCalendarAdapter(target, token, fetchImpl) };
+  const refreshToken = payload?.provider_refresh_token;
+  if (typeof refreshToken !== 'string' || !refreshToken) throw Error('CALENDAR_AUTH_REFRESH_MISSING');
+  // Supabase expires_in describes its own JWT, not the Google credential.
+  // Refresh immediately to verify the server path and obtain Google's real expiry.
+  let credential: CalendarCredential = { target, email: identity.email, expiresAt: Date.now(), token, refreshToken };
+  if (renew) credential = await renew(credential);
+  return credentialConnection(credential, fetchImpl, persist, renew);
 }
 

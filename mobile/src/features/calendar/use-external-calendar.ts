@@ -17,7 +17,7 @@ export function useExternalCalendar(months: string, revision = 0) {
   const refresh = () => setReload(value => value + 1);
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
-    const timer = info && !info.expired ? setTimeout(refresh, Math.max(1, info.expiresAt - Date.now() + 1)) : undefined;
+    const timer = info && !info.expired && info.expiresAt > Date.now() ? setTimeout(refresh, Math.max(1, info.expiresAt - Date.now() + 1)) : undefined;
     return () => { sub.remove(); if (timer) clearTimeout(timer); };
   }, [connection, generation, info?.expiresAt, info?.expired]);
   useEffect(() => {

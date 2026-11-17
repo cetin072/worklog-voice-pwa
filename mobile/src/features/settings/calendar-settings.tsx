@@ -25,7 +25,7 @@ export function CalendarSettings() {
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDetails }} onPress={() => setShowDetails(value => !value)} style={styles.detailsButton}><Text style={styles.hint}>{showDetails ? '연결 안내 접기' : '연결 안내'}</Text></Pressable>
     {showDetails ? <View style={styles.details}>
     <Text style={styles.hint}>가져온 Google 일정은 읽기 전용입니다. 업무수첩 기록이나 알림으로 자동 저장하지 않습니다.</Text>
-    <Text style={styles.hint}>기본 캘린더에 추가합니다. 앱을 다시 열어도 유효한 연결은 유지됩니다. 로그아웃하거나 인증이 만료되면 다시 연결해주세요.</Text>
+    <Text style={styles.hint}>기본 캘린더에 추가합니다. 앱을 다시 열거나 인증 시간이 지나도 자동으로 갱신합니다. 로그아웃·연결 해제 후 또는 Google에서 재동의가 필요한 경우에만 다시 연결해주세요.</Text>
     <Text style={styles.hint}>{CALENDAR_PERMISSION_NOTICE}</Text>
     <Text style={styles.hint}>업무수첩에 가입된 Google 계정으로 연결해주세요. 다른 계정은 별도 업무수첩 계정이 생성될 수 있습니다.</Text>
     </View> : null}
