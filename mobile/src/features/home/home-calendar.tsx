@@ -1,3 +1,5 @@
+import { useExternalCalendar } from '../calendar/use-external-calendar';
+import { mergeCalendarEvents } from '../calendar/calendar-read';
 import { recordRowStyles } from '@/src/ui/record-row-styles';
 import { recurringCalendarEvents } from '../recurring/recurrence-calendar';
 import type { RepeatingWork } from '../recurring/recurrence-model';
@@ -24,12 +26,12 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
   const days = calendarDays(selected, expanded);
   const months = [...new Set(days.filter((d): d is string => !!d).map(d => d.slice(0, 7)))].filter(m => m >= '2000-01' && m <= '2099-12');
   const monthKey = months.join(','), key = `${owner}:${monthKey}:${revision}:${reload}`;
+  const external = useExternalCalendar(monthKey, revision);
   const latest = useRef({ owner, key }); latest.current = { owner, key };
   useEffect(() => { setSelected(today); setOpened(null); }, [today]);
   useEffect(() => {
     if (focusId && focusDate && Number.isFinite(Date.parse(focusDate))) { setSelected(seoulDate(focusDate)); setOpened(focusId); }
   }, [focusId, focusDate]);
-  useEffect(() => { onTodayCount(result?.key === key && !result.limited ? eventsOnDay(result.events, today).length : null); }, [result, key, today, onTodayCount]);
   useEffect(() => {
     let alive = true;
     const current = () => alive && latest.current.owner === owner && latest.current.key === key;
@@ -48,7 +50,10 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
   const events = integrated && loaded ? result.events : legacy;
   const sourceIds=new Set(repeatingWorks.flatMap(w=>w.state.revisions.flatMap(r=>r.sourceScheduleIds||[r.sourceScheduleId]).filter(Boolean)));
   const projected=repeatingWorks.length?months.flatMap(m=>recurringCalendarEvents(repeatingWorks,m)):[];
-  const rows = eventsOnDay([...events.filter(e=>!sourceIds.has(e.id)),...projected], selected);
+  const combined = mergeCalendarEvents([...events.filter(e=>!sourceIds.has(e.id)),...projected], external.events);
+  const rows = eventsOnDay(combined, selected);
+  useEffect(() => { onTodayCount(loaded && (!external.connected || months.includes(today.slice(0, 7))) && !result.limited && !external.restoring && !external.loading && !external.error && !external.limited
+    ? eventsOnDay(combined, today).length : null); }, [result, key, today, onTodayCount, external.events, external.connected, external.restoring, external.loading, external.error, external.limited]);
   const action = (label: string, onPress: () => void, disabled = false) => <Pressable accessibilityRole="button" style={styles.action} disabled={disabled} onPress={onPress}><Text style={styles.link}>{label}</Text></Pressable>;
   return <View style={styles.card}>
     <View style={styles.row}>
@@ -59,8 +64,8 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     </View>
     <View style={styles.week}>{['월', '화', '수', '목', '금', '토', '일'].map(d => <View key={d} style={styles.weekday}><Text style={styles.muted}>{d}</Text></View>)}</View>
     {Array.from({length: Math.ceil(days.length / 7)}, (_, week) => <View key={week} style={styles.week}>
-      {days.slice(week * 7, week * 7 + 7).map((day, index) => day ? <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${day}${day === today ? ' 오늘' : ''}${eventsOnDay(events, day).length ? ' 일정 있음' : ''}`} accessibilityState={{ selected: day === selected }} disabled={day < '2000-01-01' || day > '2099-12-31'} onPress={() => { setSelected(day); setOpened(null); }} style={styles.day}>
-        <Text numberOfLines={1} style={[styles.dayNumber, day === selected && styles.selected, day === today && day !== selected && styles.today]}>{Number(day.slice(8))}</Text><Text style={styles.dot}>{eventsOnDay(events, day).length ? '•' : ' '}</Text>
+      {days.slice(week * 7, week * 7 + 7).map((day, index) => day ? <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${day}${day === today ? ' 오늘' : ''}${eventsOnDay(combined, day).length ? ' 일정 있음' : ''}`} accessibilityState={{ selected: day === selected }} disabled={day < '2000-01-01' || day > '2099-12-31'} onPress={() => { setSelected(day); setOpened(null); }} style={styles.day}>
+        <Text numberOfLines={1} style={[styles.dayNumber, day === selected && styles.selected, day === today && day !== selected && styles.today]}>{Number(day.slice(8))}</Text><Text style={styles.dot}>{eventsOnDay(combined, day).length ? '•' : ' '}</Text>
       </Pressable> : <View key={`blank-${index}`} style={styles.day} />)}
     </View>)}
     <View style={styles.divider} />
@@ -69,12 +74,17 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     {busy ? <View style={styles.row}><ActivityIndicator /><Text style={styles.muted}>일정 불러오는 중…</Text></View> : null}
     {error ? <View><Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>{action('일정 다시 불러오기', () => setReload(n => n + 1))}</View> : null}
     {loaded && result.limited ? <Text style={styles.error}>일부 일정만 표시 중입니다. 표시되지 않은 일정이 있을 수 있습니다.</Text> : null}
-    {!busy && !error && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
+    {external.connected ? <View style={styles.row}><Text style={styles.muted}>Google · 기본 캘린더 · 읽기 전용</Text>{action('Google 새로고침', external.refresh, external.loading)}</View> : null}
+    {external.restoring ? <Text style={styles.muted}>Google 연결 확인 중…</Text> : null}
+    {external.loading ? <Text style={styles.muted}>Google 일정 불러오는 중…</Text> : null}
+    {external.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{external.error}</Text> : null}
+    {external.limited ? <Text style={styles.error}>Google 일정 일부만 표시 중입니다.</Text> : null}
+    {!busy && !error && !external.restoring && !external.loading && !external.error && !external.limited && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
     {rows.map(event => {
       const known = fallback.find(s => s.scheduleId === event.id);
       return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => event.id.startsWith('repeat:')?onOpenRepeating?.(event.id,seoulDate(event.starts_at)):setOpened(id => id === event.id ? null : event.id)}>
-        <Text style={styles.time}>{calendarTime(event, selected)}</Text><View style={styles.eventMain}><Text style={recordRowStyles.taskTitle}>{event.title}</Text>{selected !== today ? <Text style={recordRowStyles.taskMeta}>{seoulDate(event.starts_at).replaceAll('-', '. ')}</Text> : null}</View><Text style={styles.muted}>›</Text>
-      </Pressable>{opened === event.id ? known ? renderSchedule(known) : <View style={styles.details}>{event.location ? <Text>{event.location}</Text> : null}{event.description ? <Text>{event.description}</Text> : null}{integrated ? action('내 캘린더에서 확인·수정', () => onOpenCalendar(selected)) : null}</View> : null}</View>;
+        <Text style={styles.time}>{calendarTime(event, selected)}</Text><View style={styles.eventMain}><Text style={recordRowStyles.taskTitle}>{event.title}</Text>{event.source === 'external' ? <Text style={styles.muted}>Google · 읽기 전용</Text> : null}{selected !== today ? <Text style={recordRowStyles.taskMeta}>{seoulDate(event.starts_at).replaceAll('-', '. ')}</Text> : null}</View><Text style={styles.muted}>›</Text>
+      </Pressable>{opened === event.id ? known ? renderSchedule(known) : <View style={styles.details}>{event.location ? <Text>{event.location}</Text> : null}{event.description ? <Text>{event.description}</Text> : null}{event.source === 'external' ? <Text style={styles.muted}>수정·삭제는 Google 캘린더에서 해주세요.</Text> : integrated ? action('내 캘린더에서 확인·수정', () => onOpenCalendar(selected)) : null}</View> : null}</View>;
     })}
     {focusId && !busy && !rows.some(row => row.id === focusId) ? <View style={styles.details}>{fallback.find(s => s.scheduleId === focusId) ? renderSchedule(fallback.find(s => s.scheduleId === focusId)!) : <Text style={styles.muted}>선택한 일정은 해당 날짜의 업무일지 또는 내 캘린더에서 확인해주세요.</Text>}</View> : null}
   </View>;

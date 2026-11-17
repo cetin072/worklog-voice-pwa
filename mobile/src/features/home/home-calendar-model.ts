@@ -23,7 +23,7 @@ export function eventsOnDay(events: PersonalCalendarEvent[], day: string) {
   const unique = new Map<string, PersonalCalendarEvent>();
   for (const e of events) {
     const from = Date.parse(e.starts_at), to = Date.parse(e.ends_at || '');
-    if (e.source !== 'personal' || ['cancelled', '취소'].includes(e.status) || !Number.isFinite(from)) continue;
+    if (!['personal', 'external'].includes(e.source) || ['cancelled', '취소'].includes(e.status) || !Number.isFinite(from)) continue;
     if (from < end && (Number.isFinite(to) && to > from ? to : from + 1) > start) unique.set(e.id, e);
   }
   return [...unique.values()].sort((a, b) => Number(b.all_day) - Number(a.all_day) || Date.parse(a.starts_at) - Date.parse(b.starts_at) || a.id.localeCompare(b.id));

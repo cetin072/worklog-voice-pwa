@@ -1,3 +1,5 @@
+import { useExternalCalendar } from './use-external-calendar';
+import { mergeCalendarEvents } from './calendar-read';
 import {recordRowStyles} from '@/src/ui/record-row-styles';
 import { recurringCalendarEvents } from '../recurring/recurrence-calendar';
 import type { RepeatingWork } from '../recurring/recurrence-model';
@@ -18,6 +20,7 @@ export function PersonalCalendarSheet({onClose,onSaved,initialDate,repeatingWork
  const {client,config,session}=usePlatform(),insets=useSafeAreaInsets();
  const live=useRef(true),sequence=useRef(0),flight=useRef(false),owner=session?.user.id;
  const [month,setMonth]=useState(()=>(initialDate||dateKey(new Date().toISOString())).slice(0,7));
+ const external=useExternalCalendar(month);
  const [data,setData]=useState<CalendarMonth|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const [draft,setDraft]=useState<Draft|null>(null),[dirty,setDirty]=useState(false),[picker,setPicker]=useState<Picker|null>(null),[expanded,setExpanded]=useState(false);
  useEffect(()=>{live.current=true;return()=>{live.current=false;sequence.current++;};},[]);
@@ -63,10 +66,10 @@ export function PersonalCalendarSheet({onClose,onSaved,initialDate,repeatingWork
  const dateControl=(key: Picker,label: string)=>draft?<View><Text style={styles.label}>{label}</Text>{action(draft[key]||'선택',()=>setPicker(key))}</View>:null;
  let pickerValue=new Date();if(draft){const [y,m,d]=(picker==='endDate'?draft.endDate||draft.date:draft.date).split('-').map(Number);const [h,min]=(picker==='endTime'?draft.endTime||'09:00':draft.time||'09:00').split(':').map(Number);pickerValue=new Date(y,m-1,d,h,min);}
  const sourceIds=new Set(repeatingWorks.flatMap(w=>w.state.revisions.flatMap(r=>r.sourceScheduleIds||[r.sourceScheduleId]).filter(Boolean)));
- const events=[...personalEventsForMonth(data,month).filter(e=>!sourceIds.has(e.id)),...(repeatingWorks.length?recurringCalendarEvents(repeatingWorks,month):[])].sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
+ const events=mergeCalendarEvents([...personalEventsForMonth(data,month).filter(e=>!sourceIds.has(e.id)),...(repeatingWorks.length?recurringCalendarEvents(repeatingWorks,month):[])],external.events).sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at));
  return <Modal visible animationType="slide" onRequestClose={close}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={[styles.root,{paddingTop:insets.top+12,paddingBottom:insets.bottom+12}]}>
   <View style={styles.row}><Text style={styles.heading}>{draft?'내 일정 '+(draft.revision?'수정':'등록'):'내 캘린더'}</Text>{action(draft?'뒤로':'닫기',close)}</View>
-  <Text style={styles.help}>ERP와 같은 개인 일정입니다. 업무·성과 기록을 만들지 않습니다.</Text>
+  <Text style={styles.help}>개인 일정은 ERP와 함께 사용합니다. Google 일정은 읽기 전용으로 표시합니다.</Text>
   {message?<Text accessibilityLiveRegion="polite" style={styles.error}>{message}</Text>:null}{busy?<ActivityIndicator/>:null}
   <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
    {draft?<>
@@ -77,9 +80,9 @@ export function PersonalCalendarSheet({onClose,onSaved,initialDate,repeatingWork
     {action('일정 저장',()=>void save())}
    </>:<>
     <View style={styles.row}>{action('이전 달',()=>setMonth(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7))-2,1)).toISOString().slice(0,7)),busy||month==='2000-01')}<Text>{month}</Text>{action('다음 달',()=>setMonth(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,7)),busy||month==='2099-12')}</View>
-    <View style={styles.row}>{action('일정 등록',()=>edit())}{action('새로고침',()=>void load())}</View>
-    {data?.limited?<Text style={styles.error}>일부 일정만 표시 중입니다.</Text>:null}{!busy&&!events.length?<Text>이번 달에 등록한 개인 일정이 없습니다.</Text>:null}
-    {events.map(event=><View key={event.id} style={styles.event}><Text style={recordRowStyles.taskTitle}>{event.title}</Text><Text style={recordRowStyles.taskMeta}>{dateKey(event.starts_at)} · {event.all_day?'종일':timeKey(event.starts_at)}</Text>{event.location?<Text style={recordRowStyles.taskMeta}>{event.location}</Text>:null}{event.editable?<View style={styles.eventActions}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 수정`} disabled={busy} style={recordRowStyles.inlineEdit} onPress={()=>edit(event)}><Text style={recordRowStyles.inlineEditText}>✏️</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 삭제`} disabled={busy} style={recordRowStyles.inlineDelete} onPress={()=>remove(event)}><Text style={recordRowStyles.inlineDeleteText}>삭제</Text></Pressable></View>:event.id.startsWith('repeat:')?action('반복 업무 상세',()=>onOpenRepeating?.(event.id,dateKey(event.starts_at))):<Text style={styles.help}>연결된 업무에서 수정할 수 있습니다.</Text>}</View>)}
+    <View style={styles.row}>{action('일정 등록',()=>edit())}{action('새로고침',()=>{void load();external.refresh();})}</View>
+    {data?.limited?<Text style={styles.error}>일부 일정만 표시 중입니다.</Text>:null}{external.restoring?<Text>Google 연결 확인 중…</Text>:null}{external.loading?<Text>Google 일정 불러오는 중…</Text>:null}{external.error?<Text accessibilityLiveRegion="polite" style={styles.error}>{external.error}</Text>:null}{external.limited?<Text style={styles.error}>Google 일정 일부만 표시 중입니다.</Text>:null}{!busy&&!message&&!data?.limited&&!external.restoring&&!external.loading&&!external.error&&!external.limited&&!events.length?<Text>이번 달에 표시할 일정이 없습니다.</Text>:null}
+    {events.map(event=><View key={event.id} style={styles.event}><Text style={recordRowStyles.taskTitle}>{event.title}</Text><Text style={recordRowStyles.taskMeta}>{dateKey(event.starts_at)} · {event.all_day?'종일':timeKey(event.starts_at)}</Text>{event.location?<Text style={recordRowStyles.taskMeta}>{event.location}</Text>:null}{event.source==='external'?<Text style={styles.help}>Google · 읽기 전용 · 수정·삭제는 Google 캘린더에서 해주세요.</Text>:event.editable?<View style={styles.eventActions}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 수정`} disabled={busy} style={recordRowStyles.inlineEdit} onPress={()=>edit(event)}><Text style={recordRowStyles.inlineEditText}>✏️</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 삭제`} disabled={busy} style={recordRowStyles.inlineDelete} onPress={()=>remove(event)}><Text style={recordRowStyles.inlineDeleteText}>삭제</Text></Pressable></View>:event.id.startsWith('repeat:')?action('반복 업무 상세',()=>onOpenRepeating?.(event.id,dateKey(event.starts_at))):<Text style={styles.help}>연결된 업무에서 수정할 수 있습니다.</Text>}</View>)}
    </>}
   </ScrollView>
  </KeyboardAvoidingView></Modal>;
