@@ -567,7 +567,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     if (!session || !client || androidTouchSmoke) return;
     let alive = true;
     const recover = async () => {
-      try { await recoverSavedScheduleReminders(client); }
+      try { await recoverSavedScheduleReminders(client, config ? JSON.stringify([config.supabaseUrl, config.dataSchema || 'public', session.user.id]) : undefined); }
       catch (nextError) { if (alive) console.warn('[schedule-reminder] recovery pending', messageOf(nextError, 'unknown')); }
       if (alive) setBriefingNow(Date.now());
     };

@@ -14,13 +14,13 @@ function compile(code, scope) {
 }
 test('a hanging reminder recovery does not hold the first home fetch; cleanup rejects late UI updates', async () => {
  let callback;
- function walk(n) { if (ts.isCallExpression(n) && n.expression.getText(ast) === 'useEffect' && n.arguments[0]?.getText(ast).includes('recoverSavedScheduleReminders(client)')) callback = n.arguments[0].getText(ast); ts.forEachChild(n, walk); }
+ function walk(n) { if (ts.isCallExpression(n) && n.expression.getText(ast) === 'useEffect' && n.arguments[0]?.getText(ast).includes('recoverSavedScheduleReminders(client,')) callback = n.arguments[0].getText(ast); ts.forEachChild(n, walk); }
  walk(ast); assert.ok(callback);
  let release, refreshes = 0, clockUpdates = 0, foreground, authEvent, invalidations = 0;
  // auth subscription is part of the production effect.
  const scopeClient = { auth: { onAuthStateChange(fn) { authEvent = fn; return { data: { subscription: { unsubscribe() {} } } }; } } };
  const effect = compile(`return (${callback});`, {
-   measureStartup, session: { access_token: 'synthetic', user: { id: 'A' } }, client: scopeClient, androidTouchSmoke: false, initialReminderRecovery: { current: Promise.resolve() },
+   measureStartup, config: {supabaseUrl:'https://synthetic.invalid'}, session: { access_token: 'synthetic', user: { id: 'A' } }, client: scopeClient, androidTouchSmoke: false, initialReminderRecovery: { current: Promise.resolve() },
    recoverSavedScheduleReminders: () => new Promise(resolve => { release = resolve; }),
    refreshBriefing: async () => { refreshes++; }, setBriefingNow: () => clockUpdates++,
    reminderSessionEpoch: { invalidate() { invalidations++; } }, reminderSyncEpoch: { invalidate() { invalidations++; } },

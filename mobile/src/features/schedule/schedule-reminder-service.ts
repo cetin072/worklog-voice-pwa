@@ -1,3 +1,4 @@
+import type { ConfirmedSchedule } from './schedule-reminder-coordinator';
 import { assertReminderSyncCurrent, type ReminderSyncGuard } from './schedule-reminder-snapshot';
 /** Durable notification state machine. One owner per device-state namespace/JS runtime.
  * OS side effects are journalled BEFORE execution; SecureStore and the OS are not
@@ -13,7 +14,9 @@ export type ReminderOffsetMinutes = (typeof REMINDER_OFFSETS)[number];
 export type ScheduleReminder = { identifier: string; triggerAt: string; title: string; offsetMinutes: number };
 type Mappings = Record<string, Record<string, ScheduleReminder>>;
 type Intent = { scheduleId: string; offsetMinutes: number; desired: ScheduleReminder | null; obsolete: string[] };
-type State = { accountScope?: string; version: 3; reminders: Mappings; intents: Record<string, Intent>; legacyCleanup: Record<string, string[]> };
+type LegacyOffsets = { scope: string; offsets: Record<string, ReminderOffsetMinutes[]> };
+const SCHEDULE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type State = { legacyOffsets?: LegacyOffsets; accountScope?: string; version: 3; reminders: Mappings; intents: Record<string, Intent>; legacyCleanup: Record<string, string[]> };
 export type ScheduledReminderRequest = {
   identifier: string;
   content: { data?: Record<string, unknown> | null; body?: string | null };
@@ -73,10 +76,26 @@ function parseState(raw: string): State {
     return [key, { scheduleId: item.scheduleId, offsetMinutes: item.offsetMinutes, desired, obsolete: [...new Set(item.obsolete)] }];
   }));
   if (value.accountScope !== undefined && (typeof value.accountScope !== 'string' || !value.accountScope)) throw new ReminderStateError('INVALID_ACCOUNT_SCOPE');
-  const state: State = { accountScope: value.accountScope as string | undefined, version: 3, reminders: mappings(value.reminders), intents, legacyCleanup: cleanup(value.legacyCleanup) };
+  let legacyOffsets: LegacyOffsets | undefined;
+  if (value.legacyOffsets !== undefined) {
+    const candidate = value.legacyOffsets;
+    if (!record(candidate) || typeof candidate.scope !== 'string' || !candidate.scope || !record(candidate.offsets)) throw new ReminderStateError('INVALID_LEGACY_OFFSETS');
+    const offsets = Object.fromEntries(Object.entries(candidate.offsets).map(([sid, values]) => {
+      if (!SCHEDULE_UUID.test(sid) || !Array.isArray(values) || !values.every(offset)) throw new ReminderStateError('INVALID_LEGACY_OFFSETS');
+      return [sid, [...new Set(values)] as ReminderOffsetMinutes[]];
+    }));
+    legacyOffsets = { scope: candidate.scope, offsets };
+  }
+  const state: State = { legacyOffsets, accountScope: value.accountScope as string | undefined, version: 3, reminders: mappings(value.reminders), intents, legacyCleanup: cleanup(value.legacyCleanup) };
   const owned = Object.values(state.reminders).flatMap(Object.values).map((r) => r.identifier);
   if (new Set(owned).size !== owned.length) throw new ReminderStateError('DUPLICATE_MAPPING_ID');
   return state;
+}
+function dropLegacyOffset(state: State, sid: string, minutes: number) {
+  if (!state.legacyOffsets?.offsets[sid]) return;
+  state.legacyOffsets.offsets[sid] = state.legacyOffsets.offsets[sid].filter(value => value !== minutes);
+  if (!state.legacyOffsets.offsets[sid].length) delete state.legacyOffsets.offsets[sid];
+  if (!Object.keys(state.legacyOffsets.offsets).length) delete state.legacyOffsets;
 }
 export function reminderTriggerAt(startsAt: string | Date, minutes: number) {
   return new Date(new Date(startsAt).getTime() - minutes * 60_000);
@@ -216,9 +235,14 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     const system = await deps.driver.list();
     const ownedIds = system.filter((r) => isOwned(r) && r.content.data?.scheduleId === sid && r.content.data.offsetMinutes === minutes).map((r) => r.identifier);
     const obsolete = [...new Set([...(intent?.obsolete || []), ...ownedIds, ...(intent?.desired ? [intent.desired.identifier] : []), ...(previous ? [previous.identifier] : [])])];
-    if (!obsolete.length && !intent && !previous) return false;
+    if (!obsolete.length && !intent && !previous) {
+      if (state.legacyOffsets?.offsets[sid]?.includes(minutes as ReminderOffsetMinutes)) {
+        await change(next => dropLegacyOffset(next, sid, minutes)); return true;
+      }
+      return false;
+    }
     // Supersede an incomplete replacement before touching the OS. It must never be restored.
-    await change((s) => { s.intents[key] = { scheduleId: sid, offsetMinutes: minutes, desired: null, obsolete }; });
+    await change((s) => { dropLegacyOffset(s, sid, minutes); s.intents[key] = { scheduleId: sid, offsetMinutes: minutes, desired: null, obsolete }; });
     await settle(key); return true;
   }
   async function list(sid: string) {
@@ -231,7 +255,7 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
    * A failure must block logout, leaving durable retry evidence untouched.
    * Server Schedule and WorkRecord rows are never modified.
    */
-  async function clearForAccountExit() {
+  async function clearForAccountExit(recoveryScope?: string | null) {
     const state = await read();
     const requests = await deps.driver.list();
     const targets = new Map<string, string>();
@@ -257,6 +281,22 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     // One durable cancellation journal BEFORE any OS mutation. A crash/rejection
     // retains every ID; no interrupted replacement can be resurrected on retry.
     await change(next => {
+      // Quarantine contains no title/time/native ID and is NOT ownership proof.
+      // Never transfer known-account preferences to a different account/project.
+      const continuing = recoveryScope && next.legacyOffsets?.scope === recoveryScope
+        && (!next.accountScope || next.accountScope === recoveryScope);
+      const canCollect = recoveryScope && (next.accountScope === recoveryScope
+        || (!next.accountScope && !next.legacyOffsets && !Object.keys(next.legacyCleanup).length));
+      if (continuing || canCollect) {
+        const offsets: Record<string, ReminderOffsetMinutes[]> = continuing ? { ...next.legacyOffsets!.offsets } : {};
+        if (canCollect) for (const [sid, entries] of Object.entries(next.reminders)) {
+          if (!SCHEDULE_UUID.test(sid)) continue;
+          const values = Object.values(entries).filter(item => !next.intents[slot(sid, item.offsetMinutes)]).map(item => item.offsetMinutes as ReminderOffsetMinutes);
+          if (values.length) offsets[sid] = [...new Set([...(offsets[sid] || []), ...values])];
+        }
+        if (Object.keys(offsets).length) next.legacyOffsets = { scope: recoveryScope!, offsets };
+        else delete next.legacyOffsets;
+      } else delete next.legacyOffsets;
       delete next.accountScope;
       next.reminders = {}; next.intents = {}; next.legacyCleanup = {};
       for (const [identifier, sid] of targets) (next.legacyCleanup[sid] ||= []).push(identifier);
@@ -286,10 +326,11 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
         return !isOwned(r) && !(!r.content.data?.owner && r.content.data?.target === 'schedule');
       })) return;
     }
-    await clearForAccountExit();
+    await clearForAccountExit(scope);
   }
   return Object.freeze({
-    clearForAccountExit: () => serial(clearForAccountExit),
+    clearForAccountExit: () => serial(() => clearForAccountExit()),
+    clearUnverifiedAccount: (scope: string) => serial(() => clearForAccountExit(scope)),
     prepareAccount: (scope: string | null) => serial(() => prepareAccount(scope)),
     confirmAccount: (scope: string, isCurrent: ReminderSyncGuard) => serial(async () => {
       const state = await read();
@@ -297,6 +338,34 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
       if (state.accountScope === scope) return;
       await change(state => { assertReminderSyncCurrent(isCurrent); state.accountScope = scope; });
     }),
+    legacyOffsetCandidates: (scope: string) => serial(async () => {
+      const state = await read();
+      if (state.accountScope !== scope || state.legacyOffsets?.scope !== scope) return [];
+      return Object.keys(state.legacyOffsets.offsets);
+    }),
+    // Called only after a complete owner-filtered canonical read. Missing rows
+    // are discarded, never interpreted as permission to restore old text/time.
+    restoreLegacyOffsets: (scope: string, requested: readonly string[], rows: readonly ConfirmedSchedule[], isCurrent: ReminderSyncGuard) => serial(() => guarded(isCurrent, async () => {
+      let state = await read();
+      if (state.accountScope !== scope) throw new ReminderStateError('LEGACY_SCOPE_CHANGED');
+      if (!state.legacyOffsets) return;
+      if (state.legacyOffsets.scope !== scope) throw new ReminderStateError('LEGACY_SCOPE_CHANGED');
+      for (const sid of requested) {
+        assertReminderSyncCurrent(isCurrent);
+        state = await read();
+        const minutes = state.legacyOffsets?.offsets[sid] || [];
+        const row = rows.find(value => value.id === sid);
+        for (const value of minutes) {
+          if (row?.status === 'confirmed' && !row.allDay && row.title?.trim() && row.startsAt
+            && reminderTriggerAt(row.startsAt, value).getTime() > now()) {
+            await schedule({ scheduleId: sid, title: row.title, scheduleStartsAt: row.startsAt, offsetMinutes: value }, false);
+          }
+          // Remove only AFTER the journalled schedule settles. Retry reuses the
+          // same live reservation if acknowledgement was lost.
+          await change(next => dropLegacyOffset(next, sid, value));
+        }
+      }
+    })),
     scheduleReminder: (input: ReminderInput, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, () => schedule(input, true))),
     hasPendingScheduleReminder: (sid: string) => serial(async () => {
       const state = await read();
@@ -339,6 +408,10 @@ export function createScheduleReminderService(deps: { storage: Storage; driver: 
     cancelScheduleReminder: (sid: string, minutes: number) => serial(() => cancel(sid, minutes)),
     cancelAllScheduleReminders: (sid: string, isCurrent: ReminderSyncGuard = () => true) => serial(() => guarded(isCurrent, async () => {
       assertReminderSyncCurrent(isCurrent);
+      const before = await read();
+      if (before.legacyOffsets?.offsets[sid]) await change(next => {
+        for (const minutes of REMINDER_OFFSETS) dropLegacyOffset(next, sid, minutes);
+      });
       let count = 0; let failed = 0;
       for (const minutes of REMINDER_OFFSETS) { assertReminderSyncCurrent(isCurrent); try { if (await cancel(sid, minutes)) count += 1; } catch { failed += 1; } }
       // A server-confirmed cancellation must also clean migrated rollback remnants.

@@ -6,7 +6,7 @@ import type { Session } from '@supabase/supabase-js';
 import { resetCalendarConnection, selectCalendarOwner, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
 import { AppState, Platform } from 'react-native';
-import { prepareAccount, confirmAccount, clearForAccountExit } from '@/src/features/schedule/local-notifications';
+import { clearUnverifiedAccount, prepareAccount, confirmAccount, clearForAccountExit } from '@/src/features/schedule/local-notifications';
 import { reminderSessionEpoch, reminderSyncEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -190,6 +190,7 @@ export function PlatformProvider({ children }: PropsWithChildren) {
             reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate();
             if (Platform.OS !== 'web') await prepareAccount(candidate ? JSON.stringify([nextConfig.supabaseUrl, nextConfig.dataSchema || 'public', candidate.user.id]) : null);
           }),
+          reject: candidate => Platform.OS === 'web' ? Promise.resolve() : clearUnverifiedAccount(JSON.stringify([nextConfig.supabaseUrl, nextConfig.dataSchema || 'public', candidate.user.id])),
           confirm: (candidate, current) => Platform.OS === 'web' ? Promise.resolve() : confirmAccount(JSON.stringify([nextConfig.supabaseUrl, nextConfig.dataSchema || 'public', candidate.user.id]), current),
           verify: async id => {
             const verified = await measureStartup('identity', () => withRequestDeadline(() => nextClient.auth.getUser()));

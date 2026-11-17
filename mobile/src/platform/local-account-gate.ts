@@ -2,6 +2,7 @@
  * The callback is deferred, avoiding Supabase auth-listener lock reentrancy. */
 export function createLocalAccountGate<T extends { user: { id: string } }>(deps: {
   clear(session?: T | null): Promise<unknown>; verify(id: string): Promise<boolean>;
+  reject?(session: T): Promise<unknown>;
   confirm?(session: T, current: () => boolean): Promise<unknown>;
   owner(id: string | null): void; publish(session: T | null): void; failed(): void;
 }) {
@@ -25,7 +26,8 @@ export function createLocalAccountGate<T extends { user: { id: string } }>(deps:
         if (ticket !== epoch) return;
         if (cleanup.status === 'rejected') throw cleanup.reason;
         if (identity.status === 'rejected' || !identity.value) {
-          await deps.clear(null);
+          if (session && deps.reject) await deps.reject(session);
+          else await deps.clear(null);
           throw Error('LOCAL_ACCOUNT_UNVERIFIED');
         }
         if (session) await deps.confirm?.(session, () => ticket === epoch);
