@@ -20,3 +20,6 @@ export async function confirmWorklogReminder(_client, recordId, startsAt, curren
   if (confirmationError) throw confirmationError;
   return { id: '11111111-1111-4111-8111-111111111111', title: 'test', startsAt, status: 'confirmed' };
 }
+
+export const legacyOffsetCandidates = async () => [];
+export const restoreLegacyOffsets = async () => {};

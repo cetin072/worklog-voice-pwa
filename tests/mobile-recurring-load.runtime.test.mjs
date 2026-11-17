@@ -19,6 +19,7 @@ test('인증/초기 조회 실패는 기존 알림을 비우지 않고 늦은 �
   h.call(client,'A',true);await h.effects();reject(Error('offline'));await new Promise(r=>setImmediate(r));
   h.call(client,'A',true);await h.effects();assert.equal(reservations,0,'조회 실패를 빈 목록으로 해석해 OS 알림 취소 금지');
   list=async()=>[work];await h.call(client,'A',true).reload();h.call(client,'A',true);await h.effects();assert.equal(reservations,1);
+  await h.call(client,'A',true).reload();h.call(client,'A',true);await h.effects();assert.equal(reservations,1,'unchanged snapshot must not resynchronize alarms');
   list=()=>new Promise(r=>{resolveSlow=r});const pending=h.call(client,'A',true).reload();
   await h.call(client,'A',true).mutate('w',{op:'complete',key:'v1:2026-11-10',originalDate:'2026-11-10'});
   resolveSlow([work]);await pending;assert.equal(h.call(client,'A',true).works[0].version,1);assert.equal(cancels,0);

@@ -1,0 +1,133 @@
+{
+  "baseline": "db25350c18aa73d10a3b0d15b52c8b733b94a817",
+  "environment": {
+    "runtime": "v24.19.0",
+    "fixture": "12 synthetic schedules; offsets 5/30/1440; actual durable storage + service + account gate",
+    "nativeStorageAndOsLatencyMs": 1,
+    "identityLatencyMs": 40,
+    "iterations": 5,
+    "metric": "account transition wall time only; not device startup or first touch"
+  },
+  "results": [
+    {
+      "scenario": "same-account",
+      "version": "before",
+      "samplesMs": [
+        893,
+        900,
+        883,
+        902,
+        869
+      ],
+      "medianMs": 893,
+      "counts": {
+        "read": 481,
+        "write": 157,
+        "list": 98,
+        "cancel": 12,
+        "schedule": 0
+      },
+      "preserved": 0
+    },
+    {
+      "scenario": "same-account",
+      "version": "after",
+      "samplesMs": [
+        45,
+        44,
+        44,
+        44,
+        45
+      ],
+      "medianMs": 44,
+      "counts": {
+        "read": 6,
+        "write": 0,
+        "list": 1,
+        "cancel": 0,
+        "schedule": 0
+      },
+      "preserved": 12
+    },
+    {
+      "scenario": "unknown-owner",
+      "version": "before",
+      "samplesMs": [
+        919,
+        873,
+        885,
+        866,
+        879
+      ],
+      "medianMs": 879,
+      "counts": {
+        "read": 481,
+        "write": 157,
+        "list": 98,
+        "cancel": 12,
+        "schedule": 0
+      },
+      "preserved": 0
+    },
+    {
+      "scenario": "unknown-owner",
+      "version": "after",
+      "samplesMs": [
+        88,
+        82,
+        81,
+        81,
+        81
+      ],
+      "medianMs": 81,
+      "counts": {
+        "read": 40,
+        "write": 19,
+        "list": 2,
+        "cancel": 12,
+        "schedule": 0
+      },
+      "preserved": 0
+    },
+    {
+      "scenario": "account-change",
+      "version": "before",
+      "samplesMs": [
+        873,
+        938,
+        887,
+        898,
+        872
+      ],
+      "medianMs": 887,
+      "counts": {
+        "read": 481,
+        "write": 157,
+        "list": 98,
+        "cancel": 12,
+        "schedule": 0
+      },
+      "preserved": 0
+    },
+    {
+      "scenario": "account-change",
+      "version": "after",
+      "samplesMs": [
+        85,
+        82,
+        80,
+        80,
+        81
+      ],
+      "medianMs": 81,
+      "counts": {
+        "read": 40,
+        "write": 19,
+        "list": 2,
+        "cancel": 12,
+        "schedule": 0
+      },
+      "preserved": 0
+    }
+  ]
+}

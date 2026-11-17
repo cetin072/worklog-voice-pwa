@@ -1,3 +1,4 @@
+import { measureStartup } from '../startup/startup-timing';
 import { useExternalCalendar } from '../calendar/use-external-calendar';
 import { mergeCalendarEvents } from '../calendar/calendar-read';
 import { recordRowStyles } from '@/src/ui/record-row-styles';
@@ -38,7 +39,7 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     setError('');
     if (!integrated || !client || !config || !owner) return;
     const access = { client, config, ownerId: owner, current };
-    void Promise.all(monthKey.split(',').map(month => personalCalendarRequest<CalendarMonth>(access, 'get_my_calendar_month', { p_month: month + '-01' })))
+    void measureStartup('calendar', () => Promise.all(monthKey.split(',').map(month => personalCalendarRequest<CalendarMonth>(access, 'get_my_calendar_month', { p_month: month + '-01' }))))
       .then(values => { if (current()) setResult({ key, events: values.flatMap(v => v.events), limited: values.some(v => v.limited) }); })
       .catch(e => { if (current()) { const message = personalCalendarMessage(e); setError(message.includes('입력은 유지') ? '일정을 불러오지 못했습니다. 다시 시도해주세요.' : message); } });
     return () => { alive = false; };
