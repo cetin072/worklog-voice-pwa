@@ -5,7 +5,7 @@ import type { CalendarCredential } from './calendar-credential-store';
 import { withRequestDeadline } from '../../platform/request-deadline';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.owned';
-export const CALENDAR_PERMISSION_NOTICE = '선택 사항입니다. Google 권한 자체는 소유 캘린더 일정의 조회·생성·수정·삭제를 허용합니다. 업무수첩은 확인한 한 건 생성·조회만 사용하며 기존 Google 일정을 수정·삭제하지 않습니다. 기본 소유 캘린더(primary)만 지원합니다.';
+export const CALENDAR_PERMISSION_NOTICE = '선택 사항입니다. Google 권한 자체는 소유 캘린더 일정의 조회·생성·수정·삭제를 허용합니다. 업무수첩은 달력에 표시할 기간의 일정 조회와 확인한 한 건 생성만 사용하며 기존 Google 일정을 수정·삭제하지 않습니다. 기본 소유 캘린더(primary)만 지원합니다.';
 export type CalendarPkce = { verifier: string; challenge: string };
 
 /** Native Expo Crypto boundary: never Math.random or the SDK's plain fallback. */
