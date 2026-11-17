@@ -1,3 +1,4 @@
+import { measureStartup } from '../mobile/src/features/startup/startup-timing.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register, createRequire } from 'node:module';
@@ -33,7 +34,7 @@ function calendarHarness(request, getConnection) {
  const externalHook=externalCalendarHook(React,native,getConnection);
  const props={today:'2026-11-30',revision:0,fallback:[],onOpenCalendar:()=>{},onTodayCount:()=>{},renderSchedule:s=>element('Text',{},s.title)};
  const exp={},code=ts.transpileModule(readFileSync('mobile/src/features/home/home-calendar.tsx','utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
- new Function('React','require','exports',code)(React,name=>name==='react'?React:name==='react-native'?native:name.includes('use-external-calendar')?externalHook:name.endsWith('calendar-read')?read:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:name.includes('record-row-styles')?{recordRowStyles:{taskTitle:'memoTitle',taskMeta:'memoMeta'}}:{mobileTheme:{colors:{}}},exp);
+ new Function('React','require','exports',code)(React,name=>name.endsWith('/startup-timing')?{measureStartup}:name==='react'?React:name==='react-native'?native:name.includes('use-external-calendar')?externalHook:name.endsWith('calendar-read')?read:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:name.includes('record-row-styles')?{recordRowStyles:{taskTitle:'memoTitle',taskMeta:'memoMeta'}}:{mobileTheme:{colors:{}}},exp);
  return {props,platform,render(){cursor=0;const tree=exp.HomeCalendar(props);const run=pending;pending=[];run.forEach(f=>f());return tree;},close(){effects.forEach(e=>e?.cleanup?.());}};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));

@@ -1,3 +1,4 @@
+import { measureStartup } from '../mobile/src/features/startup/startup-timing.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -15,17 +16,19 @@ test('a hanging reminder recovery does not hold the first home fetch; cleanup re
  let callback;
  function walk(n) { if (ts.isCallExpression(n) && n.expression.getText(ast) === 'useEffect' && n.arguments[0]?.getText(ast).includes('recoverSavedScheduleReminders(client)')) callback = n.arguments[0].getText(ast); ts.forEachChild(n, walk); }
  walk(ast); assert.ok(callback);
- let release, refreshes = 0, clockUpdates = 0, foreground;
+ let release, refreshes = 0, clockUpdates = 0, foreground, authEvent, invalidations = 0;
  // auth subscription is part of the production effect.
- const scopeClient = { auth: { onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; } } };
+ const scopeClient = { auth: { onAuthStateChange(fn) { authEvent = fn; return { data: { subscription: { unsubscribe() {} } } }; } } };
  const effect = compile(`return (${callback});`, {
-   session: { access_token: 'synthetic' }, client: scopeClient, androidTouchSmoke: false, initialReminderRecovery: { current: Promise.resolve() },
+   measureStartup, session: { access_token: 'synthetic', user: { id: 'A' } }, client: scopeClient, androidTouchSmoke: false, initialReminderRecovery: { current: Promise.resolve() },
    recoverSavedScheduleReminders: () => new Promise(resolve => { release = resolve; }),
    refreshBriefing: async () => { refreshes++; }, setBriefingNow: () => clockUpdates++,
-   reminderSessionEpoch: { invalidate() {} }, reminderSyncEpoch: { invalidate() {} },
+   reminderSessionEpoch: { invalidate() { invalidations++; } }, reminderSyncEpoch: { invalidate() { invalidations++; } },
    AppState: { addEventListener(_name, fn) { foreground = fn; return { remove() {} }; } }, console, Date,
  });
  const cleanup = effect(); assert.equal(refreshes, 1);
+ authEvent('TOKEN_REFRESHED', {user:{id:'A'}});assert.equal(invalidations,0);
+ authEvent('SIGNED_OUT', null);assert.equal(invalidations,2);
  foreground('background'); assert.equal(refreshes, 1);
  cleanup(); release(); await new Promise(resolve => setImmediate(resolve)); assert.equal(clockUpdates, 0);
 });

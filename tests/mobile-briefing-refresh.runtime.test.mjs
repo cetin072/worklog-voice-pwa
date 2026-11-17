@@ -1,3 +1,4 @@
+import { measureStartup } from '../mobile/src/features/startup/startup-timing.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -19,7 +20,7 @@ function compile(code, scope) {
 }
 function harness() {
   const state = { briefing: { title: 'previous snapshot' }, error: '', busy: false, reads: 0, calendarRevision: 0 };
-  const scope = {
+  const scope = { measureStartup,
     session: {}, client: {}, briefingRefreshEpoch: { current: 1 }, briefingRefreshQueue: { current: createSerialTaskQueue() },
     editDetailsCache: { current: new Map() }, androidTouchSmoke: false, initialReminderRecovery: { current: Promise.resolve() },
     freshHomeAccessToken: async () => 'synthetic',
@@ -101,7 +102,7 @@ test('native reminder cleanup failure after a fresh list is separate from list r
 
 test('completion and undo keep their confirmed server result when list retrieval fails; only reads are retried', async () => {
   const h = harness(); const mutations = []; const messages = [];
-  const scope = {
+  const scope = { measureStartup,
     session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, recordMutationInFlight: { current: false }, undoTask: null, refreshBriefing: h.refreshBriefing,
     getFreshAccessToken: async () => 'synthetic', clearMessage() {},
     setTaskBusyId: value => { scope.taskBusyId = value; },
@@ -125,7 +126,7 @@ test('two rapid taps on the same task create only one completed-status write', a
   let release;
   const barrier = new Promise(resolve => { release = resolve; });
   const calls = [];
-  const scope = {
+  const scope = { measureStartup,
     session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, recordMutationInFlight: { current: false }, undoTask: null,
     getFreshAccessToken: async () => 'fresh',
     updateWorklogStatus: async (_token, id, status) => { calls.push({ id, status }); await barrier; },
@@ -149,7 +150,7 @@ test('rapid Undo taps write one restoration and failed writes release the lock f
   const barrier = new Promise(resolve => { release = resolve; });
   const calls = [];
   const target = { pageId: 'task-2', title: '합성 업무', status: '진행중', previousAttentionAt: null };
-  const scope = {
+  const scope = { measureStartup,
     session: {}, client: {}, taskBusyId: null, taskStatusInFlight: { current: false }, recordMutationInFlight: { current: false }, undoTask: target,
     getFreshAccessToken: async () => 'fresh',
     updateWorklogStatus: async (_token, id, status) => { calls.push({ id, status }); await barrier; },
@@ -177,7 +178,7 @@ test('rapid Undo taps write one restoration and failed writes release the lock f
 
 test('note acknowledge and Undo renew access token instead of reusing an expired session token', async () => {
   const calls = [];
-  const scope = {
+  const scope = { measureStartup,
     session: { access_token: 'expired' }, client: {}, noteBusyId: null, undoNote: null,
     getFreshAccessToken: async () => 'fresh',
     updateBriefingNoteState: async (token, id, state) => { calls.push({ token, id, state }); },

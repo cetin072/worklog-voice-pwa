@@ -1,3 +1,4 @@
+import { measureStartup } from '@/src/features/startup/startup-timing';
 import { HabitsScreen } from '@/src/features/habits/habits-screen';
 import { MyManagementScreen } from '@/src/features/management/my-management-screen';
 import { repeatHistory, repeatSummary } from '@/src/features/recurring/recurrence-model';
@@ -561,7 +562,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); return; }
     if (androidTouchSmoke) void refreshBriefing();
     return () => { briefingRefreshEpoch.current += 1; briefingRefreshQueue.current.reset(); };
-  }, [session?.access_token]);
+  }, [client, session?.user.id]);
   useEffect(() => {
     if (!session || !client || androidTouchSmoke) return;
     let alive = true;
@@ -570,18 +571,18 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       catch (nextError) { if (alive) console.warn('[schedule-reminder] recovery pending', messageOf(nextError, 'unknown')); }
       if (alive) setBriefingNow(Date.now());
     };
-    const { data: authChanges } = client.auth.onAuthStateChange((event) => {
-      if (event !== 'INITIAL_SESSION') { reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); }
+    const { data: authChanges } = client.auth.onAuthStateChange((event, nextSession) => {
+      if (event !== 'INITIAL_SESSION' && nextSession?.user.id !== session.user.id) { reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); }
     });
-    initialReminderRecovery.current = recover();
+    initialReminderRecovery.current = measureStartup('recovery', recover);
     void refreshBriefing();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
-      initialReminderRecovery.current = recover();
+      initialReminderRecovery.current = measureStartup('recovery', recover);
       void refreshBriefing();
     });
     return () => { alive = false; reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); authChanges.subscription.unsubscribe(); subscription.remove(); };
-  }, [androidTouchSmoke, client, session?.access_token]);
+  }, [androidTouchSmoke, client, session?.user.id]);
   useEffect(() => {
     if (!session || !client || screen !== 'journal') return;
     let alive = true;
@@ -667,7 +668,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       setHomeCalendarRevision(value => value + 1);
       try {
         const accessToken = await freshHomeAccessToken(client);
-        const next = await loadHomeBriefing(accessToken);
+        const next = await measureStartup('briefing', () => loadHomeBriefing(accessToken));
         if (epoch !== briefingRefreshEpoch.current) return false;
         setBriefing(next);
         if (!androidTouchSmoke) {
