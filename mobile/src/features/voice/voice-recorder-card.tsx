@@ -518,10 +518,10 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, onOpenMe
         {quickPhase === 'idle' && onOpenMeetingRecording ? <Pressable accessibilityRole="button" accessibilityLabel="회의 녹음 열기" style={styles.quickStatusBubble} onPress={() => { if (!inFlight.current && quickPhase === 'idle') onOpenMeetingRecording(); }}>
           <Text style={styles.quickStatusBubbleText}>회의 녹음</Text>
         </Pressable> : <View pointerEvents="none" style={[styles.quickStatusBubble, isRecording ? styles.quickStatusBubbleRecording : statusDone ? styles.quickStatusBubbleDone : null]}>
-          <Text style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
+          <Text numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={statusText} style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
         </View>}
       </View>
-      {quickPhase === 'transcribing' && modelDownload ? <Text style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
+      {quickPhase === 'transcribing' && modelDownload ? <Text numberOfLines={1} ellipsizeMode="tail" style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
       <View pointerEvents="box-none" style={styles.quickOrbitalRow}>
         {isRecording ? <Pressable key="cancel-recording" disabled={false} accessibilityRole="button" accessibilityLabel="녹음 취소" style={[styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft]} onPress={() => void cancelQuickVoice()}>
@@ -591,7 +591,7 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, onOpenMe
 const styles = StyleSheet.create({
   quickDock: { width: QUICK_VOICE_LAYOUT.dockWidth, height: QUICK_VOICE_LAYOUT.dockHeight, alignSelf: 'center', position: 'relative', backgroundColor: 'transparent' },
   quickTopControl: { position: 'absolute', top: 0, left: 0, right: 0, height: QUICK_VOICE_LAYOUT.timerSize, alignItems: 'center', justifyContent: 'center' },
-  quickStatusBubble: { minHeight: QUICK_VOICE_LAYOUT.timerSize, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.94)', shadowColor: '#111827', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
+  quickStatusBubble: { maxWidth: '100%', minHeight: QUICK_VOICE_LAYOUT.timerSize, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.94)', shadowColor: '#111827', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
   quickStatusBubbleRecording: { backgroundColor: '#b91c1c' },
   quickStatusBubbleDone: { backgroundColor: '#eaf4ea' },
   quickStatusBubbleText: { fontSize: 12, fontWeight: '900', color: '#475569' },
