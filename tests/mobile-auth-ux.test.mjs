@@ -107,12 +107,12 @@ test('Android resizes the app above the software keyboard during login', () => {
   assert.match(appShellSource, /keyboardDismissMode="on-drag"/);
 });
 
-test('App shell applies safe-area insets without depending on a bottom navigation bar', () => {
+test('App shell reserves space for the voice dock, two bottom tabs and safe area', () => {
   assert.match(rootLayoutSource, /SafeAreaProvider/);
   assert.match(appShellSource, /useSafeAreaInsets/);
   assert.match(appShellSource, /paddingTop: insets\.top/);
   assert.match(appShellSource, /QUICK_VOICE_LAYOUT\.dockReserveHeight/);
-  assert.match(appShellSource, /paddingBottom: QUICK_VOICE_LAYOUT\.dockReserveHeight \+ Math\.max\(insets\.bottom, 8\)/);
+  assert.match(appShellSource, /paddingBottom: QUICK_VOICE_LAYOUT\.dockReserveHeight \+ 60 \+ Math\.max\(insets\.bottom, 8\)/);
   assert.doesNotMatch(appShellSource, /PrimaryNavigation/);
 });
 
