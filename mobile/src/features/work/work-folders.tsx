@@ -4,15 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
-import type { BriefingTask, WorkJournalRecord } from '@/src/platform/worklog-api';
+import type { BriefingNote, BriefingTask, WorkJournalRecord } from '@/src/platform/worklog-api';
 import { loadWorkJournalDay } from '@/src/platform/worklog-api';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 import { mobileTheme } from '@/src/ui/theme';
 import { seoulDate } from '../home/home-calendar-model';
 import { canMoveFolder, folderPath, loadFolderRecords, loadFolders, organizeRecord, saveFolder, PAGE_SIZE, TODAY_POLICY, type FolderRecord, type WorkFolder, type WorkSection } from './work-folders-store';
 
-type Props = { client: PlatformSupabaseClient; userId: string; home?: boolean; revision: number; busy: boolean; onComplete: (task: BriefingTask) => Promise<void>; onInput: () => void };
-export function WorkFolders({ client, userId, home = false, revision, busy: externalBusy, onComplete, onInput }: Props) {
+type Props = { client: PlatformSupabaseClient; userId: string; home?: boolean; revision: number; busy: boolean; onComplete: (task: BriefingTask) => Promise<void>; onInput: () => void; onCompleteNote: (note: BriefingNote) => Promise<void>; onJournal: () => void; onSearch: () => void };
+export function WorkFolders({ client, userId, home = false, revision, busy: externalBusy, onComplete, onInput, onCompleteNote, onJournal, onSearch }: Props) {
   const [folders, setFolders] = useState<WorkFolder[]>([]);
   const [folder, setFolder] = useState<string | null>(null);
   const [section, setSection] = useState<WorkSection>(home ? 'today' : 'tasks');
@@ -90,6 +90,7 @@ export function WorkFolders({ client, userId, home = false, revision, busy: exte
       </View>
       <View style={styles.actions}>{([['tasks', '할 일'], ['notes', '메모·자료'], ['completed', '완료']] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: section === key }} disabled={busy || externalBusy} style={[styles.tab, section === key && styles.active]} onPress={() => { setSection(key); setExpanded(null); }}><Text style={section === key ? styles.activeText : styles.text}>{label}</Text></Pressable>)}</View>
     </> : null}
+    {!home ? <View style={styles.actions}>{button('날짜별 업무일지', onJournal, busy || externalBusy)}{button('과거 기록 검색', onSearch, busy || externalBusy)}</View> : null}
     {editor ? <Modal transparent animationType="fade" onShow={() => folderNameInput.current?.focus()} onRequestClose={() => { if (!busy) setEditor(null); }}>
       <KeyboardAvoidingView style={styles.editorOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.editorScroll} contentContainerStyle={styles.editorContent} keyboardShouldPersistTaps="handled">
@@ -114,9 +115,10 @@ export function WorkFolders({ client, userId, home = false, revision, busy: exte
     {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
     {ready && !records.length ? <Text style={styles.help}>{home ? '업무 탭에서 날짜 없는 할 일을 골라보세요.' : '이 폴더에 해당 기록이 없습니다.'}</Text> : null}
     {records.map(record => <View key={record.id} style={styles.record}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}><Text style={styles.text}>{record.status === 'completed' ? '✓ ' : ''}{record.title}</Text><Text style={styles.help}>{home ? `${folderPath(folders, record.folder_id)} · ` : ''}{record.due_at ? `기한 ${seoulDate(record.due_at)}` : '날짜 없음'}{record.selected_on ? ' · 오늘 선택됨' : ''}</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}><Text style={styles.text}>{section === 'completed' ? '✓ ' : ''}{record.title}</Text><Text style={styles.help}>{home ? `${folderPath(folders, record.folder_id)} · ` : ''}{section === 'completed' ? `완료 ${record.completed_at || record.acknowledged_at ? seoulDate(record.completed_at || record.acknowledged_at!) : '날짜 미확인'}` : record.due_at ? `기한 ${seoulDate(record.due_at)}` : '날짜 없음'}{record.selected_on ? ' · 오늘 선택됨' : ''}</Text></Pressable>
       {expanded === record.id ? <Text selectable style={styles.text}>{record.content || record.original_text || '추가 본문이 없습니다.'}</Text> : null}
       <View style={styles.actions}>
+        {section !== 'completed' && record.status !== 'completed' && record.action_kind === 'note' && record.briefing_state !== 'acknowledged' ? button(`${record.title} 완료`, () => void mutate(() => onCompleteNote({ pageId: record.id, title: record.title })), disabled, '완료') : null}
         {record.status !== 'completed' && record.action_kind !== 'note' ? <>
           {button(`${record.title} 완료`, () => void mutate(() => onComplete({ pageId: record.id, title: record.title, status: record.status === 'waiting' ? '대기' : record.status === 'needs_review' ? '확인필요' : '진행중', nextAttentionAt: record.next_attention_at || undefined })), disabled, '완료')}
           {!record.due_at || record.selected_on ? button(record.selected_on ? '오늘 선택 해제' : '오늘 하기', () => void mutate(() => organizeRecord(client, record, { today: !record.selected_on }, userId))) : null}

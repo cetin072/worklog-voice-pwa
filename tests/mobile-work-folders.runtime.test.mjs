@@ -19,7 +19,7 @@ function harness(overrides={},home=false){
   '@/src/platform/worklog-api':{loadWorkJournalDay:async()=>({completed:[{pageId:'done',title:'Journal completion'}]})},
   '@/src/platform/authenticated-access':{getFreshAccessToken:async()=> 'synthetic'},
  });
- const props={client:{},userId:'owner',home,revision:0,busy:false,onComplete:async()=>{},onInput:()=>{}};
+ const props={client:{},userId:'owner',home,revision:0,busy:false,onComplete:async()=>{},onCompleteNote:async()=>{},onJournal:()=>{},onSearch:()=>{},onInput:()=>{}};
  const render=()=>h.render(props);
  const button=label=>nativeNodes(render()).find(n=>n.props?.accessibilityLabel===label);
  const flush=async()=>{render();await h.effects();render();await h.effects();};
@@ -128,4 +128,19 @@ test('Work and Today cards use shared Home styles with trailing text refresh',as
    assert.deepEqual(refresh.props.style,shared.workspaceStyles.refresh);assert.ok(!refresh.props.style.backgroundColor);
   }finally{h.close();}
  }
+});
+
+
+test('memo completion reuses acknowledgement, disappears after confirmed reload, and exposes journal/search',async()=>{
+ let done=false,calls=0,journal=0,search=0;
+ const h=harness({loadFolderRecords:async(_client,_folder,section)=>section==='completed'?(done?[{...record,action_kind:'note',briefing_state:'acknowledged',acknowledged_at:'2026-11-17T16:00:00Z'}]:[]):done?[]:[{...record,action_kind:'note',briefing_state:'active'}]});
+ h.props.onCompleteNote=async note=>{calls++;assert.equal(note.pageId,'r');done=true;};
+ h.props.onJournal=()=>journal++;h.props.onSearch=()=>search++;
+ try{
+  await h.flush();const press=h.button('Undated task 완료').props.onPress;press();press();await tick();await h.flush();
+  assert.equal(calls,1);assert.doesNotMatch(nativeWords(h.render()),/Undated task/);
+  nativeNodes(h.render()).find(n=>n.props?.accessibilityRole==='tab' && nativeWords(n)==='완료').props.onPress();await h.flush();
+  assert.match(nativeWords(h.render()),/완료 2026-11-18/);assert.equal(h.button('Undated task 완료'),undefined);
+  h.button('날짜별 업무일지').props.onPress();h.button('과거 기록 검색').props.onPress();assert.equal(journal,1);assert.equal(search,1);
+ }finally{h.close();}
 });

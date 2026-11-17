@@ -1312,8 +1312,9 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   return <HomeReminderStatus client={client} briefing={briefing} scope={session.user.id} refreshKey={`${screen}:${briefingNow}:${Boolean(reminderTarget)}`}><View style={[styles.page, { paddingTop: insets.top }]}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.authenticatedShell}><ScrollView style={styles.contentScroll} contentContainerStyle={[styles.scroll, { paddingBottom: QUICK_VOICE_LAYOUT.dockReserveHeight + 60 + Math.max(insets.bottom, 8) }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"><HomeHeader onOpenRecordSearch={() => setScreen('recordSearch')} onOpenSettings={() => setScreen('settings')} onOpenManagement={()=>{setManagementReturn('home');setScreen('subscriptions');}} />
     {savedReminder && !(screen === 'home' && matchingDirectReminder) ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{savedReminder.message}</Text><Button title="🔔 이 기록의 알림 추가·확인" onPress={() => setReminderTarget(savedReminder.target)} /></View> : null}
     {undoTask ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoTask.title} 완료 처리</Text><Pressable accessibilityRole="button" disabled={Boolean(taskBusyId)} onPress={() => void undoCompletedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
+      {undoNote ? <View style={styles.undoBar}><Text style={styles.undoText}>메모를 완료했습니다. 기록은 업무일지에 남습니다.</Text><Pressable accessibilityRole="button" disabled={Boolean(noteBusyId)} onPress={() => void undoAcknowledgedNote()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
     {screen === 'work' && message ? <Text accessibilityLiveRegion="polite" style={[styles.messageInline, messageTone === 'error' ? styles.messageError : styles.messageInfo]}>{message}</Text> : null}
-    {screen === 'work' && client ? <WorkFolders userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || busy} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
+    {screen === 'work' && client ? <WorkFolders userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={() => setScreen('journal')} onSearch={() => setScreen('recordSearch')} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
     {screen === 'home' ? <>
       <MeetingRecordingBanner onOpen={() => setScreen('meeting')} />
       {lastDirectSave ? <View style={styles.saveFeedback}>
@@ -1343,7 +1344,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
           <View style={styles.headerActions}><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => setScreen('reminderSettings')}><Text style={styles.linkText}>알림 설정</Text></Pressable><Pressable accessibilityRole="button" style={styles.homeRefresh} onPress={() => Alert.alert('이 기기의 알림', '종 ✓ 초록: 이 기기 예약 확인\n종 − 회색: 알림 없음\n종 ! 빨강: 권한 필요\n종 ? 파랑: 확인 필요\n종을 누르면 예약 시점과 상세 상태를 확인합니다. 예약 확인은 실제 전달을 보장하지 않습니다.')}><Text style={styles.helpText}>이 기기 기준 · 알림 표시 도움말 ⓘ</Text></Pressable></View>
         </View>} />
 
-      {client && !androidTouchSmoke ? <WorkFolders userId={session.user.id} key={`home-folders:${session.user.id}`} home client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || busy} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
+      {client && !androidTouchSmoke ? <WorkFolders userId={session.user.id} key={`home-folders:${session.user.id}`} home client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={() => setScreen('journal')} onSearch={() => setScreen('recordSearch')} onComplete={completeTaskInline} onInput={() => setScreen('input')} /> : null}
       {briefing ? briefingBuckets.filter(bucket => bucket.key === activeFilter).map((bucket) => {
         const tasks = structure[bucket.key] || [];
         const expanded = expandedBuckets[bucket.key] === true;
@@ -1373,7 +1374,6 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
         {extraNotes ? <Pressable accessibilityRole="button" accessibilityLabel={notesExpanded ? '메모 · 참고 접기' : `메모 · 참고 ${extraNotes}개 더 보기`} style={styles.moreButton} onPress={() => setNotesExpanded((value) => !value)}><Text style={styles.moreButtonText}>{notesExpanded ? '접기' : `${extraNotes}개 더 보기`}</Text></Pressable> : null}
       </View> : null}
 
-      {undoNote ? <View style={styles.undoBar}><Text style={styles.undoText}>메모를 브리핑에서 내렸습니다.</Text><Pressable accessibilityRole="button" disabled={Boolean(noteBusyId)} onPress={() => void undoAcknowledgedNote()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
 
 
 
@@ -1391,6 +1391,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
 
     {screen === 'journal' ? <View style={styles.journalScreen}>
       <PanelHead eyebrow="자동 기록" title="업무일지" onClose={() => setScreen('settings')} />
+      <Button title="과거 기록 검색" onPress={() => setScreen('recordSearch')} />
       <View style={styles.journalDateNav}>
         <Pressable accessibilityRole="button" accessibilityLabel="이전 날짜 업무일지" style={styles.journalNavButton} onPress={() => moveJournalDay(-1)}><Text style={styles.journalNavText}>‹ 이전</Text></Pressable>
         <View style={styles.journalDateTitleWrap}><Text style={styles.journalDateTitle}>{formatJournalDate(journalTarget)}</Text><Pressable accessibilityRole="button" disabled={journalTarget === journalToday} onPress={() => setJournalDate(seoulTodayKey())}><Text style={[styles.journalTodayLink, journalTarget === journalToday ? styles.journalTodayLinkDisabled : null]}>{journalTarget === journalToday ? '오늘' : '오늘로'}</Text></Pressable></View>
