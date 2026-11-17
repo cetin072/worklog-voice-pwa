@@ -1,3 +1,5 @@
+import { secureSessionStorage } from '../../platform/secure-storage';
+import { createCalendarCredentialStore } from './calendar-credential-store';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import type { PublicPlatformConfig } from '../../platform/config';
@@ -22,7 +24,11 @@ export function selectCalendarOwner(userId: string | null) {
 export function calendarConnection(config: PublicPlatformConfig, userId: string) {
   if (!active || owner !== userId) {
     resetCalendarConnection(); owner = userId;
-    active = createCalendarConnection({ authorize: () => authorizeGoogleCalendar(config, MOBILE_AUTH_CALLBACK_URL, WebBrowser.openAuthSessionAsync, nativePkce) });
+    const store = createCalendarCredentialStore(secureSessionStorage, config.supabaseUrl, userId);
+    active = createCalendarConnection({
+      authorize: () => authorizeGoogleCalendar(config, MOBILE_AUTH_CALLBACK_URL, WebBrowser.openAuthSessionAsync, nativePkce, fetch, store.save),
+      restore: store.restore, clear: store.clear,
+    });
   }
   return active;
 }

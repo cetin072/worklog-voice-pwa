@@ -1,10 +1,11 @@
 import type { PublicPlatformConfig } from '../../platform/config';
 import type { CalendarConnection } from './calendar-connection';
 import { createGoogleCalendarAdapter } from './google-calendar-adapter';
+import type { CalendarCredential } from './calendar-credential-store';
 import { withRequestDeadline } from '../../platform/request-deadline';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.owned';
-export const CALENDAR_PERMISSION_NOTICE = '선택 사항입니다. Google 권한 자체는 소유 캘린더 일정의 조회·생성·수정·삭제를 허용합니다. 업무수첩은 확인한 한 건 생성·조회만 사용하며 기존 Google 일정을 수정·삭제하지 않습니다. 기본 소유 캘린더(primary)만 지원합니다.';
+export const CALENDAR_PERMISSION_NOTICE = '선택 사항입니다. Google 권한 자체는 소유 캘린더 일정의 조회·생성·수정·삭제를 허용합니다. 업무수첩은 달력에 표시할 기간의 일정 조회와 확인한 한 건 생성만 사용하며 기존 Google 일정을 수정·삭제하지 않습니다. 기본 소유 캘린더(primary)만 지원합니다.';
 export type CalendarPkce = { verifier: string; challenge: string };
 
 /** Native Expo Crypto boundary: never Math.random or the SDK's plain fallback. */
@@ -19,13 +20,15 @@ export async function createCalendarPkce(randomBytes: () => Promise<Uint8Array>,
 
 /** Public Supabase Auth PKCE protocol, with a native S256 proof. This adapter
  * deliberately never constructs an app/temporary session client or invokes a
- * storage API. JWT/refresh fields in the response are discarded, not installed.
+ * app-session storage API. Only the Google access credential can be saved
+ * through the separate encrypted Calendar store. JWT/refresh fields in the response are discarded, not installed.
  * SDK 2.116 falls back to weak/plain PKCE when native WebCrypto is absent; using
  * the existing Expo Crypto primitive avoids both that fallback and global shims.
  */
 export async function authorizeGoogleCalendar(config: PublicPlatformConfig, callback: string,
   openBrowser: (url: string, redirect: string) => Promise<{ type: string; url?: string }>,
   makePkce: () => Promise<CalendarPkce>, fetchImpl: typeof fetch = fetch,
+  persist?: (credential: CalendarCredential) => Promise<void>,
 ): Promise<CalendarConnection | null> {
   const boundedFetch: typeof fetch = (url, options) => withRequestDeadline(signal => fetchImpl(url, { ...options, signal }));
   const redirect = `${callback}?purpose=calendar`;
@@ -64,7 +67,9 @@ export async function authorizeGoogleCalendar(config: PublicPlatformConfig, call
   const identity = await response.json();
   if (typeof identity.id !== 'string' || typeof identity.email !== 'string' || identity.verified_email !== true) throw Error('CALENDAR_AUTH_FAILED');
   const target = { accountId: identity.id, calendarId: 'primary' };
-  return { target, email: identity.email, expiresAt: Date.now() + 50 * 60000,
+  const credential = { target, email: identity.email, expiresAt: Date.now() + 50 * 60000, token };
+  return { target, email: credential.email, expiresAt: credential.expiresAt,
+    persist: persist ? () => persist(credential) : undefined,
     adapter: createGoogleCalendarAdapter(target, token, fetchImpl) };
 }
 

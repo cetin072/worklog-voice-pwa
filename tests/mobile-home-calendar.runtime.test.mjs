@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { register, createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 register('./helpers/mobile-ts-loader.mjs', import.meta.url);
+const { externalCalendarHook, read } = await import('./helpers/external-calendar-hook.mjs');
 const model = await import('../mobile/src/features/home/home-calendar-model.ts');
 const { homeHarness, nodes, words } = await import('./helpers/mobile-home-harness.mjs');
 const event = (id, start, end = null, extra = {}) => ({ id, source: 'personal', title: id, starts_at: start, ends_at: end, all_day: false, status: 'confirmed', ...extra });
@@ -22,16 +23,17 @@ test('duration overlap is end-exclusive, deduplicated and private; point events 
  assert.equal(model.calendarTime(span,'2026-11-01'),'종일');
  assert.equal(model.calendarTime(event('span','2026-10-31T23:00+09:00','2026-11-02T01:00+09:00'),'2026-11-01'),'계속');
 });
-function calendarHarness(request) {
+function calendarHarness(request, getConnection) {
  const ts=createRequire(new URL('../mobile/package.json',import.meta.url))('typescript');
  const slots=[], effects=[];let cursor=0, pending=[];
  const element=(type,props,...children)=>({type,props:{...props,children}});
  const React={createElement:element,useState(init){const i=cursor++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],v=>slots[i]=typeof v==='function'?v(slots[i]):v];},useRef(init){const i=cursor++;return slots[i]||=( {current:init} );},useEffect(fn,deps){const i=cursor++;if(!effects[i]||deps.some((v,j)=>v!==effects[i].deps[j]))pending.push(()=>{effects[i]?.cleanup?.();effects[i]={deps,cleanup:fn()};});}};
  const native={...Object.fromEntries(['ActivityIndicator','Pressable','Text','View'].map(x=>[x,x])),StyleSheet:{create:x=>x},AppState:{addEventListener:()=>({remove(){}})}};
  const platform={client:{},config:{dataSchema:'worklog'},session:{user:{id:'owner'}}};
+ const externalHook=externalCalendarHook(React,native,getConnection);
  const props={today:'2026-11-30',revision:0,fallback:[],onOpenCalendar:()=>{},onTodayCount:()=>{},renderSchedule:s=>element('Text',{},s.title)};
  const exp={},code=ts.transpileModule(readFileSync('mobile/src/features/home/home-calendar.tsx','utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
- new Function('React','require','exports',code)(React,name=>name==='react'?React:name==='react-native'?native:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:name.includes('record-row-styles')?{recordRowStyles:{taskTitle:'memoTitle',taskMeta:'memoMeta'}}:{mobileTheme:{colors:{}}},exp);
+ new Function('React','require','exports',code)(React,name=>name==='react'?React:name==='react-native'?native:name.includes('use-external-calendar')?externalHook:name.endsWith('calendar-read')?read:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:name.includes('record-row-styles')?{recordRowStyles:{taskTitle:'memoTitle',taskMeta:'memoMeta'}}:{mobileTheme:{colors:{}}},exp);
  return {props,platform,render(){cursor=0;const tree=exp.HomeCalendar(props);const run=pending;pending=[];run.forEach(f=>f());return tree;},close(){effects.forEach(e=>e?.cleanup?.());}};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -99,4 +101,46 @@ test('다가오는 업무 날짜는 펼치지 않아도 작은 보조 글자로 
    for(const date of dates){const text=nodes(date).find(n=>n.type==='Text');assert.equal(text.props.numberOfLines,1);}
  }
  h.close();
+});
+
+test('Google read hook feeds actual Home rows, source label, day count and readonly detail; disconnect hides immediately', async () => {
+ const { createCalendarConnection } = await import('../mobile/src/features/calendar/calendar-connection.ts');
+ const external=event('external:google:primary:meeting','2026-11-17T09:00:00+09:00','2026-11-17T10:00:00+09:00',{source:'external',editable:false,title:'구글 원본 미팅',description:'원본 메모'});
+ let calls=0,fail=false;
+ const connection=createCalendarConnection({authorize:async()=>({target:{accountId:'google',calendarId:'primary'},email:'synthetic@example.invalid',expiresAt:Date.now()+60000,
+  adapter:{list:async()=>{calls++;if(fail)throw Error('CALENDAR_OFFLINE');return{events:[external],limited:false};}}})});
+ await connection.connect();
+ const h=calendarHarness(async()=>({events:[],limited:false}),()=>connection);h.props.today='2026-11-17';let count;
+ h.props.onTodayCount=value=>count=value;
+ h.render();await flush();h.render();h.render();
+ assert.match(words(h.render()),/구글 원본 미팅/);assert.match(words(h.render()),/Google · 읽기 전용/);assert.equal(count,1);
+ button(h,'구글 원본 미팅 일정 상세').props.onPress();assert.match(words(h.render()),/원본 메모/);
+ assert.doesNotMatch(words(h.render()),/내 캘린더에서 확인·수정/);
+ button(h,'월 보기 ⌄').props.onPress();h.render();await flush();
+ button(h,'다음 달').props.onPress();h.render();await flush();h.render();assert.equal(count,null,'another month cannot confirm today Google count');
+ button(h,'오늘 날짜로 이동').props.onPress();h.render();await flush();
+ calls=0;fail=true;button(h,'Google 새로고침').props.onPress();h.render();await flush();
+ assert.match(words(h.render()),/인터넷 연결/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(calls,1);
+ connection.disconnect();assert.doesNotMatch(words(h.render()),/구글 원본 미팅|Google · 읽기 전용/);h.close();
+});
+
+test('pending Google read from previous connection cannot appear after account replacement', async () => {
+ let finish;
+ const info={email:'synthetic@example.invalid',expired:false,expiresAt:Date.now()+60000};
+ let connection={info:()=>info,status:()=>({generation:1}),readEvents:()=>new Promise(resolve=>finish=resolve)};
+ const h=calendarHarness(async()=>({events:[],limited:false}),()=>connection);h.props.today='2026-11-17';h.render();await flush();
+ connection={info:()=>info,status:()=>({generation:1}),readEvents:async()=>({events:[],limited:false})};h.render();
+ finish({events:[event('external:old','2026-11-17T09:00:00+09:00',null,{source:'external',title:'다른 계정 비공개 일정'})],limited:false});await flush();
+ assert.doesNotMatch(words(h.render()),/다른 계정 비공개 일정/);h.close();
+});
+
+test('restoring Google connection never claims the day is empty', async () => {
+ let restoring=true;
+ const connection={info:()=>null,status:()=>({generation:0,connecting:restoring})};
+ const h=calendarHarness(async()=>({events:[],limited:false}),()=>connection);
+ let count;h.props.onTodayCount=value=>count=value;
+ h.render();await flush();h.render();
+ assert.match(words(h.render()),/Google 연결 확인 중/);
+ assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(count,null);
+ restoring=false;h.render();assert.match(words(h.render()),/등록된 일정이 없습니다/);h.close();
 });
