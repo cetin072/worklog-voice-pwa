@@ -9,6 +9,16 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-17',
+    title: '연결한 구글 캘린더 일정 보기',
+    summary: '홈 달력과 내 캘린더에서 연결한 계정의 기본 구글 일정을 함께 확인합니다.',
+    items: [
+      '종일·반복 일정을 읽기 전용으로 표시하고 새로고침할 수 있습니다.',
+      'Google 원본을 수정하거나 업무수첩·ERP에 복사 저장하지 않습니다.',
+      '공유·추가 캘린더는 포함하지 않으며, 인증 만료 후에는 다시 연결해야 합니다.',
+    ],
+  },
+  {
     date: '2026-11-16',
     title: '구글 캘린더 연결 복원',
     summary: '앱을 다시 열어도 유효한 구글 캘린더 연결을 복원합니다.',
