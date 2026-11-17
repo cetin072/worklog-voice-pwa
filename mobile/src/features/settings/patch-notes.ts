@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-18',
+    title: '일정을 할 일로 정리하고 완료 기록 보관',
+    summary: '연필 수정에서 할 일·메모와 폴더를 선택할 수 있습니다.',
+    items: ['할 일·메모로 바꾸면 앱의 날짜와 연결 알림을 해제하고 지정한 폴더를 엽니다. 이미 전송한 구글 일정은 별도로 확인해주세요.', '메모에도 완료 버튼을 추가했습니다. 완료한 항목은 활성 목록에서 내려가고 완료 목록·날짜별 업무일지에서 확인할 수 있습니다.', '업무 탭에서 업무일지와 과거 기록 검색을 바로 열 수 있으며 완료 직후 실행 취소를 지원합니다.'],
+  },
+  {
     date: '2026-11-17',
     title: '업무 음성 등록과 폴더 자동 분류',
     summary: '업무 탭에서도 홈과 같은 음성 기록을 사용합니다.',

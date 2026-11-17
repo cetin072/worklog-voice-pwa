@@ -1,6 +1,9 @@
 # 연필 수정 → 날짜 없는 할 일/메모 + 폴더
 
-상태: 개발 및 로컬 회귀검사 완료, 운영 DB/APK 미반영.
+상태: #553·#554 통합 후 main 병합(2aab434d), 두 DB migration 적용 완료. QA APK 생성 진행.
+
+통합 npm test 1,411개 및 TypeScript, 원격 Mobile App #909와 User Acceptance Ready 통과.
+원격 함수 네 개의 SECURITY INVOKER·authenticated 실행 허용·anon 차단을 확인했다. 사용자 데이터 쓰기 검수는 수행하지 않았다.
 
 홈 업무 행의 기존 연필 수정창에서 `현재 유지 / 할 일 / 메모·자료`를 선택한다.
 할 일·메모를 선택하면 날짜 입력 대신 기존 개인 폴더와 미분류 선택이 나타난다.
