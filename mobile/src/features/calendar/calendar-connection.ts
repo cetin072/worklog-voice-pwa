@@ -3,7 +3,7 @@ import { providerFailure, calendarReceiptMatches, calendarEventId, createCalenda
 import { confirmedCalendarDraft, sameCalendarSource, type CalendarSource } from './calendar-source';
 
 export type CalendarConnection = {
-  target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter & Partial<CalendarReadAdapter>; persist?(): Promise<void>;
+  renewalVerified?: boolean; target: CalendarTarget; email: string; expiresAt: number; adapter: CalendarExportAdapter & Partial<CalendarReadAdapter>; persist?(): Promise<void>; renew?(): Promise<CalendarConnection>;
 };
 
 /** Connection state exposes no token fields to UI or app sessions. */
@@ -17,17 +17,50 @@ export function createCalendarConnection(deps: {
   let exporter: ReturnType<typeof createCalendarExporter> | null = null;
   const listeners = new Set<() => void>();
   let message = '';
+  let reauthRequired = false;
+  let renewing: { epoch: number; promise: Promise<void> } | null = null;
   const notify = () => { for (const listener of listeners) listener(); };
   const now = deps.now || Date.now;
   const pending = new Map<string, Promise<CalendarExportResult>>();
   const disconnect = () => {
-    epoch++; connection = null; exporter = null; message = '';
+    epoch++; connection = null; exporter = null; message = ''; reauthRequired = false;
     void deps.clear?.().catch(() => { message = '연결 정보 삭제에 실패했습니다. 다시 연결 해제를 눌러주세요.'; notify(); });
     notify();
   };
+  async function ensureReady(force = false) {
+    if (connecting) throw Error('CALENDAR_CONNECTING');
+    const active = connection;
+    const captured = epoch;
+    if (!active) throw Error('CALENDAR_NOT_CONNECTED');
+    if (reauthRequired) throw Error('CALENDAR_REAUTH_REQUIRED');
+    if (renewing?.epoch === captured) return renewing.promise;
+    if (!force && now() < active.expiresAt) return;
+    if (!active.renew) throw Error('CALENDAR_EXPIRED');
+    const current = () => captured === epoch && connection === active;
+    const promise = active.renew().then(async next => {
+      if (!current()) throw Error('CALENDAR_OWNER_CHANGED');
+      if (next.target.accountId !== active.target.accountId || next.target.calendarId !== active.target.calendarId
+        || next.expiresAt <= now()) throw Error('CALENDAR_REAUTH_REQUIRED');
+      await next.persist?.();
+      if (!current()) throw Error('CALENDAR_OWNER_CHANGED');
+      connection = next; exporter = createCalendarExporter(next.adapter); message = '';
+    }).catch(error => {
+      if (current()) {
+        if ((error as Error).message === 'CALENDAR_REAUTH_REQUIRED') {
+          reauthRequired = true;
+          void deps.clear?.().catch(() => undefined);
+          message = 'Google 연결 권한을 다시 확인해야 합니다. 설정에서 다시 연결해주세요.';
+        } else message = 'Google 연결을 갱신하지 못했습니다. 연결 정보는 유지됩니다. 다시 시도해주세요.';
+      }
+      throw error;
+    }).finally(() => { if (renewing?.promise === promise) renewing = null; notify(); });
+    renewing = { epoch: captured, promise }; notify();
+    return promise;
+  }
   let restoring: Promise<void> | null = null;
   return {
     disconnect,
+    ensureReady,
     restore() {
       if (restoring) return restoring;
       if (connection || connecting || !deps.restore) return Promise.resolve();
@@ -42,23 +75,27 @@ export function createCalendarConnection(deps: {
       return restoring;
     },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    status() { return { generation: epoch, connecting: !!connecting || !!restoring, message }; },
-    info() { return connection ? { email: connection.email, target: { ...connection.target }, expiresAt: connection.expiresAt, expired: now() >= connection.expiresAt } : null; },
+    status() { return { generation: epoch, connecting: !!connecting || !!restoring || renewing?.epoch === epoch, message }; },
+    info() { return connection ? { email: connection.email, target: { ...connection.target }, expiresAt: connection.expiresAt, renewalVerified: connection.renewalVerified, expired: reauthRequired || (!connection.renew && now() >= connection.expiresAt) } : null; },
     connect() {
       if (connecting) return connecting;
-      disconnect();
+      // Invalidate in-flight work without deleting a usable saved grant.
+      // Replace it only after authorization and persistence both succeed.
+      epoch++; message = '';
       const captured = epoch;
       connecting = deps.authorize().then(async next => {
         if (captured !== epoch) return false;
         if (!next || next.expiresAt <= now()) { message = '연결을 취소했거나 연결 시간이 만료되었습니다.'; return false; }
         await next.persist?.();
         if (captured !== epoch) return false;
-        connection = next; exporter = createCalendarExporter(next.adapter); message = '연결되었습니다.'; return true;
+        connection = next; reauthRequired = false; exporter = createCalendarExporter(next.adapter); message = '연결되었습니다.'; return true;
       }).catch(error => {
         if (captured === epoch) message = (error as Error).message === 'CALENDAR_AUTH_DENIED'
           ? '구글 권한 동의가 거부되었습니다.' :
           /^CALENDAR_AUTH_EXCHANGE_\d{3}$/.test((error as Error).message) ? '인증 결과 교환에 실패했습니다. 다시 연결해주세요.' :
           /^CALENDAR_AUTH_IDENTITY_\d{3}$/.test((error as Error).message) ? '연결한 구글 계정을 확인하지 못했습니다.' :
+          (error as Error).message === 'CALENDAR_REFRESH_NOT_CONFIGURED' ? '자동 연결 유지 서버 설정이 필요합니다.' :
+          (error as Error).message === 'CALENDAR_AUTH_REFRESH_MISSING' ? '연결 유지 권한을 받지 못했습니다. 다시 동의해주세요.' :
           (error as Error).message === 'CALENDAR_AUTH_TOKEN_MISSING' ? '구글 캘린더 접근 정보를 받지 못했습니다. 권한 동의를 확인해주세요.' : '연결을 완료하지 못했습니다. 다시 연결해주세요.';
         throw error;
       }).finally(() => { connecting = null; notify(); });
@@ -67,24 +104,41 @@ export function createCalendarConnection(deps: {
     },
     async readEvents(range: CalendarReadRange, callerCurrent = () => true) {
       const captured = epoch;
-      const active = connection;
-      if (!active?.adapter.list) throw Error('CALENDAR_NOT_CONNECTED');
-      if (now() >= active.expiresAt) throw Error('CALENDAR_EXPIRED');
-      const current = () => callerCurrent() && captured === epoch && connection === active && now() < active.expiresAt;
-      const result = await active.adapter.list(range, current);
-      if (!current()) throw Error('CALENDAR_OWNER_CHANGED');
-      return result;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await ensureReady(attempt > 0);
+        if (!callerCurrent() || captured !== epoch) throw Error('CALENDAR_OWNER_CHANGED');
+        const active = connection;
+        if (!active?.adapter.list) throw Error('CALENDAR_NOT_CONNECTED');
+        const current = () => callerCurrent() && captured === epoch && connection === active;
+        try {
+          const result = await active.adapter.list(range, current);
+          if (!current()) throw Error('CALENDAR_OWNER_CHANGED');
+          return result;
+        } catch (error) {
+          if ((error as Error).message !== 'CALENDAR_EXPIRED' || attempt || !current()) throw error;
+        }
+      }
+      throw Error('CALENDAR_EXPIRED');
     },
     send(source: CalendarSource, end: string, read: () => Promise<CalendarSource>, current: () => boolean) {
       const key = source.scheduleId;
       if (pending.has(key)) return pending.get(key)!;
       const captured = epoch;
-      const active = connection;
-      const send = exporter;
+      let active = connection;
+      let send = exporter;
       const isCurrent = () => current() && captured === epoch && connection === active && !!active && now() < active.expiresAt;
       const run = async (): Promise<CalendarExportResult> => {
+        try {
+          await ensureReady();
+          if (captured !== epoch || !current()) return { state: 'cancelled', message: '계정이 변경되었거나 등록을 취소했습니다.' };
+          active = connection; send = exporter;
+        } catch (error) {
+          const code = (error as Error).message;
+          return { state: code === 'CALENDAR_EXPIRED' || code === 'CALENDAR_REAUTH_REQUIRED' ? 'expired' : 'blocked',
+            message: code === 'CALENDAR_EXPIRED' || code === 'CALENDAR_REAUTH_REQUIRED' ? 'Google 권한을 다시 확인해주세요.' : '연결을 갱신하지 못했습니다. 잠시 후 다시 시도해주세요.' };
+        }
         if (!active || !send) return { state: 'blocked', message: 'Google 캘린더 계정을 먼저 연결해주세요.' };
-        if (now() >= active.expiresAt) { disconnect(); return { state: 'expired', message: '연결 시간이 만료됐습니다. 다시 연결해주세요.' }; }
+        if (now() >= active.expiresAt) return { state: 'blocked', message: 'Google 연결 갱신 후 다시 시도해주세요.' };
         try { confirmedCalendarDraft(source, end); }
         catch (error) { return { state: 'blocked', message: (error as Error).message }; }
         try {
@@ -105,7 +159,11 @@ export function createCalendarConnection(deps: {
             async () => sameCalendarSource(source, await read()));
         } catch (error) { return providerFailure(error) || { state: 'blocked', message: '최신 원본·소유권·종료 시각을 확인하지 못했습니다. 연결과 일정을 다시 확인해주세요.' }; }
       };
-      const work = run().finally(() => pending.delete(key)); pending.set(key, work); return work;
+      const work = run().then(async result => {
+        if (result.state !== 'expired' || !connection?.renew || captured !== epoch || reauthRequired || !current()) return result;
+        try { await ensureReady(true); } catch { return { state: 'blocked' as const, message: 'Google 연결을 갱신하지 못했습니다. 다시 시도해주세요.' }; }
+        return run();
+      }).finally(() => pending.delete(key)); pending.set(key, work); return work;
     },
   };
 }

@@ -59,7 +59,7 @@ test('connection rejects pending reads after disconnect and expired credentials 
   let finish, count = 0, now = 0;
   const service = createCalendarConnection({ now: () => now, authorize: async () => ({ target, email: 'test@example.invalid', expiresAt: 100,
     adapter: { target, get: async () => null, insert: async () => {}, list: () => { count++; return new Promise(resolve => finish = resolve); } } }) });
-  await service.connect(); const pending = service.readEvents(range); service.disconnect(); finish({ events: [timed('private')], limited: false });
+  await service.connect(); const pending = service.readEvents(range); await Promise.resolve(); service.disconnect(); finish({ events: [timed('private')], limited: false });
   await assert.rejects(pending, /OWNER_CHANGED/);
   await service.connect(); now = 101; await assert.rejects(service.readEvents(range), /EXPIRED/); assert.equal(count, 1);
 });

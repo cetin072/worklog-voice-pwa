@@ -20,7 +20,9 @@ export function validateCalendarReadRange(range: CalendarReadRange) {
 }
 export function calendarReadMessage(error: unknown): string {
   const code = (error as Error)?.message;
-  if (code === 'CALENDAR_EXPIRED') return 'Google 연결이 만료됐습니다. 설정에서 다시 연결해주세요.';
+  if (code === 'CALENDAR_REFRESH_NOT_CONFIGURED') return 'Google 자동 갱신 서버 설정이 필요합니다.';
+  if (code === 'CALENDAR_APP_LOGIN_REQUIRED') return '업무수첩 로그인 상태를 확인해주세요.';
+  if (code === 'CALENDAR_REAUTH_REQUIRED' || code === 'CALENDAR_EXPIRED') return 'Google 연결이 만료됐습니다. 설정에서 다시 연결해주세요.';
   if (code === 'CALENDAR_DENIED') return 'Google 일정 조회 권한을 확인해주세요. 설정에서 다시 연결할 수 있습니다.';
   if (code === 'CALENDAR_OFFLINE') return 'Google 일정을 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.';
   return 'Google 일정을 불러오지 못했습니다. 다시 시도해주세요.';

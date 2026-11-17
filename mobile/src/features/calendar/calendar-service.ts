@@ -1,3 +1,4 @@
+import { createGoogleCalendarRenewer } from './google-calendar-renewal';
 import { secureSessionStorage } from '../../platform/secure-storage';
 import { createCalendarCredentialStore } from './calendar-credential-store';
 import * as Crypto from 'expo-crypto';
@@ -21,12 +22,13 @@ export function resetCalendarConnection() { active?.disconnect(); active = null;
 export function selectCalendarOwner(userId: string | null) {
   if (owner !== (userId || '')) { resetCalendarConnection(); owner = userId || ''; }
 }
-export function calendarConnection(config: PublicPlatformConfig, userId: string) {
+export function calendarConnection(config: PublicPlatformConfig, userId: string, getSessionToken: () => Promise<string> = async () => '') {
   if (!active || owner !== userId) {
     resetCalendarConnection(); owner = userId;
-    const store = createCalendarCredentialStore(secureSessionStorage, config.supabaseUrl, userId);
+    const renew = createGoogleCalendarRenewer(userId, getSessionToken);
+    const store = createCalendarCredentialStore(secureSessionStorage, config.supabaseUrl, userId, fetch, Date.now, renew);
     active = createCalendarConnection({
-      authorize: () => authorizeGoogleCalendar(config, MOBILE_AUTH_CALLBACK_URL, WebBrowser.openAuthSessionAsync, nativePkce, fetch, store.save),
+      authorize: () => authorizeGoogleCalendar(config, MOBILE_AUTH_CALLBACK_URL, WebBrowser.openAuthSessionAsync, nativePkce, fetch, store.save, renew),
       restore: store.restore, clear: store.clear,
     });
   }

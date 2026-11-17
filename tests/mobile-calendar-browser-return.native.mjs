@@ -44,7 +44,7 @@ function exchange() {
   let calls = 0;
   return { count: () => calls, fetch: async url => {
     calls++;
-    return String(url).includes('/token?') ? Response.json({ provider_token: 'synthetic' })
+    return String(url).includes('/token?') ? Response.json({ provider_refresh_token: 'synthetic-google-refresh', provider_token: 'synthetic' })
       : Response.json({ id: 'synthetic', email: 'qa@example.invalid', verified_email: true });
   }};
 }

@@ -33,7 +33,7 @@ test('source changed before send or while remote GET waits never inserts',async(
 test('expiry, cancellation, disconnect during canonical read and failure are not success',async()=>{
   const {service,posts,expire}=connection();await service.connect();expire();
   assert.equal((await service.send(source,'',async()=>source,()=>true)).state,'expired');assert.equal(posts(),0);
-  await service.connect(); assert.equal(service.info(),null);
+  await service.connect(); assert.equal(service.info().expired,true);
   const c=connection();await c.service.connect();
   const result=await c.service.send(source,'',async()=>{c.service.disconnect();return source;},()=>true);
   assert.equal(result.state,'cancelled');assert.equal(c.posts(),0);
@@ -73,11 +73,11 @@ test('native-compatible proof uses 256-bit random verifier and SHA256 base64url;
   await assert.rejects(authorizeGoogleCalendar(config,callback,async()=>{opened++;},async()=>({verifier:'a'.repeat(64),challenge:'plain'})),/CRYPTO_UNAVAILABLE/);
   assert.equal(opened,0);
 });
-test('OAuth uses only S256/online grant, public-key PKCE exchange, and verified Google identity',async()=>{
+test('OAuth uses only S256/offline grant, public-key PKCE exchange, and verified Google identity',async()=>{
   const h=oauthHarness();const result=await h.run();const url=h.url();
   assert.equal(result.email,'synthetic@example.invalid');assert.deepEqual(result.target,{accountId:'google-id',calendarId:'primary'});
   assert.equal(url.origin,'https://example.invalid');assert.equal(url.pathname,'/auth/v1/authorize');
-  assert.equal(url.searchParams.get('code_challenge_method'),'s256');assert.equal(url.searchParams.get('access_type'),'online');
+  assert.equal(url.searchParams.get('code_challenge_method'),'s256');assert.equal(url.searchParams.get('access_type'),'offline');
   assert.match(url.searchParams.get('scopes'),/calendar.events.owned/);assert.equal(url.searchParams.get('redirect_to'),callback+'?purpose=calendar');
   assert.equal(h.calls[0].url,'https://example.invalid/auth/v1/token?grant_type=pkce');assert.equal(h.calls[0].init.headers.apikey,'public-test-key');
   assert.equal(h.proof().auth_code,'synthetic-code');assert.equal(url.searchParams.get('code_challenge'),createHash('sha256').update(h.proof().code_verifier).digest('base64url'));
