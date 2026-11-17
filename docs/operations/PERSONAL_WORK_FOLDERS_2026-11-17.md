@@ -1,5 +1,7 @@
 # 개인 업무 폴더 · 오늘 하기 구현 검수
 
+현재 상태(후속 승인 반영): #548은 main `32130a1`에 병합됐고 운영 additive migration도 적용·검증했다. 아래 초기 Draft/미적용 기록은 당시의 이력이며 최신 결과는 마지막 절을 참조한다.
+
 ## 승인 범위와 기준
 
 - 사용자 승인 목업의 구현과 Draft PR 제출만 수행한다. main 병합, 운영 migration, 배포, APK/Play 생성, 실제 사용자 데이터 변경은 승인 범위가 아니다.
@@ -90,3 +92,14 @@ Android emulator/adb는 이 환경에 없다. Chromium은 설치돼 있지만 sa
 공유 프로젝트 `jgsxpdflgkqroecfjzxq`에서 카탈로그만 읽었다. 대상 `work_folders`, `work_organization`, `save_my_work_folder`는 아직 존재하지 않고, 원본 `work_records`와 `repeating_work`는 존재한다. migration은 기존 데이터/함수 수정 없이 새 테이블·함수만 추가한다. 기존 보안 advisor를 조회했지만 공유 DB 전체의 기존 경고를 이 기능의 새 결함으로 분류하거나 타 서비스 권한을 변경하지 않는다.
 
 운영 backup/PITR 상태는 연결된 도구에서 확인할 수 없어 확인을 요청했다. 복구 지점이 확인되기 전 운영 migration은 적용하지 않는다. 그동안 코드 병합과 QA APK 준비는 독립 진행 가능하며, DB 미적용이면 새 폴더 기능은 준비 중 안내로 남는다. Play 업로드/출시는 실제 기기 QA 전 실행하지 않는다.
+
+
+## 병합 및 운영 DB 반영 결과 (2026-11-17 12:42 UTC)
+
+- 최종 PR HEAD `bf57882`의 Mobile App #890 (`44084923261`)와 UAR #1066 (`44084923226`) 및 Preview SUCCESS 후 사용자 승인에 따라 main `32130a13689f7a6b1a4ffc26b02449a01dbaf75f`에 병합했다. 보호 규칙 우회나 자동 병합 사용 없음.
+- 운영 전체 PITR 상태는 여전히 미확인이다. 다만 이번 변경이 참조하는 원본 4개 테이블(work_records/workspaces/schedules/repeating_work)의 일관된 읽기 전용 scoped snapshot과 실제 컬럼 metadata를 비공개 로컬 경로 `/workspace/worklog-private-backups/pr548/referenced-data.json`에 저장했다. 디렉터리 0700, 파일 0600. SHA256 `91d0979852943629397613cbab9f4dad876d2af20ad0f101c9c991e451d889bb`. 원본 데이터는 GitHub나 공개 산출물에 포함하지 않았다.
+- snapshot JSON·컬럼 호환성·행 수를 검증했다. 복구는 신규 기능의 authenticated 권한만 회수하고 신규/원본 데이터를 모두 보존하는 방식이며 로컬 합성 DB에서 회수→transaction rollback→권한 복원 검사를 통과했다. 원본 전체를 덮어쓰는 자동 복원은 하지 않는다. 이는 전체 공유 DB 재해복구/PITR 검증을 뜻하지 않는다.
+- 대상 신규 객체 부재와 기존 원본 schema/RLS 전제, 5초 lock timeout/30초 statement timeout을 확인하고 `personal_work_folders` additive migration을 적용했다. 기존 테이블 UPDATE/변환 및 실제 사용자 QA 쓰기 없음.
+- 도구가 생성한 실행 이력 version `20261117124209`는 이번 신규 이력 한 행만 저장소의 기존 migration version `20261117112533`으로 정렬했다. name과 미존재 version 조건을 확인했으며 재적용/기존 migration 변경은 하지 않았다.
+- 적용 전후 기존 4개 테이블의 전체 행 hash와 행 수가 동일함을 확인했다. 신규 두 테이블은 0행, RLS enabled, 네 RPC SECURITY INVOKER, anon EXECUTE 없음, authenticated EXECUTE 있음. 새 기능 관련 보안 advisor 지적 없음.
+- QA APK 빌드와 실제 기기 결과는 별도로 보고한다. 본 운영 DB 반영이 APK/Play 출시를 뜻하지 않는다.
