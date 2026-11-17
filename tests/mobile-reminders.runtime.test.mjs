@@ -28,7 +28,7 @@ function harness(seed = {}) {
     async cancel(id) { failure('cancel', id); calls.push(['cancel', id]); os.delete(id); failure('cancelled', id); },
   };
   const service = createScheduleReminderService({ storage, driver, newId: randomUUID, now: () => clock });
-  return { service, storage, disk, os, calls, fail(fn) { failure = fn; }, clock(value) { clock = value; }, allow(value) { allowed = value; }, snapshot() { return { disk, os }; } };
+  return { service, storage, driver, disk, os, calls, fail(fn) { failure = fn; }, clock(value) { clock = value; }, allow(value) { allowed = value; }, snapshot() { return { disk, os }; } };
 }
 const input = (sid = 'schedule-A', start = START, minutes = 30) => ({ scheduleId: sid, title: 'Test meeting', scheduleStartsAt: start, offsetMinutes: minutes });
 
@@ -193,4 +193,28 @@ test('batch evidence snapshot retains multiple presets and missing schedule with
  const snapshot=await h.service.readReminderSnapshot(['A','B','C']);
  assert.deepEqual(snapshot.A.stored.map(x=>x.offsetMinutes),[0,30]);assert.equal(snapshot.B.stored.length,1);
  assert.deepEqual(snapshot.C,{stored:[],pending:false});assert.equal(h.calls.length,before);
+});
+
+
+test('account cleanup cannot overtake a native schedule acknowledgement held in flight', async () => {
+  const h = harness();
+  let release, entered, enteredNative = false;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const schedule = h.driver.schedule;
+  h.driver.schedule = async (...args) => { enteredNative = true; entered(); await blocked; return schedule(...args); };
+  const pending = h.service.scheduleReminder(input());
+  await Promise.race([started, pending.then(() => undefined, () => undefined)]);
+  assert.equal(enteredNative, true, 'a reservation must reach the native driver');
+  let cleanupFinished = false;
+  const cleanup = h.service.clearForAccountExit().then(() => { cleanupFinished = true; });
+  // Drain all fake storage/native microtasks while the native schedule remains
+  // explicitly blocked. This does not rely on relative real-world IO speed.
+  await new Promise(resolve => setImmediate(resolve));
+  const overtook = cleanupFinished;
+  release();
+  const settled = await Promise.allSettled([pending, cleanup]);
+  assert.equal(overtook, false, 'cleanup must wait for the full native/storage operation');
+  assert.ok(settled.every(result => result.status === 'fulfilled'));
+  assert.equal(h.os.size, 0, 'no old-account alert may appear after successful cleanup');
 });
