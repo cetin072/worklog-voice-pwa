@@ -30,7 +30,7 @@ export function homeHarness(context) {
   briefingNow: 0, reminderTarget: null, upcomingExpanded: false, expandedBuckets: {}, taskBusyId: null, noteBusyId: null, notes: [], visibleNotes: [], extraNotes: 0,
   activeFilter: 'today', undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
   briefingBuckets: [{ key: 'today', label: '오늘', tone: 'warning' }, { key: 'overdue', label: '기한 지남', tone: 'danger' }, { key: 'upcoming', label: '다가오는 업무', tone: 'info' }, { key: 'undated', label: '기한 없는 업무', tone: 'neutral' }],
-  refreshBriefing() {}, setScreen() {}, setReminderTarget() {}, setSelectedTask() {}, openTaskEditor() {}, confirmDeleteRecord() {}, completeTaskInline() {},
+  refreshBriefing() {}, setScreen() {}, setReminderTarget() {}, setSelectedTask() {}, openTaskEditor() {}, confirmDeleteRecord() {}, completeTaskInline() {}, acknowledgeNote() {},
   setManagementReturn(){},
   recurring:{works:[],error:'',busy:false,reload(){}}, repeatUndo:null, repeatRow:()=>undefined, openRepeat(){}, completeRepeat(){},
   client: null, androidTouchSmoke: false, busy: false, WorkFolders: props => node('WorkFolders', props), config: null, quickVoiceNavigation: {current:false}, warnPendingVoice() {}, setPersonalCalendarOpen() {},

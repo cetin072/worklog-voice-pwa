@@ -5,6 +5,7 @@ export type WorkFolder = { id: string; name: string; parent_id: string | null; v
 export type FolderRecord = {
   id: string; title: string; content: string; original_text: string; status: string;
   action_kind: string | null; due_at: string | null; completed_at: string | null;
+  briefing_state?: string; acknowledged_at?: string | null;
   folder_id: string | null; selected_on: string | null; organization_version: number;
   next_attention_at: string | null;
 };
