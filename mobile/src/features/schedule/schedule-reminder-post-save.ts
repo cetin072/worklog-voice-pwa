@@ -1,4 +1,5 @@
-import { cancelAllScheduleReminders, reconcileScheduleReminders, synchronizeScheduleReminders, scheduleReminder, listTrackedReminderScheduleIds } from '@/src/features/schedule/local-notifications';
+import { createLegacyOffsetRecovery } from './legacy-offset-recovery';
+import { legacyOffsetCandidates, restoreLegacyOffsets, cancelAllScheduleReminders, reconcileScheduleReminders, synchronizeScheduleReminders, scheduleReminder, listTrackedReminderScheduleIds } from '@/src/features/schedule/local-notifications';
 import { reconcileCanceledScheduleArtifacts } from '@/src/features/schedule/schedule-cancellation';
 import { confirmWorklogReminder } from './worklog-reminder-adapter';
 import { confirmedSeoulInstant } from './reminder-feedback';
@@ -91,10 +92,12 @@ export function cancelSavedScheduleReminders(scheduleIds: readonly string[], res
   return coordinator.cancelConfirmed(scheduleIds, isCurrent);
 }
 
-export async function recoverSavedScheduleReminders(client: PlatformSupabaseClient) {
+const recoverLegacyOffsets = createLegacyOffsetRecovery({ candidates: legacyOffsetCandidates, restore: restoreLegacyOffsets });
+export async function recoverSavedScheduleReminders(client: PlatformSupabaseClient, accountScope?: string) {
   // Canonical application repairs missing reservations through the same durable
   // service, without a broad native sweep of unverified/other-account IDs.
   const isCurrent = reminderSyncEpoch.begin();
+  if (accountScope) await recoverLegacyOffsets(client, accountScope, isCurrent);
   const canonical = await reconcileSnapshot(client, [], isCurrent);
   const cancellations = await reconcileCanceledScheduleArtifacts(client, isCurrent);
   return { ...canonical, cancellations };

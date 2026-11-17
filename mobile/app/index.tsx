@@ -33,6 +33,7 @@ import { briefingMetadata } from '@/src/platform/briefing-metadata';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { measureStartup } from '@/src/features/startup/startup-timing';
 import { ActivityIndicator, Alert, AppState, BackHandler, Button, KeyboardAvoidingView, Modal, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -561,27 +562,27 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     if (!session) { quickVoiceNavigation.current = false; setBriefing(null); setJournal(null); setJournalDate(seoulTodayKey()); setScreen('home'); return; }
     if (androidTouchSmoke) void refreshBriefing();
     return () => { briefingRefreshEpoch.current += 1; briefingRefreshQueue.current.reset(); };
-  }, [session?.access_token]);
+  }, [client, session?.user.id]);
   useEffect(() => {
     if (!session || !client || androidTouchSmoke) return;
     let alive = true;
     const recover = async () => {
-      try { await recoverSavedScheduleReminders(client); }
+      try { await recoverSavedScheduleReminders(client, config ? JSON.stringify([config.supabaseUrl, config.dataSchema || 'public', session.user.id]) : undefined); }
       catch (nextError) { if (alive) console.warn('[schedule-reminder] recovery pending', messageOf(nextError, 'unknown')); }
       if (alive) setBriefingNow(Date.now());
     };
-    const { data: authChanges } = client.auth.onAuthStateChange((event) => {
-      if (event !== 'INITIAL_SESSION') { reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); }
+    const { data: authChanges } = client.auth.onAuthStateChange((event, nextSession) => {
+      if (event !== 'INITIAL_SESSION' && nextSession?.user.id !== session.user.id) { reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); }
     });
-    initialReminderRecovery.current = recover();
+    initialReminderRecovery.current = measureStartup('recovery', recover);
     void refreshBriefing();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
-      initialReminderRecovery.current = recover();
+      initialReminderRecovery.current = measureStartup('recovery', recover);
       void refreshBriefing();
     });
     return () => { alive = false; reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate(); authChanges.subscription.unsubscribe(); subscription.remove(); };
-  }, [androidTouchSmoke, client, session?.access_token]);
+  }, [androidTouchSmoke, client, session?.user.id]);
   useEffect(() => {
     if (!session || !client || screen !== 'journal') return;
     let alive = true;
@@ -667,7 +668,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       setHomeCalendarRevision(value => value + 1);
       try {
         const accessToken = await freshHomeAccessToken(client);
-        const next = await loadHomeBriefing(accessToken);
+        const next = await measureStartup('briefing', () => loadHomeBriefing(accessToken));
         if (epoch !== briefingRefreshEpoch.current) return false;
         setBriefing(next);
         if (!androidTouchSmoke) {

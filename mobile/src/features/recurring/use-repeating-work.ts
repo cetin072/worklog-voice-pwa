@@ -1,3 +1,4 @@
+import { measureStartup } from '../startup/startup-timing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -43,12 +44,16 @@ export function useRepeatingWork(client: PlatformSupabaseClient | null, owner: s
     if (!ready || !client || !owner) return;
     const current = reads.current.begin();
     try {
-      const next = await listRepeatingWork(client);
+      const next = await measureStartup('recurring', () => listRepeatingWork(client));
       if (!alive.current || !current()) return;
-      setWorks(previous=>next.map(row=>{
-        const known=previous.find(old=>old.workRecordId===row.workRecordId);
-        return known&&known.version>row.version?known:row;
-      }));
+      setWorks(previous=>{
+        const merged = next.map(row=>{
+          const known=previous.find(old=>old.workRecordId===row.workRecordId);
+          return known&&known.version>row.version?known:row;
+        });
+        // An unchanged foreground read must not cancel/recreate native alarms.
+        return JSON.stringify(previous) === JSON.stringify(merged) ? previous : merged;
+      });
       setError(''); setLoaded(true); setSnapshotReady(true);
     } catch(e) {
       if(alive.current&&current()){setLoaded(true);setError(e instanceof Error?e.message:'반복 업무를 확인하지 못했습니다.');}

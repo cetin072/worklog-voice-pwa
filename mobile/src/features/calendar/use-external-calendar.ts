@@ -1,3 +1,4 @@
+import { measureStartup } from '../startup/startup-timing';
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { useCalendarConnection } from './use-calendar-connection';
@@ -23,7 +24,7 @@ export function useExternalCalendar(months: string, revision = 0) {
   useEffect(() => {
     let alive = true;
     if (!connection || !available) return;
-    void Promise.resolve().then(() => connection.readEvents(calendarReadRange(months), () => alive))
+    void Promise.resolve().then(() => measureStartup('google', () => connection.readEvents(calendarReadRange(months), () => alive)))
       .then(data => { if (alive) setResult({ connection, key, data }); })
       .catch(error => { if (alive) setResult({ connection, key, error: calendarReadMessage(error) }); });
     return () => { alive = false; };

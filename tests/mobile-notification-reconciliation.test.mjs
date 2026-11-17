@@ -22,7 +22,7 @@ test('Home recovers durable device state and rebuilds reminders from canonical b
   assert.doesNotMatch(home, /ScheduleDeviceActions|collectDeviceSyncResult|synchronizeScheduleToPreferredCalendar/);
   assert.match(home, /recoverSavedScheduleReminders/);
   assert.match(home, /synchronizeBriefingScheduleReminders\(client, next\.schedules\)/);
-  assert.match(home, /await recoverSavedScheduleReminders\(client\)/);
+  assert.match(home, /await recoverSavedScheduleReminders\(client, config/);
   assert.match(home, /if \(alive\) setBriefingNow\(Date.now\(\)\)/);
   assert.match(postSave, /confirmedSchedulesFromBriefing/);
   assert.match(postSave, /reconcileSnapshot/);

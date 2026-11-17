@@ -1,10 +1,12 @@
+import { measureStartup } from '@/src/features/startup/startup-timing';
+import { withRequestDeadline } from '@/src/platform/request-deadline';
 import { selectMeetingOwner } from '@/src/features/voice/meeting-owner';
 import { createLocalAccountGate } from '@/src/platform/local-account-gate';
 import type { Session } from '@supabase/supabase-js';
 import { resetCalendarConnection, selectCalendarOwner, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
 import { AppState, Platform } from 'react-native';
-import { clearForAccountExit } from '@/src/features/schedule/local-notifications';
+import { clearUnverifiedAccount, prepareAccount, confirmAccount, clearForAccountExit } from '@/src/features/schedule/local-notifications';
 import { reminderSessionEpoch, reminderSyncEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -161,11 +163,13 @@ export function PlatformProvider({ children }: PropsWithChildren) {
           console.info('[android-touch-smoke] calendar-pkce-native=verified');
           await seedAndroidTouchSmokeSession();
         }
-        const nextConfig = ANDROID_TOUCH_SMOKE_MODE ? ANDROID_TOUCH_SMOKE_CONFIG : await loadPublicPlatformConfig();
+        const [nextConfig, initialUrl] = await Promise.all([
+          ANDROID_TOUCH_SMOKE_MODE ? Promise.resolve(ANDROID_TOUCH_SMOKE_CONFIG) : measureStartup('config', () => loadPublicPlatformConfig()),
+          Linking.getInitialURL(),
+        ]);
         const nextClient = ANDROID_TOUCH_SMOKE_MODE ? createAndroidTouchSmokeClient() : createPlatformSupabaseClient(nextConfig);
         activeClient = nextClient;
 
-        const initialUrl = await Linking.getInitialURL();
         if (initialUrl && isGoogleAuthCallbackUrl(initialUrl)) {
           try {
             await completeGoogleOAuthFromUrl(nextClient, initialUrl, clearDeviceRemindersForAccountExit);
@@ -175,32 +179,29 @@ export function PlatformProvider({ children }: PropsWithChildren) {
           }
         }
 
-        const { data, error: sessionError } = await nextClient.auth.getSession();
+        const { data, error: sessionError } = await measureStartup('session', () => withRequestDeadline(() => nextClient.auth.getSession()));
         if (sessionError) throw sessionError;
         if (!alive) return;
 
         setConfig(nextConfig);
         setClient(nextClient);
         localGate = createLocalAccountGate<Session>({
-          clear: clearDeviceRemindersForAccountExit,
+          clear: candidate => measureStartup('notifications', async () => {
+            reminderSessionEpoch.invalidate(); reminderSyncEpoch.invalidate();
+            if (Platform.OS !== 'web') await prepareAccount(candidate ? JSON.stringify([nextConfig.supabaseUrl, nextConfig.dataSchema || 'public', candidate.user.id]) : null);
+          }),
+          reject: candidate => Platform.OS === 'web' ? Promise.resolve() : clearUnverifiedAccount(JSON.stringify([nextConfig.supabaseUrl, nextConfig.dataSchema || 'public', candidate.user.id])),
+          confirm: (candidate, current) => Platform.OS === 'web' ? Promise.resolve() : confirmAccount(JSON.stringify([nextConfig.supabaseUrl, nextConfig.dataSchema || 'public', candidate.user.id]), current),
           verify: async id => {
-            const verified = await nextClient.auth.getUser();
+            const verified = await measureStartup('identity', () => withRequestDeadline(() => nextClient.auth.getUser()));
             return !verified.error && verified.data.user?.id === id;
           },
           owner: selectMeetingOwner,
-          publish: value => { if (alive) setSession(value); },
+          publish: value => { if (alive) { setSession(value); if (value) setAuthError(''); } },
           failed: () => { if (alive) setAuthError('계정 확인 또는 이전 기기 알림 정리가 남았습니다. 새로고침으로 다시 확인해주세요.'); },
         });
-        await localGate.transition(data.session);
-        if (data.session?.user.email) {
-          setRememberedEmail(data.session.user.email);
-          void saveRememberedLoginEmail(data.session.user.email).catch(() => undefined);
-        }
-        setPhase('ready');
-        if (ANDROID_TOUCH_SMOKE_MODE) console.info('[android-touch-smoke] platform-phase=ready');
-
         const { data: authData } = nextClient.auth.onAuthStateChange((_event, nextSession) => {
-          if (!alive) return;
+          if (!alive || _event === 'INITIAL_SESSION') return;
           if (_event === 'SIGNED_OUT') resetCalendarConnection();
           if (localGate?.current() === nextSession?.user.id) setSession(nextSession);
           else void localGate?.transition(nextSession);
@@ -210,6 +211,15 @@ export function PlatformProvider({ children }: PropsWithChildren) {
           }
         });
         authSubscription = authData.subscription;
+
+        await measureStartup('account', () => localGate!.transition(data.session));
+        if (!alive) return;
+        if (data.session?.user.email && localGate.current() === data.session.user.id) {
+          setRememberedEmail(data.session.user.email);
+          void saveRememberedLoginEmail(data.session.user.email).catch(() => undefined);
+        }
+        setPhase('ready');
+        if (ANDROID_TOUCH_SMOKE_MODE) console.info('[android-touch-smoke] platform-phase=ready');
 
         linkingSubscription = Linking.addEventListener('url', ({ url }) => {
           if (!isGoogleAuthCallbackUrl(url)) return;
