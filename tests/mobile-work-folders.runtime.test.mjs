@@ -92,3 +92,24 @@ test('late folder response after navigation cannot replace the current folder',a
   assert.match(nativeWords(h.render()),/Folder task/);assert.doesNotMatch(nativeWords(h.render()),/Stale task/);
  } finally{h.close();}
 });
+
+test('folder editor focuses inside a keyboard-resized dialog and keeps draft on failed submit', async () => {
+ let calls=0,focus=0,rejectSave;
+ const h=harness({saveFolder:()=>{calls++;return new Promise((_resolve,reject)=>rejectSave=reject);}});
+ try {
+  await h.flush();h.button('폴더 만들기').props.onPress();
+  const dialog=()=>nativeNodes(h.render()).find(n=>n.type==='Modal');
+  const field=()=>nativeNodes(dialog()).find(n=>n.type==='TextInput');
+  assert.ok(dialog(),'editor must not remain below the long folder list');
+  field().props.ref.current={focus(){focus++;}};dialog().props.onShow();assert.equal(focus,1);
+  const avoiding=nativeNodes(dialog()).find(n=>n.type==='KeyboardAvoidingView');
+  assert.equal(avoiding.props.behavior,undefined,'Android modal already resizes; do not subtract keyboard height twice');
+  assert.equal(nativeNodes(dialog()).find(n=>n.type==='ScrollView').props.keyboardShouldPersistTaps,'handled');
+  field().props.onSubmitEditing();assert.equal(calls,0,'blank name cannot submit');
+  field().props.onChangeText('Keep folder');field().props.onSubmitEditing();field().props.onSubmitEditing();
+  assert.equal(calls,1);dialog().props.onRequestClose();assert.ok(dialog(),'cannot dismiss pending save');
+  rejectSave(Error('저장 확인 필요'));await tick();
+  assert.match(nativeWords(dialog()),/저장 확인 필요/);assert.equal(field().props.value,'Keep folder');
+  dialog().props.onRequestClose();assert.equal(dialog(),undefined);
+ }finally{h.close();}
+});

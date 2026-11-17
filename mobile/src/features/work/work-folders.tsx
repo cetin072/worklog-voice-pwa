@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import type { BriefingTask, WorkJournalRecord } from '@/src/platform/worklog-api';
@@ -29,6 +29,7 @@ export function WorkFolders({ client, userId, home = false, revision, busy: exte
   const [moving, setMoving] = useState<FolderRecord | WorkFolder | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const epoch = useRef(0), locked = useRef(false), mounted = useRef(true);
+  const folderNameInput = useRef<TextInput>(null);
   const today = seoulDate();
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; epoch.current++; }; }, []);
   useEffect(() => {
@@ -87,11 +88,20 @@ export function WorkFolders({ client, userId, home = false, revision, busy: exte
       </View>
       <View style={styles.actions}>{([['tasks', '할 일'], ['notes', '메모·자료'], ['completed', '완료']] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: section === key }} disabled={busy || externalBusy} style={[styles.tab, section === key && styles.active]} onPress={() => { setSection(key); setExpanded(null); }}><Text style={section === key ? styles.activeText : styles.text}>{label}</Text></Pressable>)}</View>
     </> : null}
-    {editor ? <View style={styles.editor}>
-      <Text style={styles.text}>{editor.version === -1 ? '새 폴더' : '이름 변경'}</Text>
-      <TextInput accessibilityLabel="폴더 이름" value={editor.name} maxLength={60} editable={!busy} style={styles.input} onChangeText={name => setEditor({ ...editor, name })} />
-      <View style={styles.actions}>{button('폴더 저장', () => void mutate(() => saveFolder(client, editor, userId)), disabled || !editor.name.trim())}{button('편집 취소', () => setEditor(null), busy)}</View>
-    </View> : null}
+    {editor ? <Modal transparent animationType="fade" onShow={() => folderNameInput.current?.focus()} onRequestClose={() => { if (!busy) setEditor(null); }}>
+      <KeyboardAvoidingView style={styles.editorOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView style={styles.editorScroll} contentContainerStyle={styles.editorContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.editorDialog} accessibilityViewIsModal>
+            <Text accessibilityRole="header" style={styles.title}>{editor.version === -1 ? '새 폴더' : '폴더 이름 변경'}</Text>
+            <TextInput ref={folderNameInput} accessibilityLabel="폴더 이름" placeholder="폴더 이름" value={editor.name} maxLength={60} editable={!busy} style={styles.input} onChangeText={name => setEditor({ ...editor, name })} returnKeyType="done"
+              onSubmitEditing={() => { if (!disabled && editor.name.trim()) void mutate(() => saveFolder(client, editor, userId)); }} />
+            {busy ? <Text accessibilityLiveRegion="polite" style={styles.help}>저장 확인 중…</Text> : null}
+            {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
+            <View style={styles.actions}>{button('폴더 저장', () => void mutate(() => saveFolder(client, editor, userId)), disabled || !editor.name.trim())}{button('편집 취소', () => setEditor(null), busy)}</View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal> : null}
     {moving ? <View style={styles.editor}>
       <Text style={styles.text}>이동할 곳 선택 · {'title' in moving ? moving.title : moving.name}</Text>
       {[null, ...folders.filter(item => 'title' in moving || canMoveFolder(folders, moving.id, item.id)).map(item => item.id)].map(id => <View key={id || 'root'}>{button(id ? folderPath(folders, id) : ('title' in moving ? '미분류로 이동' : '최상위로 이동'), () => void mutate(() => 'title' in moving ? organizeRecord(client, moving, { folder: id }, userId) : saveFolder(client, { ...moving, parent_id: id }, userId)))}</View>)}
@@ -129,6 +139,10 @@ const styles = StyleSheet.create({
   folder: { minHeight: 46, justifyContent: 'center', padding: 10, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, maxWidth: '100%' },
   tab: { padding: 12, minHeight: 46, borderRadius: 12, backgroundColor: mobileTheme.colors.background },
   active: { backgroundColor: mobileTheme.colors.primary }, activeText: { color: mobileTheme.colors.primaryText, fontSize: 16 },
+  editorOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+  editorScroll: { flex: 1 },
+  editorContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  editorDialog: { width: '100%', maxWidth: 460, alignSelf: 'center', padding: 20, gap: 12, borderRadius: 16, backgroundColor: mobileTheme.colors.surface },
   editor: { padding: 12, gap: 10, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12 },
   input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, color: mobileTheme.colors.text },
   record: { gap: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: mobileTheme.colors.borderSubtle },
