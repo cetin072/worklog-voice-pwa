@@ -18,7 +18,7 @@ for (const kind of ['empty','populated','overdue','schedules','mixed']) test(`cu
  assert.equal(nodes([h.render(),h.photo()]).filter(n => n.type === 'CaptureImportButton').length,2);
  assert.equal(nodes(h.render()).filter(n => n.type === 'CaptureImportButton' && n.props.label === '캡처 등록').length,1);
  assert.equal(h.photo().props.compact,true);assert.equal(h.photo(true).props.disabled,true);
- assert.match(text, /할 일/);
+ assert.match(text, /오늘 마감/);
  assert.doesNotMatch(text, /오늘 한눈에/);
  for (const key of ['today','overdue','upcoming','undated']) {
   h.context.setTaskFilter(key); const tree = h.render();

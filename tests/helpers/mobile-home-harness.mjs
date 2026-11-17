@@ -14,7 +14,8 @@ function findPhoto(node) { if (ts.isJsxAttribute(node) && node.name.getText(ast)
 findPhoto(ast);
 if (!photoAction) throw Error('Home Photo action is missing');
 const networkConstant = ast.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(ast) === 'NETWORK_CONNECTION_MESSAGE')).map(node => node.getText(ast)).join('\n');
-const compiled = ts.transpileModule(`${networkConstant}\n${declarations}\nfunction renderHome() { return (${home}); }\nreturn { renderHome, TaskRow, renderPhoto: ${photoAction} };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
+const undo = source.slice(source.indexOf('{undoTask ?'), source.indexOf('\n', source.indexOf('{undoTask ?')));
+const compiled = ts.transpileModule(`${networkConstant}\n${declarations}\nfunction renderHome() { return (<>${undo}{${home}}</>); }\nreturn { renderHome, TaskRow, renderPhoto: ${photoAction} };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
 export function homeHarness(context) {
  const states = []; let cursor = 0; let back; let cleanup;
  const node = (type, props, ...children) => ({ type, props: { ...props, children } });
@@ -32,7 +33,7 @@ export function homeHarness(context) {
   refreshBriefing() {}, setScreen() {}, setReminderTarget() {}, setSelectedTask() {}, openTaskEditor() {}, confirmDeleteRecord() {}, completeTaskInline() {},
   setManagementReturn(){},
   recurring:{works:[],error:'',busy:false,reload(){}}, repeatUndo:null, repeatRow:()=>undefined, openRepeat(){}, completeRepeat(){},
-  config: null, quickVoiceNavigation: {current:false}, warnPendingVoice() {}, setPersonalCalendarOpen() {},
+  client: null, androidTouchSmoke: false, busy: false, WorkFolders: props => node('WorkFolders', props), config: null, quickVoiceNavigation: {current:false}, warnPendingVoice() {}, setPersonalCalendarOpen() {},
   ...context,
  };
  base.allSchedules = [...(base.briefing?.schedules?.today || []), ...(base.briefing?.schedules?.upcoming || [])];

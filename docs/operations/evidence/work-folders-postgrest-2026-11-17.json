@@ -1,0 +1,82 @@
+[
+  {
+    "check": "anonymous RPC denied",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "authenticated create A",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "authenticated create B",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "list isolation",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "cross-user folder move rejected",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "cross-user work rejected",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "old account command rejected",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "anonymous table denied",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "direct cross-owner insert denied",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "work folder move",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "today selection",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "same source date unchanged",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "selected visible and B isolated",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "check": "concurrent inverse RPC moves reject one",
+    "pass": true,
+    "detail": "[(204, None), (400, 'FOLDER_CYCLE')]"
+  },
+  {
+    "check": "concurrent record version rejects one",
+    "pass": true,
+    "detail": "[(204, None), (409, 'PT409')]"
+  },
+  {
+    "check": "concurrent direct graph moves reject one",
+    "pass": true,
+    "detail": "[(204, None), (400, '23514')]"
+  }
+]
