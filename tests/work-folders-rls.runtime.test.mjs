@@ -32,6 +32,7 @@ test('personal folders SQL: nesting, move, RLS, canonical completion/Undo, persi
    insert into worklog.repeating_work values('${R}');
    insert into worklog.schedules(workspace_id,created_by_user_id,title,starts_at,metadata) values('${WA}','${A}','appointment','2030-01-01','{"workRecordId":"${S}"}');`);
   await db.exec(fs.readFileSync('supabase/migrations/20261117112533_personal_work_folders.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261118001000_memo_completion_history.sql','utf8'));
   await db.exec(fs.readFileSync('supabase/migrations/20261118003000_work_record_destination.sql','utf8'));
   let owner=A;
   const login = async who => { owner=who; return db.exec(`reset role;set role authenticated;select set_config('request.jwt.claim.sub','${who}',false)`); };
@@ -69,6 +70,19 @@ test('personal folders SQL: nesting, move, RLS, canonical completion/Undo, persi
   assert.equal((await list(CHILD,'completed')).length,0);assert.equal((await list(null,'today'))[0].id,T);
   await organize(T,1,{today:false});assert.equal((await list(null,'today')).length,0);assert.equal((await list(CHILD))[0].id,T);
   await organize(T,2,{folder:null});assert.ok((await list()).some(r=>r.id===T));
+  // Completed notes disappear from active folders, remain in completion-day history,
+  // preserve the original journal date/body, and return on Undo.
+  await db.query("update worklog.work_records set briefing_state='acknowledged' where id=$1",[N]);
+  assert.equal((await list(CHILD,'notes')).length,0);
+  const doneNote=(await list(CHILD,'completed')).find(r=>r.id===N);
+  assert.ok(doneNote.acknowledged_at);assert.equal(doneNote.content,'memo source');
+  const doneDay=(await db.query("select * from worklog.get_my_work_journal_day((now() at time zone 'Asia/Seoul')::date)")).rows[0];
+  assert.ok(doneDay.completed.some(r=>r.id===N && r.completed_at));
+  const originalDay=(await db.query("select * from worklog.get_my_work_journal_day('2020-01-01')")).rows[0];
+  assert.ok(originalDay.notes.some(r=>r.id===N),'original note is not moved or deleted');
+  await db.query("update worklog.work_records set briefing_state='active' where id=$1",[N]);
+  assert.ok((await list(CHILD,'notes')).some(r=>r.id===N));
+  assert.ok(!(await list(CHILD,'completed')).some(r=>r.id===N));
   await login(B);
   await assert.rejects(db.query('select worklog.save_my_work_folder($1,$2,$3,$4,$5)',[A,id(30),'old account draft',null,-1]),/AUTH_REQUIRED/);
   await save(FOREIGN,'Private',null,-1);

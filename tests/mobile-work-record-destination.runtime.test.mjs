@@ -6,7 +6,7 @@ register('./helpers/mobile-ts-loader.mjs',import.meta.url);
 const api=await import('../mobile/src/features/work/work-record-destination.ts');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function editor(overrides={}) {
- let moves=0,normal=0;const cleanup=[],messages=[];
+ let moves=0,normal=0;const cleanup=[],messages=[],destinations=[];
  const imports={
   './work-record-edit-sheet':{WorkRecordEditSheet:'Sheet'},
   './work-folders-store':{loadFolders:async()=>[{id:'salt',name:'소금'}]},
@@ -16,16 +16,16 @@ function editor(overrides={}) {
   ...overrides,
  };
  const h=nativeComponentHarness('mobile/src/features/work/work-record-folder-editor.tsx','WorkRecordFolderEditor',imports);
- const props={client:{},recordId:'r',ownerId:'owner',visible:true,title:'소금 견적',date:'2026-11-17',time:'15:00',loading:false,saving:false,ready:true,onSave:()=>normal++,onMoved:m=>messages.push(m)};
+ const props={client:{},recordId:'r',ownerId:'owner',visible:true,title:'소금 견적',date:'2026-11-17',time:'15:00',loading:false,saving:false,ready:true,onSave:()=>normal++,onMoved:(m,d)=>{messages.push(m);destinations.push(d);}};
  const render=()=>h.render(props).props;
- return {...h,props,render,messages,cleanup,get moves(){return moves},get normal(){return normal},async load(){render();await h.effects();return render();}};
+ return {...h,props,render,messages,destinations,cleanup,get moves(){return moves},get normal(){return normal},async load(){render();await h.effects();return render();}};
 }
 test('ordinary save delegates; explicit kind and folder save once, cancel every linked device alarm then report',async()=>{
  const h=editor();try{
   let p=await h.load();p.onSave();assert.equal(h.normal,1);
   p.folderDestination.onChange('task');p=h.render();assert.equal(p.folderDestination.value.folderId,'salt');
   p.folderDestination.onFolder(null);p=h.render();p.folderDestination.onChange('note');p=h.render();assert.equal(p.folderDestination.value.folderId,null,'explicit unclassified survives kind switching');
-  p.onSave();p.onSave();await tick();assert.equal(h.moves,1);assert.deepEqual(h.cleanup,[['schedule-1','schedule-2']]);assert.equal(h.messages.length,1);assert.match(h.messages[0],/구글/);assert.equal(h.render().ready,false);
+  p.onSave();p.onSave();await tick();assert.equal(h.moves,1);assert.deepEqual(h.cleanup,[['schedule-1','schedule-2']]);assert.equal(h.messages.length,1);assert.match(h.messages[0],/구글/);assert.deepEqual(h.destinations,[{kind:'note',folderId:null}]);assert.equal(h.render().ready,false);
  }finally{h.close()}
 });
 test('failed save keeps destination and title; no cleanup or success; failed alarm cleanup does not repeat committed write',async()=>{

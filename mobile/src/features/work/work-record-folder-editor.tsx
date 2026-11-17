@@ -8,7 +8,7 @@ import { moveWorkDestination, readDestination, type WorkDestination, type Destin
 
 type Props = WorkRecordEditSheetProps & {
   client?: PlatformSupabaseClient | null; recordId?: string | null; ownerId: string;
-  onMoved(message: string): void;
+  onMoved(message: string, destination: WorkDestination): void;
 };
 // Keeps the ordinary editor unchanged. Explicit destination changes use one atomic RPC.
 export function WorkRecordFolderEditor({ client, recordId, ownerId, onMoved, ...props }: Props) {
@@ -42,7 +42,7 @@ export function WorkRecordFolderEditor({ client, recordId, ownerId, onMoved, ...
       try { await cancelSavedScheduleReminders(ids,guard); }
       catch { warning=' 이 기기 알림 정리는 확인이 필요합니다.'; }
       if(!active.current || !guard()) return;
-      onMoved(`${destination.kind==='task'?'할 일':'메모·자료'}로 변경했습니다.${warning} 구글에 전송한 일정은 구글 캘린더에서 별도로 확인해주세요.`);
+      onMoved(`${destination.kind==='task'?'할 일':'메모·자료'}로 변경했습니다.${warning} 구글에 전송한 일정은 구글 캘린더에서 별도로 확인해주세요.`, destination);
     } catch(error) {
       if(active.current && guard()) setMessage(error instanceof Error ? error.message : '변경을 확인하지 못했습니다. 입력은 유지됩니다.');
     } finally { locked.current=false;if(active.current)setSaving(false); }
