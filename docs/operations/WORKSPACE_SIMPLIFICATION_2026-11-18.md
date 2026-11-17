@@ -38,3 +38,11 @@ flowchart TD
 - 320dp 도크 터치 영역 계산 및 기존 녹음 동작 회귀검사. 화면 겹침은 flex 구조로 제거했지만 실제 픽셀 렌더링/휴대폰 키보드 검수는 미완료.
 - 로컬 Chromium 실행은 환경 socket 제한, Cloud Browser 로컬 file URL은 정책 제한으로 중단. 이를 우회하지 않았으며 합성 HTML을 실제 기기 검수 증거로 사용하지 않음.
 - APK 재생성·Play 배포는 이번 수정 범위에서 실행하지 않음. 사용자 업무시간 개선 수치는 미측정.
+
+## 반영 결과
+
+- PR #556 병합: `ce8e78ff2ded2285b43536991bdd93bbc2bf586d` (검증 head `bfc170826de9137f776db2e56fff541f0ead1046`).
+- 최종 CI Mobile App run `44128060220`: typecheck/Android bundle/mobile runtime 및 device-state mutation 검증 PASS. APK/native emulator jobs는 JS-only 정책에 따라 skipped이며 실행 성공으로 주장하지 않음.
+- Web UAR run `44128060262`: 첫 시도 Chrome spawn timeout, 같은 SHA/동일 조건의 실패 job 재실행 PASS. 모든 1,411개 테스트 PASS, 로컬 추가 native-source 5개 및 마지막 음성 관련 76개 PASS.
+- 운영과 QA가 공유하는 `jgsxpdflgkqroecfjzxq`의 worklog schema에 `work_overview` migration 적용 완료. SECURITY INVOKER/stable/빈 search_path, authenticated 허용·anon 거절 확인. 인증 식별자 없는 authenticated 역할 읽기는 빈 목록/0개 반환. 대상 함수·폴더 테이블 관련 security advisor 항목 없음(프로젝트 전체 기존 항목의 해소를 의미하지 않음).
+- 기존 사용자 데이터 쓰기/일괄 이동/삭제 없음. 설치된 APK에는 아직 이 UI가 포함되지 않음.
