@@ -52,8 +52,8 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
   const projected=repeatingWorks.length?months.flatMap(m=>recurringCalendarEvents(repeatingWorks,m)):[];
   const combined = mergeCalendarEvents([...events.filter(e=>!sourceIds.has(e.id)),...projected], external.events);
   const rows = eventsOnDay(combined, selected);
-  useEffect(() => { onTodayCount(loaded && !result.limited && !external.loading && !external.error && !external.limited
-    ? eventsOnDay(combined, today).length : null); }, [result, key, today, onTodayCount, external.events, external.loading, external.error, external.limited]);
+  useEffect(() => { onTodayCount(loaded && (!external.connected || months.includes(today.slice(0, 7))) && !result.limited && !external.restoring && !external.loading && !external.error && !external.limited
+    ? eventsOnDay(combined, today).length : null); }, [result, key, today, onTodayCount, external.events, external.connected, external.restoring, external.loading, external.error, external.limited]);
   const action = (label: string, onPress: () => void, disabled = false) => <Pressable accessibilityRole="button" style={styles.action} disabled={disabled} onPress={onPress}><Text style={styles.link}>{label}</Text></Pressable>;
   return <View style={styles.card}>
     <View style={styles.row}>
@@ -75,10 +75,11 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     {error ? <View><Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>{action('일정 다시 불러오기', () => setReload(n => n + 1))}</View> : null}
     {loaded && result.limited ? <Text style={styles.error}>일부 일정만 표시 중입니다. 표시되지 않은 일정이 있을 수 있습니다.</Text> : null}
     {external.connected ? <View style={styles.row}><Text style={styles.muted}>Google · 기본 캘린더 · 읽기 전용</Text>{action('Google 새로고침', external.refresh, external.loading)}</View> : null}
+    {external.restoring ? <Text style={styles.muted}>Google 연결 확인 중…</Text> : null}
     {external.loading ? <Text style={styles.muted}>Google 일정 불러오는 중…</Text> : null}
     {external.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{external.error}</Text> : null}
     {external.limited ? <Text style={styles.error}>Google 일정 일부만 표시 중입니다.</Text> : null}
-    {!busy && !error && !external.loading && !external.error && !external.limited && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
+    {!busy && !error && !external.restoring && !external.loading && !external.error && !external.limited && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
     {rows.map(event => {
       const known = fallback.find(s => s.scheduleId === event.id);
       return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => event.id.startsWith('repeat:')?onOpenRepeating?.(event.id,seoulDate(event.starts_at)):setOpened(id => id === event.id ? null : event.id)}>

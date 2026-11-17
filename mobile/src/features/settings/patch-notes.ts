@@ -10,6 +10,12 @@ export type PatchNoteEntry = {
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
     date: '2026-11-17',
+    title: '구글 일정 표시 보완',
+    summary: 'Google에서 장소·메모만 바꾼 일정도 확인할 수 있습니다.',
+    items: ['연결을 복원하는 동안 일정 없음 대신 연결 확인 중으로 표시합니다.', '다른 달을 조회 중일 때 오늘 일정 수를 0건으로 잘못 표시하지 않습니다.'],
+  },
+  {
+    date: '2026-11-17',
     title: '연결한 구글 캘린더 일정 보기',
     summary: '홈 달력과 내 캘린더에서 연결한 계정의 기본 구글 일정을 함께 확인합니다.',
     items: [
