@@ -56,7 +56,7 @@ export async function saveFolder(client: PlatformSupabaseClient, folder: WorkFol
   const { error } = await withRequestDeadline(async signal => await client.rpc('save_my_work_folder', { p_owner: owner, p_id: folder.id, p_name: folder.name.trim(), p_parent: folder.parent_id, p_version: folder.version }).abortSignal(signal));
   check(error);
 }
-export async function organizeRecord(client: PlatformSupabaseClient, record: FolderRecord, command: { folder: string | null } | { today: boolean }, owner: string) {
+export async function organizeRecord(client: PlatformSupabaseClient, record: Pick<FolderRecord, 'id' | 'organization_version'>, command: { folder: string | null } | { today: boolean }, owner: string) {
   const { error } = await withRequestDeadline(async signal => await client.rpc('organize_my_work_record', { p_owner: owner, p_id: record.id, p_version: record.organization_version, p_command: command }).abortSignal(signal));
   check(error);
 }

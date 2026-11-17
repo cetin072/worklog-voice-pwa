@@ -23,6 +23,6 @@ test('actual dock opens meeting only from idle and preserves recording, processi
 });
 test('meeting shortcut uses existing Home navigation and cannot bypass unfinished quick recording',()=>{
  assert.ok(callback&&navigate);let screen,warnings=0;
- const scope={quickVoiceNavigation:{current:false},warnPendingVoice:()=>warnings++,applyScreen:v=>screen=v};
+ const scope={screen:'home',quickVoiceNavigation:{current:false},warnPendingVoice:()=>warnings++,applyScreen:v=>screen=v};
  const open=compile(navigate+'; return '+callback+';',scope);open();assert.equal(screen,'meeting');scope.quickVoiceNavigation.current=true;screen='home';open();assert.equal(screen,'home');assert.equal(warnings,1);
 });

@@ -4,6 +4,8 @@ import { register } from 'node:module';
 import { nativeComponentHarness, nativeNodes, nativeWords } from './helpers/native-component-harness.mjs';
 register('./helpers/mobile-ts-loader.mjs',import.meta.url);
 const store=await import('../mobile/src/features/work/work-folders-store.ts');
+const shared=await import('../mobile/src/ui/workspace-styles.ts');
+const rows=await import('../mobile/src/ui/record-row-styles.ts');
 const theme=await import('../mobile/src/ui/theme.ts');
 const date=await import('../mobile/src/features/home/home-calendar-model.ts');
 const folder={id:'f',name:'Personal project',parent_id:null,version:0};
@@ -12,6 +14,7 @@ const tick=()=>new Promise(r=>setImmediate(r));
 function harness(overrides={},home=false){
  const boundaries={...store,loadFolders:async()=>[folder],loadFolderRecords:async()=>[record],saveFolder:async()=>{},organizeRecord:async()=>{},...overrides};
  const h=nativeComponentHarness('mobile/src/features/work/work-folders.tsx','WorkFolders',{
+  '@/src/ui/workspace-styles':shared,'@/src/ui/record-row-styles':rows,
   'expo-crypto':{randomUUID:()=> 'new-folder'},'@/src/ui/theme':theme,'../home/home-calendar-model':date,'./work-folders-store':boundaries,
   '@/src/platform/worklog-api':{loadWorkJournalDay:async()=>({completed:[{pageId:'done',title:'Journal completion'}]})},
   '@/src/platform/authenticated-access':{getFreshAccessToken:async()=> 'synthetic'},
@@ -112,4 +115,17 @@ test('folder editor focuses inside a keyboard-resized dialog and keeps draft on 
   assert.match(nativeWords(dialog()),/저장 확인 필요/);assert.equal(field().props.value,'Keep folder');
   dialog().props.onRequestClose();assert.equal(dialog(),undefined);
  }finally{h.close();}
+});
+
+test('Work and Today cards use shared Home styles with trailing text refresh',async()=>{
+ for(const home of [false,true]){
+  const h=harness({},home);
+  try{
+   await h.flush();const tree=h.render();assert.deepEqual(tree.props.style,shared.workspaceStyles.card);
+   const heading=nativeNodes(tree).find(n=>n.props?.style===shared.workspaceStyles.heading);
+   assert.ok(heading);assert.equal(heading.props.style.justifyContent,'space-between');
+   const refresh=nativeNodes(heading).find(n=>n.props?.accessibilityLabel==='새로고침');
+   assert.deepEqual(refresh.props.style,shared.workspaceStyles.refresh);assert.ok(!refresh.props.style.backgroundColor);
+  }finally{h.close();}
+ }
 });
