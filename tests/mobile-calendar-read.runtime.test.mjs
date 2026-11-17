@@ -73,4 +73,7 @@ test('only matching exported schedule copies are hidden; changed Google events a
   assert.equal(mergeCalendarEvents([{ ...local, title: '변경됨' }], events).length, 3);
   assert.equal(mergeCalendarEvents([{ ...local, status: 'cancelled' }], events).length, 3);
   assert.equal(mergeCalendarEvents([], events).length, 2);
+  for (const changed of [{ location: '바뀐 회의실' }, { description: '변경된 준비물' }, { status: 'tentative' }]) {
+    assert.equal(mergeCalendarEvents([local], [{ ...events[0], ...changed }]).length, 2);
+  }
 });

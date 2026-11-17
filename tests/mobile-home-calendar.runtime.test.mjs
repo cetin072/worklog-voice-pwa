@@ -116,8 +116,11 @@ test('Google read hook feeds actual Home rows, source label, day count and reado
  assert.match(words(h.render()),/구글 원본 미팅/);assert.match(words(h.render()),/Google · 읽기 전용/);assert.equal(count,1);
  button(h,'구글 원본 미팅 일정 상세').props.onPress();assert.match(words(h.render()),/원본 메모/);
  assert.doesNotMatch(words(h.render()),/내 캘린더에서 확인·수정/);
- fail=true;button(h,'Google 새로고침').props.onPress();h.render();await flush();
- assert.match(words(h.render()),/인터넷 연결/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(calls,2);
+ button(h,'월 보기 ⌄').props.onPress();h.render();await flush();
+ button(h,'다음 달').props.onPress();h.render();await flush();h.render();assert.equal(count,null,'another month cannot confirm today Google count');
+ button(h,'오늘 날짜로 이동').props.onPress();h.render();await flush();
+ calls=0;fail=true;button(h,'Google 새로고침').props.onPress();h.render();await flush();
+ assert.match(words(h.render()),/인터넷 연결/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(calls,1);
  connection.disconnect();assert.doesNotMatch(words(h.render()),/구글 원본 미팅|Google · 읽기 전용/);h.close();
 });
 
@@ -129,4 +132,15 @@ test('pending Google read from previous connection cannot appear after account r
  connection={info:()=>info,status:()=>({generation:1}),readEvents:async()=>({events:[],limited:false})};h.render();
  finish({events:[event('external:old','2026-11-17T09:00:00+09:00',null,{source:'external',title:'다른 계정 비공개 일정'})],limited:false});await flush();
  assert.doesNotMatch(words(h.render()),/다른 계정 비공개 일정/);h.close();
+});
+
+test('restoring Google connection never claims the day is empty', async () => {
+ let restoring=true;
+ const connection={info:()=>null,status:()=>({generation:0,connecting:restoring})};
+ const h=calendarHarness(async()=>({events:[],limited:false}),()=>connection);
+ let count;h.props.onTodayCount=value=>count=value;
+ h.render();await flush();h.render();
+ assert.match(words(h.render()),/Google 연결 확인 중/);
+ assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(count,null);
+ restoring=false;h.render();assert.match(words(h.render()),/등록된 일정이 없습니다/);h.close();
 });

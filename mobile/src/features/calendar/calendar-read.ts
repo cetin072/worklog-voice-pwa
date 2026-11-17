@@ -35,6 +35,8 @@ export function mergeCalendarEvents(local: PersonalCalendarEvent[], external: Ex
     if (!original || ['cancelled', '취소'].includes(original.status)) return true;
     const expectedEnd = original.ends_at ? Date.parse(original.ends_at) : Date.parse(original.starts_at) + (original.all_day ? 86400000 : 30 * 60000);
     return original.title.trim() !== event.title || original.all_day !== event.all_day
+      || (original.location || '') !== (event.location || '') || (original.description || '') !== (event.description || '')
+      || (original.status === 'tentative') !== (event.status === 'tentative')
       || Date.parse(original.starts_at) !== Date.parse(event.starts_at) || expectedEnd !== Date.parse(event.ends_at || '');
   });
   return [...local, ...visible];
