@@ -76,7 +76,7 @@ export function WorkFolders({ client, userId, home = false, revision, busy: exte
   const currentFolder = folders.find(item => item.id === folder);
   return <View style={styles.card}>
     <View style={styles.heading}><Text style={styles.title}>{home ? '오늘 하기' : '업무'}</Text><Pressable accessibilityRole="button" accessibilityLabel="새로고침" disabled={busy || externalBusy || loading} style={styles.refresh} onPress={() => setRefresh(n => n + 1)}><Text style={styles.link}>새로고침</Text></Pressable></View>
-    <Text style={styles.help}>{home ? TODAY_POLICY : '아래 음성 기록으로 등록하세요. 새 기록은 미분류에서 폴더로 옮길 수 있어요.'}</Text>
+    <Text style={styles.help}>{home ? TODAY_POLICY : '음성으로 폴더 이름을 말하면 자동 분류합니다. 이름이 없거나 모호하면 미분류에서 확인하세요.'}</Text>
     {!home ? <>
       <Pressable accessibilityRole="button" accessibilityLabel="업무·메모 등록" disabled={busy || externalBusy} style={styles.refresh} onPress={onInput}><Text style={styles.link}>직접 입력 ›</Text></Pressable>
       <Text style={styles.path}>{folder ? folderPath(folders, folder) : '내 폴더 / 미분류'}</Text>

@@ -31,12 +31,12 @@ test('both tabs use the same voice dock and existing save/refresh flow',async()=
  const js=ts.transpileModule(`return (${dock});`,{compilerOptions:{jsx:ts.JsxEmit.React}}).outputText;
  for(const screen of ['home','work','settings']){
   let saves=0,refreshes=0,feedback;
-  const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',VoiceRecorderCard:'VoiceRecorderCard',CaptureImportButton:'CaptureImportButton',styles:{},insets:{bottom:20},screen,androidTouchSmoke:false,FORCE_WHISPER_FALLBACK_QA_MODE:false,prepareQuickVoiceWhisperProvider:()=>{},QUICK_VOICE_SPEECH_RECOGNITION:{},quickVoiceNavigation:{current:false},session:{user:{id:'owner'}},client:{},refreshQuickVoiceBriefing:async()=>refreshes++,getFreshAccessToken:async()=> 'synthetic',reminderSessionEpoch:{capture:()=>()=>true},saveWorklog:async(token,text,options)=>{assert.equal(token,'synthetic');assert.equal(text,'Synthetic task');assert.equal(options.sourceType,'voice');saves++;return {dataCoreWorkRecordId:'saved',scheduleIds:[]};},synchronizeSavedScheduleReminders:async()=>[],savedReminderMessage:()=> 'Saved',setSavedReminder:value=>feedback=value};
+  const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',VoiceRecorderCard:'VoiceRecorderCard',CaptureImportButton:'CaptureImportButton',styles:{},insets:{bottom:20},screen,androidTouchSmoke:false,FORCE_WHISPER_FALLBACK_QA_MODE:false,prepareQuickVoiceWhisperProvider:()=>{},QUICK_VOICE_SPEECH_RECOGNITION:{},quickVoiceNavigation:{current:false},session:{user:{id:'owner'}},client:{},organizeVoiceRecord:async()=> '테라리움 폴더에 저장했습니다.',refreshQuickVoiceBriefing:async()=>refreshes++,getFreshAccessToken:async()=> 'synthetic',reminderSessionEpoch:{capture:()=>()=>true},saveWorklog:async(token,text,options)=>{assert.equal(token,'synthetic');assert.equal(text,'Synthetic task');assert.equal(options.sourceType,'voice');saves++;return {dataCoreWorkRecordId:'saved',scheduleIds:[]};},synchronizeSavedScheduleReminders:async()=>[],savedReminderMessage:()=> 'Saved',setSavedReminder:value=>feedback=value};
   const tree=new Function('scope',`with(scope){${js}}`)(scope);
   if(screen==='settings'){assert.equal(tree,null);continue;}
   const card=nativeNodes(tree).find(n=>n.type==='VoiceRecorderCard');assert.equal(card.props.mode,'quick');
   const result=await card.props.quickVoice.saveWorklog('Synthetic task',{});await card.props.quickVoice.refreshBriefing();
-  assert.equal(result.recordId,'saved');assert.equal(feedback.target.recordId,'saved');assert.equal(saves,1);assert.equal(refreshes,1);
+  assert.match(result.reminderMessage,/테라리움 폴더/);assert.equal(result.recordId,'saved');assert.equal(feedback.target.recordId,'saved');assert.equal(saves,1);assert.equal(refreshes,1);
  }
 });
 test('pending voice in either tab prevents leaving that tab',()=>{
