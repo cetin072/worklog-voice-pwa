@@ -60,7 +60,7 @@ test('overview retains all buckets; approved Home starts with today and keeps ex
   assert.equal(firstNonEmptyTaskBucket(todayAndOverdue.structure), 'today');
   assert.equal(firstNonEmptyTaskBucket(homeOverview({}).structure), 'today');
   // The app uses this only if the user has not selected a filter.
-  assert.match(readFileSync('mobile/app/index.tsx', 'utf8'), /taskFilter \|\| firstNonEmptyTaskBucket\(structure\)/);
+  assert.match(readFileSync('mobile/app/index.tsx', 'utf8'), /firstNonEmptyTaskBucket\(\{ \.\.\.structure, undated: \[\] \}\)/);
 });
 
 
@@ -69,7 +69,8 @@ test('Home keeps schedule focus and notes while moving filters behind the task c
   assert.match(source, /focusId=\{notificationScheduleId\}/);
   assert.match(source, /focusDate=\{/);
   assert.match(source, /taskFiltersExpanded \? <View style=\{styles.homeFilters\}/);
-  assert.match(source, /\{notes.length \? <View style=\{\[styles.briefingSection/);
+  assert.doesNotMatch(source, /\{notes.length \? <View/);
+  assert.match(source, /전체 할 일·메모는 업무 탭에서/);
   assert.match(source, /<HomeCalendar/);
   assert.doesNotMatch(source, /오늘 한눈에/);
 });

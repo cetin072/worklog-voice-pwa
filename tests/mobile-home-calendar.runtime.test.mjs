@@ -64,7 +64,8 @@ test('actual Home shows schedule before actionable tasks and moves tools after t
  const h=homeHarness({setReminderTarget:()=>reminders++,setScreen:screen=>{assert.equal(screen,'settings');settings++;},CalendarExportPreview:props=>({type:'CalendarExportPreview',props}),briefing:{today:'2026-11-09'},structure:{today:[task],overdue:[],upcoming:[],undated:[]},activeFilter:'today',completeTaskInline:()=>complete++,openTaskEditor:()=>edit++,confirmDeleteRecord:()=>remove++,undoTask:{title:task.title},undoCompletedTask:()=>undo++});
  const tree=h.render(),all=nodes(tree);const idx=label=>all.findIndex(n=>n.props?.accessibilityLabel===label);
  assert.ok(all.findIndex(n=>n.type==='HomeCalendar')<idx('견적서 검토 완료 처리'));
- assert.ok(idx('견적서 검토 완료 처리')<all.findIndex(n=>n.props?.label==='캡처 등록'));
+ assert.ok(idx('견적서 검토 완료 처리')<idx('전체 업무 보기'));
+ assert.equal(all.filter(n=>n.props?.label==='캡처 등록').length,0);
  const action=label=>nodes(h.render()).find(n=>n.props?.accessibilityLabel===label);
  assert.equal(words(action('견적서 검토 완료 처리')).trim(),'완료');
  assert.equal(words(action('견적서 검토 수정')).trim(),'✏️');

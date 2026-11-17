@@ -154,12 +154,9 @@ test("shared edit sheet shows human labels only and hides conversion when action
   assert.doesNotMatch(sheet,/>Task<\/Text>|>Note<\/Text>|>Schedule<\/Text>/);
 });
 
-test("Home Note row keeps 확인했어요 primary while adding lower-priority edit access",()=>{
-  assert.match(home,/function NoteRow\(\{ note, onEdit, onDelete, onAcknowledge/);
-  assert.match(home,/note\.title \|\| '메모'[\s\S]{0,100}수정/);
-  assert.match(home,/확인했어요/);
+test("Work memo edit preserves shared conversion contract",()=>{
   assert.match(home,/async function openNoteEditor/);
-  assert.match(home,/onEdit=\{\(\) => void openNoteEditor\(note\)\}/);
+  assert.match(home,/onEdit=\{record => record.action_kind === 'note' \? void openNoteEditor/);
   assert.match(home,/actionKind=\{editActionKind\}/);
   assert.match(home,/onActionKind=\{\(value\) => \{ editDirty.current.kind = true; setEditActionKind\(value\); \}\}/);
   assert.match(home,/result\.actionKindChanged[\s\S]*메모 · 참고로 변경했습니다/);

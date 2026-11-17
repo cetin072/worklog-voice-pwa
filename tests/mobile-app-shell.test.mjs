@@ -46,10 +46,10 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
   assert.match(homeSource, /accessibilityLabel="설정 열기"/);
   assert.match(homeSource + fs.readFileSync('mobile/src/features/home/home-calendar.tsx', 'utf8'), /오늘 일정/);
   assert.match(homeSource, /업무 · 메모 · 일정/);
-  assert.match(homeSource, /briefingBuckets\.map/);
+  assert.match(homeSource, /briefingBuckets\.filter\(bucket => bucket.key !== 'undated'\)\.map/);
   assert.match(homeSource, /tasks\.slice\(0, 3\)/);
   assert.match(homeSource, /개 더 보기/);
-  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(homeSource, /pointerEvents="box-none"/);
   assert.match(homeSource, /MeetingRecordingBanner[\s\S]*VoiceRecorderCard mode="quick"/);
 });

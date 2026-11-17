@@ -1,55 +1,58 @@
 import { workspaceStyles } from '@/src/ui/workspace-styles';
 import { recordRowStyles } from '@/src/ui/record-row-styles';
+import { RecordCompleteButton } from '@/src/ui/record-complete-button';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
-import type { BriefingNote, BriefingTask, WorkJournalRecord } from '@/src/platform/worklog-api';
-import { loadWorkJournalDay } from '@/src/platform/worklog-api';
-import { getFreshAccessToken } from '@/src/platform/authenticated-access';
+import type { BriefingNote, BriefingTask } from '@/src/platform/worklog-api';
 import { mobileTheme } from '@/src/ui/theme';
 import { seoulDate } from '../home/home-calendar-model';
-import { canMoveFolder, folderPath, loadFolderRecords, loadFolders, organizeRecord, saveFolder, PAGE_SIZE, TODAY_POLICY, type FolderRecord, type WorkFolder, type WorkSection } from './work-folders-store';
+import { canMoveFolder, folderPath, loadWorkOverview, organizeRecord, saveFolder, type FolderRecord, type WorkFolder, type WorkOverview, type WorkScope, type WorkSection } from './work-folders-store';
 
-type Props = { initialFolder?: string | null; initialSection?: 'tasks' | 'notes'; client: PlatformSupabaseClient; userId: string; home?: boolean; revision: number; busy: boolean; onComplete: (task: BriefingTask) => Promise<void>; onInput: () => void; onCompleteNote: (note: BriefingNote) => Promise<void>; onJournal: () => void; onSearch: () => void };
-export function WorkFolders({ client, userId, home = false, revision, initialFolder = null, initialSection = 'tasks', busy: externalBusy, onComplete, onInput, onCompleteNote, onJournal, onSearch }: Props) {
-  const [folders, setFolders] = useState<WorkFolder[]>([]);
-  const [folder, setFolder] = useState<string | null>(initialFolder);
-  const [section, setSection] = useState<WorkSection>(home ? 'today' : initialSection);
-  const [records, setRecords] = useState<FolderRecord[]>([]);
-  const [completed, setCompleted] = useState<WorkJournalRecord[]>([]);
+type Props = {
+  initialFolder?: string | null; initialSection?: WorkSection; onViewChange?: (scope: WorkScope, section: WorkSection) => void; client: PlatformSupabaseClient;
+  userId: string; revision: number; busy: boolean;
+  onComplete: (task: BriefingTask) => Promise<void>; onCompleteNote: (note: BriefingNote) => Promise<void>;
+  onJournal: () => void; onSearch: () => void;
+  onEdit: (record: FolderRecord) => void; onDelete: (record: FolderRecord) => void; onReminder: (record: FolderRecord) => void;
+};
+export function WorkFolders({ client, userId, revision, initialFolder, initialSection = 'tasks', busy: externalBusy,
+  onViewChange, onComplete, onCompleteNote, onJournal, onSearch, onEdit, onDelete, onReminder }: Props) {
+  // undefined means all; null explicitly means unclassified (including after conversion).
+  const [scope, setScope] = useState<WorkScope>(initialFolder === undefined ? 'all' : initialFolder);
+  const [section, setSection] = useState<WorkSection>(initialSection);
+  const [snapshot, setSnapshot] = useState<WorkOverview | null>(null);
+  const [loadedKey, setLoadedKey] = useState('');
   const [error, setError] = useState('');
-  const [journalLoading, setJournalLoading] = useState(home);
-  const [journalError, setJournalError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [nextOffset, setNextOffset] = useState(0);
-  const [more, setMore] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [nextOffset, setNextOffset] = useState(0);
   const [editor, setEditor] = useState<WorkFolder | null>(null);
   const [moving, setMoving] = useState<FolderRecord | WorkFolder | null>(null);
+  const [menu, setMenu] = useState<'workspace' | FolderRecord | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const epoch = useRef(0), locked = useRef(false), mounted = useRef(true);
   const folderNameInput = useRef<TextInput>(null);
-  const today = seoulDate();
+  const key = `${scope}:${section}`;
+  const folders = snapshot?.folders || [];
+  const currentFolder = folders.find(item => item.id === scope);
+  const sameScope = loadedKey === key;
+  const records = sameScope ? snapshot?.records || [] : [];
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; epoch.current++; }; }, []);
+  useEffect(() => { setScope(initialFolder === undefined ? 'all' : initialFolder); setSection(initialSection); }, [initialFolder, initialSection]);
+  useEffect(() => { onViewChange?.(scope, section); }, [scope, section]);
   useEffect(() => {
     const request = ++epoch.current;
-    setLoading(true); setReady(false); setError(''); setRecords([]); setMore(false);
-    void Promise.all([loadFolders(client), loadFolderRecords(client, folder, section)])
-      .then(([nextFolders, rows]) => { if (request !== epoch.current) return; setFolders(nextFolders); setRecords(rows); setNextOffset(rows.length); setMore(rows.length === PAGE_SIZE); setReady(true); })
+    // Keep confirmed counts and rows during refresh. A different scope never shows old rows.
+    setLoading(true); setError('');
+    void loadWorkOverview(client, scope, section)
+      .then(next => { if (request === epoch.current) { setSnapshot(next); setNextOffset(next.records.length); setLoadedKey(key); } })
       .catch(e => { if (request === epoch.current) setError(e.message); })
       .finally(() => { if (request === epoch.current) setLoading(false); });
-    if (home) {
-      setCompleted([]); setJournalError(''); setJournalLoading(true);
-      void getFreshAccessToken(client).then(token => loadWorkJournalDay(token, today))
-        .then(day => { if (request === epoch.current) setCompleted(day.completed); })
-        .catch(() => { if (request === epoch.current) setJournalError('오늘 끝낸 일을 불러오지 못했습니다. 새로고침해주세요.'); })
-        .finally(() => { if (request === epoch.current) setJournalLoading(false); });
-    }
     return () => { epoch.current++; };
-  }, [client, folder, section, revision, refresh, today, home]);
+  }, [client, scope, section, revision, refresh]);
 
   async function mutate(action: () => Promise<void>) {
     if (locked.current || externalBusy) return;
@@ -57,102 +60,115 @@ export function WorkFolders({ client, userId, home = false, revision, initialFol
     try {
       await action();
       if (!mounted.current) return;
-      setEditor(null); setMoving(null); setRefresh(n => n + 1);
+      setEditor(null); setMoving(null); setMenu(null); setRefresh(n => n + 1);
     } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : '저장 확인이 필요합니다. 새로고침해주세요.'); }
     finally { locked.current = false; if (mounted.current) setBusy(false); }
   }
   async function loadMore() {
-    if (locked.current || loading) return;
-    locked.current = true; setLoading(true);
+    if (locked.current || loading || !snapshot || !sameScope) return;
+    locked.current = true; setLoading(true); setError('');
     const request = epoch.current;
     try {
-      const rows = await loadFolderRecords(client, folder, section, nextOffset);
-      if (request === epoch.current) { setRecords(current => [...current, ...rows.filter(row => !current.some(item => item.id === row.id))]); setNextOffset(nextOffset + rows.length); setMore(rows.length === PAGE_SIZE); }
+      const next = await loadWorkOverview(client, scope, section, nextOffset);
+      if (request === epoch.current) { setNextOffset(nextOffset + next.records.length); setSnapshot(current => current && ({ ...next, records: [...current.records, ...next.records.filter(row => !current.records.some(item => item.id === row.id))] })); }
     } catch (e) { if (request === epoch.current) setError(e instanceof Error ? e.message : '더 불러오지 못했습니다.'); }
     finally { locked.current = false; if (request === epoch.current) setLoading(false); }
   }
   const disabled = busy || externalBusy || loading;
   const button = (label: string, action: () => void, off = disabled, text = label) => <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={off} style={[styles.button, off && styles.disabled]} onPress={action}><Text style={styles.buttonText}>{text}</Text></Pressable>;
-  const currentFolder = folders.find(item => item.id === folder);
+  const closeDialog = () => { if (!busy) { setEditor(null); setMoving(null); setMenu(null); } };
+  const scopeButton = (value: WorkScope, label: string, count?: number) => <Pressable key={value ?? 'unclassified'} accessibilityRole="button" accessibilityLabel={`${label} ${count ?? '확인 중'}개 할 일`} accessibilityState={{ selected: scope === value }} disabled={busy || externalBusy} style={[styles.folder, scope === value && styles.active]} onPress={() => { setScope(value); setExpanded(null); }}><Text style={[styles.folderName, scope === value && styles.selectedText]}>{label}</Text><Text style={styles.count}>{count ?? '—'}</Text></Pressable>;
   return <View style={styles.card}>
-    <View style={styles.heading}><Text style={styles.title}>{home ? '오늘 하기' : '업무'}</Text><Pressable accessibilityRole="button" accessibilityLabel="새로고침" disabled={busy || externalBusy || loading} style={styles.refresh} onPress={() => setRefresh(n => n + 1)}><Text style={styles.link}>새로고침</Text></Pressable></View>
-    <Text style={styles.help}>{home ? TODAY_POLICY : '음성으로 폴더 이름을 말하면 자동 분류합니다. 이름이 없거나 모호하면 미분류에서 확인하세요.'}</Text>
-    {!home ? <>
-      <Pressable accessibilityRole="button" accessibilityLabel="업무·메모 등록" disabled={busy || externalBusy} style={styles.refresh} onPress={onInput}><Text style={styles.link}>직접 입력 ›</Text></Pressable>
-      <Text style={styles.path}>{folder ? folderPath(folders, folder) : '내 폴더 / 미분류'}</Text>
-      {folder ? button('상위 폴더', () => { setFolder(currentFolder?.parent_id || null); setExpanded(null); }) : null}
-      <View style={styles.actions}>
-        {folders.filter(item => item.parent_id === folder).map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.name} 폴더 열기`} style={styles.folder} disabled={disabled} onPress={() => { setFolder(item.id); setExpanded(null); }}><Text style={styles.text}>📁 {item.name}</Text></Pressable>)}
+    <View style={styles.heading}><Text style={styles.title}>업무</Text><View style={styles.actions}>
+      <Pressable accessibilityRole="button" accessibilityLabel="새로고침" disabled={disabled} style={styles.refresh} onPress={() => setRefresh(n => n + 1)}><Text style={styles.link}>새로고침</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="업무 메뉴" style={styles.menuButton} disabled={busy || externalBusy} onPress={() => setMenu('workspace')}><Text style={styles.text}>⋯</Text></Pressable>
+    </View></View>
+    <View style={styles.heading}><Text style={styles.help}>폴더 · 남은 할 일</Text><Pressable accessibilityRole="button" accessibilityLabel={currentFolder ? '하위 폴더 만들기' : '폴더 만들기'} style={styles.refresh} disabled={disabled || !snapshot} onPress={() => setEditor({ id: randomUUID(), name: '', parent_id: currentFolder?.id || null, version: -1 })}><Text style={styles.link}>＋ 폴더</Text></Pressable></View>
+    <View style={styles.folders}>
+      {scopeButton('all', '전체', snapshot?.all_tasks)}
+      {scopeButton(null, '미분류', snapshot?.unclassified_tasks)}
+      {folders.map(item => scopeButton(item.id, folderPath(folders, item.id), item.task_count))}
+    </View>
+    <Text style={styles.scopeLabel}>{scope === 'all' ? '전체 업무' : scope === null ? '미분류' : folderPath(folders, scope)}{currentFolder && folders.some(item => item.parent_id === currentFolder.id) ? ' · 하위 폴더 포함' : ''}</Text>
+    <View style={styles.tabs}>{([['tasks', '할 일'], ['notes', '메모·자료'], ['completed', '완료']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: section === value }} disabled={busy || externalBusy} style={[styles.tab, section === value && styles.active]} onPress={() => { setSection(value); setExpanded(null); }}><Text style={[styles.tabText, section === value && styles.selectedText]}>{label}</Text></Pressable>)}</View>
+    {section === 'completed' ? <Pressable accessibilityRole="button" accessibilityLabel="날짜별 업무일지" style={styles.refresh} onPress={onJournal}><Text style={styles.link}>날짜별 업무일지 ›</Text></Pressable> : null}
+    {loading ? <Text accessibilityLiveRegion="polite" style={styles.help}>{snapshot ? '갱신 중…' : '불러오는 중…'}</Text> : null}
+    {busy ? <Text accessibilityLiveRegion="polite" style={styles.help}>저장 확인 중…</Text> : null}
+    {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
+    {sameScope && !loading && !error && !records.length ? <Text style={styles.empty}>{section === 'completed' ? '완료한 기록이 없습니다.' : section === 'notes' ? '메모·자료가 없습니다.' : '남은 할 일이 없습니다.'}</Text> : null}
+    {records.map(record => <View key={record.id} style={styles.record}>
+      <View style={styles.recordLine}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}>
+          <Text style={styles.text}>{section === 'completed' ? '✓ ' : ''}{record.title}</Text>
+          {scope === 'all' || (currentFolder && record.folder_id !== currentFolder.id) ? <Text style={styles.help}>{folderPath(folders, record.folder_id)}</Text> : null}
+          {section === 'completed' ? <Text style={styles.help}>완료 {record.completed_at || record.acknowledged_at ? seoulDate(record.completed_at || record.acknowledged_at!) : '날짜 미확인'}</Text> : record.due_at ? <Text style={styles.help}>기한 {seoulDate(record.due_at)}</Text> : null}
+        </Pressable>
+        <View style={styles.recordActions}>
+          <View style={styles.actions}>
+            {section !== 'completed' ? <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 수정`} style={recordRowStyles.inlineEdit} disabled={disabled} onPress={() => onEdit(record)}><Text style={recordRowStyles.inlineEditText}>✏️</Text></Pressable> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 더 보기`} style={styles.menuButton} disabled={disabled} onPress={() => setMenu(record)}><Text style={styles.text}>⋯</Text></Pressable>
+          </View>
+          {section !== 'completed' ? <RecordCompleteButton label={`${record.title} 완료`} disabled={disabled} onPress={() => void mutate(() => record.action_kind === 'note' ? onCompleteNote({ pageId: record.id, title: record.title }) : onComplete({ pageId: record.id, title: record.title, status: record.status === 'waiting' ? '대기' : record.status === 'needs_review' ? '확인필요' : '진행중', nextAttentionAt: record.next_attention_at || undefined }))} /> : null}
+        </View>
       </View>
-      <View style={styles.actions}>
-        {button(folder ? '하위 폴더 만들기' : '폴더 만들기', () => setEditor({ id: randomUUID(), name: '', parent_id: folder, version: -1 }), disabled || !ready)}
-        {currentFolder ? <>{button('폴더 이름 변경', () => setEditor({ ...currentFolder }))}{button('폴더 이동', () => setMoving(currentFolder))}</> : null}
-      </View>
-      <View style={styles.actions}>{([['tasks', '할 일'], ['notes', '메모·자료'], ['completed', '완료']] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: section === key }} disabled={busy || externalBusy} style={[styles.tab, section === key && styles.active]} onPress={() => { setSection(key); setExpanded(null); }}><Text style={section === key ? styles.activeText : styles.text}>{label}</Text></Pressable>)}</View>
-    </> : null}
-    {!home ? <View style={styles.actions}>{button('날짜별 업무일지', onJournal, busy || externalBusy)}{button('과거 기록 검색', onSearch, busy || externalBusy)}</View> : null}
-    {editor ? <Modal transparent animationType="fade" onShow={() => folderNameInput.current?.focus()} onRequestClose={() => { if (!busy) setEditor(null); }}>
+      {expanded === record.id ? <Text selectable style={styles.body}>{record.content || record.original_text || '추가 본문이 없습니다.'}</Text> : null}
+    </View>)}
+    {sameScope && snapshot && nextOffset < snapshot.total_count ? button('더 불러오기', () => void loadMore()) : null}
+    {editor || moving || menu ? <Modal transparent animationType="fade" onShow={() => editor && folderNameInput.current?.focus()} onRequestClose={closeDialog}>
       <KeyboardAvoidingView style={styles.editorOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.editorScroll} contentContainerStyle={styles.editorContent} keyboardShouldPersistTaps="handled">
           <View style={styles.editorDialog} accessibilityViewIsModal>
-            <Text accessibilityRole="header" style={styles.title}>{editor.version === -1 ? '새 폴더' : '폴더 이름 변경'}</Text>
-            <TextInput ref={folderNameInput} accessibilityLabel="폴더 이름" placeholder="폴더 이름" value={editor.name} maxLength={60} editable={!busy} style={styles.input} onChangeText={name => setEditor({ ...editor, name })} returnKeyType="done"
-              onSubmitEditing={() => { if (!disabled && editor.name.trim()) void mutate(() => saveFolder(client, editor, userId)); }} />
+            {editor ? <>
+              <Text accessibilityRole="header" style={styles.title}>{editor.version === -1 ? '새 폴더' : '폴더 이름 변경'}</Text>
+              <TextInput ref={folderNameInput} accessibilityLabel="폴더 이름" placeholder="폴더 이름" value={editor.name} maxLength={60} editable={!busy} style={styles.input} onChangeText={name => setEditor({ ...editor, name })} returnKeyType="done" onSubmitEditing={() => { if (!disabled && editor.name.trim()) void mutate(() => saveFolder(client, editor, userId)); }} />
+              {button('폴더 저장', () => void mutate(() => saveFolder(client, editor, userId)), disabled || !editor.name.trim())}
+            </> : moving ? <>
+              <Text accessibilityRole="header" style={styles.title}>폴더 이동</Text><Text style={styles.help}>{'title' in moving ? moving.title : moving.name}</Text>
+              {[null, ...folders.filter(item => 'title' in moving || canMoveFolder(folders, moving.id, item.id)).map(item => item.id)].map(id => <View key={id || 'root'}>{button(id ? folderPath(folders, id) : ('title' in moving ? '미분류로 이동' : '최상위로 이동'), () => void mutate(() => 'title' in moving ? organizeRecord(client, moving, { folder: id }, userId) : saveFolder(client, { ...moving, parent_id: id }, userId)))}</View>)}
+            </> : menu === 'workspace' ? <>
+              <Text accessibilityRole="header" style={styles.title}>업무 메뉴</Text>
+              {button('과거 기록 검색', () => { setMenu(null); onSearch(); }, false)}
+              {button('날짜별 업무일지', () => { setMenu(null); onJournal(); }, false)}
+              {currentFolder ? <>{button('폴더 이름 변경', () => { setEditor({ ...currentFolder }); setMenu(null); })}{button('폴더 이동', () => { setMoving(currentFolder); setMenu(null); })}</> : null}
+              <Text style={styles.help}>음성으로 폴더 이름을 말하면 자동 분류합니다. 이름이 없거나 모호하면 미분류에 저장합니다. 폴더 숫자는 하위 폴더를 포함한 남은 할 일 수입니다.</Text>
+            </> : menu ? <>
+              <Text accessibilityRole="header" style={styles.title}>{menu.title}</Text>
+              {button('폴더 이동', () => { setMoving(menu); setMenu(null); })}
+              {section !== 'completed' ? button('알림 설정', () => { const record = menu; setMenu(null); onReminder(record); }) : null}
+              {button('삭제', () => { const record = menu; setMenu(null); onDelete(record); })}
+            </> : null}
             {busy ? <Text accessibilityLiveRegion="polite" style={styles.help}>저장 확인 중…</Text> : null}
             {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-            <View style={styles.actions}>{button('폴더 저장', () => void mutate(() => saveFolder(client, editor, userId)), disabled || !editor.name.trim())}{button('편집 취소', () => setEditor(null), busy)}</View>
+            {button(editor ? '편집 취소' : moving ? '이동 취소' : '닫기', closeDialog, busy)}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal> : null}
-    {moving ? <View style={styles.editor}>
-      <Text style={styles.text}>이동할 곳 선택 · {'title' in moving ? moving.title : moving.name}</Text>
-      {[null, ...folders.filter(item => 'title' in moving || canMoveFolder(folders, moving.id, item.id)).map(item => item.id)].map(id => <View key={id || 'root'}>{button(id ? folderPath(folders, id) : ('title' in moving ? '미분류로 이동' : '최상위로 이동'), () => void mutate(() => 'title' in moving ? organizeRecord(client, moving, { folder: id }, userId) : saveFolder(client, { ...moving, parent_id: id }, userId)))}</View>)}
-      {button('이동 취소', () => setMoving(null), busy)}
-    </View> : null}
-    {loading ? <Text accessibilityLiveRegion="polite" style={styles.help}>불러오는 중…</Text> : null}
-    {busy ? <Text accessibilityLiveRegion="polite" style={styles.help}>저장 확인 중…</Text> : null}
-    {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-    {ready && !records.length ? <Text style={styles.help}>{home ? '업무 탭에서 날짜 없는 할 일을 골라보세요.' : '이 폴더에 해당 기록이 없습니다.'}</Text> : null}
-    {records.map(record => <View key={record.id} style={styles.record}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}><Text style={styles.text}>{section === 'completed' ? '✓ ' : ''}{record.title}</Text><Text style={styles.help}>{home ? `${folderPath(folders, record.folder_id)} · ` : ''}{section === 'completed' ? `완료 ${record.completed_at || record.acknowledged_at ? seoulDate(record.completed_at || record.acknowledged_at!) : '날짜 미확인'}` : record.due_at ? `기한 ${seoulDate(record.due_at)}` : '날짜 없음'}{record.selected_on ? ' · 오늘 선택됨' : ''}</Text></Pressable>
-      {expanded === record.id ? <Text selectable style={styles.text}>{record.content || record.original_text || '추가 본문이 없습니다.'}</Text> : null}
-      <View style={styles.actions}>
-        {section !== 'completed' && record.status !== 'completed' && record.action_kind === 'note' && record.briefing_state !== 'acknowledged' ? button(`${record.title} 완료`, () => void mutate(() => onCompleteNote({ pageId: record.id, title: record.title })), disabled, '완료') : null}
-        {record.status !== 'completed' && record.action_kind !== 'note' ? <>
-          {button(`${record.title} 완료`, () => void mutate(() => onComplete({ pageId: record.id, title: record.title, status: record.status === 'waiting' ? '대기' : record.status === 'needs_review' ? '확인필요' : '진행중', nextAttentionAt: record.next_attention_at || undefined })), disabled, '완료')}
-          {!record.due_at || record.selected_on ? button(record.selected_on ? '오늘 선택 해제' : '오늘 하기', () => void mutate(() => organizeRecord(client, record, { today: !record.selected_on }, userId))) : null}
-        </> : null}
-        {!home ? button(`${record.title} 폴더 이동`, () => setMoving(record), disabled, '폴더 이동') : null}
-      </View>
-    </View>)}
-    {more ? button('더 불러오기', () => void loadMore()) : null}
-    {home ? <View style={styles.record}><Text style={styles.title}>오늘 끝낸 일</Text>{journalLoading ? <Text style={styles.help}>완료 기록을 불러오는 중…</Text> : journalError ? <Text style={styles.error}>{journalError}</Text> : completed.length ? completed.map(record => <Text key={record.pageId} style={styles.text}>✓ {record.title}</Text>) : <Text style={styles.help}>오늘 완료한 업무가 없습니다.</Text>}</View> : null}
   </View>;
 }
 const styles = StyleSheet.create({
-  card: workspaceStyles.card,
-  heading: workspaceStyles.heading,
-  refresh: workspaceStyles.refresh,
-  link: workspaceStyles.link,
-  title: workspaceStyles.title,
-  text: recordRowStyles.taskTitle,
-  help: recordRowStyles.taskMeta,
-  path: { fontSize: 15, color: mobileTheme.colors.text, fontWeight: '600' },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  button: { minHeight: mobileTheme.size.touchTarget, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border, maxWidth: '100%' },
-  buttonText: { color: mobileTheme.colors.link, fontSize: 13, fontWeight: '700' },
-  disabled: { opacity: 0.5 },
-  folder: { minHeight: 46, justifyContent: 'center', padding: 10, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, maxWidth: '100%' },
-  tab: workspaceStyles.filter,
-  active: workspaceStyles.filterActive, activeText: { ...recordRowStyles.taskTitle, color: mobileTheme.colors.link },
-  editorOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  editorScroll: { flex: 1 },
+  card: workspaceStyles.card, heading: workspaceStyles.heading, refresh: workspaceStyles.refresh,
+  link: workspaceStyles.link, title: workspaceStyles.title, text: recordRowStyles.taskTitle, help: recordRowStyles.taskMeta,
+  body: { ...recordRowStyles.taskMeta, color: mobileTheme.colors.text }, empty: { ...workspaceStyles.empty, paddingVertical: 20 },
+  actions: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  folders: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  folder: { minHeight: 44, width: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 4, padding: 8, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12 },
+  folderName: { ...recordRowStyles.taskMeta, color: mobileTheme.colors.text, flex: 1, fontWeight: '600' },
+  count: { ...recordRowStyles.taskMeta, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  scopeLabel: { ...recordRowStyles.taskMeta, paddingTop: 6 },
+  tabs: { flexDirection: 'row', gap: 6, paddingBottom: 6 },
+  tab: { ...workspaceStyles.filter, flex: 1, alignItems: 'center', paddingHorizontal: 2 },
+  tabText: { ...recordRowStyles.taskMeta, color: mobileTheme.colors.text, fontWeight: '700' },
+  active: workspaceStyles.filterActive, selectedText: { color: mobileTheme.colors.link },
+  button: { minHeight: mobileTheme.size.touchTarget, justifyContent: 'center', padding: 12, borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border },
+  buttonText: { color: mobileTheme.colors.link, fontSize: 14, fontWeight: '700' }, disabled: { opacity: 0.5 },
+  menuButton: { minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  editorOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }, editorScroll: { flex: 1 },
   editorContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   editorDialog: { width: '100%', maxWidth: 460, alignSelf: 'center', padding: 20, gap: 12, borderRadius: 16, backgroundColor: mobileTheme.colors.surface },
-  editor: { padding: 12, gap: 10, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12 },
   input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, color: mobileTheme.colors.text },
   record: { gap: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: mobileTheme.colors.borderSubtle },
-  open: { minHeight: 46, gap: 4, justifyContent: 'center' },
+  recordLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }, recordActions: { gap: 6 },
+  open: { flex: 1, minHeight: 48, gap: 4, justifyContent: 'center' },
   error: { color: mobileTheme.colors.danger, lineHeight: 22 },
 });

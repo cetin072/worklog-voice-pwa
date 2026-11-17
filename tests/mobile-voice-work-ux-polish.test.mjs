@@ -11,7 +11,7 @@ const search = fs.readFileSync('mobile/src/features/search/work-record-search.ts
 
 test('Voice UX mirrors the strongest web recording affordances', () => {
   assert.match(voice, /QUICK_VOICE_LAYOUT\.micSize/);
-  assert.match(quickVoiceLayout, /micSize: 116/);
+  assert.match(quickVoiceLayout, /micSize: 80/);
   assert.doesNotMatch(voice, /marginTop: -28/);
   assert.match(voice, /accessibilityLabel="녹음 취소"/);
   assert.match(voice, /backgroundColor: '#b91c1c'/);
@@ -25,9 +25,9 @@ test('Voice UX mirrors the strongest web recording affordances', () => {
 });
 
 test('Home uses a compact pass-through floating voice dock', () => {
-  assert.match(home, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(home, /pointerEvents="box-none"/);
-  assert.match(home, /QUICK_VOICE_LAYOUT\.dockReserveHeight/);
+  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(home, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
 });
 

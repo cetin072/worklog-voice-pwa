@@ -23,7 +23,7 @@ test("journal entry lives in settings while header retains search/settings",()=>
   assert.match(header,/accessibilityLabel="과거 업무 검색"/);
   assert.match(header,/accessibilityLabel="설정 열기"/);
   assert.match(settings,/title="업무일지" accessibilityLabel="업무일지 열기"[\s\S]*onPress=\{openJournal\}/);
-  assert.match(home,/title="업무일지" onClose=\{\(\) => setScreen\('settings'\)\}/);
+  assert.match(home,/title="업무일지" onClose=\{\(\) => setScreen\(journalReturn\)\}/);
   assert.match(home,/setScreen\(screen === 'journal' \? 'settings' : 'home'\)/);
 });
 
