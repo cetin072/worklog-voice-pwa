@@ -46,8 +46,9 @@ for weekday, date in zip(weekdays, dates):
     assert abs((wb[0]+wb[2])-(db[0]+db[2])) <= 4, 'Date/weekday column misaligned'
 print('Android seven-column calendar alignment PASS')
 PYCALENDAR
+  # Start above the floating recorder so the swipe reaches the scroll view.
   for page in 1 2 3; do
-    adb shell input swipe "$((width / 2))" 660 "$((width / 2))" 220 500
+    adb shell input swipe "$((width / 2))" 540 "$((width / 2))" 220 500
     adb shell uiautomator dump /sdcard/home-capture.xml >/dev/null
     adb pull /sdcard/home-capture.xml "$output/$name-page-$page.xml" >/dev/null
     adb exec-out screencap -p > "$output/$name-page-$page.png"

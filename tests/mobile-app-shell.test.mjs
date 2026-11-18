@@ -49,7 +49,7 @@ test('Authenticated mobile shell is home-first without the duplicated bottom tab
   assert.match(homeSource, /briefingBuckets\.filter\(bucket => bucket.key !== 'undated'\)\.map/);
   assert.match(homeSource, /tasks\.slice\(0, 3\)/);
   assert.match(homeSource, /개 더 보기/);
-  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(homeSource, /pointerEvents="box-none"/);
   assert.match(homeSource, /MeetingRecordingBanner[\s\S]*VoiceRecorderCard mode="quick"/);
 });

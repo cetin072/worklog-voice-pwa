@@ -70,7 +70,7 @@ test('Home keeps schedule focus and notes while moving filters behind the task c
   assert.match(source, /focusDate=\{/);
   assert.match(source, /taskFiltersExpanded \? <View style=\{styles.homeFilters\}/);
   assert.doesNotMatch(source, /\{notes.length \? <View/);
-  assert.match(source, /전체 할 일·메모는 업무 탭에서/);
+  assert.match(source, /전체 업무/);
   assert.match(source, /<HomeCalendar/);
   assert.doesNotMatch(source, /오늘 한눈에/);
 });

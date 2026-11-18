@@ -13,6 +13,7 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   t.after(()=>{if(previous===undefined)delete process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT;else process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT=previous;});
   process.env.EXPO_PUBLIC_WORKLOG_APP_VARIANT='qa';
   const row={id:'22222222-2222-4222-8222-222222222222',workspace_id:'workspace',created_by_user_id:'owner',title:'합성 일정',status:'confirmed',starts_at:'2026-11-02T10:00:00+09:00',ends_at:null,all_day:false,timezone:'Asia/Seoul',updated_at:'2026-10-31T01:00:00Z'};
+  let refreshEnabled=false,refreshes=0;
   let connects=0,posts=0,stored=null,finish;
   const target={accountId:'google-id',calendarId:'primary'};
   const service=createCalendarConnection({authorize:async()=>{connects++;await new Promise(r=>finish=r);return {target,email:'qa@example.invalid',expiresAt:Date.now()+60000,adapter:{target,get:async id=>stored?.id===id?stored:null,insert:async(id,draft)=>{posts++;stored={id,draft,status:'confirmed',sourceId:draft.scheduleId};return stored;}}};}});
@@ -30,7 +31,7 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
       useRef:init=>{const i=cursor++;if(!(i in slots))slots[i]={current:init};return slots[i];},useEffect:()=>{}};React.default=React;
     const native=Object.fromEntries(['Image','Modal','Pressable','ScrollView','Text','View'].map(k=>[k,k]));native.StyleSheet={create:v=>v};
     const exp={};const code=ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
-    new Function('require','exports',code)(mod=>mod==='react'?React:mod==='react/jsx-runtime'?{}:mod==='react-native'?native:mod.includes('home-reminder-status')?{useCalendarScheduleId:()=>row.id}:mod.includes('use-calendar-connection')?{useCalendarConnection:()=>service}:mod.includes('calendar-end-picker')?{CalendarEndPicker:'CalendarEndPicker',calendarDateLabel:()=> '2026년 11월 2일 오전 10시'}:mod.includes('platform-provider')?{usePlatform:()=>platform}:mod.includes('snapshot')?{reminderSessionEpoch:{capture:()=>()=>true}}:mod.includes('calendar-record-source')?entryModule:mod.includes('calendar-source')?sourceModule:{CALENDAR_PERMISSION_NOTICE:'선택한 일정 한 건'},exp);
+    new Function('require','exports',code)(mod=>mod==='react'?React:mod==='react/jsx-runtime'?{}:mod==='react-native'?native:mod.includes('home-reminder-status')?{useCalendarScheduleId:()=>row.id}:mod.includes('use-calendar-connection')?{useCalendarConnection:()=>service}:mod.includes('use-external-calendar')?{useExternalCalendar:(_month,_revision,enabled)=>{if(enabled)refreshEnabled=true;return {refresh:()=>refreshes++,loading:false};}}:mod.includes('home-calendar-model')?{seoulDate:()=> '2026-11-18'}:mod.includes('calendar-end-picker')?{CalendarEndPicker:'CalendarEndPicker',calendarDateLabel:()=> '2026년 11월 2일 오전 10시'}:mod.includes('platform-provider')?{usePlatform:()=>platform}:mod.includes('snapshot')?{reminderSessionEpoch:{capture:()=>()=>true}}:mod.includes('calendar-record-source')?entryModule:mod.includes('calendar-source')?sourceModule:{CALENDAR_PERMISSION_NOTICE:'선택한 일정 한 건'},exp);
     return ()=>{cursor=0;return exp[name](props);};
   }
   const render=component('mobile/src/features/calendar/calendar-export-preview.tsx','CalendarExportPreview',{scheduleId:row.id,title:'snapshot'});
@@ -49,6 +50,9 @@ test('settings owns OAuth; disconnected schedules are hidden; mounted export rea
   finish();await flush();assert.equal(connects,1);assert.match(text(settings()),/연결됨/);
   const remountedSettings=component('mobile/src/features/settings/calendar-settings.tsx','CalendarSettings');
   assert.match(text(remountedSettings()),/qa@example.invalid/);assert.equal(posts,0);
+  assert.equal(refreshEnabled,false);button(remountedSettings,'Google 새로고침').props.onPress();
+  assert.match(text(remountedSettings()),/Google 일정을 확인했습니다/);assert.equal(refreshes,1);assert.equal(refreshEnabled,true);
+  button(remountedSettings,'연결 안내').props.onPress();assert.match(text(remountedSettings()),/읽기 전용.*수정·삭제는 Google 캘린더/);
   const compact=component('mobile/src/features/calendar/calendar-export-preview.tsx','CalendarExportPreview',{recordId:record.id,title:record.title,compact:true});
   assert.equal(text(button(compact,'Google 캘린더에 보내기')),'','compact entry is an accessible Google icon');
   assert.equal(posts,0,'connecting and mounting compact entry never export automatically');
