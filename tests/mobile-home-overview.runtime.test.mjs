@@ -74,3 +74,21 @@ test('Home keeps schedule focus and notes while moving filters behind the task c
   assert.match(source, /<HomeCalendar/);
   assert.doesNotMatch(source, /오늘 한눈에/);
 });
+
+test('undated review cards open the existing detail without changing deadline counts', async () => {
+  const { undatedReviews } = await import('../mobile/src/features/home/home-overview.ts');
+  const task = { pageId: 'review', title: '공급조건 다시 보기', nextAttentionAt: '2026-11-18T00:00:00Z' };
+  const candidates = [task, task, { ...task, pageId: 'due', dueKey: '2026-11-18' }, { pageId: 'plain', title: '날짜 없는 업무' }];
+  const reviewTasks = undatedReviews({ resurface: candidates });
+  assert.deepEqual(reviewTasks, [task]);
+  const { homeHarness, nodes, words } = await import('./helpers/mobile-home-harness.mjs');
+  let selected, screen;
+  const app = homeHarness({ briefing: { today: '2026-11-18' }, reviewTasks, briefingBuckets: [],
+    structure: { today: [], overdue: [], upcoming: [], undated: [task] },
+    setSelectedTask: value => { selected = value; }, setScreen: value => { screen = value; } });
+  const tree = app.render();
+  assert.match(words(tree), /오늘 마감\s+0.*다시 확인할 업무.*공급조건 다시 보기/s);
+  nodes(tree).find(node => node.type === 'Pressable' && words(node).includes(task.title)).props.onPress();
+  assert.deepEqual(selected, { bucket: 'undated', task });
+  assert.equal(screen, 'task');
+});

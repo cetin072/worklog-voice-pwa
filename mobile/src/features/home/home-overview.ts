@@ -32,3 +32,13 @@ export function homeOverview(briefing: MobileBriefing) {
   // Notes-only and schedules-only home screens have content, not task rows.
   return { structure, hasTasks, empty, summary: `표시된 업무: 오늘 ${structure.today.length} · 기한 지남 ${structure.overdue.length} · 다가오는 ${structure.upcoming.length} · 기한 없음 ${structure.undated.length} / 오늘 일정 ${schedules}개` };
 }
+
+/** Undated reviews get one entry on Home without affecting due-date counts. */
+export function undatedReviews(briefing: MobileBriefing): BriefingTask[] {
+  const seen = new Set<string>();
+  return (briefing.resurface ?? []).filter(task => {
+    if (task.dueKey || !task.nextAttentionAt || !task.pageId || seen.has(task.pageId)) return false;
+    seen.add(task.pageId);
+    return true;
+  });
+}
