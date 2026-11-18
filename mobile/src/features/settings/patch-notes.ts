@@ -12,7 +12,7 @@ export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
     date: '2026-11-18',
     title: '홈 캘린더를 일요일부터 보기',
     summary: '주 보기와 월 보기의 요일을 일·월·화·수·목·금·토 순서로 표시합니다.',
-    items: [],
+    items: ['일요일은 빨간색, 토요일은 파란색으로 표시합니다.'],
   },
   {
     date: '2026-11-18',

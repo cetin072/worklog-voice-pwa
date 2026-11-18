@@ -13,6 +13,11 @@ import type { BriefingSchedule } from '@/src/platform/worklog-api';
 import { CALENDAR_WEEKDAYS, calendarDays, calendarTime, eventsOnDay, seoulDate, shiftDay, shiftMonth } from './home-calendar-model';
 import { mobileTheme } from '@/src/ui/theme';
 
+const weekendColorByColumn: Readonly<Partial<Record<number, string>>> = {
+  0: mobileTheme.colors.danger,
+  6: mobileTheme.colors.link,
+};
+
 export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, today, fallback, onOpenCalendar, renderSchedule, focusId, focusDate, onTodayCount }: {
   repeatingWorks?: RepeatingWork[]; onOpenRepeating?(id:string,date?:string): void;
   revision: number; today: string; fallback: BriefingSchedule[]; onOpenCalendar(day?: string): void; onTodayCount(count: number | null): void;
@@ -63,11 +68,33 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
       <Pressable accessibilityRole="button" accessibilityLabel={expanded ? '다음 달' : '다음 주'} disabled={selected >= '2099-12-25'} style={styles.nav} onPress={() => setSelected(expanded ? shiftMonth(selected, 1) : shiftDay(selected, 7))}><Text style={styles.link}>›</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded }} style={styles.action} onPress={() => setExpanded(v => !v)}><Text style={styles.link}>{expanded ? '주 보기 ⌃' : '월 보기 ⌄'}</Text></Pressable>
     </View>
-    <View style={styles.week}>{CALENDAR_WEEKDAYS.map(d => <View key={d} style={styles.weekday}><Text style={styles.muted}>{d}</Text></View>)}</View>
+    <View style={styles.week}>{CALENDAR_WEEKDAYS.map((weekday, column) => {
+      const color = weekendColorByColumn[column];
+      return <View key={weekday} style={styles.weekday}>
+        <Text style={[styles.muted, color && { color }]}>{weekday}</Text>
+      </View>;
+    })}</View>
     {Array.from({length: Math.ceil(days.length / 7)}, (_, week) => <View key={week} style={styles.week}>
-      {days.slice(week * 7, week * 7 + 7).map((day, index) => day ? <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${day}${day === today ? ' 오늘' : ''}${eventsOnDay(combined, day).length ? ' 일정 있음' : ''}`} accessibilityState={{ selected: day === selected }} disabled={day < '2000-01-01' || day > '2099-12-31'} onPress={() => { setSelected(day); setOpened(null); }} style={styles.day}>
-        <Text numberOfLines={1} style={[styles.dayNumber, day === selected && styles.selected, day === today && day !== selected && styles.today]}>{Number(day.slice(8))}</Text><Text style={styles.dot}>{eventsOnDay(combined, day).length ? '•' : ' '}</Text>
-      </Pressable> : <View key={`blank-${index}`} style={styles.day} />)}
+      {days.slice(week * 7, week * 7 + 7).map((day, column) => {
+        if (!day) return <View key={`blank-${column}`} style={styles.day} />;
+        const color = weekendColorByColumn[column];
+        const isSelected = day === selected;
+        const isToday = day === today;
+        const hasEvents = eventsOnDay(combined, day).length > 0;
+        return <Pressable key={day} accessibilityRole="button"
+          accessibilityLabel={`${day}${isToday ? ' 오늘' : ''}${hasEvents ? ' 일정 있음' : ''}`}
+          accessibilityState={{ selected: isSelected }} disabled={day < '2000-01-01' || day > '2099-12-31'}
+          onPress={() => { setSelected(day); setOpened(null); }} style={styles.day}>
+          <Text numberOfLines={1} style={[
+            styles.dayNumber,
+            isToday && styles.today,
+            color && { color },
+            isSelected && styles.selected,
+            isSelected && color && { backgroundColor: color },
+          ]}>{Number(day.slice(8))}</Text>
+          <Text style={styles.dot}>{hasEvents ? '•' : ' '}</Text>
+        </Pressable>;
+      })}
     </View>)}
     <View style={styles.divider} />
     <View style={styles.row}><Text accessibilityRole="header" style={styles.subtitle}>{selected === today ? '오늘 일정' : `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8))}일 일정`}</Text>{integrated ? action('일정 관리', () => onOpenCalendar(selected)) : null}</View>

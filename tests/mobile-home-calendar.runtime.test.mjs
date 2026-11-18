@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 register('./helpers/mobile-ts-loader.mjs', import.meta.url);
 const { externalCalendarHook, read } = await import('./helpers/external-calendar-hook.mjs');
 const model = await import('../mobile/src/features/home/home-calendar-model.ts');
+const { mobileTheme } = await import('../mobile/src/ui/theme.ts');
 const { homeHarness, nodes, words } = await import('./helpers/mobile-home-harness.mjs');
 const event = (id, start, end = null, extra = {}) => ({ id, source: 'personal', title: id, starts_at: start, ends_at: end, all_day: false, status: 'confirmed', ...extra });
 test('calendar dates use Seoul, Sunday weeks and complete leap/month/year boundaries', () => {
@@ -35,7 +36,7 @@ function calendarHarness(request, getConnection) {
  const externalHook=externalCalendarHook(React,native,getConnection);
  const props={today:'2026-11-30',revision:0,fallback:[],onOpenCalendar:()=>{},onTodayCount:()=>{},renderSchedule:s=>element('Text',{},s.title)};
  const exp={},code=ts.transpileModule(readFileSync('mobile/src/features/home/home-calendar.tsx','utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
- new Function('React','require','exports',code)(React,name=>name.endsWith('/startup-timing')?{measureStartup}:name==='react'?React:name==='react-native'?native:name.includes('use-external-calendar')?externalHook:name.endsWith('calendar-read')?read:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:name.includes('record-row-styles')?{recordRowStyles:{taskTitle:'memoTitle',taskMeta:'memoMeta'}}:{mobileTheme:{colors:{}}},exp);
+ new Function('React','require','exports',code)(React,name=>name.endsWith('/startup-timing')?{measureStartup}:name==='react'?React:name==='react-native'?native:name.includes('use-external-calendar')?externalHook:name.endsWith('calendar-read')?read:name.includes('platform-provider')?{usePlatform:()=>platform}:name.includes('personal-calendar-api')?{personalCalendarRequest:request,personalCalendarMessage:()=> '일정 조회 실패'}:name.includes('home-calendar-model')?model:name.includes('record-row-styles')?{recordRowStyles:{taskTitle:'memoTitle',taskMeta:'memoMeta'}}:{mobileTheme},exp);
  return {props,platform,render(){cursor=0;const tree=exp.HomeCalendar(props);const run=pending;pending=[];run.forEach(f=>f());return tree;},close(){effects.forEach(e=>e?.cleanup?.());}};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -91,22 +92,37 @@ test('다가오는 업무 날짜는 펼치지 않아도 작은 보조 글자로 
  assert.equal(nodes(tree).filter(n=>n.props?.accessibilityLabel==='합성 방문 일정 삭제').length,1);
 });
 
- test('native calendar keeps all seven weekday/date columns in one row and month boundaries aligned', () => {
+test('native calendar aligns dates with weekday columns and colors weekends in both views', () => {
  const h=calendarHarness(async()=>({events:[],limited:false}));
+ const textStyle = cell => Object.assign({}, ...[nodes(cell).find(node => node.type === 'Text').props.style].flat());
+ const { danger, link, primaryText, text, textSecondary } = mobileTheme.colors;
  for(const expanded of [false,true]) {
    if(expanded)button(h,'월 보기 ⌄').props.onPress();
    const tree=h.render(),all=nodes(tree);
    const weeks=all.filter(n=>n.type==='View'&&n.props.style?.flexDirection==='row'&&!n.props.style.flexWrap&&Array.isArray(n.props.children?.[0])&&n.props.children[0].length===7);
    assert.equal(weeks.length,expanded?6:2,'weekday header plus complete date weeks');
    assert.deepEqual(weeks[0].props.children[0].map(cell=>words(cell).trim()), ['일','월','화','수','목','금','토']);
+   assert.deepEqual(weeks[0].props.children[0].map(cell => textStyle(cell).color), [
+     danger, textSecondary, textSecondary, textSecondary, textSecondary, textSecondary, link,
+   ]);
    const [sunday, monday, , , , , saturday] = weeks[1].props.children[0];
    assert.equal(sunday.props.accessibilityLabel, expanded?'2026-11-01':'2026-11-29');
    assert.equal(monday.props.accessibilityLabel, expanded?'2026-11-02':'2026-11-30 오늘');
    assert.equal(saturday.props.accessibilityLabel, expanded?'2026-11-07':'2026-12-05');
+   assert.equal(textStyle(sunday).color, danger);
+   assert.equal(textStyle(monday).color, expanded ? text : primaryText);
+   assert.equal(textStyle(saturday).color, link);
    for(const row of weeks)for(const cell of row.props.children[0]){assert.equal(cell.props.style.flex,1);assert.equal(cell.props.style.width,undefined);}
    const dates=all.filter(n=>n.type==='Pressable'&&/^2026-/.test(n.props.accessibilityLabel||''));
    assert.equal(dates.length,expanded?30:7);
    for(const date of dates){const text=nodes(date).find(n=>n.type==='Text');assert.equal(text.props.numberOfLines,1);}
+   for (const [weekend, color] of [[saturday, link], [sunday, danger]]) {
+     weekend.props.onPress();
+     const selected = button(h, weekend.props.accessibilityLabel);
+     assert.equal(selected.props.accessibilityState.selected, true);
+     assert.equal(textStyle(selected).backgroundColor, color);
+     assert.equal(textStyle(selected).color, primaryText);
+   }
  }
  h.close();
 });
