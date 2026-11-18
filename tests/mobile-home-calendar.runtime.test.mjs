@@ -8,13 +8,14 @@ const { externalCalendarHook, read } = await import('./helpers/external-calendar
 const model = await import('../mobile/src/features/home/home-calendar-model.ts');
 const { homeHarness, nodes, words } = await import('./helpers/mobile-home-harness.mjs');
 const event = (id, start, end = null, extra = {}) => ({ id, source: 'personal', title: id, starts_at: start, ends_at: end, all_day: false, status: 'confirmed', ...extra });
-test('calendar dates use Seoul, Monday weeks and complete leap/month/year boundaries', () => {
+test('calendar dates use Seoul, Sunday weeks and complete leap/month/year boundaries', () => {
  assert.equal(model.seoulDate('2026-11-08T15:00:00Z'), '2026-11-09');
- assert.deepEqual(model.calendarDays('2026-11-01', false), ['2026-10-26','2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-10-31','2026-11-01']);
+ assert.deepEqual(model.calendarDays('2026-11-01', false), ['2026-11-01','2026-11-02','2026-11-03','2026-11-04','2026-11-05','2026-11-06','2026-11-07']);
  assert.equal(model.calendarDays('2024-02-10', true).filter(Boolean).length, 29);
- assert.equal(model.calendarDays('2026-11-09', true).length, 42);
+ assert.deepEqual(model.calendarDays('2026-08-01', true).slice(0, 7), [null,null,null,null,null,null,'2026-08-01']);
+ assert.equal(model.calendarDays('2026-08-01', true).length, 42);
  assert.equal(model.shiftMonth('2026-12-31', 1), '2027-01-01');
- assert.equal(model.calendarDays('2027-01-01', false)[0], '2026-12-28');
+ assert.equal(model.calendarDays('2027-01-01', false)[0], '2026-12-27');
 });
 test('duration overlap is end-exclusive, deduplicated and private; point events keep Seoul midnight', () => {
  const span = event('span', '2026-10-31T00:00:00+09:00', '2026-11-02T00:00:00+09:00', { all_day: true });
@@ -96,7 +97,12 @@ test('다가오는 업무 날짜는 펼치지 않아도 작은 보조 글자로 
    if(expanded)button(h,'월 보기 ⌄').props.onPress();
    const tree=h.render(),all=nodes(tree);
    const weeks=all.filter(n=>n.type==='View'&&n.props.style?.flexDirection==='row'&&!n.props.style.flexWrap&&Array.isArray(n.props.children?.[0])&&n.props.children[0].length===7);
-   assert.equal(weeks.length,expanded?7:2,'weekday header plus complete date weeks');
+   assert.equal(weeks.length,expanded?6:2,'weekday header plus complete date weeks');
+   assert.deepEqual(weeks[0].props.children[0].map(cell=>words(cell).trim()), ['일','월','화','수','목','금','토']);
+   const [sunday, monday, , , , , saturday] = weeks[1].props.children[0];
+   assert.equal(sunday.props.accessibilityLabel, expanded?'2026-11-01':'2026-11-29');
+   assert.equal(monday.props.accessibilityLabel, expanded?'2026-11-02':'2026-11-30 오늘');
+   assert.equal(saturday.props.accessibilityLabel, expanded?'2026-11-07':'2026-12-05');
    for(const row of weeks)for(const cell of row.props.children[0]){assert.equal(cell.props.style.flex,1);assert.equal(cell.props.style.width,undefined);}
    const dates=all.filter(n=>n.type==='Pressable'&&/^2026-/.test(n.props.accessibilityLabel||''));
    assert.equal(dates.length,expanded?30:7);

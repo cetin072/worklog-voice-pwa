@@ -1,5 +1,7 @@
 import type { PersonalCalendarEvent } from '../calendar/personal-calendar-api';
 
+export const CALENDAR_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
 export function seoulDate(value: string | number = Date.now()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value));
   return ['year', 'month', 'day'].map(key => parts.find(p => p.type === key)?.value).join('-');
@@ -12,7 +14,7 @@ export function shiftMonth(day: string, amount: number) {
 }
 export function calendarDays(selected: string, expanded: boolean): (string | null)[] {
   const first = expanded ? selected.slice(0, 7) + '-01' : selected;
-  const offset = (new Date(first + 'T12:00:00Z').getUTCDay() + 6) % 7;
+  const offset = new Date(first + 'T12:00:00Z').getUTCDay();
   if (!expanded) return Array.from({ length: 7 }, (_, i) => shiftDay(first, i - offset));
   const count = new Date(Date.UTC(Number(first.slice(0, 4)), Number(first.slice(5, 7)), 0)).getUTCDate();
   const length = Math.ceil((offset + count) / 7) * 7;

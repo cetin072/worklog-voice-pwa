@@ -10,6 +10,12 @@ export type PatchNoteEntry = {
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
     date: '2026-11-18',
+    title: '홈 캘린더를 일요일부터 보기',
+    summary: '주 보기와 월 보기의 요일을 일·월·화·수·목·금·토 순서로 표시합니다.',
+    items: [],
+  },
+  {
+    date: '2026-11-18',
     title: '긴 문서 보관과 할 일 다시 확인',
     summary: '업무의 메모·자료에서 긴 기획안과 참고 문서를 작성하고 다시 찾을 수 있습니다.',
     items: ['Markdown·텍스트 파일을 가져오고 제목과 본문을 검색할 수 있습니다. Markdown 소제목은 목차에 표시됩니다.', '기한 없는 할 일에 다시 확인 날짜를 정하면 그날 홈에 표시됩니다. 확인했어요를 눌러도 할 일은 미완료로 남습니다.'],

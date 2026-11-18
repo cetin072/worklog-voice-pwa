@@ -10,7 +10,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { usePlatform } from '@/src/providers/platform-provider';
 import { personalCalendarMessage, personalCalendarRequest, type CalendarMonth, type PersonalCalendarEvent } from '../calendar/personal-calendar-api';
 import type { BriefingSchedule } from '@/src/platform/worklog-api';
-import { calendarDays, calendarTime, eventsOnDay, seoulDate, shiftDay, shiftMonth } from './home-calendar-model';
+import { CALENDAR_WEEKDAYS, calendarDays, calendarTime, eventsOnDay, seoulDate, shiftDay, shiftMonth } from './home-calendar-model';
 import { mobileTheme } from '@/src/ui/theme';
 
 export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, today, fallback, onOpenCalendar, renderSchedule, focusId, focusDate, onTodayCount }: {
@@ -63,7 +63,7 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
       <Pressable accessibilityRole="button" accessibilityLabel={expanded ? '다음 달' : '다음 주'} disabled={selected >= '2099-12-25'} style={styles.nav} onPress={() => setSelected(expanded ? shiftMonth(selected, 1) : shiftDay(selected, 7))}><Text style={styles.link}>›</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded }} style={styles.action} onPress={() => setExpanded(v => !v)}><Text style={styles.link}>{expanded ? '주 보기 ⌃' : '월 보기 ⌄'}</Text></Pressable>
     </View>
-    <View style={styles.week}>{['월', '화', '수', '목', '금', '토', '일'].map(d => <View key={d} style={styles.weekday}><Text style={styles.muted}>{d}</Text></View>)}</View>
+    <View style={styles.week}>{CALENDAR_WEEKDAYS.map(d => <View key={d} style={styles.weekday}><Text style={styles.muted}>{d}</Text></View>)}</View>
     {Array.from({length: Math.ceil(days.length / 7)}, (_, week) => <View key={week} style={styles.week}>
       {days.slice(week * 7, week * 7 + 7).map((day, index) => day ? <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${day}${day === today ? ' 오늘' : ''}${eventsOnDay(combined, day).length ? ' 일정 있음' : ''}`} accessibilityState={{ selected: day === selected }} disabled={day < '2000-01-01' || day > '2099-12-31'} onPress={() => { setSelected(day); setOpened(null); }} style={styles.day}>
         <Text numberOfLines={1} style={[styles.dayNumber, day === selected && styles.selected, day === today && day !== selected && styles.today]}>{Number(day.slice(8))}</Text><Text style={styles.dot}>{eventsOnDay(combined, day).length ? '•' : ' '}</Text>
