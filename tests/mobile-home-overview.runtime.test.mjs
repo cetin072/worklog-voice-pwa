@@ -91,4 +91,46 @@ test('undated review cards open the existing detail without changing deadline co
   nodes(tree).find(node => node.type === 'Pressable' && words(node).includes(task.title)).props.onPress();
   assert.deepEqual(selected, { bucket: 'undated', task });
   assert.equal(screen, 'task');
+  assert.ok(nodes(tree).some(node => node.props?.accessibilityLabel === '공급조건 다시 보기 확인했어요'));
+});
+
+test('confirming a Home review removes that instance only after a successful write', async () => {
+  const { homeHarness } = await import('./helpers/mobile-home-harness.mjs');
+  const task = { pageId: 'review', title: '공급조건', nextAttentionAt: '2026-11-18T00:00:00.000Z' };
+  const rescheduled = { ...task, nextAttentionAt: '2026-11-20T00:00:00.000Z' };
+  const structure = { undated: [task] };
+  let briefing = { resurface: [task, rescheduled], structure };
+  let writeError = new Error('stale');
+  let refreshed = 0;
+  let message = '';
+  let currentAccount = true;
+  const calls = [];
+  const app = homeHarness({
+    client: {}, reminderMutationInFlight: { current: false },
+    reminderSessionEpoch: { capture: () => () => currentAccount },
+    briefingRefreshQueue: { current: { run: run => run() } },
+    getFreshAccessToken: async () => 'current-token',
+    undoWorklogAttention: async (...args) => {
+      calls.push(args);
+      if (writeError) throw writeError;
+    },
+    setBriefing: update => { briefing = update(briefing); },
+    refreshBriefing: async () => { refreshed++; },
+    setReminderBusyId() {}, clearMessage() {},
+    messageOf: error => error.message,
+    showMessage: value => { message = value; },
+  });
+  await app.acknowledgeTaskReview(task);
+  assert.deepEqual(briefing.resurface, [task, rescheduled]);
+  assert.equal(message, 'stale');
+  assert.equal(refreshed, 1);
+  writeError = null;
+  await app.acknowledgeTaskReview(task);
+  assert.deepEqual(calls[1], ['current-token', task.pageId, task.nextAttentionAt, null]);
+  assert.deepEqual(briefing.resurface, [rescheduled]);
+  assert.equal(briefing.structure, structure);
+  currentAccount = false;
+  await app.acknowledgeTaskReview(rescheduled);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(briefing.resurface, [rescheduled]);
 });

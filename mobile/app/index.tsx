@@ -931,6 +931,38 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     }
   }
 
+  async function acknowledgeTaskReview(task: BriefingTask) {
+    const { pageId, nextAttentionAt } = task;
+    if (!session || !client || !pageId || !nextAttentionAt || reminderBusyId || reminderMutationInFlight.current) return;
+    const currentAccount = reminderSessionEpoch.capture();
+    reminderMutationInFlight.current = true;
+    setReminderBusyId(pageId);
+    clearMessage();
+    try {
+      const accessToken = await getFreshAccessToken(client);
+      if (!currentAccount()) return;
+      // Clear only the review date that the user actually saw.
+      await undoWorklogAttention(accessToken, pageId, nextAttentionAt, null);
+      await briefingRefreshQueue.current.run(async () => {
+        if (!currentAccount()) return;
+        setBriefing(current => {
+          if (!current) return current;
+          return {
+            ...current,
+            resurface: current.resurface?.filter(row => row.pageId !== pageId || row.nextAttentionAt !== nextAttentionAt),
+          };
+        });
+      });
+    } catch (nextError) {
+      if (!currentAccount()) return;
+      showMessage(messageOf(nextError, '다시 확인을 처리하지 못했습니다.'), 'error');
+      await refreshBriefing();
+    } finally {
+      reminderMutationInFlight.current = false;
+      setReminderBusyId(null);
+    }
+  }
+
   async function undoPostponedTask() {
     if (!session || !client || !undoPostpone || reminderBusyId || reminderMutationInFlight.current) return;
     reminderMutationInFlight.current = true;
@@ -1350,10 +1382,16 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
 
       {reviewTasks.length ? <View style={styles.homeTaskCard}>
         <Text style={styles.briefingSectionTitle}>다시 확인할 업무</Text>
-        {reviewTasks.map(task => <Pressable key={task.pageId} accessibilityRole="button" style={styles.homeRefresh}
-          onPress={() => { setTaskReturn('home'); setSelectedTask({ bucket: 'undated', task }); setScreen('task'); }}>
-          <Text style={styles.taskTitle}>{task.title} ›</Text>
-        </Pressable>)}
+        {reviewTasks.map(task => <View key={task.pageId} style={styles.reviewRow}>
+          <Pressable accessibilityRole="button" style={styles.reviewTitle}
+            onPress={() => { setTaskReturn('home'); setSelectedTask({ bucket: 'undated', task }); setScreen('task'); }}>
+            <Text style={styles.taskTitle}>{task.title || '제목 없는 업무'} ›</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${task.title || '업무'} 확인했어요`} style={styles.homeRefresh}
+            disabled={Boolean(reminderBusyId)} onPress={() => void acknowledgeTaskReview(task)}>
+            <Text style={styles.linkText}>{reminderBusyId === task.pageId ? '처리 중…' : '확인했어요'}</Text>
+          </Pressable>
+        </View>)}
       </View> : null}
 
       {recurring.notificationError ? <Text style={styles.helpText}>{recurring.notificationError}</Text> : null}
@@ -1642,6 +1680,8 @@ const styles = StyleSheet.create({
   homeSummary: { fontSize: 15, lineHeight: 23, color: mobileTheme.colors.textSecondary },
   homeOverdue: { color: mobileTheme.colors.danger },
   homeRefresh: workspaceStyles.refresh,
+  reviewRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reviewTitle: { ...workspaceStyles.refresh, flex: 1 },
   homeTaskCard: workspaceStyles.card,
   homeTaskEntry: { paddingVertical: 8, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: mobileTheme.colors.borderSubtle },
   homeTaskLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },

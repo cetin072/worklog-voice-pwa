@@ -16,7 +16,14 @@ findPhoto(ast);
 if (!photoAction) throw Error('Home Photo action is missing');
 const networkConstant = ast.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(ast) === 'NETWORK_CONNECTION_MESSAGE')).map(node => node.getText(ast)).join('\n');
 const undo = source.slice(source.indexOf('{undoTask ?'), source.indexOf('\n', source.indexOf('{undoTask ?')));
-const compiled = ts.transpileModule(`${networkConstant}\n${declarations}\nfunction renderHome() { return (<>${undo}{${home}}</>); }\nreturn { renderHome, TaskRow, renderPhoto: ${photoAction} };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
+const reviewHandler = source.slice(source.indexOf('  async function acknowledgeTaskReview('), source.indexOf('  async function undoPostponedTask('));
+const compiled = ts.transpileModule([
+  networkConstant,
+  declarations,
+  reviewHandler,
+  'function renderHome() { return (<>' + undo + '{' + home + '}</>); }',
+  'return { renderHome, TaskRow, acknowledgeTaskReview, renderPhoto: ' + photoAction + ' };',
+].join('\n'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
 export function homeHarness(context) {
  const states = []; let cursor = 0; let back; let cleanup;
  const node = (type, props, ...children) => ({ type, props: { ...props, children } });
@@ -29,7 +36,7 @@ export function homeHarness(context) {
   CalendarExportPreview: () => null, CaptureImportButton: props => node('CaptureImportButton', props),
   session: {user:{id:'synthetic'}}, homeCalendarRevision: 0, homeScheduleCount: 0, taskFiltersExpanded: false, setTaskFiltersExpanded() {}, personalCalendarDate: undefined, setPersonalCalendarDate() {}, HomeCalendar: props => node('HomeCalendar', props), lastDirectSave: null, briefingInfo: { heading: '오늘의 브리핑', warnings: [] }, briefingBusy: false, briefingError: '', notificationScheduleId: null,
   briefingNow: 0, reminderTarget: null, upcomingExpanded: false, expandedBuckets: {}, taskBusyId: null, noteBusyId: null, notes: [], visibleNotes: [], extraNotes: 0,
-  activeFilter: 'today', reviewTasks: [], setTaskReturn() {}, undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
+  activeFilter: 'today', reviewTasks: [], reminderBusyId: null, setTaskReturn() {}, undoTask: null, undoPostpone: null, undoAttention: null, undoNote: null, message: '', overview: {},
   briefingBuckets: [{ key: 'today', label: '오늘', tone: 'warning' }, { key: 'overdue', label: '기한 지남', tone: 'danger' }, { key: 'upcoming', label: '다가오는 업무', tone: 'info' }, { key: 'undated', label: '기한 없는 업무', tone: 'neutral' }],
   refreshBriefing() {}, setScreen() {}, setReminderTarget() {}, setSelectedTask() {}, openTaskEditor() {}, confirmDeleteRecord() {}, completeTaskInline() {}, acknowledgeNote() {},
   setManagementReturn(){},
@@ -52,7 +59,7 @@ export function homeHarness(context) {
   if (typeof value.type === 'function') return expand(value.type(value.props));
   return { ...value, props: { ...value.props, children: expand(value.props.children) } };
  }
- return { element: () => api.renderHome(), context: base, photo(disabled = false) { return expand(api.renderPhoto(disabled)); }, render() { cursor = 0; return expand(api.renderHome()); }, back() { return back?.(); } };
+ return { element: () => api.renderHome(), context: base, acknowledgeTaskReview: api.acknowledgeTaskReview, photo(disabled = false) { return expand(api.renderPhoto(disabled)); }, render() { cursor = 0; return expand(api.renderHome()); }, back() { return back?.(); } };
 }
 export function nodes(tree) { return Array.isArray(tree) ? tree.flatMap(nodes) : tree && typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : []; }
 export function words(tree) { return Array.isArray(tree) ? tree.map(words).join(' ') : tree && typeof tree === 'object' ? words(tree.props?.children) : String(tree ?? ''); }
