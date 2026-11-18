@@ -18,7 +18,7 @@ function harness(overrides={}){
  const h=nativeComponentHarness('mobile/src/features/work/work-folders.tsx','WorkFolders',{
   '@/src/ui/workspace-styles':shared,'@/src/ui/record-row-styles':rows,
   '@/src/ui/record-complete-button':{RecordCompleteButton:props=>complete.render(props)},
-  'expo-crypto':{randomUUID:()=> 'new-folder'},'@/src/ui/theme':theme,'../home/home-calendar-model':date,'./work-folders-store':boundaries,
+  'expo-crypto':{randomUUID:()=> 'new-folder'},'@/src/ui/theme':theme,'../home/home-calendar-model':date,'./work-folders-store':boundaries,'./work-documents':{WorkDocuments:()=>null},
  });
  const props={client:{},userId:'owner',revision:0,busy:false,onComplete:async()=>{},onCompleteNote:async()=>{},onJournal:()=>{},onSearch:()=>{},onEdit:()=>{},onDelete:()=>{},onReminder:()=>{}};
  const expand=node=>Array.isArray(node)?node.map(expand):node&&typeof node==='object'?typeof node.type==='function'?expand(node.type(node.props)):{...node,props:{...node.props,children:expand(node.props.children)}}:node;

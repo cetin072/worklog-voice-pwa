@@ -1,3 +1,4 @@
+import { WorkDocuments } from './work-documents';
 import { workspaceStyles } from '@/src/ui/workspace-styles';
 import { recordRowStyles } from '@/src/ui/record-row-styles';
 import { RecordCompleteButton } from '@/src/ui/record-complete-button';
@@ -16,9 +17,10 @@ type Props = {
   onComplete: (task: BriefingTask) => Promise<void>; onCompleteNote: (note: BriefingNote) => Promise<void>;
   onJournal: () => void; onSearch: () => void;
   onEdit: (record: FolderRecord) => void; onDelete: (record: FolderRecord) => void; onReminder: (record: FolderRecord) => void;
+  onReview?: (record: FolderRecord) => void;
 };
 export function WorkFolders({ client, userId, revision, initialFolder, initialSection = 'tasks', busy: externalBusy,
-  onViewChange, onComplete, onCompleteNote, onJournal, onSearch, onEdit, onDelete, onReminder }: Props) {
+  onViewChange, onComplete, onCompleteNote, onJournal, onSearch, onEdit, onDelete, onReminder, onReview }: Props) {
   // undefined means all; null explicitly means unclassified (including after conversion).
   const [scope, setScope] = useState<WorkScope>(initialFolder === undefined ? 'all' : initialFolder);
   const [section, setSection] = useState<WorkSection>(initialSection);
@@ -91,11 +93,12 @@ export function WorkFolders({ client, userId, revision, initialFolder, initialSe
     </View>
     <Text style={styles.scopeLabel}>{scope === 'all' ? '전체 업무' : scope === null ? '미분류' : folderPath(folders, scope)}{currentFolder && folders.some(item => item.parent_id === currentFolder.id) ? ' · 하위 폴더 포함' : ''}</Text>
     <View style={styles.tabs}>{([['tasks', '할 일'], ['notes', '메모·자료'], ['completed', '완료']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: section === value }} disabled={busy || externalBusy} style={[styles.tab, section === value && styles.active]} onPress={() => { setSection(value); setExpanded(null); }}><Text style={[styles.tabText, section === value && styles.selectedText]}>{label}</Text></Pressable>)}</View>
+    {section === 'notes' ? <WorkDocuments client={client} owner={userId} scope={scope} folders={folders} revision={`${revision}:${refresh}`} /> : null}
     {section === 'completed' ? <Pressable accessibilityRole="button" accessibilityLabel="날짜별 업무일지" style={styles.refresh} onPress={onJournal}><Text style={styles.link}>날짜별 업무일지 ›</Text></Pressable> : null}
     {loading ? <Text accessibilityLiveRegion="polite" style={styles.help}>{snapshot ? '갱신 중…' : '불러오는 중…'}</Text> : null}
     {busy ? <Text accessibilityLiveRegion="polite" style={styles.help}>저장 확인 중…</Text> : null}
     {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-    {sameScope && !loading && !error && !records.length ? <Text style={styles.empty}>{section === 'completed' ? '완료한 기록이 없습니다.' : section === 'notes' ? '메모·자료가 없습니다.' : '남은 할 일이 없습니다.'}</Text> : null}
+    {sameScope && !loading && !error && !records.length ? <Text style={styles.empty}>{section === 'completed' ? '완료한 기록이 없습니다.' : section === 'notes' ? '짧은 메모가 없습니다.' : '남은 할 일이 없습니다.'}</Text> : null}
     {records.map(record => <View key={record.id} style={styles.record}>
       <View style={styles.recordLine}>
         <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}>
@@ -134,6 +137,7 @@ export function WorkFolders({ client, userId, revision, initialFolder, initialSe
             </> : menu ? <>
               <Text accessibilityRole="header" style={styles.title}>{menu.title}</Text>
               {button('폴더 이동', () => { setMoving(menu); setMenu(null); })}
+              {section === 'tasks' && onReview ? button('다시 확인 날짜', () => { const record = menu; setMenu(null); onReview(record); }) : null}
               {section !== 'completed' ? button('알림 설정', () => { const record = menu; setMenu(null); onReminder(record); }) : null}
               {button('삭제', () => { const record = menu; setMenu(null); onDelete(record); })}
             </> : null}

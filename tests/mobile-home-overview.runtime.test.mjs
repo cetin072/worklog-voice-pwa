@@ -74,3 +74,63 @@ test('Home keeps schedule focus and notes while moving filters behind the task c
   assert.match(source, /<HomeCalendar/);
   assert.doesNotMatch(source, /오늘 한눈에/);
 });
+
+test('undated review cards open the existing detail without changing deadline counts', async () => {
+  const { undatedReviews } = await import('../mobile/src/features/home/home-overview.ts');
+  const task = { pageId: 'review', title: '공급조건 다시 보기', nextAttentionAt: '2026-11-18T00:00:00Z' };
+  const candidates = [task, task, { ...task, pageId: 'due', dueKey: '2026-11-18' }, { pageId: 'plain', title: '날짜 없는 업무' }];
+  const reviewTasks = undatedReviews({ resurface: candidates });
+  assert.deepEqual(reviewTasks, [task]);
+  const { homeHarness, nodes, words } = await import('./helpers/mobile-home-harness.mjs');
+  let selected, screen;
+  const app = homeHarness({ briefing: { today: '2026-11-18' }, reviewTasks, briefingBuckets: [],
+    structure: { today: [], overdue: [], upcoming: [], undated: [task] },
+    setSelectedTask: value => { selected = value; }, setScreen: value => { screen = value; } });
+  const tree = app.render();
+  assert.match(words(tree), /오늘 마감\s+0.*다시 확인할 업무.*공급조건 다시 보기/s);
+  nodes(tree).find(node => node.type === 'Pressable' && words(node).includes(task.title)).props.onPress();
+  assert.deepEqual(selected, { bucket: 'undated', task });
+  assert.equal(screen, 'task');
+  assert.ok(nodes(tree).some(node => node.props?.accessibilityLabel === '공급조건 다시 보기 확인했어요'));
+});
+
+test('confirming a Home review removes that instance only after a successful write', async () => {
+  const { homeHarness } = await import('./helpers/mobile-home-harness.mjs');
+  const task = { pageId: 'review', title: '공급조건', nextAttentionAt: '2026-11-18T00:00:00.000Z' };
+  const rescheduled = { ...task, nextAttentionAt: '2026-11-20T00:00:00.000Z' };
+  const structure = { undated: [task] };
+  let briefing = { resurface: [task, rescheduled], structure };
+  let writeError = new Error('stale');
+  let refreshed = 0;
+  let message = '';
+  let currentAccount = true;
+  const calls = [];
+  const app = homeHarness({
+    client: {}, reminderMutationInFlight: { current: false },
+    reminderSessionEpoch: { capture: () => () => currentAccount },
+    briefingRefreshQueue: { current: { run: run => run() } },
+    getFreshAccessToken: async () => 'current-token',
+    undoWorklogAttention: async (...args) => {
+      calls.push(args);
+      if (writeError) throw writeError;
+    },
+    setBriefing: update => { briefing = update(briefing); },
+    refreshBriefing: async () => { refreshed++; },
+    setReminderBusyId() {}, clearMessage() {},
+    messageOf: error => error.message,
+    showMessage: value => { message = value; },
+  });
+  await app.acknowledgeTaskReview(task);
+  assert.deepEqual(briefing.resurface, [task, rescheduled]);
+  assert.equal(message, 'stale');
+  assert.equal(refreshed, 1);
+  writeError = null;
+  await app.acknowledgeTaskReview(task);
+  assert.deepEqual(calls[1], ['current-token', task.pageId, task.nextAttentionAt, null]);
+  assert.deepEqual(briefing.resurface, [rescheduled]);
+  assert.equal(briefing.structure, structure);
+  currentAccount = false;
+  await app.acknowledgeTaskReview(rescheduled);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(briefing.resurface, [rescheduled]);
+});
