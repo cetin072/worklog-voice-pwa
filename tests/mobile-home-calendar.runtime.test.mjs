@@ -57,7 +57,7 @@ test('failed/limited month never claims complete emptiness; verified briefing re
  h.props.today='2026-11-09';h.props.fallback=[{scheduleId:'known',title:'known appointment',startsAt:'2026-11-09T10:00+09:00'}];
  h.render();await flush();assert.match(words(h.render()),/일정 조회 실패/);assert.match(words(h.render()),/known appointment/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);
  button(h,'known appointment 일정 상세').props.onPress();assert.match(words(h.render()),/known appointment/);
- fail=false;button(h,'일정 다시 불러오기').props.onPress();h.render();await flush();assert.match(words(h.render()),/일부 일정만/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);h.close();
+ fail=false;button(h,'일정 다시 불러오기').props.onPress();h.render();await flush();assert.match(words(h.render()),/일부 일정을 표시할 수 없습니다/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);h.close();
 });
 test('actual Home shows schedule before actionable tasks and moves tools after them; task expansion preserves edit/delete/undo',()=>{
  const task={pageId:'t',title:'견적서 검토'};let complete=0,edit=0,remove=0,undo=0,reminders=0,settings=0;
@@ -105,7 +105,7 @@ test('다가오는 업무 날짜는 펼치지 않아도 작은 보조 글자로 
  h.close();
 });
 
-test('Google read hook feeds actual Home rows, source label, day count and readonly detail; disconnect hides immediately', async () => {
+test('Google read hook feeds actual Home rows, day count and clean readonly detail; disconnect hides immediately', async () => {
  const { createCalendarConnection } = await import('../mobile/src/features/calendar/calendar-connection.ts');
  const external=event('external:google:primary:meeting','2026-11-17T09:00:00+09:00','2026-11-17T10:00:00+09:00',{source:'external',editable:false,title:'구글 원본 미팅',description:'원본 메모'});
  let calls=0,fail=false;
@@ -115,14 +115,14 @@ test('Google read hook feeds actual Home rows, source label, day count and reado
  const h=calendarHarness(async()=>({events:[],limited:false}),()=>connection);h.props.today='2026-11-17';let count;
  h.props.onTodayCount=value=>count=value;
  h.render();await flush();h.render();h.render();
- assert.match(words(h.render()),/구글 원본 미팅/);assert.match(words(h.render()),/Google · 읽기 전용/);assert.equal(count,1);
+ assert.match(words(h.render()),/구글 원본 미팅/);assert.doesNotMatch(words(h.render()),/Google · 읽기 전용|Google 새로고침|기본 캘린더/);assert.equal(count,1);
  button(h,'구글 원본 미팅 일정 상세').props.onPress();assert.match(words(h.render()),/원본 메모/);
  assert.doesNotMatch(words(h.render()),/내 캘린더에서 확인·수정/);
  button(h,'월 보기 ⌄').props.onPress();h.render();await flush();
  button(h,'다음 달').props.onPress();h.render();await flush();h.render();assert.equal(count,null,'another month cannot confirm today Google count');
  button(h,'오늘 날짜로 이동').props.onPress();h.render();await flush();
- calls=0;fail=true;button(h,'Google 새로고침').props.onPress();h.render();await flush();
- assert.match(words(h.render()),/인터넷 연결/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(calls,1);
+ calls=0;fail=true;h.props.revision++;h.render();await flush();
+ assert.match(words(h.render()),/일부 일정을 표시할 수 없습니다/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(calls,1);
  connection.disconnect();assert.doesNotMatch(words(h.render()),/구글 원본 미팅|Google · 읽기 전용/);h.close();
 });
 
@@ -142,7 +142,7 @@ test('restoring Google connection never claims the day is empty', async () => {
  const h=calendarHarness(async()=>({events:[],limited:false}),()=>connection);
  let count;h.props.onTodayCount=value=>count=value;
  h.render();await flush();h.render();
- assert.match(words(h.render()),/Google 연결 확인 중/);
+ assert.match(words(h.render()),/일정 불러오는 중/);
  assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);assert.equal(count,null);
  restoring=false;h.render();assert.match(words(h.render()),/등록된 일정이 없습니다/);h.close();
 });

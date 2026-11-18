@@ -71,21 +71,34 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     </View>)}
     <View style={styles.divider} />
     <View style={styles.row}><Text accessibilityRole="header" style={styles.subtitle}>{selected === today ? '오늘 일정' : `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8))}일 일정`}</Text>{integrated ? action('일정 관리', () => onOpenCalendar(selected)) : null}</View>
-    {!integrated ? <Text style={styles.muted}>브리핑에서 확인된 일정만 표시합니다. 월 전체 일정은 포함되지 않습니다.</Text> : null}
-    {busy ? <View style={styles.row}><ActivityIndicator /><Text style={styles.muted}>일정 불러오는 중…</Text></View> : null}
+    {busy || (!rows.length && (external.restoring || external.loading)) ? <View style={styles.row}><ActivityIndicator /><Text style={styles.muted}>일정 불러오는 중…</Text></View> : null}
     {error ? <View><Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>{action('일정 다시 불러오기', () => setReload(n => n + 1))}</View> : null}
-    {loaded && result.limited ? <Text style={styles.error}>일부 일정만 표시 중입니다. 표시되지 않은 일정이 있을 수 있습니다.</Text> : null}
-    {external.connected ? <View style={styles.row}><Text style={styles.muted}>Google · 기본 캘린더 · 읽기 전용</Text>{action('Google 새로고침', external.refresh, external.loading)}</View> : null}
-    {external.restoring ? <Text style={styles.muted}>Google 연결 확인 중…</Text> : null}
-    {external.loading ? <Text style={styles.muted}>Google 일정 불러오는 중…</Text> : null}
-    {external.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{external.error}</Text> : null}
-    {external.limited ? <Text style={styles.error}>Google 일정 일부만 표시 중입니다.</Text> : null}
+    {(loaded && result.limited) || external.error || external.limited ? <Text accessibilityLiveRegion="polite" style={styles.error}>일부 일정을 표시할 수 없습니다.</Text> : null}
     {!busy && !error && !external.restoring && !external.loading && !external.error && !external.limited && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
     {rows.map(event => {
       const known = fallback.find(s => s.scheduleId === event.id);
-      return <View key={event.id}><Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event} onPress={() => event.id.startsWith('repeat:')?onOpenRepeating?.(event.id,seoulDate(event.starts_at)):setOpened(id => id === event.id ? null : event.id)}>
-        <Text style={styles.time}>{calendarTime(event, selected)}</Text><View style={styles.eventMain}><Text style={recordRowStyles.taskTitle}>{event.title}</Text>{event.source === 'external' ? <Text style={styles.muted}>Google · 읽기 전용</Text> : null}{selected !== today ? <Text style={recordRowStyles.taskMeta}>{seoulDate(event.starts_at).replaceAll('-', '. ')}</Text> : null}</View><Text style={styles.muted}>›</Text>
-      </Pressable>{opened === event.id ? known ? renderSchedule(known) : <View style={styles.details}>{event.location ? <Text>{event.location}</Text> : null}{event.description ? <Text>{event.description}</Text> : null}{event.source === 'external' ? <Text style={styles.muted}>수정·삭제는 Google 캘린더에서 해주세요.</Text> : integrated ? action('내 캘린더에서 확인·수정', () => onOpenCalendar(selected)) : null}</View> : null}</View>;
+      const repeating = event.id.startsWith('repeat:');
+      const externalEvent = event.source === 'external';
+      const canOpen = !externalEvent || Boolean(event.location || event.description);
+      const content = <>
+        <Text style={styles.time}>{calendarTime(event, selected)}</Text>
+        <View style={styles.eventMain}>
+          <Text style={recordRowStyles.taskTitle}>{event.title}</Text>
+          {selected !== today ? <Text style={recordRowStyles.taskMeta}>{seoulDate(event.starts_at).replaceAll('-', '. ')}</Text> : null}
+        </View>
+      </>;
+      if (!canOpen) return <View key={event.id} style={styles.event}>{content}</View>;
+      return <View key={event.id}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event}
+          onPress={() => repeating ? onOpenRepeating?.(event.id, seoulDate(event.starts_at)) : setOpened(id => id === event.id ? null : event.id)}>
+          {content}<Text style={styles.muted}>›</Text>
+        </Pressable>
+        {opened === event.id ? known ? renderSchedule(known) : <View style={styles.details}>
+          {event.location ? <Text>{event.location}</Text> : null}
+          {event.description ? <Text>{event.description}</Text> : null}
+          {!externalEvent && integrated ? action('내 캘린더에서 확인·수정', () => onOpenCalendar(selected)) : null}
+        </View> : null}
+      </View>;
     })}
     {focusId && !busy && !rows.some(row => row.id === focusId) ? <View style={styles.details}>{fallback.find(s => s.scheduleId === focusId) ? renderSchedule(fallback.find(s => s.scheduleId === focusId)!) : <Text style={styles.muted}>선택한 일정은 해당 날짜의 업무일지 또는 내 캘린더에서 확인해주세요.</Text>}</View> : null}
   </View>;

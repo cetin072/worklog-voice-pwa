@@ -7,20 +7,21 @@ import { calendarReadRange, calendarReadMessage, type CalendarReadResult } from 
 /** Screen-owned, in-memory projection. Keys suppress old account/range results
  * immediately on render, before effect cleanup. No DB or notification writes.
  */
-export function useExternalCalendar(months: string, revision = 0) {
+export function useExternalCalendar(months: string, revision = 0, enabled = true) {
   const connection = useCalendarConnection();
   const info = connection?.info();
   const generation = connection?.status().generation;
   const [reload, setReload] = useState(0);
   const key = `${months}:${revision}:${reload}:${generation}`;
   const [result, setResult] = useState<{ connection: typeof connection; key: string; data?: CalendarReadResult; error?: string } | null>(null);
-  const available = !!info && !info.expired;
+  const available = enabled && !!info && !info.expired;
   const refresh = () => setReload(value => value + 1);
   useEffect(() => {
+    if (!enabled) return;
     const sub = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
     const timer = info && !info.expired && info.expiresAt > Date.now() ? setTimeout(refresh, Math.max(1, info.expiresAt - Date.now() + 1)) : undefined;
     return () => { sub.remove(); if (timer) clearTimeout(timer); };
-  }, [connection, generation, info?.expiresAt, info?.expired]);
+  }, [connection, enabled, generation, info?.expiresAt, info?.expired]);
   useEffect(() => {
     let alive = true;
     if (!connection || !available) return;

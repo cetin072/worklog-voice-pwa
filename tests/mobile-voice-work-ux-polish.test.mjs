@@ -25,9 +25,9 @@ test('Voice UX mirrors the strongest web recording affordances', () => {
 });
 
 test('Home uses a compact pass-through floating voice dock', () => {
-  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(home, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(home, /pointerEvents="box-none"/);
-  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(home, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(home, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
 });
 

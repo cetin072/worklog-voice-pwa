@@ -66,9 +66,9 @@ test('Quick voice memo uses a pass-through floating dock and auto-saves a valid 
   assert.match(recorderSource, /브리핑 카드의 ✏️/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.match(recorderSource, /업무 직접 입력 열기/);
-  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(homeSource, /pointerEvents="box-none"/);
-  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{\[styles\.quickDock,/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
@@ -104,9 +104,9 @@ test('Meeting recorder is owned by an app-wide session instead of the meeting ca
 
 
 test('Home keeps Quick Voice in a pass-through absolute dock with reserved scroll space', () => {
-  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(homeSource, /pointerEvents="box-none"/);
-  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(homeSource, /ANDROID_TOUCH_SMOKE_MODE/);
 });
