@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-20',
+    title: '구독 결제 캡처 인식 개선',
+    summary: '구글 플레이 결제 캡처에서 상품명·금액·주기·결제수단을 읽습니다.',
+    items: ['다른 영수증도 상품명·결제금액 등 항목이 표시되어 있으면 입력란을 채웁니다. 다음 결제일이 영수증에 없으면 직접 선택할 수 있습니다.'],
+  },
+  {
     date: '2026-11-18',
     title: '홈 캘린더를 일요일부터 보기',
     summary: '주 보기와 월 보기의 요일을 일·월·화·수·목·금·토 순서로 표시합니다.',
