@@ -32,6 +32,7 @@ function harness() {
   const scope = {
     session: { user: { id: 'owner' } }, client: {}, selectedTask: { task: { pageId: 'task-1', title: '계약서 확인' } },
     reminderBusyId: null, reminderMutationInFlight: { current: false }, undoPostpone: null, undoAttention: null,
+    reminderSessionEpoch: { capture: () => () => true }, taskReturn: 'work',
     setReminderBusyId() {}, // Simulate two taps before React's state is updated
     clearMessage() {},
     getFreshAccessToken: async () => 'fresh-token',

@@ -21,7 +21,7 @@ test('실제 내 관리 반복 패널은 초기 로딩·빈 목록·조회 실�
 test('실제 뒤로가기 핸들러는 내 관리 진입점으로 복귀하고 미확정 음성을 먼저 보호',()=>{
  for(const origin of ['home','settings']){
   let handler,destination,warned=0;
-  const context={screen:'subscriptions',managementReturn:origin,quickVoiceNavigation:{current:false},
+  const context={screen:'subscriptions',managementReturn:origin,taskReturn:'home',journalReturn:'settings',searchReturn:'home',quickVoiceNavigation:{current:false},
    warnPendingVoice(){warned++;},setScreen(value){destination=value;},useEffect(fn){fn();},
    BackHandler:{addEventListener(_event,fn){handler=fn;return{remove(){}};}}};
   managementBackHandler(context);
