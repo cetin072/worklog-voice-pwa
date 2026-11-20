@@ -540,9 +540,11 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, onOpenMe
             style={[styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
             onPress={() => void (isRecording ? stopQuickVoice() : canStart ? startQuickVoice() : undefined)}
           >
-            <Text style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
-            <Text style={styles.quickMicLabel}>{isRecording ? '녹음 중' : quickActive ? '처리 중' : '음성 기록'}</Text>
-            {isRecording ? <Text style={styles.quickMicTimer}>{formatDuration(recordingElapsedMs)}</Text> : null}
+            <Text allowFontScaling={false} style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2} style={styles.quickMicLabel}>
+              {isRecording ? '녹음 중' : quickActive ? '처리 중' : '음성 기록'}
+            </Text>
+            {isRecording ? <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={styles.quickMicTimer}>{formatDuration(recordingElapsedMs)}</Text> : null}
           </Pressable>
         </View>
 

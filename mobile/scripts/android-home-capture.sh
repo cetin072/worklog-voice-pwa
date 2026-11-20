@@ -36,7 +36,7 @@ import re, sys, xml.etree.ElementTree as ET
 nodes = list(ET.parse(sys.argv[1]).iter('node'))
 def bounds(n):
     return tuple(map(int, re.findall(r'\d+', n.get('bounds', ''))))
-weekdays = [next(n for n in nodes if n.get('text') == label) for label in ['월','화','수','목','금','토','일']]
+weekdays = [next(n for n in nodes if n.get('text') == label) for label in ['일','월','화','수','목','금','토']]
 dates = [n for n in nodes if re.match(r'^\d{4}-\d{2}-\d{2}(?: |$)', n.get('content-desc', ''))]
 assert len(dates) == 7, 'Weekly calendar must expose seven dates'
 assert len({bounds(n)[1] for n in weekdays}) == 1, 'Weekday label wrapped'

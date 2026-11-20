@@ -3,13 +3,15 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { mobileTheme } from '@/src/ui/theme';
+import { seoulDate, shiftDay } from '@/src/features/home/home-calendar-model';
 
 type Props = Readonly<{
   busy?: boolean;
   hasAttention?: boolean;
-  onPostpone(date: string): void;
+  onPostpone?(date: string): void;
   onAttention(date: string): void;
   onClearAttention(): void;
+  attentionDate?: string;
 }>;
 
 type PickerAction = 'postpone' | 'attention' | null;
@@ -19,50 +21,55 @@ function dateKey(date: Date) {
 }
 
 function afterDays(days: number) {
-  const next = new Date();
-  next.setHours(9, 0, 0, 0);
-  next.setDate(next.getDate() + days);
-  return dateKey(next);
+  return shiftDay(seoulDate(), days);
 }
 
 /** Secondary actions only: the primary home-row action remains completion. */
-export function TaskReminderActions({ busy = false, hasAttention = false, onPostpone, onAttention, onClearAttention }: Props) {
+export function TaskReminderActions({ busy = false, hasAttention = false, onPostpone, onAttention, onClearAttention, attentionDate }: Props) {
   const [pickerAction, setPickerAction] = useState<PickerAction>(null);
   const [pickerDate, setPickerDate] = useState(() => new Date());
 
   function startPicker(action: Exclude<PickerAction, null>) {
-    const initial = new Date();
-    initial.setHours(9, 0, 0, 0);
-    initial.setDate(initial.getDate() + 1);
-    setPickerDate(initial);
+    const initial = action === 'attention' && attentionDate ? attentionDate : afterDays(1);
+    setPickerDate(new Date(`${initial}T12:00:00`));
     setPickerAction(action);
   }
 
-  function pick(value?: Date) {
-    if (!value || !pickerAction) return;
+  function pick(value: Date) {
+    if (!pickerAction || busy) return;
     const selected = dateKey(value);
-    const action = pickerAction;
-    if (Platform.OS === 'android') setPickerAction(null);
-    if (action === 'postpone') onPostpone(selected);
+    setPickerAction(null);
+    if (pickerAction === 'postpone') onPostpone?.(selected);
     else onAttention(selected);
   }
 
   return <View style={styles.section}>
-    <Text style={styles.title}>일정 조정</Text>
-    <Text style={styles.help}>미루기는 기한을 바꾸고, 다시 확인은 선택한 날짜에 브리핑에서 다시 보여줍니다.</Text>
-    <View style={styles.row}>
-      <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => onPostpone(afterDays(1))}><Text style={styles.actionText}>내일로 미루기</Text></Pressable>
-      <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => onPostpone(afterDays(7))}><Text style={styles.actionText}>다음주로 미루기</Text></Pressable>
-      <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => startPicker('postpone')}><Text style={styles.actionText}>직접 선택</Text></Pressable>
-    </View>
+    {onPostpone ? <>
+      <Text style={styles.title}>기한 미루기</Text>
+      <View style={styles.row}>
+        <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => onPostpone(afterDays(1))}><Text style={styles.actionText}>내일로 미루기</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => onPostpone(afterDays(7))}><Text style={styles.actionText}>다음주로 미루기</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => startPicker('postpone')}><Text style={styles.actionText}>직접 선택</Text></Pressable>
+      </View>
+    </> : null}
     <Text style={styles.title}>다시 확인</Text>
+    {attentionDate ? <Text style={styles.help}>설정된 날짜 {attentionDate}</Text> : null}
     <View style={styles.row}>
       <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => onAttention(afterDays(1))}><Text style={styles.actionText}>내일</Text></Pressable>
       <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => onAttention(afterDays(7))}><Text style={styles.actionText}>다음주</Text></Pressable>
       <Pressable accessibilityRole="button" disabled={busy} style={[styles.action, busy ? styles.disabled : null]} onPress={() => startPicker('attention')}><Text style={styles.actionText}>직접 선택</Text></Pressable>
       {hasAttention ? <Pressable accessibilityRole="button" disabled={busy} style={[styles.clear, busy ? styles.disabled : null]} onPress={onClearAttention}><Text style={styles.clearText}>다시 확인 취소</Text></Pressable> : null}
     </View>
-    {pickerAction ? <View style={styles.picker}><Text style={styles.help}>{pickerAction === 'postpone' ? '미룰 날짜' : '다시 확인할 날짜'}를 선택하세요. 기존 기한 시간이 있으면 유지됩니다.</Text><DateTimePicker value={pickerDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} locale="ko-KR" onChange={(_, value) => { if (Platform.OS === 'ios') { if (value) setPickerDate(value); } else pick(value); }} />{Platform.OS === 'ios' ? <Pressable accessibilityRole="button" style={styles.done} onPress={() => { const selected = dateKey(pickerDate); const action = pickerAction; setPickerAction(null); if (action === 'postpone') onPostpone(selected); else onAttention(selected); }}><Text style={styles.doneText}>선택 완료</Text></Pressable> : null}</View> : null}
+    {pickerAction ? <View style={styles.picker}>
+      <Text style={styles.help}>{pickerAction === 'postpone' ? '미룰 날짜를 선택하세요. 기한 시간은 유지됩니다.' : '선택한 날짜에 홈에서 다시 확인합니다.'}</Text>
+      <DateTimePicker value={pickerDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} locale="ko-KR"
+        onChange={(event, value) => {
+          if (event.type !== 'set' || !value) { setPickerAction(null); return; }
+          if (Platform.OS === 'ios') setPickerDate(value);
+          else pick(value);
+        }} />
+      {Platform.OS === 'ios' ? <Pressable accessibilityRole="button" disabled={busy} style={styles.done} onPress={() => pick(pickerDate)}><Text style={styles.doneText}>선택 완료</Text></Pressable> : null}
+    </View> : null}
   </View>;
 }
 
