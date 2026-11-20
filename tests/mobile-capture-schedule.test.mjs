@@ -8,6 +8,41 @@ import { classifyWorklogAction } from '../netlify/shared/action-engine-v1.mjs';
 register('./helpers/mobile-ts-loader.mjs', import.meta.url);
 const { createCaptureInbox } = await import('../mobile/src/features/capture/capture-inbox.ts');
 const now = '2026-10-31T00:00:00Z';
+const reservation = [
+  '서비스센터 알림톡', '채팅 종료', '알림톡 도착',
+  '[서비스센터 예약 안내]', '■ 고객명: 예시 사용자', '고객번호: 1234567890',
+  '■ 예약일: 2026년12월07일(월)', '방문시간: 09:30',
+  '■ 대표번호: 000-000-0000', '※ 방문 시 신분증을 지참하시기 바랍니다.',
+].join('\n');
+
+test('a booking notice combines its date and colon time, using only the booking heading', () => {
+  const expected = {
+    kind: 'schedule', title: '서비스센터 예약 안내', date: '2026-12-07', time: '09:30',
+    startsAt: '2026-12-07T09:30:00+09:00', description: '', reason: 'labeled_event',
+    transcript: '서비스센터 예약 안내', status: '진행중', followUp: '',
+  };
+  assert.deepEqual(captureScheduleInput(reservation, now), expected);
+  assert.deepEqual(captureScheduleInput(reservation
+    .replace('예약일:', '예약 날짜：\n')
+    .replace('방문시간: 09:30', '예약 시간：\n9 : 30'), now), expected);
+});
+
+test('an incomplete, conflicting, cancelled or past booking stays in review', () => {
+  for (const text of [
+    reservation.replace('방문시간: 09:30', ''),
+    reservation.replace('방문시간: 09:30', '방문시간: 09:30\n예약 시간: 10:30'),
+    reservation.replace('07일(월)', '07일(화)'),
+    reservation.replace('방문시간: 09:30', '방문시간: 29:30'),
+    reservation + '\n예약이 취소되었습니다.',
+  ]) {
+    const result = captureScheduleInput(text, now);
+    assert.equal(result.kind, 'review');
+    assert.equal(result.date, '');
+    assert.equal(result.time, '');
+  }
+  assert.equal(captureScheduleInput(reservation, '2026-12-07T01:00:00Z').reason, 'past_event');
+});
+
 test('single explicit appointment becomes one canonical existing-core schedule', () => {
   const value = captureScheduleInput('2026년 11월 3일 오후 3시 김해 회사에서 회의합니다.\n오전 9:10', now);
   assert.equal(value.kind,'schedule');assert.equal(value.date,'2026-11-03');assert.equal(value.time,'15:00');

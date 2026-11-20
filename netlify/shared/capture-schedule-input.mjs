@@ -6,8 +6,9 @@ const CHANGE = /취소|변경|연기|미뤄|미루|안\s*만나|없던\s*일|안
 const DATE = /(20\d{2})[년.\/-]\s*(\d{1,2})[월.\/-]\s*(\d{1,2})일?/;
 const normalized = s => s.replace(/(20\d{2})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})\.?/g, '$1년 $2월 $3일')
   .replace(/오후\s*(1[3-9]|2[0-3])\s*시/g, '$1시');
-const EVENT_FIELD = /^(?:[^\p{L}\p{N}]+\s*|[\p{L}]{1,2}\s+)?((?:행사|교육|공연|세미나|포럼|회의)\s*(?:일시|시작(?:\s*(?:일시|시간))?)|등록\s*시간|(?:행사\s*)?장소|주소)\s*:\s*(.*)$/u;
+const EVENT_FIELD = /^(?:[^\p{L}\p{N}]+\s*|[\p{L}]{1,2}\s+)?((?:행사|교육|공연|세미나|포럼|회의)\s*(?:일시|시작(?:\s*(?:일시|시간))?)|예약\s*(?:일자?|날짜|시간)|방문\s*시간|등록\s*시간|(?:행사\s*)?장소|주소)\s*:\s*(.*)$/u;
 const EVENT_HEADING = /^[^:!?？]{2,100}(?:포럼|세미나|설명회|워크숍|컨퍼런스|박람회|회의|교육|공연|행사)(?:\s*20\d{2})?$/;
+const RESERVATION_HEADING = /^(?:\[)?([^\[\]:!?？]{2,100}예약\s*(?:안내|확인))(?:\])?$/;
 const START_VALUE = /^(20\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일(?:\s*\(([월화수목금토일])(?:요일)?\))?\s+(.+)$/;
 const CLOCK = /\b(?:[01]?\d|2[0-3])\s*:\s*[0-5]\d\b/;
 
@@ -25,6 +26,17 @@ function structuredEvent(lines, now, review) {
     if (continuation) fieldLines.add(index + 1);
   }
   const starts = fields.filter(({ label }) => /(?:일시|시작|시작시간)$/.test(label));
+  const reservationDates = fields.filter(({ label }) => /^(?:예약일자?|예약날짜)$/.test(label));
+  const reservationTimes = fields.filter(({ label }) => /^(?:예약시간|방문시간)$/.test(label));
+  const reservation = reservationDates.length > 0 || reservationTimes.length > 0;
+  if (reservation) {
+    if (starts.length || reservationDates.length !== 1 || reservationTimes.length !== 1) {
+      return review('ambiguous_date_or_time');
+    }
+    const [date] = reservationDates;
+    const [time] = reservationTimes;
+    starts.push({ index: Math.min(date.index, time.index), value: `${date.value} ${time.value}` });
+  }
   if (!starts.length) return null;
   // Forms append a report prompt unrelated to the event's status.
   const prose = lines.filter(line => !/^양식이\s*의심스러운가요\?\s*보고서$/.test(line)).join(' ');
@@ -38,11 +50,14 @@ function structuredEvent(lines, now, review) {
     countKoreanDateSignals(normalized(relatedTimes), { policy: 'journal' }) || countKoreanTimeSignals(relatedTimes) || CLOCK.test(relatedTimes)) {
     return review('ambiguous_date_or_time');
   }
-  const title = lines.slice(0, start.index).findLast((line, index) => !fieldLines.has(index) && EVENT_HEADING.test(line));
+  const headings = lines.slice(0, start.index).filter((_, index) => !fieldLines.has(index));
+  const title = reservation
+    ? headings.map(line => RESERVATION_HEADING.exec(line)?.[1].trim()).findLast(Boolean)
+    : headings.findLast(line => EVENT_HEADING.test(line));
   const parts = normalized(start.value).match(START_VALUE);
   if (!title || !parts) return review('ambiguous_date_or_time');
   const [, year, month, day, weekday, clock] = parts;
-  const date = parseKoreanDateExpression(`${year}년 ${month}월 ${day}일`, now, { policy: 'journal' });
+  const date = parseKoreanDateExpression(`${year}년 ${Number(month)}월 ${Number(day)}일`, now, { policy: 'journal' });
   const dateKey = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   if (date?.key !== dateKey || (weekday && '일월화수목금토'[new Date(dateKey).getUTCDay()] !== weekday)) return review('invalid_calendar_date');
   const colonClock = clock.match(/^(\d{1,2})\s*:\s*([0-5]\d)$/);
