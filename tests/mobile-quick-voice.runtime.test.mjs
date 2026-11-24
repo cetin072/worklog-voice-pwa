@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { register } from 'node:module';
-register('./helpers/mobile-ts-loader.mjs', import.meta.url);
+const blobs = 'const store={get:async()=>null,setJSON:async()=>{}};export const getStore=()=>store;export const getDeployStore=()=>store;';
+register('./helpers/mobile-ts-loader.mjs', import.meta.url, { data: { mocks: {
+  '@netlify/blobs': `data:text/javascript,${encodeURIComponent(blobs)}`,
+} } });
 const flow = await import('../mobile/src/features/voice/quick-voice-flow.ts');
 const stt = await import('../mobile/src/features/voice/transcription-provider.ts');
 const inputs = await import('../mobile/src/features/voice/audio-input.ts');
@@ -26,6 +29,58 @@ test('transcription remains pure and fast path auto-saves the accepted STT trans
   assert.equal(refreshes, 1);
   assert.equal(result.saveResult.id, 'test-id');
   assert.equal(result.saveResult.text, draft.transcript.text);
+});
+
+test('Quick Voice stores a timed site visit on the worklog calendar and keeps visit paperwork as an action', async () => {
+  const { saveWorklog } = await import('../mobile/src/platform/worklog-api.ts');
+  const { default: handler } = await import('../netlify/functions/worklog.mts');
+  const previousFetch = globalThis.fetch, previousNetlify = globalThis.Netlify;
+  globalThis.Netlify = { env: { get: key => ({ WORKLOG_DATA_CORE_PRIMARY_ENABLED: 'true', SUPABASE_URL: 'https://synthetic.invalid', SUPABASE_PUBLISHABLE_KEY: 'synthetic-key', WORKLOG_DATA_SCHEMA: 'worklog' })[key] } };
+  const writes = [];
+  const scheduleId = '55555555-5555-4555-8555-555555555555';
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(input);
+    if (url.pathname === '/api/worklog') return handler(new Request(url, init), {});
+    if (url.pathname === '/api/record-normalize') return Response.json({}, { status: 202 });
+    assert.equal(url.origin, 'https://synthetic.invalid');
+    assert.equal(url.pathname, '/rest/v1/rpc/save_my_worklog_with_schedule_v2');
+    const write = JSON.parse(init.body);
+    writes.push(write);
+    return Response.json([{
+      user_id: '11111111-1111-4111-8111-111111111111', workspace_id: '22222222-2222-4222-8222-222222222222',
+      work_record_id: '33333333-3333-4333-8333-333333333333', source_ref_id: '44444444-4444-4444-8444-444444444444',
+      schedule_id: write.p_schedule_title ? scheduleId : null,
+    }]);
+  };
+  try {
+    const cases = [
+      ['전시장 사전 답사 내일 오전 열시', 'schedule', '전시장 사전 답사', '2026-09-20T10:00:00+09:00'],
+      ['전시장 사전 답사 내일 오전 10시', 'schedule', '전시장 사전 답사', '2026-09-20T10:00:00+09:00'],
+      ['내일 저녁 일곱 시까지 답사 보고서 제출', 'task', null, '2026-09-20T19:00:00+09:00'],
+      ['내일 저녁 일곱 시 사전 답사 관련 메모', 'note', null, '2026-09-20T19:00:00+09:00'],
+      ['내일 오전 열시 사전 답사 취소', 'note', null, '2026-09-20T10:00:00+09:00'],
+      ['내일 오전 열시 또는 오후 3시 사전 답사', 'note', null, null],
+    ];
+    for (const [text, kind, title, startsAt] of cases) {
+      const saved = (await flow.runQuickVoiceFastPath({
+        provider: provider(text), audio, clientRequestId: `synthetic-voice-${writes.length}`,
+        saveWorklog: (value, options) => saveWorklog('synthetic-token', value, { ...options, sourceType: 'voice' }),
+        refreshBriefing: async () => {},
+      })).saveResult;
+      const write = writes.at(-1);
+      assert.equal(write.p_metadata.actionEngine.kind, kind, text);
+      assert.equal(write.p_schedule_title, title, text);
+      assert.equal(write.p_schedule_starts_at, title ? startsAt : null, text);
+      assert.equal(write.p_due_at, startsAt, text);
+      assert.equal(saved.scheduleCreated, kind === 'schedule', text);
+      assert.equal(saved.scheduleId, title ? scheduleId : '', text);
+      assert.ok(saved.dataCoreWorkRecordId, text);
+    }
+    assert.equal(writes.length, cases.length);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.Netlify = previousNetlify;
+  }
 });
 test('concurrent save retries send one immutable payload, completed attempts cannot save twice', async () => {
   const t = { ...(await transcript()) }; let writes = 0; let unblock; const gate = new Promise((r) => { unblock = r; });

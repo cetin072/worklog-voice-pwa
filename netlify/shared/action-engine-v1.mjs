@@ -1,11 +1,13 @@
 import {
   extractJournalDateFromText,
   formatYmd,
+  parseKoreanTimeExpression,
   seoulDateParts,
 } from "./korean-date-core.mjs";
 import { extractScheduleFromText } from "./schedule-extract.mjs";
 
 const EVENT_SIGNAL_RE=/(미팅|약속|면담|상담|방문|만나|통화|전화(?!번호)|인터뷰|행사|교육|세미나|촬영|식사|점심|저녁|출발|도착|회의(?!\s*(?:자료|록|안건|준비|내용|비)))/;
+const SITE_VISIT_RE=/답사(?!\s*(?:자료|보고|준비|계획|결과|후기|기록|취소|일정\s*(?:표|조율|확인|변경)))(?=$|[^가-힣]|하|를|에|는|도)/;
 const REMINDER_SIGNAL_RE=/(알림|리마인더|리마인드|알려\s*줘|알려줘|깨워)/;
 const RELATIVE_TIME_SIGNAL_RE=/\d{1,3}\s*(?:분|시간)\s*(?:뒤|후)(?:로)?/;
 const MOVEMENT_RE=/(?:[가-힣A-Za-z0-9]+(?:으로|로|에)\s*(?:가(?:기|는|야|자|요|겠습니다)|이동)|[가-힣A-Za-z0-9]*(?:IC|ic|역|공항|터미널|회사|병원)\s*가(?:기|는|야|자|요|겠습니다))/;
@@ -45,7 +47,10 @@ export function isTimedScheduleIntent({source="",dueStart="",recordType="",expli
   if(NEGATED_EVENT_RE.test(text)) return false;
   const deadline=DEADLINE_RE.test(text);
   const strongEvent=STRONG_EVENT_VERB_RE.test(text);
-  const eventSignal=EVENT_SIGNAL_RE.test(text.replace(/(?:아침|점심|저녁)\s*\d{1,2}\s*시/g, ''));
+  const clock=parseKoreanTimeExpression(text);
+  const eventText=(clock ? text.replace(clock.raw," ") : text).replace(/(?:아침|점심|저녁)\s*\d{1,2}\s*시/g," ");
+  const siteVisit=SITE_VISIT_RE.test(eventText) && !REPORTING_NOTE_RE.test(text) && !IDEA_NOTE_RE.test(text) && !explicitTypeKind(explicitType);
+  const eventSignal=EVENT_SIGNAL_RE.test(eventText) || siteVisit;
   const meetingType=recordType==="meeting_call" || normalize(explicitType)==="회의·통화";
   const explicitReminder=REMINDER_SIGNAL_RE.test(text);
   if(deadline && !strongEvent) return false;

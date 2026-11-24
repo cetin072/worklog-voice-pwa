@@ -158,13 +158,17 @@ export function parseKoreanDateExpression(value,baseInput=new Date(),options={})
     || null;
 }
 
+const SPOKEN_HOURS=Object.freeze({한:1,두:2,세:3,네:4,다섯:5,여섯:6,일곱:7,여덟:8,아홉:9,열:10,열한:11,열두:12});
+const DAY_PART_CLOCK_RE=/(오전|오후|아침|저녁|밤)\s*(?:(\d{1,2})\s*시|(열\s*[한두]|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)\s*시(?!간|적))(?:\s*(반|\d{1,2}\s*분))?/;
+const TWENTY_FOUR_HOUR_CLOCK_RE=/(1\d|2[0-3])시(?:\s*(반|\d{1,2}분))?/;
+
 export function parseKoreanTimeExpression(value){
   const source=normalize(value);
-  let match=source.match(/(오전|오후|아침|저녁|밤)\s*(\d{1,2})시(?:\s*(반|\d{1,2}분))?/);
+  let match=source.match(DAY_PART_CLOCK_RE);
   if(match){
-    let hour=Number(match[2]);
+    const [,meridiem,digits,spokenHour,minuteText]=match;
+    let hour=digits ? Number(digits) : SPOKEN_HOURS[spokenHour.replace(/\s/g,"")];
     if(hour<1 || hour>12) return null;
-    const meridiem=match[1];
     if(meridiem==="밤" && hour===12){
       hour=0;
     }else if(meridiem==="오후" || meridiem==="저녁" || meridiem==="밤"){
@@ -172,12 +176,12 @@ export function parseKoreanTimeExpression(value){
     }else if(hour===12){
       hour=0;
     }
-    const minute=match[3]==="반" ? 30 : Number(String(match[3] || "0").replace("분",""));
+    const minute=minuteText==="반" ? 30 : Number(String(minuteText || "0").replace("분",""));
     if(minute<0 || minute>59) return null;
     return {hour,minute,raw:match[0],index:match.index};
   }
 
-  match=source.match(/(1\d|2[0-3])시(?:\s*(반|\d{1,2}분))?/);
+  match=source.match(TWENTY_FOUR_HOUR_CLOCK_RE);
   if(match){
     const hour=Number(match[1]);
     const minute=match[2]==="반" ? 30 : Number(String(match[2] || "0").replace("분",""));
@@ -194,7 +198,7 @@ export function parseKoreanTimeExpression(value){
 
 const SCHEDULE_DATE_SIGNAL_RE=/(?:20\d{2}년\s*(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:이번\s*주|이번주|다음\s*주|다음주)\s*[월화수목금토일]요일|[월화수목금토일]요일|글피|모레|내일|오늘)/g;
 const JOURNAL_DATE_SIGNAL_RE=/(?:20\d{2}년\s*(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:1[0-2]|0?[1-9])월\s*(?:3[01]|[12]?\d)일|(?:지난\s*주|지난주|이번\s*주|이번주|다음\s*주|다음주)\s*[월화수목금토일]요일|지난\s*[월화수목금토일]요일|그저께|그제|어제|오늘|내일|모레|글피)/g;
-const TIME_SIGNAL_RE=/(?:(?:오전|오후|아침|저녁|밤)\s*\d{1,2}시(?:\s*(?:반|\d{1,2}분))?|(?:1\d|2[0-3])시(?:\s*(?:반|\d{1,2}분))?|정오|자정)/g;
+const TIME_SIGNAL_RE=new RegExp(`${DAY_PART_CLOCK_RE.source}|${TWENTY_FOUR_HOUR_CLOCK_RE.source}|정오|자정`,"g");
 
 export function countKoreanDateSignals(value,{policy="schedule"}={}){
   const source=normalize(value);
