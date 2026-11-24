@@ -1,12 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  countKoreanTimeSignals,
   extractJournalDateFromText,
   parseKoreanDateExpression,
+  parseKoreanTimeExpression,
   seoulDateParts,
 } from "../netlify/shared/korean-date-core.mjs";
 
 const RECORDED_AT="2026-09-19T08:00:00.000Z"; // 2026-09-19 17:00 KST
+
+test("spoken clock hours accept Korean numerals with or without spaces",()=>{
+  for(const [text,hour,minute] of [["오전 열시",10,0],["오전 열 시",10,0],["오후 열 한 시 반",23,30],["오전 열두시",0,0],["저녁 일곱 시 15분",19,15]]){
+    assert.deepEqual(parseKoreanTimeExpression(text),{hour,minute,raw:text,index:0});
+    assert.equal(countKoreanTimeSignals(text),1);
+  }
+  assert.equal(countKoreanTimeSignals("오전 열시 또는 오후 3시"),2);
+  assert.equal(parseKoreanTimeExpression("오전 두 시간 동안 작업"),null);
+  assert.equal(countKoreanTimeSignals("오전 두 시간 동안 작업"),0);
+});
 
 test("journal relative dates support past, today, and future",()=>{
   assert.equal(extractJournalDateFromText("어제 삼현 대표 미팅",RECORDED_AT).dateKey,"2026-09-18");

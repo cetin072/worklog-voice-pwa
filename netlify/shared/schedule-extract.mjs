@@ -257,6 +257,7 @@ export function extractScheduleFromText(value,recordedAt=new Date()){
     dueStart,
     dateKey,
     hasTime:Boolean(timePart),
+    dateSpecified:Boolean(datePart),
     matched:true
   };
 }

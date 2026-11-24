@@ -1478,7 +1478,40 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       const recovered = recognizedText?.trim() || '';
       if (recovered) setManualInput((current) => current.transcript.trim() ? current : { ...current, transcript: recovered });
       setScreen('input');
-    }} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{ ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider, speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION, draftScope: session.user.id, saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => { if (!client) throw new Error('로그인 연결을 확인한 뒤 다시 시도해주세요.'); const reminderGuard = reminderSessionEpoch.capture(); const saved = await saveWorklog(await getFreshAccessToken(client), transcript, { ...options, sourceType: 'voice' }); let reminderMessage: string; try { const results = await synchronizeSavedScheduleReminders(saved, reminderGuard, client); reminderMessage = savedReminderMessage(results, saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0)); } catch (nextError) { reminderMessage = reminderFailureMessage(nextError); } const folderMessage = (saved.scheduleDetected || saved.scheduleCreated || saved.scheduleId) ? '일정은 캘린더에서 확인해주세요.' : (saved.dataCoreWorkRecordIds?.length || 0) > 1 ? '여러 기록을 저장했습니다. 폴더는 업무 탭에서 확인해주세요.' : await organizeVoiceRecord(client, session.user.id, transcript, saved.dataCoreWorkRecordId, reminderGuard); if (folderMessage) reminderMessage = `${folderMessage} ${reminderMessage}`; if (reminderGuard()) setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage }); if (reminderGuard() && saved.scheduleId) { setNotificationScheduleId(saved.scheduleId); setScheduleFocusReason('created'); } return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' }; }, refreshBriefing: refreshQuickVoiceBriefing }} />
+    }} freezeQuickVoiceTimer={androidTouchSmoke} onQuickVoicePhaseChange={androidTouchSmoke ? (nextPhase) => console.info(`[android-touch-smoke] quick-voice-phase=${nextPhase}`) : undefined} quickVoice={{
+      ensureProvider: androidTouchSmoke ? async () => ANDROID_TOUCH_SMOKE_PROVIDER : prepareQuickVoiceWhisperProvider,
+      speechRecognition: androidTouchSmoke || FORCE_WHISPER_FALLBACK_QA_MODE ? undefined : QUICK_VOICE_SPEECH_RECOGNITION,
+      draftScope: session.user.id,
+      saveWorklog: androidTouchSmoke ? async () => ({}) : async (transcript, options) => {
+        if (!client) throw new Error('로그인 연결을 확인한 뒤 다시 시도해주세요.');
+        const reminderGuard = reminderSessionEpoch.capture();
+        const saved = await saveWorklog(await getFreshAccessToken(client), transcript, { ...options, sourceType: 'voice' });
+        const scheduleCount = saved.scheduleIds?.length || (saved.scheduleId ? 1 : 0);
+        let reminderMessage: string;
+        try {
+          const results = await synchronizeSavedScheduleReminders(saved, reminderGuard, client);
+          reminderMessage = savedReminderMessage(results, scheduleCount);
+        } catch (nextError) {
+          reminderMessage = reminderFailureMessage(nextError);
+        }
+        if (scheduleCount) reminderMessage = `일정은 캘린더에서 확인해주세요. ${reminderMessage}`;
+        else if (saved.scheduleDetected) reminderMessage = `기록은 업무 탭에서 확인해주세요. ${reminderMessage}`;
+        else if ((saved.dataCoreWorkRecordIds?.length || 0) > 1) reminderMessage = `여러 기록을 저장했습니다. 폴더는 업무 탭에서 확인해주세요. ${reminderMessage}`;
+        else {
+          const folderMessage = await organizeVoiceRecord(client, session.user.id, transcript, saved.dataCoreWorkRecordId, reminderGuard);
+          if (folderMessage) reminderMessage = `${folderMessage} ${reminderMessage}`;
+        }
+        if (reminderGuard()) {
+          setSavedReminder({ target: { recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleId: saved.scheduleId, title: saved.cleanTranscript || transcript }, message: reminderMessage });
+          if (saved.scheduleId) {
+            setNotificationScheduleId(saved.scheduleId);
+            setScheduleFocusReason('created');
+          }
+        }
+        return { reminderMessage, recordId: saved.dataCoreWorkRecordId || saved.pageId, scheduleDetected: Boolean(saved.scheduleDetected), scheduleCreated: Boolean(saved.scheduleCreated), scheduleId: saved.scheduleId || '', dueStart: saved.dueStart || '' };
+      },
+      refreshBriefing: refreshQuickVoiceBriefing,
+    }} />
   </View> : null}
   </View>
   <View style={[styles.bottomTabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>

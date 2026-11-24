@@ -1,6 +1,8 @@
 import {
+  countKoreanDateSignals,
   extractJournalDateFromText,
   formatYmd,
+  parseKoreanTimeExpression,
   seoulDateParts,
 } from "./korean-date-core.mjs";
 import { extractScheduleFromText } from "./schedule-extract.mjs";
@@ -10,8 +12,10 @@ const REMINDER_SIGNAL_RE=/(알림|리마인더|리마인드|알려\s*줘|알려�
 const RELATIVE_TIME_SIGNAL_RE=/\d{1,3}\s*(?:분|시간)\s*(?:뒤|후)(?:로)?/;
 const MOVEMENT_RE=/(?:[가-힣A-Za-z0-9]+(?:으로|로|에)\s*(?:가(?:기|는|야|자|요|겠습니다)|이동)|[가-힣A-Za-z0-9]*(?:IC|ic|역|공항|터미널|회사|병원)\s*가(?:기|는|야|자|요|겠습니다))/;
 const NEGATED_EVENT_RE=/(?:가지|이동하지|알리지|알려주지)\s*마|안\s*(?:가|알려)|알림\s*(?:취소|필요\s*없)/;
-const STRONG_EVENT_VERB_RE=/(약속|면담|상담|방문|만나|통화|전화(?!번호)|출발|도착)/;
-const DEADLINE_RE=/까지[\s\S]{0,40}(?:제출|보내|전달|완료|처리|보고|정리|준비|확인|작성|수정|회신|납부|입금|신고|결제|송금|지급)|(?:마감|제출기한|완료기한)/;
+const DEADLINE_RE=/까지[\s\S]{0,40}(?:제출|보내|전달|완료|처리|보고|정리|준비|확인|작성|수정|회신|납부|입금|신고|결제|송금|지급)|(?:마감|제출\s*기한|완료\s*기한)(?=$|\s*(?:[,.!?]|인\s|이야|입니다))/;
+const EXPLICIT_TASK_RE=/(?:^|\s)할\s*일\s*(?:[:：,]|로(?:\s|$)|(?=$|[.!?]))/;
+const EXPLICIT_NOTE_RE=/(?:^|\s)메모\s*(?:[:：,]|로(?:\s|$)|(?:해\s*줘)?(?=$|[.!?]))|^메모\s+(?=오늘|내일|모레|글피|이번|다음|\d)/;
+const CANCELED_NOTE_RE=/(?:^|\s)취소(?:\s*(?:했(?:어요?|음)|해\s*줘|됨|됐(?:어요?|음)|되었(?:어요?|음)))?(?=$|[.!?])/;
 const STRONG_TASK_RE=/(?:해야\s*(?:해|돼|함|한다|겠|할)|할\s*것|하기|보내기|전달하기|제출하기|확인하기|전화하기|연락하기|정리하기|준비하기|검토하기|처리하기|보고하기|작성하기|수정하기|회신하기|예약하기|신청하기|문의하기|챙기기|납부하기|입금하기|신고하기|결제하기|송금하기|지급하기|받기)|(?:보내|전달|제출|확인|전화|연락|정리|준비|검토|처리|보고|작성|수정|회신|예약|신청|문의|챙기)(?:야|해|하자|할게|할 것|부터|$)/;
 const ACTIONISH_RE=/(확인|검토|연락|전화|보내|전달|제출|정리|준비|처리|보고|작성|수정|회신|예약|신청|문의|챙기|방문|만나|보자|체크)/;
 const REPORTING_NOTE_RE=/(?:다고|라고|한다고|했다고|예정이라고)\s*(?:함|했음|말함|전달받|연락받)|(?:연락|회신)\s*(?:옴|왔|받음)|(?:접수|승인|확정|변경|취소)\s*(?:됐|되었|됨)|(?:예정|상태|내용)\s*(?:임|이라고 함)/;
@@ -39,21 +43,22 @@ function hasExplicitTime(value){
   return /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(String(value || ""));
 }
 
-export function isTimedScheduleIntent({source="",dueStart="",recordType="",explicitType=""}={}){
+function isDeadline(source,clock){
+  return DEADLINE_RE.test(source) || Boolean(clock && /^\s*까지/.test(source.slice(clock.index+clock.raw.length)));
+}
+
+export function isTimedScheduleIntent({source="",dueStart="",recordType="",explicitType="",dateSpecified}={}){
   const text=normalize(source);
   if(!text || !hasExplicitTime(dueStart)) return false;
-  if(NEGATED_EVENT_RE.test(text)) return false;
-  const deadline=DEADLINE_RE.test(text);
-  const strongEvent=STRONG_EVENT_VERB_RE.test(text);
-  const eventSignal=EVENT_SIGNAL_RE.test(text.replace(/(?:아침|점심|저녁)\s*\d{1,2}\s*시/g, ''));
-  const meetingType=recordType==="meeting_call" || normalize(explicitType)==="회의·통화";
-  const explicitReminder=REMINDER_SIGNAL_RE.test(text);
-  if(deadline && !strongEvent) return false;
-  const explicitDate=extractJournalDateFromText(text);
-  const unambiguousTime=RELATIVE_TIME_SIGNAL_RE.test(text) || (explicitDate.matched && !explicitDate.ambiguous && /(?:오전|오후|아침|저녁|밤|정오|자정|\b(?:1[3-9]|2[0-3])시|\b(?:[01]?\d|2[0-3]):[0-5]\d)/.test(text));
-  const expandedIntent=unambiguousTime && (explicitReminder || MOVEMENT_RE.test(text)) && !REPORTING_NOTE_RE.test(text) && !IDEA_NOTE_RE.test(text) && !NEGATED_EVENT_RE.test(text) && !explicitTypeKind(explicitType);
-  if(!eventSignal && !meetingType && !expandedIntent) return false;
-  return true;
+  const clock=parseKoreanTimeExpression(text);
+  if(explicitTypeKind(explicitType) || EXPLICIT_TASK_RE.test(text) || EXPLICIT_NOTE_RE.test(text) ||
+     NEGATED_EVENT_RE.test(text) || CANCELED_NOTE_RE.test(text) || isDeadline(text,clock)) return false;
+
+  if(dateSpecified ?? (Boolean(clock) && countKoreanDateSignals(text)===1)) return true;
+
+  const eventText=(clock ? text.replace(clock.raw," ") : text).replace(/(?:아침|점심|저녁)\s*\d{1,2}\s*시/g," ");
+  return EVENT_SIGNAL_RE.test(eventText) || recordType==="meeting_call" || normalize(explicitType)==="회의·통화" ||
+    (RELATIVE_TIME_SIGNAL_RE.test(text) && (REMINDER_SIGNAL_RE.test(text) || MOVEMENT_RE.test(text)) && !REPORTING_NOTE_RE.test(text) && !IDEA_NOTE_RE.test(text));
 }
 
 function result({kind,journalDate,reason,confidence,needsReview=false,schedule}){
@@ -93,7 +98,8 @@ export function classifyWorklogAction({
     : (!journal.ambiguous && schedule?.matched && scheduleDate ? scheduleDate : (journal.dateKey || fallbackDate));
   const dateAmbiguous=Boolean(journal.ambiguous);
 
-  if(isTimedScheduleIntent({source,dueStart:schedule?.dueStart,explicitType})){
+  const historicalDateOutsideSchedule=journal.matched && journal.dateKey<fallbackDate && journal.dateKey!==scheduleDate;
+  if(!historicalDateOutsideSchedule && isTimedScheduleIntent({source,dueStart:schedule?.dueStart,explicitType,dateSpecified:schedule?.dateSpecified})){
     return result({
       kind:"schedule",
       journalDate,
@@ -116,11 +122,18 @@ export function classifyWorklogAction({
     });
   }
 
-  if(DEADLINE_RE.test(source) || STRONG_TASK_RE.test(source)){
+  if(EXPLICIT_NOTE_RE.test(source) || CANCELED_NOTE_RE.test(source) || historicalDateOutsideSchedule){
+    return result({kind:"note",journalDate,reason:historicalDateOutsideSchedule ? "reported_fact" : "idea_or_memo",
+      confidence:dateAmbiguous ? 0.72 : 0.94,needsReview:dateAmbiguous,
+      schedule:historicalDateOutsideSchedule ? null : schedule});
+  }
+
+  const deadline=isDeadline(source,parseKoreanTimeExpression(source));
+  if(deadline || EXPLICIT_TASK_RE.test(source) || STRONG_TASK_RE.test(source)){
     return result({
       kind:"task",
       journalDate,
-      reason:DEADLINE_RE.test(source) ? "deadline_action" : "explicit_action",
+      reason:deadline ? "deadline_action" : "explicit_action",
       confidence:dateAmbiguous ? 0.72 : 0.94,
       needsReview:dateAmbiguous,
       schedule,
