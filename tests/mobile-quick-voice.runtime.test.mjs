@@ -31,7 +31,7 @@ test('transcription remains pure and fast path auto-saves the accepted STT trans
   assert.equal(result.saveResult.text, draft.transcript.text);
 });
 
-test('Quick Voice stores a timed site visit on the worklog calendar and keeps visit paperwork as an action', async () => {
+test('Quick Voice uses the spoken date and time for any title and respects explicit memo and deadline instructions', async () => {
   const { saveWorklog } = await import('../mobile/src/platform/worklog-api.ts');
   const { default: handler } = await import('../netlify/functions/worklog.mts');
   const previousFetch = globalThis.fetch, previousNetlify = globalThis.Netlify;
@@ -53,22 +53,29 @@ test('Quick Voice stores a timed site visit on the worklog calendar and keeps vi
     }]);
   };
   try {
+    const decemberAudio = { ...audio, createdAt: '2026-12-23T16:00:00Z' }; // 12월 24일 01:00 KST
     const cases = [
-      ['전시장 사전 답사 내일 오전 열시', 'schedule', '전시장 사전 답사', '2026-09-20T10:00:00+09:00'],
-      ['전시장 사전 답사 내일 오전 10시', 'schedule', '전시장 사전 답사', '2026-09-20T10:00:00+09:00'],
-      ['내일 저녁 일곱 시까지 답사 보고서 제출', 'task', null, '2026-09-20T19:00:00+09:00'],
-      ['내일 저녁 일곱 시 사전 답사 관련 메모', 'note', null, '2026-09-20T19:00:00+09:00'],
-      ['내일 오전 열시 사전 답사 취소', 'note', null, '2026-09-20T10:00:00+09:00'],
+      ['답퍼 사전 답사 내일 오전 열시', 'schedule', '답퍼 사전 답사', '2026-12-25T10:00:00+09:00'],
+      ['답퍼 사전 탑사 내일 오전 열 시', 'schedule', '답퍼 사전 탑사', '2026-12-25T10:00:00+09:00'],
+      ['시제품 점검 내일 오전 10시', 'schedule', '시제품 점검', '2026-12-25T10:00:00+09:00'],
+      ['시제품 점검 내일 10:00', 'schedule', '시제품 점검', '2026-12-25T10:00:00+09:00'],
+      ['자료 정리하기 12월 25일 오전 열시', 'schedule', '자료 정리하기', '2026-12-25T10:00:00+09:00'],
+      ['메모: 내일 오전 열시 담당자 미팅', 'note', null, '2026-12-25T10:00:00+09:00'],
+      ['내일 오전 열시 자료 정리 할 일로 등록', 'task', null, '2026-12-25T10:00:00+09:00'],
+      ['내일 저녁 일곱 시까지 답사 보고서 제출', 'task', null, '2026-12-25T19:00:00+09:00'],
+      ['내일 저녁 일곱 시 사전 답사 관련 메모', 'note', null, '2026-12-25T19:00:00+09:00'],
+      ['내일 오전 열시 사전 답사 취소', 'note', null, '2026-12-25T10:00:00+09:00'],
       ['내일 오전 열시 또는 오후 3시 사전 답사', 'note', null, null],
     ];
     for (const [text, kind, title, startsAt] of cases) {
       const saved = (await flow.runQuickVoiceFastPath({
-        provider: provider(text), audio, clientRequestId: `synthetic-voice-${writes.length}`,
+        provider: provider(text), audio: decemberAudio, clientRequestId: `synthetic-voice-${writes.length}`,
         saveWorklog: (value, options) => saveWorklog('synthetic-token', value, { ...options, sourceType: 'voice' }),
         refreshBriefing: async () => {},
       })).saveResult;
       const write = writes.at(-1);
       assert.equal(write.p_metadata.actionEngine.kind, kind, text);
+      assert.equal(write.p_original_text, text);
       assert.equal(write.p_schedule_title, title, text);
       assert.equal(write.p_schedule_starts_at, title ? startsAt : null, text);
       assert.equal(write.p_due_at, startsAt, text);

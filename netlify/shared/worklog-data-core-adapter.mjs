@@ -76,12 +76,15 @@ function snapshotsFromRow(row, scheduleIds, hasSnapshot) {
 }
 
 export function quickWorklogSchedule(record = {}, normalized = {}) {
-  if (!isTimedScheduleIntent({
-    source: record.transcript,
-    dueStart: record.dueStart,
-    recordType: normalized.recordType,
-    explicitType: record.type,
-  })) return null;
+  const shouldCreateSchedule = record.actionEngine
+    ? record.actionEngine.kind === "schedule"
+    : isTimedScheduleIntent({
+      source: record.transcript,
+      dueStart: record.dueStart,
+      recordType: normalized.recordType,
+      explicitType: record.type,
+    });
+  if (!shouldCreateSchedule) return null;
   return Object.freeze({ title: normalized.title, startsAt: normalized.dueAt, timezone: "Asia/Seoul", status: "confirmed" });
 }
 

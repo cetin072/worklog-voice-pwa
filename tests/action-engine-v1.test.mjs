@@ -192,7 +192,7 @@ test("future appointment, explicit deadline and accounting phrases remain distin
   }
 });
 
-test("explicit financial task commands do not turn into appointments because of 회의비 wording", () => {
+test("dated and timed financial actions can be scheduled while explicit deadlines remain tasks", () => {
   const cases = [
     "내일 오후 2시에 회의비 결제하기",
     "내일 오후 2시에 세금 납부하기",
@@ -200,7 +200,7 @@ test("explicit financial task commands do not turn into appointments because of 
   ];
   for (const transcript of cases) {
     const schedule = extractScheduleFromText(transcript, RECORDED_AT);
-    assert.equal(classifyWorklogAction({ transcript, recordedAt: RECORDED_AT, schedule }).kind, "task", transcript);
-    assert.equal(isTimedScheduleIntent({ source: transcript, dueStart: schedule.dueStart }), false, transcript);
+    assert.equal(classifyWorklogAction({ transcript, recordedAt: RECORDED_AT, schedule }).kind, "schedule", transcript);
+    assert.equal(isTimedScheduleIntent({ source: transcript, dueStart: schedule.dueStart }), true, transcript);
   }
 });

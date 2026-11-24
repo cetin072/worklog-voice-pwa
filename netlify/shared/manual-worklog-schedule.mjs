@@ -10,5 +10,5 @@ export function worklogSchedule(transcript, recordedAt, dueDate = '', dueTime = 
   const date = dueDate.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1년 $2월 $3일');
   const suffix = new RegExp(`\\s+${date}(?:\\s+(?:오전|오후)\\s+\\d{1,2}시\\s+\\d{1,2}분)?$`);
   return { text: String(transcript).replace(suffix, '').trim(), dueStart: normalized.dueHasTime ? normalized.dueAt : normalized.dueDate,
-    dateKey: normalized.dueDate, hasTime: normalized.dueHasTime, matched: true };
+    dateKey: normalized.dueDate, hasTime: normalized.dueHasTime, dateSpecified: true, matched: true };
 }
