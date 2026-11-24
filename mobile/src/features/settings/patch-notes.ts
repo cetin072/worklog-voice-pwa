@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-24',
+    title: '음성 기록의 날짜와 시간으로 일정 등록',
+    summary: '날짜와 시각을 말하면 제목에 관계없이 업무수첩 캘린더에 일정이 만들어집니다.',
+    items: ['오전 열시도 인식하며, 메모로 남겨 달라고 말하거나 할 일의 마감을 말하면 업무 탭에서 확인할 수 있습니다.'],
+  },
+  {
     date: '2026-11-20',
     title: '예약 알림톡 캡처에서 일정 읽기',
     summary: '예약일과 방문시간이 별도 줄에 있는 알림톡에서 일정 제목과 날짜·시간을 읽습니다.',
