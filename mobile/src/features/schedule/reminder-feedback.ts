@@ -23,11 +23,17 @@ export function reminderFailureMessage(error: unknown): string {
   return '기록은 저장됐지만 기기 알림 예약을 확인하지 못했습니다. 연결과 권한을 확인한 뒤 다시 시도해주세요.';
 }
 
-export function confirmedSeoulInstant(date: string, time: string, now = Date.now()) {
+export function seoulScheduleInstant(date: string, time: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error('TIME_REQUIRED');
   const instant = `${date}T${time}:00+09:00`;
   const parsed = Date.parse(instant);
-  if (!Number.isFinite(parsed) || parsed <= now || new Date(parsed + 9 * 3600000).toISOString().slice(0, 16) !== `${date}T${time}`) throw new Error('TIME_INVALID');
+  if (!Number.isFinite(parsed) || new Date(parsed + 9 * 3600000).toISOString().slice(0, 16) !== `${date}T${time}`) throw new Error('TIME_INVALID');
+  return instant;
+}
+
+export function confirmedSeoulInstant(date: string, time: string, now = Date.now()) {
+  const instant = seoulScheduleInstant(date, time);
+  if (Date.parse(instant) <= now) throw new Error('TIME_INVALID');
   return instant;
 }
 

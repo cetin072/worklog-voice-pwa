@@ -1,5 +1,5 @@
 import { folderPath, type WorkFolder } from './work-folders-store';
-import type { WorkDestination } from './work-record-destination';
+import type { EditDestination } from './work-record-destination';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -29,7 +29,7 @@ export type WorkRecordEditSheetProps = Readonly<{
   onCancel(): void;
   onRetry?(): void;
   onRepeat?(): void;
-  folderDestination?: { value: WorkDestination | null; folders: WorkFolder[]; onChange(kind: 'task' | 'note' | null): void; onFolder(id: string | null): void };
+  folderDestination?: { value: EditDestination | null; folders: WorkFolder[]; canSchedule?: boolean; onChange(kind: EditDestination['kind'] | null): void; onFolder(id: string | null): void };
 }>;
 
 function pickerValue(date: string, time: string) {
@@ -89,6 +89,11 @@ export function WorkRecordEditSheet({
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const inputBlocked = loading || saving;
   const fieldsBlocked = saving || (!ready && !allowFieldsWhileLoading);
+  const destination = folderDestination?.value;
+  const scheduling = destination?.kind === 'schedule';
+  const folderMove = destination && destination.kind !== 'schedule' ? destination : null;
+  const destinations = [[null, '현재 유지'], ['task', '할 일'], ['note', '메모·자료'], ['schedule', '홈 일정']] as const;
+  const saveBlocked = !ready || inputBlocked || !title.trim() || (scheduling && (!date || !time));
 
   useEffect(() => {
     if (!visible) {
@@ -154,11 +159,11 @@ export function WorkRecordEditSheet({
 
         {folderDestination ? <View style={styles.kindSection}>
           <Text style={styles.label}>보관 방식</Text>
-          <View style={styles.kindRow}>{([[null,'현재 유지'],['task','할 일'],['note','메모·자료']] as const).map(([kind,label])=><Pressable key={label} accessibilityRole="button" accessibilityLabel={`${label} 선택`} accessibilityState={{selected:(folderDestination.value?.kind || null)===kind}} disabled={!ready || inputBlocked} style={[styles.kindChoice,(folderDestination.value?.kind || null)===kind && styles.kindChoiceActive]} onPress={()=>{setPickerMode(null);folderDestination.onChange(kind);}}><Text style={styles.kindChoiceText}>{label}</Text></Pressable>)}</View>
-          {folderDestination.value ? <>
+          <View style={styles.kindRow}>{destinations.filter(([kind]) => kind !== 'schedule' || folderDestination.canSchedule).map(([kind,label])=><Pressable key={label} accessibilityRole="button" accessibilityLabel={`${label} 선택`} accessibilityState={{selected:(destination?.kind || null)===kind}} disabled={!ready || inputBlocked} style={[styles.kindChoice,(destination?.kind || null)===kind && styles.kindChoiceActive]} onPress={()=>{setPickerMode(null);folderDestination.onChange(kind);}}><Text style={styles.kindChoiceText}>{label}</Text></Pressable>)}</View>
+          {folderMove ? <>
             <Text style={styles.help}>날짜·시간을 없애고 업무 탭으로 옮깁니다. 앱 일정과 알림은 취소되며 원문은 보존됩니다. 구글에 전송한 일정은 별도로 확인해주세요.</Text>
             <Text style={styles.label}>폴더</Text>
-            <View style={[styles.kindRow,{flexWrap:'wrap'}]}>{[null,...folderDestination.folders.map(folder=>folder.id)].map(id=><Pressable key={id || 'unclassified'} accessibilityRole="button" accessibilityLabel={`${folderPath(folderDestination.folders,id)} 폴더 선택`} accessibilityState={{selected:folderDestination.value?.folderId===id}} disabled={inputBlocked} style={[styles.kindChoice,{flex:0,paddingHorizontal:12},folderDestination.value?.folderId===id && styles.kindChoiceActive]} onPress={()=>folderDestination.onFolder(id)}><Text style={styles.kindChoiceText}>{folderPath(folderDestination.folders,id)}</Text></Pressable>)}</View>
+            <View style={[styles.kindRow,{flexWrap:'wrap'}]}>{[null,...folderDestination.folders.map(folder=>folder.id)].map(id=><Pressable key={id || 'unclassified'} accessibilityRole="button" accessibilityLabel={`${folderPath(folderDestination.folders,id)} 폴더 선택`} accessibilityState={{selected:folderMove.folderId===id}} disabled={inputBlocked} style={[styles.kindChoice,{flex:0,paddingHorizontal:12},folderMove.folderId===id && styles.kindChoiceActive]} onPress={()=>folderDestination.onFolder(id)}><Text style={styles.kindChoiceText}>{folderPath(folderDestination.folders,id)}</Text></Pressable>)}</View>
           </> : null}
         </View> : null}
         {!folderDestination && actionKind ? <View style={styles.kindSection}>
@@ -186,7 +191,7 @@ export function WorkRecordEditSheet({
           <Text style={styles.help}>{actionConversionAllowed ? '종류를 바꾸면 저장할 때 함께 반영됩니다.' : '일정과 연결된 기록은 종류를 바꿀 수 없습니다.'}</Text>
         </View> : null}
 
-        {!folderDestination?.value ? <>
+        {!folderMove ? <>
         <View style={styles.dateRow}>
           <View style={styles.field}>
             <Text style={styles.label}>날짜</Text>
@@ -201,7 +206,7 @@ export function WorkRecordEditSheet({
             </Pressable>
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>시간 <Text style={styles.optional}>선택</Text></Text>
+            <Text style={styles.label}>{scheduling ? '시작 시간' : <>시간 <Text style={styles.optional}>선택</Text></>}</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="수정할 시간 선택"
@@ -229,10 +234,10 @@ export function WorkRecordEditSheet({
           {Platform.OS === 'ios' ? <Pressable accessibilityRole="button" style={styles.pickerDone} onPress={() => setPickerMode(null)}><Text style={styles.pickerDoneText}>선택 완료</Text></Pressable> : null}
         </View> : null}
 
-        <View style={styles.helpRow}>
+        {scheduling ? <Text style={styles.help}>날짜와 시작 시간을 확인한 뒤 홈 일정에 저장하세요.</Text> : <View style={styles.helpRow}>
           <Text style={styles.help}>{date ? '기한을 변경하거나 없앨 수 있습니다.' : '현재 기한 없음'}</Text>
           {date || time ? <Pressable accessibilityRole="button" accessibilityLabel="기한 없음으로 변경" disabled={fieldsBlocked} onPress={() => { setPickerMode(null); onDate(''); onTime(''); }}><Text style={styles.clearDue}>기한 없음</Text></Pressable> : null}
-        </View>
+        </View>}
         </> : null}
         <Text style={styles.help}>음성 원문은 그대로 보존됩니다.</Text>
 
@@ -243,7 +248,7 @@ export function WorkRecordEditSheet({
         {loading && allowFieldsWhileLoading ? <Text style={styles.help}>수정할 수 있습니다. 저장 전 최신 정보를 확인하고 있습니다.</Text> : null}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" disabled={saving} style={[styles.secondary, saving ? styles.disabled : null]} onPress={close}><Text style={styles.secondaryText}>취소</Text></Pressable>
-          <Pressable accessibilityRole="button" disabled={!ready || inputBlocked || !title.trim()} style={[styles.primary, !ready || inputBlocked || !title.trim() ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : statusTone === 'success' ? '✓ 저장 완료' : '저장'}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={saveBlocked} style={[styles.primary, saveBlocked ? styles.disabled : null]} onPress={onSave}><Text style={styles.primaryText}>{saving ? '저장 중…' : statusTone === 'success' ? '✓ 저장 완료' : scheduling ? '일정으로 저장' : '저장'}</Text></Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -265,7 +270,7 @@ const styles = StyleSheet.create({
   kindRow: { flexDirection: 'row', gap: 8 },
   kindChoice: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, backgroundColor: mobileTheme.colors.surface },
   kindChoiceActive: { borderColor: mobileTheme.colors.primary, backgroundColor: mobileTheme.colors.neutralBackground },
-  kindChoiceText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.textSecondary },
+  kindChoiceText: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.textSecondary, textAlign: 'center' },
   kindChoiceTextActive: { color: mobileTheme.colors.primary },
   optional: { fontSize: 11, fontWeight: '700', color: mobileTheme.colors.textMuted },
   input: { minHeight: mobileTheme.size.input, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: mobileTheme.radius.control, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: mobileTheme.colors.text, backgroundColor: mobileTheme.colors.surface },

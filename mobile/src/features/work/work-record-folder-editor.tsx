@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
 import { reminderSessionEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
-import { cancelSavedScheduleReminders } from '@/src/features/schedule/schedule-reminder-post-save';
+import { cancelSavedScheduleReminders, synchronizeUpdatedScheduleReminder } from '@/src/features/schedule/schedule-reminder-post-save';
+import { reminderFailureMessage } from '@/src/features/schedule/reminder-feedback';
 import { WorkRecordEditSheet, type WorkRecordEditSheetProps } from './work-record-edit-sheet';
 import { loadFolders, type WorkFolder } from './work-folders-store';
-import { moveWorkDestination, readDestination, type WorkDestination, type DestinationSnapshot } from './work-record-destination';
+import { moveWorkDestination, readDestination, scheduleWorkRecord, type EditDestination, type ScheduledWorkRecord, type WorkDestination, type DestinationSnapshot } from './work-record-destination';
 
 type Props = WorkRecordEditSheetProps & {
   client?: PlatformSupabaseClient | null; recordId?: string | null; ownerId: string;
   onMoved(message: string, destination: WorkDestination): void;
+  onScheduled(schedule: ScheduledWorkRecord, message: string): void;
 };
-// Keeps the ordinary editor unchanged. Explicit destination changes use one atomic RPC.
-export function WorkRecordFolderEditor({ client, recordId, ownerId, onMoved, ...props }: Props) {
+export function WorkRecordFolderEditor({ client, recordId, ownerId, onMoved, onScheduled, ...props }: Props) {
   const [folders,setFolders] = useState<WorkFolder[]>([]);
   const [snapshot,setSnapshot] = useState<DestinationSnapshot | null>(null);
-  const [destination,setDestination] = useState<WorkDestination | null>(null);
+  const [destination,setDestination] = useState<EditDestination | null>(null);
   const [saving,setSaving] = useState(false);
   const [message,setMessage] = useState('');
   const [committed,setCommitted] = useState(false);
@@ -35,6 +36,24 @@ export function WorkRecordFolderEditor({ client, recordId, ownerId, onMoved, ...
     locked.current=true;setSaving(true);setMessage('');
     const guard=reminderSessionEpoch.capture();
     try {
+      if (destination.kind === 'schedule') {
+        const schedule = await scheduleWorkRecord(client, ownerId, recordId, props.title, props.date, props.time, snapshot);
+        if (!active.current || !guard()) return;
+        setCommitted(true);
+        let message = '홈 일정에 저장했습니다.';
+        try {
+          if (Date.parse(schedule.startsAt) > Date.now()) {
+            const reminder = await synchronizeUpdatedScheduleReminder(schedule, guard);
+            message += reminder.action === 'scheduled'
+              ? ' 이 기기의 시작 알림을 예약했습니다.'
+              : ' 이 기기의 시작 알림을 확인하지 못했습니다.';
+          }
+        } catch (error) {
+          message += ` ${reminderFailureMessage(error)}`;
+        }
+        if (active.current && guard()) onScheduled(schedule, message);
+        return;
+      }
       const ids=await moveWorkDestination(client,ownerId,recordId,props.title,destination,snapshot);
       if(!active.current || !guard()) return;
       setCommitted(true);
@@ -50,6 +69,16 @@ export function WorkRecordFolderEditor({ client, recordId, ownerId, onMoved, ...
   return <WorkRecordEditSheet {...props}
     saving={props.saving || saving} ready={props.ready && !committed}
     statusText={message || props.statusText} statusTone={message?'error':props.statusTone}
-    folderDestination={snapshot ? { value:destination, folders, onChange:(kind)=>setDestination(kind ? {kind,folderId:destination ? destination.folderId : snapshot.folderId} : null), onFolder:(folderId)=>setDestination(current=>current?{...current,folderId}:null) } : undefined}
+    folderDestination={snapshot ? {
+      value: destination,
+      folders,
+      canSchedule: props.actionKind === 'note' || props.actionKind === 'task',
+      onChange: kind => setDestination(current => {
+        if (!kind) return null;
+        if (kind === 'schedule') return { kind };
+        return { kind, folderId: current && current.kind !== 'schedule' ? current.folderId : snapshot.folderId };
+      }),
+      onFolder: folderId => setDestination(current => current && current.kind !== 'schedule' ? { ...current, folderId } : current),
+    } : undefined}
     onSave={()=>void save()} />;
 }
