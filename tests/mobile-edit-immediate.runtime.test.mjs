@@ -49,3 +49,23 @@ test('work destination shows folder picker and hides dates without erasing the o
  byLabel(tree,'현재 유지 선택').props.onPress();assert.equal(selected,null);
  tree=h.render(p);assert.match(nativeWords(tree),/14:30/);h.close();
 });
+
+test('Home calendar choice preserves visible date and start time and requires both to save',()=>{
+ const h=editor();let selected;
+ const choice={value:null,folders:[],canSchedule:true,onChange:kind=>selected=kind,onFolder(){}};
+ const p={...props,loading:false,ready:true,folderDestination:choice};
+ try {
+  const initial=h.render(p);
+  byLabel(initial,'홈 일정 선택').props.onPress();
+  assert.equal(selected,'schedule');
+  const calendarProps={...p,folderDestination:{...choice,value:{kind:'schedule'}}};
+  const save=tree=>nativeNodes(tree).find(n=>n.type==='Pressable'&&nativeWords(n).trim()==='일정으로 저장');
+  let tree=h.render(calendarProps);
+  assert.match(nativeWords(byLabel(tree,'수정할 날짜 선택')),/2026. 11. 13./);
+  assert.match(nativeWords(byLabel(tree,'수정할 시간 선택')),/14:30/);
+  assert.equal(byLabel(tree,'기한 없음으로 변경'),undefined);
+  assert.equal(save(tree).props.disabled,false);
+  tree=h.render({...calendarProps,time:''});
+  assert.equal(save(tree).props.disabled,true);
+ } finally { h.close(); }
+});

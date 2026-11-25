@@ -8,6 +8,18 @@ const { externalCalendarHook, read } = await import('./helpers/external-calendar
 const model = await import('../mobile/src/features/home/home-calendar-model.ts');
 const { mobileTheme } = await import('../mobile/src/ui/theme.ts');
 const { homeHarness, nodes, words } = await import('./helpers/mobile-home-harness.mjs');
+
+test('Home focuses the recorded date immediately after a memo becomes a schedule',()=>{
+ const id='converted', startsAt='2026-12-15T15:00:00+09:00';
+ const h=homeHarness({
+  notificationScheduleId:id, savedReminder:{target:{scheduleId:id},startsAt},
+  briefing:{today:'2026-11-26',schedules:{upcoming:[{scheduleId:id,startsAt:'2026-11-28T10:00:00+09:00'}]}},
+  structure:{today:[],overdue:[],upcoming:[],undated:[]},
+ });
+ const calendar=nodes(h.render()).find(node=>node.type==='HomeCalendar');
+ assert.equal(calendar.props.focusId,id);
+ assert.equal(calendar.props.focusDate,startsAt);
+});
 const event = (id, start, end = null, extra = {}) => ({ id, source: 'personal', title: id, starts_at: start, ends_at: end, all_day: false, status: 'confirmed', ...extra });
 test('calendar dates use Seoul, Sunday weeks and complete leap/month/year boundaries', () => {
  assert.equal(model.seoulDate('2026-11-08T15:00:00Z'), '2026-11-09');

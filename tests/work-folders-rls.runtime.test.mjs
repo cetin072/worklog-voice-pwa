@@ -34,6 +34,7 @@ test('personal folders SQL: nesting, move, RLS, canonical completion/Undo, persi
   await db.exec(fs.readFileSync('supabase/migrations/20261117112533_personal_work_folders.sql','utf8'));
   await db.exec(fs.readFileSync('supabase/migrations/20261118001000_memo_completion_history.sql','utf8'));
   await db.exec(fs.readFileSync('supabase/migrations/20261118003000_work_record_destination.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261125123000_work_record_to_calendar.sql','utf8'));
   await db.exec(fs.readFileSync('supabase/migrations/20261117162554_work_overview.sql','utf8'));
   const overview=async(all=true,folder=null,section='tasks',offset=0)=>(await db.query('select worklog.get_my_work_overview($1,$2,$3,$4) value',[all,folder,section,offset])).rows[0].value;
   let owner=A;
@@ -144,5 +145,49 @@ test('personal folders SQL: nesting, move, RLS, canonical completion/Undo, persi
   await db.query("update worklog.work_records set status='completed' where id=$1",[S]);
   assert.equal(await snapshot(),null);await assert.rejects(move(snap),/WORK_NOT_AVAILABLE/);
   assert.equal((await db.query('select worklog.get_my_work_record_destination($1) value',[R])).rows[0].value,null,'repeating work remains independent');
+
+  const memo = id(20), linked = id(21), previous = id(22), active = id(23);
+  const startsAt='2030-01-02T15:00:00+09:00';
+  await db.query("insert into worklog.work_records(id,workspace_id,created_by_user_id,title,journal_date,action_kind,content,original_text,due_at) values ($1,$3,$4,'memo','2020-01-01','note','keep content','keep voice',$5),($2,$3,$4,'linked','2020-01-01','note','','',$5)",[memo,linked,WA,A,startsAt]);
+  await db.query("insert into worklog.schedules(id,workspace_id,created_by_user_id,title,starts_at,ends_at,status,metadata) values ($1,$3,$4,'cancelled','2030-01-01T01:00:00Z',null,'cancelled',jsonb_build_object('workRecordId',$5::text)),($2,$3,$4,'old active','2030-01-01T01:00:00Z','2030-01-01T02:00:00Z','confirmed',jsonb_build_object('reminderWorkRecordId',$6::text,'externalEventId','keep-google-id'))",[previous,active,WA,A,memo,linked]);
+  const destination=async record=>(await db.query('select worklog.get_my_work_record_destination($1) value',[record])).rows[0].value;
+  const schedule=async (record,title,updatedAt,who=A,date=startsAt)=>(await db.query('select worklog.schedule_my_work_record($1,$2,$3,$4,$5) value',[who,record,title,date,updatedAt])).rows[0].value;
+  const version=(await destination(memo)).updatedAt;
+  const linkedVersion=(await destination(linked)).updatedAt;
+  await assert.rejects(schedule(memo,'New title','2000-01-01'),e=>e.code==='PT409');
+  await assert.rejects(schedule(memo,'New title',version,A,'2100-01-01'),/INVALID_SCHEDULE/);
+  await assert.rejects(schedule(R,'Repeat',version),/WORK_NOT_AVAILABLE/);
+  await login(B);
+  await assert.rejects(schedule(memo,'New title',version,B),/WORK_NOT_AVAILABLE/);
+  await login(A);
+  const saved=await schedule(memo,'New title',version);
+  assert.equal(saved.recordId,memo);
+  assert.notEqual(saved.schedule.id,previous);
+  assert.equal(Date.parse(saved.schedule.startsAt),Date.parse(startsAt));
+  assert.equal(saved.schedule.allDay,false);
+  assert.deepEqual(await schedule(memo,'New title',version),saved,'same request returns the same schedule');
+  await assert.rejects(schedule(memo,'Different title',version),e=>e.code==='PT409');
+  const scheduledRecord=(await db.query('select * from worklog.work_records where id=$1',[memo])).rows[0];
+  assert.equal(scheduledRecord.action_kind,null);
+  assert.equal(scheduledRecord.record_type,'meeting_call');
+  assert.equal(scheduledRecord.original_text,'keep voice');
+  assert.equal(scheduledRecord.content,'keep content');
+  assert.equal(scheduledRecord.metadata.dueTimeExplicit,true);
+  assert.equal(scheduledRecord.metadata.actionOverride.kind,'schedule');
+  assert.equal(scheduledRecord.metadata.actionEngine.kind,'schedule');
+  for (const section of ['tasks','notes']) {
+    assert.ok(!(await overview(true,null,section)).records.some(record=>record.id===memo));
+  }
+  assert.equal((await db.query('select status from worklog.schedules where id=$1',[previous])).rows[0].status,'cancelled');
+  assert.equal((await db.query("select count(*)::int n from worklog.schedules where metadata->>'workRecordId'=$1 and status='confirmed'",[memo])).rows[0].n,1);
+  assert.equal((await schedule(linked,'Keep linked',linkedVersion)).schedule.id,active);
+  const retained=(await db.query('select * from worklog.schedules where id=$1',[active])).rows[0];
+  assert.equal(retained.metadata.externalEventId,'keep-google-id');
+  assert.equal(retained.metadata.workRecordId,linked);
+  assert.equal(Date.parse(retained.ends_at)-Date.parse(retained.starts_at),3600000);
+
+  await db.query("insert into worklog.schedules(workspace_id,created_by_user_id,title,starts_at,metadata) values ($1,$2,'one',$4,jsonb_build_object('workRecordId',$3::text)),($1,$2,'two',$4,jsonb_build_object('reminderWorkRecordId',$3::text))",[WA,A,T,startsAt]);
+  await assert.rejects(schedule(T,'Multiple links',(await destination(T)).updatedAt),/SCHEDULE_LINK_CONFLICT/);
+  assert.equal((await db.query('select action_kind from worklog.work_records where id=$1',[T])).rows[0].action_kind,'task');
  } finally { await db.close(); }
 });

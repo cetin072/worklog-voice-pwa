@@ -459,7 +459,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   const [homeCalendarRevision, setHomeCalendarRevision] = useState(0);
   const [homeScheduleCount, setHomeScheduleCount] = useState<number | null>(null);
   const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
-  const [savedReminder, setSavedReminder] = useState<{ target: ReminderTarget; message: string } | null>(null);
+  const [savedReminder, setSavedReminder] = useState<{ target: ReminderTarget; message: string; startsAt?: string } | null>(null);
   useEffect(() => { setReminderTarget(null); setSavedReminder(null); }, [session?.user.id]);
   const [taskReturn, setTaskReturn] = useState<'home' | 'work'>('home');
   const [selectedTask, setSelectedTask] = useState<{ bucket: BriefingBucket; task: BriefingTask } | null>(null);
@@ -1361,7 +1361,10 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
         {briefingBusy && !briefing ? <View style={styles.loadingInline}><ActivityIndicator /><Text style={styles.statusText}>오늘 업무를 불러오는 중입니다.</Text></View> : null}
         {briefingError ? <View style={styles.errorPanel}><Text style={styles.errorText}>{briefingError}</Text><Button title="다시 시도" onPress={() => void refreshBriefing()} /></View> : null}
       </View>
-      <HomeCalendar repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{const parts=id.split(':');setRepeatDetail({workId:parts[1],focusDate:date});}} key={`home-calendar:${session.user.id}`} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId} focusDate={allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
+      <HomeCalendar repeatingWorks={recurring.works} onOpenRepeating={(id,date)=>{const parts=id.split(':');setRepeatDetail({workId:parts[1],focusDate:date});}} key={`home-calendar:${session.user.id}`} today={briefing?.today || seoulTodayKey()} revision={homeCalendarRevision} fallback={allSchedules} focusId={notificationScheduleId}
+        focusDate={(savedReminder?.target.scheduleId === notificationScheduleId ? savedReminder?.startsAt : undefined)
+          || allSchedules.find(s => s.scheduleId === notificationScheduleId)?.startsAt
+          || (lastDirectSave?.scheduleId === notificationScheduleId ? lastDirectSave?.dueStart : undefined)} onTodayCount={setHomeScheduleCount}
         onOpenCalendar={day => { if (quickVoiceNavigation.current) { warnPendingVoice(); return; } setPersonalCalendarDate(day); setPersonalCalendarOpen(true); }}
         renderSchedule={schedule => <View>
           {schedule.scheduleId === notificationScheduleId ? <Text style={styles.helpText}>{scheduleFocusReason === 'created' ? '방금 생성된 일정' : '알림에서 연 일정'}</Text> : null}
@@ -1557,6 +1560,18 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       setWorkDestination({...destination,ownerId:session.user.id});
       if (editTaskId) { editDetailsCache.current.delete(editTaskId); removeVisibleRecordForConversion(editTaskId); }
       setEditTaskId(null); setScreen('work'); showMessage(feedback,'info'); void refreshBriefing();
+    }}
+    onScheduled={(schedule, message) => {
+      if (editTaskId) {
+        editDetailsCache.current.delete(editTaskId);
+        removeVisibleRecordForConversion(editTaskId);
+      }
+      setSavedReminder({ target: { scheduleId: schedule.id, title: schedule.title }, message, startsAt: schedule.startsAt });
+      setNotificationScheduleId(schedule.id);
+      setScheduleFocusReason('created');
+      setEditTaskId(null);
+      setScreen('home');
+      void refreshBriefing();
     }}
     allowTitleWhileLoading
     allowFieldsWhileLoading
