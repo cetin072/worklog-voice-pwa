@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-25',
+    title: '메모에서 홈 일정으로 바로 저장',
+    summary: '메모를 편집할 때 홈 일정을 선택하면 기존 날짜와 시작 시간으로 캘린더에 저장할 수 있습니다.',
+    items: ['저장한 뒤 홈 캘린더에서 해당 날짜를 바로 엽니다.'],
+  },
+  {
     date: '2026-11-24',
     title: '음성 기록의 날짜와 시간으로 일정 등록',
     summary: '날짜와 시각을 말하면 제목에 관계없이 업무수첩 캘린더에 일정이 만들어집니다.',
