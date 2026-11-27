@@ -63,14 +63,14 @@ test('Quick voice memo uses a pass-through floating dock and auto-saves a valid 
   assert.match(recorderSource, /quickMic/);
   assert.match(recorderSource, /녹음 중/);
   assert.match(recorderSource, /quickMicTimer/);
-  assert.match(recorderSource, /브리핑 카드의 ✏️/);
+  assert.match(recorderSource, /기록을 편집해 수정/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.match(recorderSource, /업무 직접 입력 열기/);
   assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(homeSource, /pointerEvents="box-none"/);
   assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
   assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
-  assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{\[styles\.quickDock,/);
+  assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{embedded \? styles\.embeddedDock : \[styles\.quickDock,/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
   assert.match(homeSource, /saveWorklog: androidTouchSmoke \? async \(\) => \(\{\}\) : async \(transcript, options\)/);
   assert.match(homeSource, /refreshBriefing/);

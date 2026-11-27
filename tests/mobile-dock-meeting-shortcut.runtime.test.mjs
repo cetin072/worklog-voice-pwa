@@ -7,7 +7,7 @@ const parse=path=>ts.createSourceFile(path,readFileSync(path,'utf8'),ts.ScriptTa
 const card=parse('mobile/src/features/voice/voice-recorder-card.tsx'),home=parse('mobile/app/index.tsx');
 let top,callback,navigate;
 function walk(n){
- if(ts.isJsxElement(n)&&n.openingElement.attributes.properties.some(p=>p.name?.getText(card)==='style'&&p.initializer?.getText(card)==='{styles.quickTopControl}'))top=n.getText(card);
+ if(ts.isJsxElement(n)&&n.openingElement.attributes.properties.some(p=>p.name?.getText(card)==='style'&&p.initializer?.getText(card).includes('styles.quickTopControl')))top=n.getText(card);
  ts.forEachChild(n,walk);
 }walk(card);
 function visit(n){if(ts.isJsxAttribute(n)&&n.name.getText(home)==='onOpenMeetingRecording')callback=n.initializer.expression.getText(home);if(ts.isFunctionDeclaration(n)&&n.name?.text==='setScreen')navigate=n.getText(home);ts.forEachChild(n,visit);}visit(home);
@@ -15,7 +15,7 @@ function compile(code,scope){const js=ts.transpileModule(code,{compilerOptions:{
 const nodes=n=>Array.isArray(n)?n.flatMap(nodes):n&&typeof n==='object'?[n,...nodes(n.props?.children)]:[];
 test('actual dock opens meeting only from idle and preserves recording, processing and saved feedback',()=>{
  assert.ok(top);let opened=0;
- const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',Text:'Text',Pressable:'Pressable',styles:{},quickPhase:'idle',inFlight:{current:false},onOpenMeetingRecording:()=>opened++,isRecording:false,statusDone:false,statusText:'대기'};
+ const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',Text:'Text',Pressable:'Pressable',styles:{},embedded:false,textLines:1,quickPhase:'idle',inFlight:{current:false},onOpenMeetingRecording:()=>opened++,isRecording:false,statusDone:false,statusText:'대기'};
  const render=compile('return ()=>('+top+');',scope);
  let button=nodes(render()).find(n=>n.type==='Pressable');assert.equal(button.props.accessibilityLabel,'회의 녹음 열기');button.props.onPress();assert.equal(opened,1);
  scope.inFlight.current=true;button.props.onPress();assert.equal(opened,1);scope.inFlight.current=false;

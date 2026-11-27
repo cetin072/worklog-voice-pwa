@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Pressable, StyleSheet, Text, TextInput, Vibration, View } from 'react-native';
+import { Alert, Button, Platform, Pressable, StyleSheet, Text, TextInput, Vibration, View } from 'react-native';
 
 import { type QuickVoicePcmAudioInput } from '@/src/features/voice/audio-input';
 import { createQuickVoiceDraftStorage } from '@/src/features/voice/quick-voice-draft';
@@ -26,6 +26,7 @@ type QuickVoiceProps = Readonly<{
 }>;
 type VoiceRecorderCardProps = {
   mode?: 'quick';
+  embedded?: boolean;
   onOpenMeetingRecording?: () => void;
   onOpenWorklogInput?: (recognizedText?: string) => void;
   renderPhotoAction?: (disabled: boolean) => ReactNode;
@@ -37,6 +38,7 @@ type VoiceRecorderCardProps = {
   freezeQuickVoiceTimer?: boolean;
 } | {
   mode: 'meeting';
+  embedded?: never;
   onOpenMeetingRecording?: never;
   renderPhotoAction?: never;
   onOpenWorklogInput?: (recognizedText?: string) => void;
@@ -74,7 +76,7 @@ function quickStatus(phase: QuickVoicePhase) {
   return ({ idle: '대기', preparing: '녹음 준비 중', recording: '녹음 중', captured: '녹음 확인 중', transcribing: '한국어 전사 중', saving: '업무 저장 중', refreshing: '브리핑 새로고침 중', saved: '업무 저장 완료', transcript_error: '전사 재시도 필요', save_error: '저장 재시도 필요', refresh_error: '브리핑 새로고침 재시도 필요' } satisfies Record<QuickVoicePhase, string>)[phase];
 }
 
-export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, onOpenMeetingRecording, renderPhotoAction, quickVoice, navigationGuard, onQuickVoicePhaseChange, freezeQuickVoiceTimer = false }: VoiceRecorderCardProps) {
+export function VoiceRecorderCard({ mode = 'quick', embedded = false, onOpenWorklogInput, onOpenMeetingRecording, renderPhotoAction, quickVoice, navigationGuard, onQuickVoicePhaseChange, freezeQuickVoiceTimer = false }: VoiceRecorderCardProps) {
   const meeting = useMeetingRecordingSession();
   const quickCapture = useQuickVoicePcmCapture();
   const [quickPhase, applyQuickPhase] = useState<QuickVoicePhase>('idle');
@@ -513,64 +515,66 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, onOpenMe
             ? '저장된 업무를 브리핑에 바로 반영하고 있습니다.'
             : null;
 
-    return <View pointerEvents="box-none" style={[styles.quickDock, guidance || modelDownload ? { height: QUICK_VOICE_LAYOUT.dockHeight + 28 } : null]}>
-      <View pointerEvents="box-none" style={styles.quickTopControl}>
-        {quickPhase === 'idle' && onOpenMeetingRecording ? <Pressable accessibilityRole="button" accessibilityLabel="회의 녹음 열기" style={styles.quickStatusBubble} onPress={() => { if (!inFlight.current && quickPhase === 'idle') onOpenMeetingRecording(); }}>
-          <Text style={styles.quickStatusBubbleText}>회의 녹음</Text>
+    const resultStyle = embedded ? styles.embeddedResult : styles.quickResult;
+    const textLines = embedded ? undefined : 1;
+    return <View pointerEvents="box-none" style={embedded ? styles.embeddedDock : [styles.quickDock, guidance || modelDownload ? { height: QUICK_VOICE_LAYOUT.dockHeight + 28 } : null]}>
+      <View pointerEvents="box-none" style={embedded ? styles.embeddedTop : styles.quickTopControl}>
+        {quickPhase === 'idle' && onOpenMeetingRecording ? <Pressable accessibilityRole="button" accessibilityLabel="회의 녹음 열기" style={embedded ? styles.embeddedMeeting : styles.quickStatusBubble} onPress={() => { if (!inFlight.current && quickPhase === 'idle') onOpenMeetingRecording(); }}>
+          <Text style={embedded ? styles.embeddedLabel : styles.quickStatusBubbleText}>회의 녹음</Text>
         </Pressable> : <View pointerEvents="none" style={[styles.quickStatusBubble, isRecording ? styles.quickStatusBubbleRecording : statusDone ? styles.quickStatusBubbleDone : null]}>
-          <Text numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={statusText} style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
+          <Text numberOfLines={textLines} ellipsizeMode="tail" accessibilityLabel={statusText} style={[styles.quickStatusBubbleText, isRecording ? styles.quickStatusBubbleTextRecording : statusDone ? styles.quickStatusBubbleTextDone : null]}>{statusText}</Text>
         </View>}
       </View>
-      {quickPhase === 'transcribing' && modelDownload ? <Text numberOfLines={1} ellipsizeMode="tail" style={styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
+      {quickPhase === 'transcribing' && modelDownload ? <Text numberOfLines={textLines} ellipsizeMode="tail" style={embedded ? styles.embeddedStatus : styles.quickProgress}>음성 모델 받는 중 · {formatBytes(modelDownload.bytesWritten)}{modelDownload.totalBytes ? ` / ${formatBytes(modelDownload.totalBytes)}` : ''}</Text> : null}
 
-      <View pointerEvents="box-none" style={styles.quickOrbitalRow}>
-        {isRecording ? <Pressable key="cancel-recording" disabled={false} accessibilityRole="button" accessibilityLabel="녹음 취소" style={[styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft]} onPress={() => void cancelQuickVoice()}>
-          <Text style={[styles.quickSideIcon, styles.quickCancelIcon]}>✕</Text>
-          <Text style={[styles.quickSideLabel, styles.quickCancelLabel]}>취소</Text>
-        </Pressable> : <Pressable key="open-manual-input" accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft, quickActive ? styles.quickSideActionDisabled : null]} onPress={() => onOpenWorklogInput?.()}>
-          <Text style={styles.quickSideIcon}>✏️</Text>
-          <Text style={styles.quickSideLabel}>메모</Text>
+      <View pointerEvents="box-none" style={embedded ? styles.embeddedActions : styles.quickOrbitalRow}>
+        {isRecording ? <Pressable key="cancel-recording" disabled={false} accessibilityRole="button" accessibilityLabel="녹음 취소" style={embedded ? styles.embeddedAction : [styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft]} onPress={() => void cancelQuickVoice()}>
+          {!embedded ? <Text style={[styles.quickSideIcon, styles.quickCancelIcon]}>✕</Text> : null}
+          <Text style={[embedded ? styles.embeddedLabel : styles.quickSideLabel, styles.quickCancelLabel]}>{embedded ? '녹음 취소' : '취소'}</Text>
+        </Pressable> : <Pressable key="open-manual-input" accessibilityRole="button" accessibilityLabel="업무 직접 입력 열기" disabled={!onOpenWorklogInput || quickActive} style={[embedded ? styles.embeddedAction : [styles.quickAuxiliaryAction, styles.quickAuxiliaryActionLeft], quickActive ? styles.quickSideActionDisabled : null]} onPress={() => onOpenWorklogInput?.()}>
+          {!embedded ? <Text style={styles.quickSideIcon}>✏️</Text> : null}
+          <Text style={embedded ? styles.embeddedLabel : styles.quickSideLabel}>{embedded ? '직접 입력' : '메모'}</Text>
         </Pressable>}
 
-        <View pointerEvents="box-none" style={styles.quickPrimaryControl}>
+        <View pointerEvents="box-none" style={embedded ? styles.embeddedPrimary : styles.quickPrimaryControl}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isRecording ? '음성 기록 종료 후 바로 저장' : '음성 기록 시작'}
             disabled={quickActive && !isRecording}
-            style={[styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
+            style={[embedded ? styles.embeddedMic : styles.quickMic, isRecording ? styles.quickMicActive : null, quickActive && !isRecording ? styles.quickMicBusy : null]}
             onPress={() => void (isRecording ? stopQuickVoice() : canStart ? startQuickVoice() : undefined)}
           >
-            <Text allowFontScaling={false} style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2} style={styles.quickMicLabel}>
-              {isRecording ? '녹음 중' : quickActive ? '처리 중' : '음성 기록'}
+            {!embedded ? <Text allowFontScaling={false} style={styles.quickMicIcon}>{isRecording ? '■' : '🎙'}</Text> : null}
+            <Text numberOfLines={textLines} adjustsFontSizeToFit={!embedded} maxFontSizeMultiplier={embedded ? undefined : 1.2} style={[styles.quickMicLabel, embedded && styles.embeddedMicLabel]}>
+              {isRecording ? (embedded ? '녹음 끝내기' : '녹음 중') : quickActive ? '처리 중' : '음성 기록'}
             </Text>
             {isRecording ? <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={styles.quickMicTimer}>{formatDuration(recordingElapsedMs)}</Text> : null}
           </Pressable>
         </View>
 
-        <View pointerEvents={renderPhotoAction ? 'auto' : 'none'} style={[styles.quickAuxiliaryStatus, styles.quickAuxiliaryStatusRight]}>
+        {!embedded || Platform.OS === 'android' ? <View pointerEvents={renderPhotoAction ? 'auto' : 'none'} style={embedded ? styles.embeddedAction : [styles.quickAuxiliaryStatus, styles.quickAuxiliaryStatusRight]}>
           {renderPhotoAction ? renderPhotoAction(quickActive) : <>
           <Text style={styles.quickStatusIcon}>{statusDone ? '✓' : quickPhase === 'transcript_error' || quickPhase === 'save_error' ? '!' : '●'}</Text>
           <Text style={styles.quickSideLabel}>{statusDone ? '저장됨' : isRecording ? '녹음 중' : quickPhase === 'idle' ? '대기' : '처리 중'}</Text>
           </>}
-        </View>
+        </View> : null}
       </View>
 
       {isRecording
-        ? <Text numberOfLines={1} ellipsizeMode="tail" style={styles.quickGuidance}>{speechPreview || guidance}</Text>
-        : guidance && !modelDownload ? <Text numberOfLines={1} ellipsizeMode="tail" style={styles.quickGuidance}>{guidance}</Text> : null}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        ? <Text numberOfLines={1} ellipsizeMode="tail" style={embedded ? styles.embeddedStatus : styles.quickGuidance}>{speechPreview || guidance}</Text>
+        : guidance && !modelDownload ? <Text numberOfLines={textLines} ellipsizeMode="tail" style={embedded ? styles.embeddedStatus : styles.quickGuidance}>{guidance}</Text> : null}
+      {error ? <Text style={[styles.errorText, embedded && styles.embeddedError]}>{error}</Text> : null}
 
-      {quickPhase === 'transcript_error' && quickAudio ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>{formatQuickVoicePcmDuration(quickAudio)} · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
-      {quickPhase === 'transcript_error' && !quickAudio ? <View style={styles.quickResult}>
+      {quickPhase === 'transcript_error' && quickAudio ? <View style={resultStyle}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>{formatQuickVoicePcmDuration(quickAudio)} · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
+      {quickPhase === 'transcript_error' && !quickAudio ? <View style={resultStyle}>
         <Text style={styles.quickResultTitle}>{speechPreview.trim() ? '인식된 내용을 보존했습니다.' : '음성 인식 경로를 다시 시작할 수 없습니다.'}</Text>
         {speechPreview.trim() ? <Text selectable numberOfLines={3} ellipsizeMode="tail" style={styles.transcript}>{speechPreview}</Text> : null}
         <Button title="Whisper로 다시 녹음" onPress={() => void retryWhisperFallback()} />
         {onOpenWorklogInput ? <Button title={speechPreview.trim() ? '인식된 내용으로 직접 입력' : '업무 직접 입력'} onPress={openDirectInputFallback} /> : null}
       </View> : null}
       {quickPhase === 'transcript_error' ? <Button title="녹음 버리기" onPress={discardQuickVoice} /> : null}
-      {quickPhase === 'save_error' && quickTranscript ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 브리핑 카드의 ✏️에서 바로 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
-      {quickPhase === 'refresh_error' ? <View style={styles.quickResult}><Text style={styles.quickResultTitle}>✅ 저장 완료 · 브리핑 갱신 실패</Text><Button title="브리핑만 다시 불러오기" onPress={() => void retryBriefing()} /></View> : null}
+      {quickPhase === 'save_error' && quickTranscript ? <View style={resultStyle}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 기록을 편집해 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
+      {quickPhase === 'refresh_error' ? <View style={resultStyle}><Text style={styles.quickResultTitle}>✅ 저장 완료 · 브리핑 갱신 실패</Text><Button title="브리핑만 다시 불러오기" onPress={() => void retryBriefing()} /></View> : null}
       {!quickActive && !quickTranscript && !error ? <Text style={styles.quickHint}>가운데 마이크를 누르면 바로 기록합니다.</Text> : null}
     </View>;
   }
@@ -591,6 +595,18 @@ export function VoiceRecorderCard({ mode = 'quick', onOpenWorklogInput, onOpenMe
 }
 
 const styles = StyleSheet.create({
+  embeddedDock: { gap: 4 },
+  embeddedTop: { alignItems: 'flex-end' },
+  embeddedMeeting: { minHeight: 48, paddingHorizontal: 8, justifyContent: 'center' },
+  embeddedActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: 6 },
+  embeddedAction: { flexGrow: 1, flexBasis: 0, minWidth: 84, minHeight: 48, justifyContent: 'center', borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 10, backgroundColor: mobileTheme.colors.surface },
+  embeddedPrimary: { flexGrow: 1, flexBasis: 0, minWidth: 84 },
+  embeddedMic: { flexGrow: 1, minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingVertical: 6, borderRadius: 10, backgroundColor: mobileTheme.colors.primary },
+  embeddedLabel: { paddingHorizontal: 3, fontSize: 14, fontWeight: '700', color: mobileTheme.colors.text, textAlign: 'center' },
+  embeddedMicLabel: { fontSize: 14, paddingHorizontal: 3, textAlign: 'center' },
+  embeddedStatus: { textAlign: 'center', color: mobileTheme.colors.textSecondary },
+  embeddedResult: { gap: 6, padding: 8, borderColor: mobileTheme.colors.border, borderWidth: 1, borderRadius: 10 },
+  embeddedError: { position: 'relative', left: 0, right: 0, bottom: 0 },
   quickDock: { width: QUICK_VOICE_LAYOUT.dockWidth, height: QUICK_VOICE_LAYOUT.dockHeight, alignSelf: 'center', position: 'relative', backgroundColor: 'transparent' },
   quickTopControl: { position: 'absolute', top: 0, left: 0, right: 0, height: QUICK_VOICE_LAYOUT.timerSize, alignItems: 'center', justifyContent: 'center' },
   quickStatusBubble: { maxWidth: '100%', minHeight: QUICK_VOICE_LAYOUT.timerSize, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(241,245,249,0.94)', shadowColor: '#111827', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
