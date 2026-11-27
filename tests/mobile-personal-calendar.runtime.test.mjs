@@ -53,3 +53,47 @@ test('actual calendar sheet saves a standalone all-day event, retains failed inp
  assert.equal(all(render()).filter(n=>n.props?.accessibilityLabel==='구글 전용 일정 수정'||n.props?.accessibilityLabel==='구글 전용 일정 삭제').length,0);
  effects.forEach(x=>x?.cleanup?.());
 });
+
+test('home reads only the current owner’s personal schedules when the combined RPC is forbidden',async()=>{
+ const a=access(), calls=[];
+ const mock=async(url,options)=>{
+  const u=new URL(url);calls.push({u,options});
+  if(u.pathname.endsWith('/get_my_calendar_month')) return Response.json({message:'CALENDAR_FORBIDDEN'},{status:403});
+  if(u.pathname.endsWith('/workspaces'))return Response.json([{id:'personal-workspace'}]);
+  if(u.pathname.endsWith('/workspace_members'))return Response.json([{role:'owner'}]);
+  return Response.json([{id:'standalone',title:'Own',starts_at:'2026-11-01T00:00:00+09:00'}]);
+ };
+ const outcome=await api.readHomeCalendarMonth(a.value,'2026-11',mock);
+ assert.equal(outcome.personalOnly,true);assert.equal(outcome.limited,true);assert.equal(outcome.events[0].editable,false);
+ assert.deepEqual(calls.map(({u})=>u.pathname.split('/').at(-1)),['get_my_calendar_month','workspaces','workspace_members','schedules']);
+ for(const {options} of calls.slice(1)){assert.equal(options.method,'GET');assert.equal(options.headers['Accept-Profile'],'worklog');assert.equal(options.headers.authorization,'Bearer pinned-owner-token');}
+ assert.equal(calls[1].u.searchParams.get('owner_user_id'),'eq.owner');
+ assert.equal(calls[1].u.searchParams.get('kind'),'eq.personal');
+ assert.equal(calls[2].u.searchParams.get('user_id'),'eq.owner');
+ assert.equal(calls[2].u.searchParams.get('role'),'eq.owner');
+ assert.equal(calls[3].u.searchParams.get('workspace_id'),'eq.personal-workspace');
+ assert.equal(calls[3].u.searchParams.get('created_by_user_id'),'eq.owner');
+ assert.match(calls[3].u.searchParams.get('or'),/2026-11-01T00:00:00\+09:00/);
+});
+test('home never falls back without owner membership or for a different RPC error',async()=>{
+ const a=access();
+ let calls=0;
+ await assert.rejects(api.readHomeCalendarMonth(a.value,'2026-11',async()=>{
+   calls++;return Response.json({message:'CALENDAR_UNAVAILABLE'},{status:503});
+ }),/CALENDAR_UNAVAILABLE/);
+ assert.equal(calls,1);
+ await assert.rejects(api.readHomeCalendarMonth(a.value,'2026-11',async(url)=>{
+   calls++;if(url.includes('/rpc/'))return Response.json({message:'CALENDAR_FORBIDDEN'},{status:403});
+   if(url.includes('/workspaces?'))return Response.json([{id:'w'}]);
+   if(url.includes('/workspace_members?'))return Response.json([]);
+   assert.fail('schedules must not be read without owner membership');
+ }),/CALENDAR_FORBIDDEN/);
+ assert.equal(calls,4);
+});
+test('home discards a late personal request after the account changes',async()=>{
+ const a=access();
+ await assert.rejects(api.readHomeCalendarMonth(a.value,'2026-11',async(url)=>{
+   if(url.includes('/rpc/'))return Response.json({message:'CALENDAR_FORBIDDEN'},{status:403});
+   a.live(false);return Response.json([{id:'w'}]);
+ }),/CALENDAR_OWNER_CHANGED/);
+});
