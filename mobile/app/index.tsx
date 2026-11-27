@@ -2,7 +2,7 @@ import { QUICK_VOICE_LAYOUT } from '@/src/features/voice/quick-voice-layout';
 import { organizeVoiceRecord } from '@/src/features/work/voice-folder';
 import { workspaceStyles } from '@/src/ui/workspace-styles';
 import { WorkFolders } from '@/src/features/work/work-folders';
-import { TaejangDailyReport } from '@/src/features/daily-work-report/daily-work-report';
+import { TaejangDailyReport, useTaejangDailyReportAccess } from '@/src/features/daily-work-report/daily-work-report';
 import { HabitsScreen } from '@/src/features/habits/habits-screen';
 import { MyManagementScreen } from '@/src/features/management/my-management-screen';
 import { repeatHistory, repeatSummary } from '@/src/features/recurring/recurrence-model';
@@ -71,7 +71,10 @@ import { mobileTheme } from '@/src/ui/theme';
 
 const QUICK_VOICE_SPEECH_RECOGNITION = createExpoSpeechRecognitionAdapter();
 const APP_BUILD_INFO = appBuildInfo(Constants.expoConfig);
-type AppScreen = 'home' | 'work' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes' | 'subscriptions';
+const primaryTabs = [{ key: 'home', label: '홈' }, { key: 'work', label: '업무' }] as const;
+const taejangTab = { key: 'taejang', label: '태장' } as const;
+
+type AppScreen = 'home' | 'work' | 'taejang' | 'journal' | 'recordSearch' | 'task' | 'input' | 'meeting' | 'settings' | 'reminderSettings' | 'patchNotes' | 'subscriptions';
 type BriefingBucket = 'overdue' | 'today' | 'upcoming' | 'undated';
 type WorkStatus = '완료' | '진행중' | '대기' | '확인필요';
 type AuthMode = 'signIn' | 'signUp';
@@ -445,6 +448,13 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     return () => { clearInterval(timer); subscription.remove(); };
   }, []);
   const [screen, applyScreen] = useState<AppScreen>(initialScreen);
+  const taejangAccess = useTaejangDailyReportAccess(
+    phase === 'ready' && !androidTouchSmoke ? client : null, config, session?.user.id,
+  );
+  const canOpenTaejang = !!taejangAccess.grant;
+  useEffect(() => {
+    if (screen === 'taejang' && !canOpenTaejang) applyScreen('home');
+  }, [screen, canOpenTaejang]);
   const [policyExpanded, setPolicyExpanded] = useState(false);
   useEffect(() => { if (screen !== 'settings') setPolicyExpanded(false); }, [screen]);
   const quickVoiceNavigation = useRef(false);
@@ -452,6 +462,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     Alert.alert('음성 기록을 먼저 확인해주세요', '녹음을 마치고 전사문을 저장하거나 버리면 다른 화면으로 이동할 수 있습니다.');
   }
   function setScreen(next: AppScreen) {
+    if (next === 'taejang' && !canOpenTaejang) return;
     if (next !== screen && quickVoiceNavigation.current) { warnPendingVoice(); return; }
     applyScreen(next);
   }
@@ -1331,8 +1342,10 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     {undoTask ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoTask.title} 완료 처리</Text><Pressable accessibilityRole="button" disabled={Boolean(taskBusyId)} onPress={() => void undoCompletedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
       {undoNote ? <View style={styles.undoBar}><Text style={styles.undoText}>메모를 완료했습니다. 기록은 업무일지에 남습니다.</Text><Pressable accessibilityRole="button" disabled={Boolean(noteBusyId)} onPress={() => void undoAcknowledgedNote()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
     {screen === 'work' && message ? <Text accessibilityLiveRegion="polite" style={[styles.messageInline, messageTone === 'error' ? styles.messageError : styles.messageInfo]}>{message}</Text> : null}
-    {screen === 'work' && client && config?.dataSchema === 'worklog' ? <TaejangDailyReport
-      key={`${config.supabaseUrl}:${session.user.id}`} client={client} config={config} ownerId={session.user.id} /> : null}
+    {screen === 'taejang' && canOpenTaejang ? <View style={{ gap: mobileTheme.spacing.control }}>
+      <Text accessibilityRole="header" style={workspaceStyles.title}>태장</Text>
+      <TaejangDailyReport access={taejangAccess} />
+    </View> : null}
     {screen === 'work' && client ? <WorkFolders initialFolder={workDestination?.ownerId === session.user.id ? workDestination.folderId : undefined} initialSection={workDestination?.ownerId === session.user.id && workDestination.kind === 'note' ? 'notes' : workDestination?.ownerId === session.user.id && workDestination.kind === 'completed' ? 'completed' : 'tasks'} onViewChange={(scope, section) => setWorkDestination({ ownerId: session.user.id, folderId: scope === 'all' ? undefined : scope, kind: section === 'notes' ? 'note' : section === 'completed' ? 'completed' : 'task' })} userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={openJournal} onSearch={() => { setSearchReturn('work'); setScreen('recordSearch'); }} onComplete={completeTaskInline} onEdit={record => record.action_kind === 'note' ? void openNoteEditor({ pageId: record.id, title: record.title }) : void openTaskEditor({ pageId: record.id, title: record.title, dueKey: record.due_at ? seoulDate(record.due_at) : undefined })} onDelete={record => confirmDeleteRecord(record.id, record.title, record.action_kind === 'note' ? 'note' : 'task')} onReminder={record => setReminderTarget({ recordId: record.id, title: record.title })}
       onReview={record => {
         const dueKey = record.due_at ? seoulDate(record.due_at) : undefined;
@@ -1547,7 +1560,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
   </View> : null}
   </View>
   <View style={[styles.bottomTabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-    {(['home', 'work'] as const).map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityLabel={tab === 'home' ? '홈' : '업무'} accessibilityState={{ selected: screen === tab }} style={styles.bottomTab} onPress={() => setScreen(tab)}><Text style={[styles.bottomTabText, screen === tab && styles.bottomTabSelected]}>{tab === 'home' ? '홈' : '업무'}</Text></Pressable>)}
+    {(canOpenTaejang ? [...primaryTabs, taejangTab] : primaryTabs).map(tab => <Pressable key={tab.key} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected: screen === tab.key }} style={styles.bottomTab} onPress={() => setScreen(tab.key)}><Text style={[styles.bottomTabText, screen === tab.key && styles.bottomTabSelected]}>{tab.label}</Text></Pressable>)}
   </View>
     {client && reminderTarget ? <WorklogReminderSheet key={`${session.user.id}:${reminderTarget.scheduleId || reminderTarget.recordId}`} client={client} target={reminderTarget} onClose={() => setReminderTarget(null)} /> : null}
   {repeatCreating && editTaskId ? <Modal visible animationType="slide" onRequestClose={()=>setRepeatCreating(false)}><ScrollView contentContainerStyle={[styles.scroll,{paddingTop:insets.top+16,paddingBottom:insets.bottom+24}]}><PanelHead eyebrow="기존 업무" title="반복 설정" onClose={()=>setRepeatCreating(false)}/><RepeatFromRecord initial={{transcript:editTitle,dueDate:editDate||seoulTodayKey(),dueTime:editTime}} busy={recurring.busy} onSave={async revision=>{try{const guard=reminderSessionEpoch.capture();const links=await findWorklogReminderLinks(client!,[editTaskId],guard);if(!guard()||repeatCreateTarget.current!==editTaskId)return false;if(await recurring.mutate(editTaskId,{op:'create',revision:{...revision,sourceScheduleIds:[...new Set(links[editTaskId]||[])].sort()}})){setRepeatCreating(false);setEditTaskId(null);return true;}}catch{showMessage('연결된 일정 확인 필요 · 입력을 유지했습니다. 다시 시도해주세요.','error');}return false;}}/>{recurring.error?<Text style={styles.errorText}>{recurring.error}</Text>:null}</ScrollView></Modal> : null}
