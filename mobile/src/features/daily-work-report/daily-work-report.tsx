@@ -27,22 +27,22 @@ const draftFor = (row: DailyReport | null): ReportDraft => ({
   work_done: row?.work_done ?? '', staff_notes: row?.staff_notes ?? '', other_notes: row?.other_notes ?? '',
 });
 
-type Props = { client: PlatformSupabaseClient; config: PublicPlatformConfig; ownerId: string };
 type Grant = { api: DailyReportApi; info: ReportGrant; current: () => boolean };
 
-export function TaejangDailyReport({ client, config, ownerId }: Props) {
-  const [grant, setGrant] = useState<Grant | null>(null);
-  const [opened, setOpened] = useState(false);
+export function useTaejangDailyReportAccess(client: PlatformSupabaseClient | null, config: PublicPlatformConfig | null, ownerId: string | undefined) {
+  const [granted, setGranted] = useState<(Grant & { client: PlatformSupabaseClient; config: PublicPlatformConfig; ownerId: string }) | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
   const retry = useRef<() => void>(() => undefined);
 
-  function revoke() {
-    setOpened(false);
-    setGrant(null);
-  }
+  function revoke() { setGranted(null); }
 
   useEffect(() => {
+    setGranted(null);
+    setChecking(false);
+    setCheckFailed(false);
+    retry.current = () => undefined;
+    if (!client || config?.dataSchema !== 'worklog' || !ownerId) return;
     let valid = true;
     let checkNumber = 0;
     const current = () => valid;
@@ -54,7 +54,12 @@ export function TaejangDailyReport({ client, config, ownerId }: Props) {
       setCheckFailed(false);
       try {
         const info = await api.access();
-        if (valid && request === checkNumber) setGrant({ api, info, current });
+        if (!valid || request !== checkNumber) return;
+        if (!info || typeof info.author_name !== 'string' || typeof info.can_read_all !== 'boolean') {
+          revoke();
+          return;
+        }
+        setGranted({ api, info, current, client, config, ownerId });
       } catch (error) {
         if (valid && request === checkNumber) {
           if (reportAccessLost(error)) revoke();
@@ -64,8 +69,6 @@ export function TaejangDailyReport({ client, config, ownerId }: Props) {
         if (valid && request === checkNumber) setChecking(false);
       }
     };
-    setGrant(null);
-    setOpened(false);
     retry.current = () => void check();
     const auth = client.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION' || session?.user.id === ownerId) return;
@@ -83,15 +86,23 @@ export function TaejangDailyReport({ client, config, ownerId }: Props) {
     };
   }, [client, config, ownerId]);
 
-  if (!grant?.current()) return null;
+  const grant = granted?.client === client && granted?.config === config && granted?.ownerId === ownerId
+    && granted?.current() ? granted : null;
+  return { grant, checking, checkFailed, retry: retry.current, revoke };
+}
+
+export function TaejangDailyReport({ access }: { access: ReturnType<typeof useTaejangDailyReportAccess> }) {
+  const [opened, setOpened] = useState(false);
+  const { grant, checking, checkFailed, retry, revoke } = access;
+  if (!grant) return null;
   return <>
     <Pressable accessibilityRole="button" disabled={checking} style={[workspaceStyles.card, workspaceStyles.heading]}
-      onPress={() => { setOpened(true); retry.current(); }}>
+      onPress={() => { setOpened(true); retry(); }}>
       <Text style={workspaceStyles.title}>{title}</Text>
       <Text style={workspaceStyles.link} accessibilityElementsHidden importantForAccessibility="no">›</Text>
     </Pressable>
     {opened ? <ReportSheet key={String(grant.info.can_read_all)} grant={grant} checking={checking} checkFailed={checkFailed}
-      retry={retry.current} onAccessLost={revoke} onClose={() => setOpened(false)} /> : null}
+      retry={retry} onAccessLost={revoke} onClose={() => setOpened(false)} /> : null}
   </>;
 }
 

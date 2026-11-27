@@ -29,6 +29,15 @@ const personal = { ...selected, id: '20000000-0000-4000-8000-000000000002', titl
 const endpoint = name => config.supabaseUrl + '/rest/v1/rpc/' + name;
 const rpcError = (message, status = 403) => Response.json({ message }, { status });
 
+const shellSource = readFileSync(new URL('../mobile/app/index.tsx', import.meta.url), 'utf8');
+test('the app shell mounts the granted report only under the Taejang bottom tab', () => {
+  assert.match(shellSource, /const taejangTab = \{ key: 'taejang', label: '태장' \}/);
+  assert.match(shellSource, /canOpenTaejang \? \[\.\.\.primaryTabs, taejangTab\] : primaryTabs/);
+  assert.match(shellSource, /screen === 'taejang' && canOpenTaejang[\s\S]{0,300}<TaejangDailyReport access=\{taejangAccess\}/);
+  assert.doesNotMatch(shellSource, /screen === 'work'.*<TaejangDailyReport/);
+  assert.match(shellSource, /screen === 'taejang' && !canOpenTaejang\) applyScreen\('home'\)/);
+});
+
 const source = readFileSync(new URL('../mobile/src/features/daily-work-report/daily-work-report.tsx', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
 
@@ -66,9 +75,14 @@ async function mount(transport, options = {}) {
   };
   const exports = {};
   new Function('React', 'require', 'exports', code)(React, name => imports[name], exports);
+  const client = { auth };
+  function TaejangTabHarness() {
+    const access = exports.useTaejangDailyReportAccess(client, options.config ?? config, ownerId);
+    return access.grant ? React.createElement(exports.TaejangDailyReport, { access }) : null;
+  }
   let renderer;
   await act(async () => {
-    renderer = create(React.createElement(exports.TaejangDailyReport, { client: { auth }, config, ownerId }));
+    renderer = create(React.createElement(TaejangTabHarness));
     await tick();
   });
   const root = () => renderer.root;
@@ -192,5 +206,17 @@ test('account switch closes report access and ignores a response already in flig
     await act(async () => { returnRows(Response.json([ownReport])); await tick(); });
     assert.equal(ui.buttons('태장 일일 업무일지').length, 0);
     assert.doesNotMatch(ui.content(), /가상 업무/);
+  } finally { await ui.close(); }
+});
+
+test('a non-Worklog environment never requests Taejang access', async () => {
+  let calls = 0;
+  const ui = await mount(async () => {
+    calls++;
+    throw Error('unexpected request');
+  }, { config: { ...config, dataSchema: 'public' } });
+  try {
+    assert.equal(calls, 0);
+    assert.equal(ui.buttons('태장 일일 업무일지').length, 0);
   } finally { await ui.close(); }
 });
