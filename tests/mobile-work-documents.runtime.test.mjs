@@ -5,7 +5,7 @@ import { documentSections } from '../mobile/src/features/work/work-document-mark
 
 test('document editor imports a long file, retains it after save failure, then opens, jumps and searches', async () => {
   const text = '# 사업 계획\n' + '공급 조건을 기록합니다.\n'.repeat(3000) + '## 가격 정책\n최소 주문량';
-  let current, attempts = 0, scroll;
+  let current, trashed, attempts = 0, deletionAttempts = 0, scroll;
   const queries = [];
   const mock = {
     DOCUMENT_MAX_BYTES: 1048576,
@@ -14,6 +14,19 @@ test('document editor imports a long file, retains it after save failure, then o
       return { rows: current ? [{ ...current, preview: '최소 주문량' }] : [], more: false };
     },
     readDocument: async () => current,
+    setDocumentDeleted: async (_client, owner, document, deleted) => {
+      assert.equal(owner, 'owner');
+      if (deleted) {
+        assert.equal(document.version, current.version);
+        if (++deletionAttempts === 1) throw Error('삭제를 확인하지 못했습니다.');
+        trashed = { ...current, version: current.version + 1 };
+        current = null;
+        return trashed.version;
+      }
+      assert.equal(document.version, trashed.version);
+      current = { ...trashed, version: trashed.version + 1 };
+      return current.version;
+    },
     saveDocument: async (_client, owner, draft) => {
       assert.equal(owner, 'owner');
       assert.equal(draft.body, text);
@@ -45,7 +58,7 @@ test('document editor imports a long file, retains it after save failure, then o
   try {
     render();
     await h.effects();
-    button('＋ 문서').props.onPress();
+    button('새 문서').props.onPress();
     button('파일 가져오기').props.onPress();
     await tick();
     assert.equal(input('문서 제목').props.value, '긴 기획안');
@@ -74,6 +87,41 @@ test('document editor imports a long file, retains it after save failure, then o
     assert.match(nativeWords(render()), /목차/);
     button('편집').props.onPress();
     assert.equal(input('문서 본문').props.value, text);
+    button('닫기').props.onPress();
+    const deleteFromList = () => input('긴 기획안 문서 삭제').props.onPress();
+    deleteFromList();
+    await tick();
+    assert.match(nativeWords(render()), /이 문서를 삭제할까요/);
+    button('취소').props.onPress();
+    assert.equal(deletionAttempts, 0);
+    input('긴 기획안 문서 열기').props.onPress();
+    await tick();
+    assert.ok(nativeNodes(render()).find(n => n.type === 'Modal' && nativeWords(n).includes('삭제')));
+    const readerDelete = nativeNodes(render()).filter(n => n.type === 'Pressable' && nativeWords(n).trim() === '삭제').at(-1);
+    readerDelete.props.onPress();
+    button('취소').props.onPress();
+    assert.match(nativeWords(render()), /목차/);
+    button('닫기').props.onPress();
+    deleteFromList();
+    await tick();
+    button('문서 삭제').props.onPress();
+    await tick();
+    assert.match(nativeWords(render()), /삭제를 확인하지 못했습니다/);
+    assert.ok(current);
+    const confirm = button('문서 삭제').props.onPress;
+    confirm();
+    confirm();
+    await tick();
+    render();
+    await h.effects();
+    assert.equal(deletionAttempts, 2);
+    assert.equal(input('긴 기획안 문서 열기'), undefined);
+    input('긴 기획안 삭제 실행 취소').props.onPress();
+    await tick();
+    render();
+    await h.effects();
+    assert.ok(input('긴 기획안 문서 열기'));
+    assert.equal(current.body, text);
   } finally {
     h.close();
   }

@@ -55,6 +55,33 @@ test('long documents round-trip without truncation, search Korean body, scope fo
     await assert.rejects(save(owner, doc, 1, '변경', '다른 계정', null), { code: '42501' });
     await db.exec('reset role; set role anon');
     await assert.rejects(list(owner, true, null, ''), { code: '42501' });
+
+    // Upgrade an existing database without changing older list, read, or save clients.
+    await db.exec('reset role');
+    await db.exec(fs.readFileSync('supabase/migrations/20261127234621_work_document_trash.sql', 'utf8'));
+    const trash = (who, key, version, deleted) => db.query(
+      'select worklog.set_my_work_document_deleted($1,$2,$3,$4) as version', [who, key, version, deleted]);
+    await db.exec('set role anon');
+    await assert.rejects(trash(owner, doc, 1, true), { code: '42501' });
+    await login(other);
+    await assert.rejects(trash(owner, doc, 1, true), { code: '42501' });
+    await assert.rejects(trash(other, doc, 1, true), { code: 'PT409' });
+    await login(owner);
+    await assert.rejects(trash(owner, doc, 0, true), { code: 'PT409' });
+    assert.equal((await list(owner, true, null, '최소 주문량')).rows.length, 1);
+    await assert.rejects(db.query('update worklog.work_documents set deleted_at = now() where id=$1', [doc]), { code: '42501' });
+    await assert.rejects(db.query('delete from worklog.work_documents where id=$1', [doc]), { code: '42501' });
+    assert.equal((await trash(owner, doc, 1, true)).rows[0].version, 2);
+    assert.equal((await trash(owner, doc, 1, true)).rows[0].version, 2);
+    assert.equal((await list(owner, true, null, '최소 주문량')).rows.length, 0);
+    assert.equal((await db.query('select * from worklog.work_documents where id=$1', [doc])).rows.length, 0);
+    await assert.rejects(save(owner, doc, 1, '오래된 저장', body, child), { code: 'PT409' });
+    await login(other);
+    await assert.rejects(trash(other, doc, 2, false), { code: 'PT409' });
+    await login(owner);
+    assert.equal((await trash(owner, doc, 2, false)).rows[0].version, 3);
+    assert.equal((await trash(owner, doc, 2, false)).rows[0].version, 3);
+    assert.deepEqual((await db.query('select title,body from worklog.work_documents where id=$1', [doc])).rows, [{ title: '편집됨', body }]);
   } finally {
     await db.close();
   }

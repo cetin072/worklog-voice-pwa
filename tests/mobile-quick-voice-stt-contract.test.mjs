@@ -63,7 +63,7 @@ test('Quick Voice automatically persists a valid STT transcript without a review
   assert.match(flow, /transcribeQuickVoiceCapture/);
   assert.match(recorder, /createQuickVoiceSaveAttempt\(\{/);
   assert.match(recorder, /const saved = await saveAttempt\.current\.save\(\)/);
-  assert.match(recorder, /브리핑 카드의 ✏️/);
+  assert.match(recorder, /기록을 편집해 수정/);
   assert.doesNotMatch(recorder, /setQuickPhase\('review'\)/);
   assert.doesNotMatch(recorder, /전사문을 확인한 뒤 저장하세요/);
   assert.doesNotMatch(recorder, /runQuickVoiceFastPath/);

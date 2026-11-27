@@ -83,7 +83,7 @@ export function WorkFolders({ client, userId, revision, initialFolder, initialSe
   return <View style={styles.card}>
     <View style={styles.heading}><Text style={styles.title}>업무</Text><View style={styles.actions}>
       <Pressable accessibilityRole="button" accessibilityLabel="새로고침" disabled={disabled} style={styles.refresh} onPress={() => setRefresh(n => n + 1)}><Text style={styles.link}>새로고침</Text></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="업무 메뉴" style={styles.menuButton} disabled={busy || externalBusy} onPress={() => setMenu('workspace')}><Text style={styles.text}>⋯</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="업무 메뉴" style={styles.menuButton} disabled={busy || externalBusy} onPress={() => setMenu('workspace')}><Text style={styles.buttonText}>업무 메뉴</Text></Pressable>
     </View></View>
     <View style={styles.heading}><Text style={styles.help}>폴더 · 남은 할 일</Text><Pressable accessibilityRole="button" accessibilityLabel={currentFolder ? '하위 폴더 만들기' : '폴더 만들기'} style={styles.refresh} disabled={disabled || !snapshot} onPress={() => setEditor({ id: randomUUID(), name: '', parent_id: currentFolder?.id || null, version: -1 })}><Text style={styles.link}>＋ 폴더</Text></Pressable></View>
     <View style={styles.folders}>
@@ -93,28 +93,27 @@ export function WorkFolders({ client, userId, revision, initialFolder, initialSe
     </View>
     <Text style={styles.scopeLabel}>{scope === 'all' ? '전체 업무' : scope === null ? '미분류' : folderPath(folders, scope)}{currentFolder && folders.some(item => item.parent_id === currentFolder.id) ? ' · 하위 폴더 포함' : ''}</Text>
     <View style={styles.tabs}>{([['tasks', '할 일'], ['notes', '메모·자료'], ['completed', '완료']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: section === value }} disabled={busy || externalBusy} style={[styles.tab, section === value && styles.active]} onPress={() => { setSection(value); setExpanded(null); }}><Text style={[styles.tabText, section === value && styles.selectedText]}>{label}</Text></Pressable>)}</View>
-    {section === 'notes' ? <WorkDocuments client={client} owner={userId} scope={scope} folders={folders} revision={`${revision}:${refresh}`} /> : null}
+    {section === 'notes' ? <>
+      <WorkDocuments client={client} owner={userId} scope={scope} folders={folders} revision={`${revision}:${refresh}`} />
+      <Text accessibilityRole="header" style={styles.notesHeading}>짧은 메모</Text>
+    </> : null}
     {section === 'completed' ? <Pressable accessibilityRole="button" accessibilityLabel="날짜별 업무일지" style={styles.refresh} onPress={onJournal}><Text style={styles.link}>날짜별 업무일지 ›</Text></Pressable> : null}
     {loading ? <Text accessibilityLiveRegion="polite" style={styles.help}>{snapshot ? '갱신 중…' : '불러오는 중…'}</Text> : null}
     {busy ? <Text accessibilityLiveRegion="polite" style={styles.help}>저장 확인 중…</Text> : null}
     {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
     {sameScope && !loading && !error && !records.length ? <Text style={styles.empty}>{section === 'completed' ? '완료한 기록이 없습니다.' : section === 'notes' ? '짧은 메모가 없습니다.' : '남은 할 일이 없습니다.'}</Text> : null}
     {records.map(record => <View key={record.id} style={styles.record}>
-      <View style={styles.recordLine}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}>
-          <Text style={styles.text}>{section === 'completed' ? '✓ ' : ''}{record.title}</Text>
-          {scope === 'all' || (currentFolder && record.folder_id !== currentFolder.id) ? <Text style={styles.help}>{folderPath(folders, record.folder_id)}</Text> : null}
-          {section === 'completed' ? <Text style={styles.help}>완료 {record.completed_at || record.acknowledged_at ? seoulDate(record.completed_at || record.acknowledged_at!) : '날짜 미확인'}</Text> : record.due_at ? <Text style={styles.help}>기한 {seoulDate(record.due_at)}</Text> : null}
-        </Pressable>
-        <View style={styles.recordActions}>
-          <View style={styles.actions}>
-            {section !== 'completed' ? <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 수정`} style={recordRowStyles.inlineEdit} disabled={disabled} onPress={() => onEdit(record)}><Text style={recordRowStyles.inlineEditText}>✏️</Text></Pressable> : null}
-            <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 더 보기`} style={styles.menuButton} disabled={disabled} onPress={() => setMenu(record)}><Text style={styles.text}>⋯</Text></Pressable>
-          </View>
-          {section !== 'completed' ? <RecordCompleteButton label={`${record.title} 완료`} disabled={disabled} onPress={() => void mutate(() => record.action_kind === 'note' ? onCompleteNote({ pageId: record.id, title: record.title }) : onComplete({ pageId: record.id, title: record.title, status: record.status === 'waiting' ? '대기' : record.status === 'needs_review' ? '확인필요' : '진행중', nextAttentionAt: record.next_attention_at || undefined }))} /> : null}
-        </View>
-      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}>
+        <Text style={styles.text}>{section === 'completed' ? '✓ ' : ''}{record.title}</Text>
+        {scope === 'all' || (currentFolder && record.folder_id !== currentFolder.id) ? <Text style={styles.help}>{folderPath(folders, record.folder_id)}</Text> : null}
+        {section === 'completed' ? <Text style={styles.help}>완료 {record.completed_at || record.acknowledged_at ? seoulDate(record.completed_at || record.acknowledged_at!) : '날짜 미확인'}</Text> : record.due_at ? <Text style={styles.help}>기한 {seoulDate(record.due_at)}</Text> : null}
+      </Pressable>
       {expanded === record.id ? <Text selectable style={styles.body}>{record.content || record.original_text || '추가 본문이 없습니다.'}</Text> : null}
+      <View style={styles.recordActions}>
+        {section !== 'completed' ? button(`${record.title} 수정`, () => onEdit(record), disabled, '편집') : null}
+        {button(`${record.title} 더 보기`, () => setMenu(record), disabled, '더보기')}
+        {section !== 'completed' ? <RecordCompleteButton label={`${record.title} 완료`} disabled={disabled} onPress={() => void mutate(() => record.action_kind === 'note' ? onCompleteNote({ pageId: record.id, title: record.title }) : onComplete({ pageId: record.id, title: record.title, status: record.status === 'waiting' ? '대기' : record.status === 'needs_review' ? '확인필요' : '진행중', nextAttentionAt: record.next_attention_at || undefined }))} /> : null}
+      </View>
     </View>)}
     {sameScope && snapshot && nextOffset < snapshot.total_count ? button('더 불러오기', () => void loadMore()) : null}
     {editor || moving || menu ? <Modal transparent animationType="fade" onShow={() => editor && folderNameInput.current?.focus()} onRequestClose={closeDialog}>
@@ -164,15 +163,16 @@ const styles = StyleSheet.create({
   tab: { ...workspaceStyles.filter, flex: 1, alignItems: 'center', paddingHorizontal: 2 },
   tabText: { ...recordRowStyles.taskMeta, color: mobileTheme.colors.text, fontWeight: '700' },
   active: workspaceStyles.filterActive, selectedText: { color: mobileTheme.colors.link },
-  button: { minHeight: mobileTheme.size.touchTarget, justifyContent: 'center', padding: 12, borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border },
+  button: { minHeight: 48, justifyContent: 'center', padding: 10, borderRadius: mobileTheme.radius.control, backgroundColor: mobileTheme.colors.surface, borderWidth: 1, borderColor: mobileTheme.colors.border },
   buttonText: { color: mobileTheme.colors.link, fontSize: 14, fontWeight: '700' }, disabled: { opacity: 0.5 },
-  menuButton: { minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  menuButton: { minWidth: 48, minHeight: 48, justifyContent: 'center', paddingHorizontal: 6 },
   editorOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }, editorScroll: { flex: 1 },
   editorContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   editorDialog: { width: '100%', maxWidth: 460, alignSelf: 'center', padding: 20, gap: 12, borderRadius: 16, backgroundColor: mobileTheme.colors.surface },
   input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, color: mobileTheme.colors.text },
   record: { gap: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: mobileTheme.colors.borderSubtle },
-  recordLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }, recordActions: { gap: 6 },
-  open: { flex: 1, minHeight: 48, gap: 4, justifyContent: 'center' },
+  notesHeading: { ...recordRowStyles.taskTitle, marginTop: 8 },
+  recordActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  open: { minHeight: 48, gap: 4, justifyContent: 'center' },
   error: { color: mobileTheme.colors.danger, lineHeight: 22 },
 });

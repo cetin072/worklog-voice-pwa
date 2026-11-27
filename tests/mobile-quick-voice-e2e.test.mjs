@@ -15,7 +15,7 @@ test('Quick Voice source contract stays provider-neutral while separating captur
   assert.match(card, /transcribeQuickVoiceCapture/);
   assert.match(card, /createQuickVoiceSaveAttempt/);
   assert.match(card, /const saved = await saveAttempt\.current\.save\(\)/);
-  assert.match(card, /브리핑 카드의 ✏️/);
+  assert.match(card, /기록을 편집해 수정/);
   assert.match(card, /clientRequestId/);
   assert.doesNotMatch(card, /전사문을 확인한 뒤 저장하세요/);
   assert.doesNotMatch(card, /whisper\.rn|initWhisper|transcribeData/);

@@ -10,7 +10,7 @@ assert.ok(expression);
 const js=ts.transpileModule('function render(){return ('+expression+');}',{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
 test('recording Cancel gets a fresh enabled native control instead of reusing the disabled preparing shortcut',()=>{
  let cancellations=0,opens=0;
- const scope={React:{createElement:(type,props,...children)=>({type,props,children})},Pressable:'Pressable',Text:'Text',styles:{},isRecording:false,quickActive:true,onOpenWorklogInput:()=>opens++,cancelQuickVoice:()=>cancellations++};
+ const scope={React:{createElement:(type,props,...children)=>({type,props,children})},Pressable:'Pressable',Text:'Text',styles:{},embedded:false,isRecording:false,quickActive:true,onOpenWorklogInput:()=>opens++,cancelQuickVoice:()=>cancellations++};
  const render=new Function('scope','with(scope){'+js+';return render;}')(scope);
  const preparing=render();assert.equal(preparing.props.disabled,true);
  scope.isRecording=true;
