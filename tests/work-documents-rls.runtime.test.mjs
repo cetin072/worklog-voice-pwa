@@ -58,7 +58,7 @@ test('long documents round-trip without truncation, search Korean body, scope fo
 
     // Upgrade an existing database without changing older list, read, or save clients.
     await db.exec('reset role');
-    await db.exec(fs.readFileSync('supabase/migrations/20261128000500_work_document_trash.sql', 'utf8'));
+    await db.exec(fs.readFileSync('supabase/migrations/20261127234621_work_document_trash.sql', 'utf8'));
     const trash = (who, key, version, deleted) => db.query(
       'select worklog.set_my_work_document_deleted($1,$2,$3,$4) as version', [who, key, version, deleted]);
     await db.exec('set role anon');
