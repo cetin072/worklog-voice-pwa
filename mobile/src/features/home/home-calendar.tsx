@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePlatform } from '@/src/providers/platform-provider';
-import { personalCalendarMessage, personalCalendarRequest, type CalendarMonth, type PersonalCalendarEvent } from '../calendar/personal-calendar-api';
+import { personalCalendarMessage, readHomeCalendarMonth, type PersonalCalendarEvent } from '../calendar/personal-calendar-api';
 import type { BriefingSchedule } from '@/src/platform/worklog-api';
 import { CALENDAR_WEEKDAYS, calendarDays, calendarTime, eventsOnDay, seoulDate, shiftDay, shiftMonth } from './home-calendar-model';
 import { mobileTheme } from '@/src/ui/theme';
@@ -26,7 +26,7 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
   const { client, config, session } = usePlatform();
   const [selected, setSelected] = useState(today), [expanded, setExpanded] = useState(false);
   const [opened, setOpened] = useState<string | null>(null), [reload, setReload] = useState(0);
-  const [result, setResult] = useState<{ key: string; events: PersonalCalendarEvent[]; limited: boolean } | null>(null);
+  const [result, setResult] = useState<{ key: string; events: PersonalCalendarEvent[]; limited: boolean; personalOnly: boolean } | null>(null);
   const [error, setError] = useState('');
   const owner = session?.user.id, integrated = config?.dataSchema === 'worklog';
   const days = calendarDays(selected, expanded);
@@ -44,8 +44,8 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     setError('');
     if (!integrated || !client || !config || !owner) return;
     const access = { client, config, ownerId: owner, current };
-    void measureStartup('calendar', () => Promise.all(monthKey.split(',').map(month => personalCalendarRequest<CalendarMonth>(access, 'get_my_calendar_month', { p_month: month + '-01' }))))
-      .then(values => { if (current()) setResult({ key, events: values.flatMap(v => v.events), limited: values.some(v => v.limited) }); })
+    void measureStartup('calendar', () => Promise.all(monthKey.split(',').map(month => readHomeCalendarMonth(access, month))))
+      .then(values => { if (current()) setResult({ key, events: values.flatMap(v => v.events), limited: values.some(v => v.limited), personalOnly: values.some(v => v.personalOnly) }); })
       .catch(e => { if (current()) { const message = personalCalendarMessage(e); setError(message.includes('입력은 유지') ? '일정을 불러오지 못했습니다. 다시 시도해주세요.' : message); } });
     return () => { alive = false; };
   }, [client, config, owner, key, integrated, monthKey]);
@@ -100,7 +100,8 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
     <View style={styles.row}><Text accessibilityRole="header" style={styles.subtitle}>{selected === today ? '오늘 일정' : `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8))}일 일정`}</Text>{integrated ? action('일정 관리', () => onOpenCalendar(selected)) : null}</View>
     {busy || (!rows.length && (external.restoring || external.loading)) ? <View style={styles.row}><ActivityIndicator /><Text style={styles.muted}>일정 불러오는 중…</Text></View> : null}
     {error ? <View><Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>{action('일정 다시 불러오기', () => setReload(n => n + 1))}</View> : null}
-    {(loaded && result.limited) || external.error || external.limited ? <Text accessibilityLiveRegion="polite" style={styles.error}>일부 일정을 표시할 수 없습니다.</Text> : null}
+    {loaded && result.personalOnly ? <View><Text accessibilityLiveRegion="polite" style={styles.muted}>업무수첩 개인 일정은 표시 중입니다. 회사 일정은 불러오지 못했습니다. ERP 역할 미리보기 중이라면 종료 후 다시 불러와 주세요.</Text>{action('일정 다시 불러오기', () => setReload(n => n + 1))}</View> : null}
+    {(loaded && result.limited && !result.personalOnly) || external.error || external.limited ? <Text accessibilityLiveRegion="polite" style={styles.error}>일부 일정을 표시할 수 없습니다.</Text> : null}
     {!busy && !error && !external.restoring && !external.loading && !external.error && !external.limited && !rows.length ? <Text style={styles.muted}>{integrated && loaded && !result.limited ? '이 날짜에 등록된 일정이 없습니다.' : '현재 확인된 일정이 없습니다.'}</Text> : null}
     {rows.map(event => {
       const known = fallback.find(s => s.scheduleId === event.id);
