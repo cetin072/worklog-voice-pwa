@@ -9,6 +9,12 @@ export type PatchNoteEntry = {
 // Keep only changes that are already merged to main. Development-only notes live in .patch-notes/.
 export const MOBILE_PATCH_NOTES: PatchNoteEntry[] = [
   {
+    date: '2026-11-27',
+    title: '태장 ERP 일일 업무일지 연동',
+    summary: '작성 권한이 있는 태장 계정은 업무 탭에서 ERP와 같은 일일 업무일지를 작성하고 조회할 수 있습니다.',
+    items: ['작성일의 내 일정 중 필요한 항목만 골라 미리 본 뒤 일지에 추가할 수 있습니다.'],
+  },
+  {
     date: '2026-11-25',
     title: '메모에서 홈 일정으로 바로 저장',
     summary: '메모를 편집할 때 홈 일정을 선택하면 기존 날짜와 시작 시간으로 캘린더에 저장할 수 있습니다.',
