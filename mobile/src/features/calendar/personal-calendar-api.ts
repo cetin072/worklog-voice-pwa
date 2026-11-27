@@ -1,20 +1,11 @@
-import type { PlatformSupabaseClient } from '@/src/platform/supabase';
-import type { PublicPlatformConfig } from '@/src/platform/config';
+import { verifiedPublicRpc, type VerifiedRpcAccess } from '@/src/platform/verified-public-rpc';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
 export type PersonalCalendarEvent = {id: string;source: string;title: string;starts_at: string;ends_at: string|null;all_day: boolean;location: string|null;description: string;status: string;updated_at: string;editable: boolean};
 export type CalendarMonth = {month: string;today: string;events: PersonalCalendarEvent[];limited: boolean;personalOnly?: boolean};
-export type CalendarAccess = {client: PlatformSupabaseClient;config: PublicPlatformConfig;ownerId: string;current(): boolean};
+export type CalendarAccess = VerifiedRpcAccess;
 /** Same ERP RPCs and schedule IDs. Token pinned to verified owner, never a mirror. */
 export async function personalCalendarRequest<T>(access: CalendarAccess,name: 'get_my_calendar_month'|'save_my_calendar_event'|'cancel_my_calendar_event',body: Record<string,unknown>,fetchImpl: typeof fetch=fetch): Promise<T> {
- const {client,config,ownerId,current}=access;
- if(config.dataSchema!=='worklog'||!current())throw Error('CALENDAR_OWNER_CHANGED');
- const token=await getFreshAccessToken(client),actor=await client.auth.getUser(token);
- if(!current()||actor.error||actor.data.user?.id!==ownerId)throw Error('CALENDAR_OWNER_CHANGED');
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20_000);
- try {
-  const r=await fetchImpl(config.supabaseUrl.replace(/\/$/,'')+'/rest/v1/rpc/'+name,{method:'POST',redirect:'error',signal:controller.signal,headers:{apikey:config.publishableKey,authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(body)});
-  const value=await r.json();if(!current())throw Error('CALENDAR_OWNER_CHANGED');if(!r.ok)throw Error(value.message||'CALENDAR_UNAVAILABLE');return value as T;
- }finally{clearTimeout(timer);}
+ return verifiedPublicRpc<T>(access,name,body,{ownerChanged:'CALENDAR_OWNER_CHANGED',unavailable:'CALENDAR_UNAVAILABLE'},fetchImpl);
 }
 /** Read-only Worklog recovery. Normal workspaces still use PostgreSQL RLS;
  * this never requests ERP notices, other owners, or write access. */
@@ -22,7 +13,7 @@ export async function readHomeCalendarMonth(access: CalendarAccess, month: strin
   try {
     return await personalCalendarRequest<CalendarMonth>(access, 'get_my_calendar_month', {p_month: month + '-01'}, fetchImpl);
   } catch (error) {
-    if (!(error instanceof Error) || error.message !== 'CALENDAR_FORBIDDEN') throw error;
+    if (!(error instanceof Error) || !/^CALENDAR_FORBIDDEN(?: |$)/.test(error.message)) throw error;
   }
   const {client,config,ownerId,current}=access;
   if (config.dataSchema !== 'worklog' || !current()) throw Error('CALENDAR_OWNER_CHANGED');

@@ -2,6 +2,7 @@ import { QUICK_VOICE_LAYOUT } from '@/src/features/voice/quick-voice-layout';
 import { organizeVoiceRecord } from '@/src/features/work/voice-folder';
 import { workspaceStyles } from '@/src/ui/workspace-styles';
 import { WorkFolders } from '@/src/features/work/work-folders';
+import { TaejangDailyReport } from '@/src/features/daily-work-report/daily-work-report';
 import { HabitsScreen } from '@/src/features/habits/habits-screen';
 import { MyManagementScreen } from '@/src/features/management/my-management-screen';
 import { repeatHistory, repeatSummary } from '@/src/features/recurring/recurrence-model';
@@ -1330,6 +1331,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     {undoTask ? <View style={styles.undoBar}><Text style={styles.undoText}>{undoTask.title} 완료 처리</Text><Pressable accessibilityRole="button" disabled={Boolean(taskBusyId)} onPress={() => void undoCompletedTask()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
       {undoNote ? <View style={styles.undoBar}><Text style={styles.undoText}>메모를 완료했습니다. 기록은 업무일지에 남습니다.</Text><Pressable accessibilityRole="button" disabled={Boolean(noteBusyId)} onPress={() => void undoAcknowledgedNote()}><Text style={styles.undoAction}>실행 취소</Text></Pressable></View> : null}
     {screen === 'work' && message ? <Text accessibilityLiveRegion="polite" style={[styles.messageInline, messageTone === 'error' ? styles.messageError : styles.messageInfo]}>{message}</Text> : null}
+    {screen === 'work' && client && config?.dataSchema === 'worklog' ? <TaejangDailyReport
+      key={`${config.supabaseUrl}:${session.user.id}`} client={client} config={config} ownerId={session.user.id} /> : null}
     {screen === 'work' && client ? <WorkFolders initialFolder={workDestination?.ownerId === session.user.id ? workDestination.folderId : undefined} initialSection={workDestination?.ownerId === session.user.id && workDestination.kind === 'note' ? 'notes' : workDestination?.ownerId === session.user.id && workDestination.kind === 'completed' ? 'completed' : 'tasks'} onViewChange={(scope, section) => setWorkDestination({ ownerId: session.user.id, folderId: scope === 'all' ? undefined : scope, kind: section === 'notes' ? 'note' : section === 'completed' ? 'completed' : 'task' })} userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={openJournal} onSearch={() => { setSearchReturn('work'); setScreen('recordSearch'); }} onComplete={completeTaskInline} onEdit={record => record.action_kind === 'note' ? void openNoteEditor({ pageId: record.id, title: record.title }) : void openTaskEditor({ pageId: record.id, title: record.title, dueKey: record.due_at ? seoulDate(record.due_at) : undefined })} onDelete={record => confirmDeleteRecord(record.id, record.title, record.action_kind === 'note' ? 'note' : 'task')} onReminder={record => setReminderTarget({ recordId: record.id, title: record.title })}
       onReview={record => {
         const dueKey = record.due_at ? seoulDate(record.due_at) : undefined;
