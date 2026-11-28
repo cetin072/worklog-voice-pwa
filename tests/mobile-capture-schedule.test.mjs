@@ -68,6 +68,34 @@ test('compact cards never auto-save an unconfirmed, mismatched, multiple, or pas
   assert.equal(captureScheduleInput(bookingCard, '2026-11-29T04:00:00Z').kind, 'review');
 });
 
+test('role-based candidates work with different confirmation words and date layouts', () => {
+  for (const [text, start] of [
+    ['방문 예약\n방문이 확정되었습니다.\n매장: 예시 공방\n방문일시: 2026-12-06 14:30\n스폰서 추천\n유료 서비스 12. 8. (화) 오후 3:00', '2026-12-06T14:30:00+09:00'],
+    ['진료가 확정됐습니다\n병원: 예시 의원\n12월 6일 (일요일)\n오전 10시 15분', '2026-12-06T10:15:00+09:00'],
+    ['상담 확정\n예시 상담실\n12/6 (일) 오후 12:00\n결제 일시: 11. 29. (일) 오후 1:00', '2026-12-06T12:00:00+09:00'],
+  ]) assert.equal(captureScheduleInput(text, cardNow).startsAt, start, text);
+});
+test('only safe fields from one candidate become local hints; no write date or time is set', () => {
+  const badDay = captureScheduleInput(bookingCard.replace('(일)', '(월)'), cardNow);
+  assert.deepEqual(badDay.reviewHint, { date: '', time: '13:00' });
+  const noClock = captureScheduleInput(bookingCard.replace(' 오후 1:00', ''), cardNow);
+  assert.deepEqual(noClock.reviewHint, { date: '2026-11-29', time: '' });
+  const noMeridiem = captureScheduleInput(bookingCard.replace('오후 1:00', '1:00'), cardNow);
+  assert.deepEqual(noMeridiem.reviewHint, { date: '2026-11-29', time: '' });
+  for (const result of [badDay, noClock, noMeridiem]) {
+    assert.equal(result.kind, 'review');
+    assert.equal(result.title, '예시 바버숍');
+    assert.equal(result.date, '');
+    assert.equal(result.time, '');
+    assert.equal(result.startsAt, undefined);
+    assert.equal(result.transcript, '캡처 일정 확인 필요');
+  }
+  for (const injected of ['예약이 취소되었습니다', '다른 업체\n11. 29. (일) 오후 4:00']) {
+    const result = captureScheduleInput(bookingCard.replace('실장 예시', injected), cardNow);
+    assert.equal(result.kind, 'review');
+    assert.equal(result.reviewHint, undefined);
+  }
+});
 test('single explicit appointment becomes one canonical existing-core schedule', () => {
   const value = captureScheduleInput('2026년 11월 3일 오후 3시 김해 회사에서 회의합니다.\n오전 9:10', now);
   assert.equal(value.kind,'schedule');assert.equal(value.date,'2026-11-03');assert.equal(value.time,'15:00');

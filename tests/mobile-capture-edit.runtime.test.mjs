@@ -113,3 +113,23 @@ test('explicit cancelled-screen registration invokes one restart and shows the n
  await Promise.all([h.api.registerAgain(),h.api.registerAgain()]);
  assert.equal(h.writes.length,1);assert.equal(h.state.setEntry.saved.pageId,'new-record');assert.equal(h.state.setEntry.undone,false);assert.equal(h.state.setBusy,false);
 });
+
+test('review hint fills blank fields only after an owned read and never writes on opening', async () => {
+  const empty = { title: '확인 필요 예약', dueDate: '', dueTime: '' };
+  const hint = { title: empty.title, reviewHint: { date: '', time: '13:00' } };
+  const h = harness(empty);
+  h.scope.visible.decision = hint;
+  const opened = h.api.openEditor(); await tick();
+  assert.equal(h.state.setTime, '');
+  await h.api.saveEdit();
+  assert.equal(h.save(), undefined);
+  h.pending[0].resolve(empty); await opened;
+  assert.equal(h.state.setTime, '13:00');
+  assert.equal(h.state.setDate, '');
+  assert.equal(h.save(), undefined);
+  const existing = harness(empty);
+  existing.scope.visible.decision = hint;
+  const reopen = existing.api.openEditor(); await tick();
+  existing.pending[0].resolve({ ...empty, dueDate: '2030-11-03', dueTime: '16:00' }); await reopen;
+  assert.equal(existing.state.setTime, '16:00', 'server time has precedence');
+});
