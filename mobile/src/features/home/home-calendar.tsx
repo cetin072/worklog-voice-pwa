@@ -11,6 +11,7 @@ import { usePlatform } from '@/src/providers/platform-provider';
 import { personalCalendarMessage, readHomeCalendarMonth, type PersonalCalendarEvent } from '../calendar/personal-calendar-api';
 import type { BriefingSchedule } from '@/src/platform/worklog-api';
 import { CALENDAR_WEEKDAYS, calendarDays, calendarTime, eventsOnDay, seoulDate, shiftDay, shiftMonth } from './home-calendar-model';
+import { ScheduleReminderWarning } from './schedule-reminder-label';
 import { mobileTheme } from '@/src/ui/theme';
 
 const weekendColorByColumn: Readonly<Partial<Record<number, string>>> = {
@@ -18,9 +19,10 @@ const weekendColorByColumn: Readonly<Partial<Record<number, string>>> = {
   6: mobileTheme.colors.link,
 };
 
-export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, today, fallback, onOpenCalendar, renderSchedule, focusId, focusDate, onTodayCount }: {
+export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, today, fallback, onOpenCalendar, onReminderOptions, renderSchedule, focusId, focusDate, onTodayCount }: {
   repeatingWorks?: RepeatingWork[]; onOpenRepeating?(id:string,date?:string): void;
   revision: number; today: string; fallback: BriefingSchedule[]; onOpenCalendar(day?: string): void; onTodayCount(count: number | null): void;
+  onReminderOptions(): void;
   renderSchedule(schedule: BriefingSchedule): ReactNode; focusId?: string | null; focusDate?: string;
 }) {
   const { client, config, session } = usePlatform();
@@ -90,14 +92,13 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
             isToday && styles.today,
             color && { color },
             isSelected && styles.selected,
-            isSelected && color && { backgroundColor: color },
           ]}>{Number(day.slice(8))}</Text>
           <Text style={styles.dot}>{hasEvents ? '•' : ' '}</Text>
         </Pressable>;
       })}
     </View>)}
     <View style={styles.divider} />
-    <View style={styles.row}><Text accessibilityRole="header" style={styles.subtitle}>{selected === today ? '오늘 일정' : `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8))}일 일정`}</Text>{integrated ? action('일정 관리', () => onOpenCalendar(selected)) : null}</View>
+    <View style={styles.row}><Text accessibilityRole="header" style={styles.subtitle}>{selected === today ? '오늘 일정' : `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8))}일 일정`}</Text>{action('알림 안내', onReminderOptions)}{integrated ? action('일정 관리', () => onOpenCalendar(selected)) : null}</View>
     {busy || (!rows.length && (external.restoring || external.loading)) ? <View style={styles.row}><ActivityIndicator /><Text style={styles.muted}>일정 불러오는 중…</Text></View> : null}
     {error ? <View><Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>{action('일정 다시 불러오기', () => setReload(n => n + 1))}</View> : null}
     {loaded && result.personalOnly ? <View><Text accessibilityLiveRegion="polite" style={styles.muted}>업무수첩 개인 일정은 표시 중입니다. 회사 일정은 불러오지 못했습니다. ERP 역할 미리보기 중이라면 종료 후 다시 불러와 주세요.</Text>{action('일정 다시 불러오기', () => setReload(n => n + 1))}</View> : null}
@@ -112,12 +113,13 @@ export function HomeCalendar({ repeatingWorks = [], onOpenRepeating, revision, t
         <Text style={styles.time}>{calendarTime(event, selected)}</Text>
         <View style={styles.eventMain}>
           <Text style={recordRowStyles.taskTitle}>{event.title}</Text>
+          {known?.scheduleId ? <ScheduleReminderWarning id={known.scheduleId} /> : null}
           {selected !== today ? <Text style={recordRowStyles.taskMeta}>{seoulDate(event.starts_at).replaceAll('-', '. ')}</Text> : null}
         </View>
       </>;
       if (!canOpen) return <View key={event.id} style={styles.event}>{content}</View>;
       return <View key={event.id}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`${event.title} 일정 상세`} accessibilityState={{ expanded: opened === event.id }} style={styles.event}
+        <Pressable accessibilityRole="button" accessibilityHint="일정 상세 열기" accessibilityState={{ expanded: opened === event.id }} style={styles.event}
           onPress={() => repeating ? onOpenRepeating?.(event.id, seoulDate(event.starts_at)) : setOpened(id => id === event.id ? null : event.id)}>
           {content}<Text style={styles.muted}>›</Text>
         </Pressable>

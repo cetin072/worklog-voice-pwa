@@ -131,9 +131,8 @@ test('QA-only Whisper fallback build bypasses only SpeechRecognizer and retains 
   assert.match(home, /saveWorklog: androidTouchSmoke \? async \(\) => \(\{\}\) : async \(transcript, options\)/);
 });
 
-test('Whisper fallback exposes original to processed PCM duration in the UI and debug evidence', () => {
-  assert.match(card, /formatQuickVoicePcmDuration/);
-  assert.match(card, /PCM \$\{formatDuration\(original\)\} → Whisper \$\{formatDuration\(audio\.durationMs\)\}/);
+test('Whisper fallback shows recording length to the user and retains compaction details in debug evidence', () => {
+  assert.match(card, /녹음 길이 \{formatDuration\(quickAudio.signal.originalDurationMs \?\? quickAudio.durationMs\)/);
   const pcm = fs.readFileSync('mobile/src/features/voice/quick-voice-pcm.ts', 'utf8');
   const debug = fs.readFileSync('mobile/src/features/voice/quick-voice-debug.ts', 'utf8');
   assert.match(pcm, /reportQuickVoicePcmCompaction\(compacted\)/);

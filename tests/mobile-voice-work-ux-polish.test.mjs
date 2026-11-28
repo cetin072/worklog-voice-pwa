@@ -24,10 +24,10 @@ test('Voice UX mirrors the strongest web recording affordances', () => {
   assert.match(voice, /브리핑에 반영하는 중/);
 });
 
-test('Home uses a compact pass-through floating voice dock', () => {
-  assert.match(home, /quickVoiceFooter: \{ position: 'absolute'/);
+test('Home uses the shared non-overlay voice footer', () => {
+  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(home, /pointerEvents="box-none"/);
-  assert.match(home, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(home, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(home, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
 });
 

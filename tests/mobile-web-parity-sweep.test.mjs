@@ -44,7 +44,7 @@ test('settings keeps account, notifications, app info, and account actions witho
 });
 
 test('Quick Voice mirrors the web dock with a pass-through floating overlay while Home keeps schedules visible', () => {
-  assert.match(mobileHome, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(mobileHome, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(mobileHome, /pointerEvents="box-none"/);
   assert.match(voiceDock, /quickDock: \{ width: QUICK_VOICE_LAYOUT\.dockWidth/);
   assert.match(mobileHome, /quickVoiceFooter/);

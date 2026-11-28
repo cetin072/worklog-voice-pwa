@@ -1,3 +1,4 @@
+import { mobileTheme } from '@/src/ui/theme';
 import { synchronizeEditedWorklogReminder } from '@/src/features/schedule/schedule-reminder-post-save';
 import { reminderSessionEpoch } from '@/src/features/schedule/schedule-reminder-snapshot';
 import { reminderFailureMessage } from '@/src/features/schedule/reminder-feedback';
@@ -299,11 +300,11 @@ const styles = StyleSheet.create({
   resultCopy: { flex: 1, minWidth: 0, gap: 4 },
   expand: { fontSize: 12, fontWeight: '800', color: '#275daf', paddingVertical: 4 },
   detail: { gap: 8, padding: 10, borderRadius: 10, backgroundColor: '#f8fafc' },
-  detailMeta: { fontSize: 12, color: '#737985', lineHeight: 18 },
+  detailMeta: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   editIconAction: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#cfd5dd', backgroundColor: '#fff' },
   editIconText: { fontSize: 18 },
   title: { fontSize: 15, fontWeight: '800', color: '#30343b', lineHeight: 21 },
-  meta: { fontSize: 12, color: '#737985', lineHeight: 18 },
+  meta: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   snippet: { fontSize: 13, color: '#4b515c', lineHeight: 19 },
   message: { fontSize: 13, color: '#4b515c', lineHeight: 19, backgroundColor: '#f4f7fb', padding: 10, borderRadius: 10 },
 });

@@ -314,8 +314,8 @@ export function WorkDocuments({ client, owner, scope, folders, revision, notes, 
             else { setPageError(''); setOpened({ mode: 'note', note: row.value }); }
           }}>
           <Text numberOfLines={2} style={styles.title}>{value.title}</Text>
-          <Text numberOfLines={1} style={styles.muted}>{folderPath(folders, value.folder_id)}</Text>
           {preview?.trim() && preview.trim() !== value.title.trim() ? <Text numberOfLines={2} style={styles.muted}>{preview}</Text> : null}
+          {value.folder_id ? <Text numberOfLines={1} style={styles.folderCaption}>{folderPath(folders, value.folder_id)}</Text> : null}
         </Pressable>
         <Action label="⋯" accessibilityLabel={`${value.title} 메뉴`} disabled={busy || parentBusy} onPress={() => setMenu(row)} />
       </View>;
@@ -434,6 +434,7 @@ const styles = StyleSheet.create({
   undoRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: mobileTheme.colors.upcomingBackground },
   undoMessage: { flex: 1, minWidth: 90, color: mobileTheme.colors.text },
   undoError: { width: '100%' },
+  folderCaption: { fontSize: 13, color: mobileTheme.colors.textMuted },
   muted: { color: mobileTheme.colors.textSecondary, lineHeight: 20 },
   error: { color: mobileTheme.colors.danger },
   sheet: { flex: 1, backgroundColor: mobileTheme.colors.surface },

@@ -55,11 +55,6 @@ function formatDuration(durationMs: number) {
 function messageOf(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback; }
 function formatBytes(bytes: number) { return `${(Math.max(0, bytes) / (1024 * 1024)).toFixed(1)}MB`; }
 function formatMs(ms: number | null) { return ms === null ? '-' : `${(Math.max(0, ms) / 1000).toFixed(2)}초`; }
-function formatQuickVoicePcmDuration(audio: QuickVoicePcmAudioInput) {
-  const original = audio.signal.originalDurationMs ?? audio.durationMs;
-  const removed = audio.signal.removedSilenceMs ?? 0;
-  return `PCM ${formatDuration(original)} → Whisper ${formatDuration(audio.durationMs)}${removed > 0 ? ` · 무음 정리 ${formatDuration(removed)}` : ''}`;
-}
 function formatSavedDue(value?: string) {
   if (!value) return '';
   const date = new Date(value);
@@ -212,7 +207,7 @@ export function VoiceRecorderCard({ mode = 'quick', embedded = false, onOpenWork
             speechSession.current = null;
             recordingStartedAt.current = null;
             setQuickPhase('transcript_error');
-            setError(`${messageOf(nextError, '음성 인식을 계속할 수 없습니다.')} 기존 Whisper 경로로 다시 시도하거나 직접 입력할 수 있습니다.`);
+            setError(`${messageOf(nextError, '음성 인식을 계속할 수 없습니다.')} 다시 녹음하거나 직접 입력할 수 있습니다.`);
           },
         });
         speechSession.current = session;
@@ -225,7 +220,7 @@ export function VoiceRecorderCard({ mode = 'quick', embedded = false, onOpenWork
         } catch (recognitionError) {
           session.dispose();
           speechSession.current = null;
-          setError(`${messageOf(recognitionError, 'Android 음성 인식을 사용할 수 없습니다.')} Whisper 음성 전사로 전환합니다.`);
+          setError(`${messageOf(recognitionError, 'Android 음성 인식을 사용할 수 없습니다.')} 기기에서 다시 인식을 시도합니다.`);
         }
       }
       // Recording must be the first expensive action after the user taps the mic.
@@ -331,7 +326,7 @@ export function VoiceRecorderCard({ mode = 'quick', embedded = false, onOpenWork
     inFlight.current = true;
     clientRequestId.current = null; saveAttempt.current = null; setSpeechPreview(''); setQuickAudio(null); setQuickTranscript(null); setQuickSave(null); setEditableTranscript(''); setFlowTimings(null); setError(null); setQuickPhase('preparing');
     try { await startWhisperCapture(); }
-    catch (nextError) { setQuickPhase('transcript_error'); setError(messageOf(nextError, 'Whisper 음성 전사를 시작하지 못했습니다.')); }
+    catch (nextError) { setQuickPhase('transcript_error'); setError(messageOf(nextError, '다시 녹음을 시작하지 못했습니다.')); }
     finally { inFlight.current = false; }
   }
 
@@ -565,15 +560,15 @@ export function VoiceRecorderCard({ mode = 'quick', embedded = false, onOpenWork
         : guidance && !modelDownload ? <Text numberOfLines={textLines} ellipsizeMode="tail" style={embedded ? styles.embeddedStatus : styles.quickGuidance}>{guidance}</Text> : null}
       {error ? <Text style={[styles.errorText, embedded && styles.embeddedError]}>{error}</Text> : null}
 
-      {quickPhase === 'transcript_error' && quickAudio ? <View style={resultStyle}><Text style={styles.quickResultTitle}>음성은 보존했습니다.</Text><Text style={styles.meta}>{formatQuickVoicePcmDuration(quickAudio)} · Peak {quickAudio.signal.peak.toFixed(3)} · RMS {quickAudio.signal.rms.toFixed(3)} · 유효 샘플 {(quickAudio.signal.nonZeroRatio * 100).toFixed(1)}%</Text><Button title="다시 전사" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
+      {quickPhase === 'transcript_error' && quickAudio ? <View style={resultStyle}><Text style={styles.quickResultTitle}>녹음은 보관됐습니다.</Text><Text style={styles.meta}>녹음 길이 {formatDuration(quickAudio.signal.originalDurationMs ?? quickAudio.durationMs)}</Text><Button title="다시 인식" onPress={() => void transcribeCapturedAudio(quickAudio)} />{onOpenWorklogInput ? <Button title="업무 직접 입력" onPress={openDirectInputFallback} /> : null}</View> : null}
       {quickPhase === 'transcript_error' && !quickAudio ? <View style={resultStyle}>
         <Text style={styles.quickResultTitle}>{speechPreview.trim() ? '인식된 내용을 보존했습니다.' : '음성 인식 경로를 다시 시작할 수 없습니다.'}</Text>
         {speechPreview.trim() ? <Text selectable numberOfLines={3} ellipsizeMode="tail" style={styles.transcript}>{speechPreview}</Text> : null}
-        <Button title="Whisper로 다시 녹음" onPress={() => void retryWhisperFallback()} />
+        <Button title="다시 녹음" onPress={() => void retryWhisperFallback()} />
         {onOpenWorklogInput ? <Button title={speechPreview.trim() ? '인식된 내용으로 직접 입력' : '업무 직접 입력'} onPress={openDirectInputFallback} /> : null}
       </View> : null}
       {quickPhase === 'transcript_error' ? <Button title="녹음 버리기" onPress={discardQuickVoice} /> : null}
-      {quickPhase === 'save_error' && quickTranscript ? <View style={resultStyle}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>저장 응답이 불확실해도 같은 요청 ID로 재시도합니다. 오타는 저장 확인 후 기록을 편집해 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
+      {quickPhase === 'save_error' && quickTranscript ? <View style={resultStyle}><Text style={styles.quickResultTitle}>{quickAudio ? '전사문을 보존했습니다.' : '이전 음성 기록을 복구했습니다.'}</Text><Text style={styles.meta}>다시 저장하면 같은 기록의 저장 여부를 확인합니다. 저장 후 기록을 편집해 수정할 수 있습니다.</Text><TextInput accessibilityLabel="보존된 전사문" multiline editable={false} style={styles.transcriptInput} value={editableTranscript} textAlignVertical="top" /><Button title="같은 업무 다시 저장" disabled={!saveAttempt.current} onPress={() => void retryQuickVoiceSave()} /><Button title="버리기" onPress={discardQuickVoice} /></View> : null}
       {quickPhase === 'refresh_error' ? <View style={resultStyle}><Text style={styles.quickResultTitle}>✅ 저장 완료 · 브리핑 갱신 실패</Text><Button title="브리핑만 다시 불러오기" onPress={() => void retryBriefing()} /></View> : null}
       {!quickActive && !quickTranscript && !error ? <Text style={styles.quickHint}>가운데 마이크를 누르면 바로 기록합니다.</Text> : null}
     </View>;
@@ -644,11 +639,11 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   timer: { fontSize: 30, fontWeight: '800', color: '#17191d', fontVariant: ['tabular-nums'] },
   status: { fontSize: 14, fontWeight: '700', color: '#4b515c' },
-  notice: { fontSize: 12, color: '#737985', lineHeight: 18 },
+  notice: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18 },
   errorText: { position: 'absolute', left: 6, right: 6, bottom: QUICK_VOICE_LAYOUT.dockHeight + 8, padding: 10, borderRadius: 12, backgroundColor: '#fff1f2', color: mobileTheme.colors.danger, lineHeight: 18, fontSize: 12 },
   result: { borderWidth: 1, borderColor: '#e0e3e8', borderRadius: 12, padding: 14, gap: 8 },
   resultTitle: { fontSize: 15, fontWeight: '700', color: '#17191d' },
-  meta: { fontSize: 11, color: '#737985', lineHeight: 16 },
+  meta: { fontSize: 11, color: mobileTheme.colors.textMuted, lineHeight: 16 },
   scheduleSuccess: { fontSize: 13, fontWeight: '800', color: mobileTheme.colors.link, lineHeight: 19, textAlign: 'center' },
   scheduleNeutral: { fontSize: 12, color: mobileTheme.colors.textMuted, lineHeight: 18, textAlign: 'center' },
   transcript: { fontSize: 14, color: '#30343b', lineHeight: 20 },

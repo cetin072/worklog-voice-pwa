@@ -52,7 +52,7 @@ test('Briefing App Shell shows progress plus typed result or error next to the a
   assert.match(homeSource, /briefingError/);
 });
 
-test('Quick voice memo uses a pass-through floating dock and auto-saves a valid STT transcript', () => {
+test('Quick voice memo uses a shared input footer and auto-saves a valid STT transcript', () => {
   assert.match(recorderSource, /useQuickVoicePcmCapture/);
   assert.match(recorderSource, /transcribeQuickVoiceCapture/);
   assert.match(recorderSource, /createQuickVoiceSaveAttempt/);
@@ -66,9 +66,9 @@ test('Quick voice memo uses a pass-through floating dock and auto-saves a valid 
   assert.match(recorderSource, /기록을 편집해 수정/);
   assert.match(recorderSource, /업무 저장 완료/);
   assert.match(recorderSource, /업무 직접 입력 열기/);
-  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(homeSource, /pointerEvents="box-none"/);
-  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(recorderSource, /return <View pointerEvents="box-none" style=\{embedded \? styles\.embeddedDock : \[styles\.quickDock,/);
   assert.match(homeSource, /prepareQuickVoiceWhisperProvider/);
@@ -103,10 +103,10 @@ test('Meeting recorder is owned by an app-wide session instead of the meeting ca
 });
 
 
-test('Home keeps Quick Voice in a pass-through absolute dock with reserved scroll space', () => {
-  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
+test('Home keeps Quick Voice in a shared footer below the scrollable content', () => {
+  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(homeSource, /pointerEvents="box-none"/);
-  assert.match(homeSource, /quickVoiceFooter: \{ position: 'absolute'/);
+  assert.match(homeSource, /quickVoiceFooter: \{ flexShrink: 0/);
   assert.match(homeSource, /<\/ScrollView>[\s\S]*styles\.quickVoiceFooter[\s\S]*VoiceRecorderCard mode="quick"/);
   assert.match(homeSource, /ANDROID_TOUCH_SMOKE_MODE/);
 });

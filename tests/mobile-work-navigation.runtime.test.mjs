@@ -26,23 +26,23 @@ test('actual bottom navigation preserves Home/Work and adds Taejang only with ve
   assert.equal(tree.props.style[1].paddingBottom,20);
  }
  assert.match(source,/bottomTabs: \{ flexShrink: 0/);
- assert.match(source,/paddingBottom: screen === 'home' \? QUICK_VOICE_LAYOUT\.dockReserveHeight \+ 32 : 16/);
+ assert.match(source,/paddingBottom: 16/);
  assert.match(source,/onOpenManagement=\{\(\)=>\{setManagementReturn\('home'\);setScreen\('subscriptions'\);\}\}/);
 });
 
-test('both tabs share voice saves, with a dedicated non-overlay input footer on Work',async()=>{
+test('both tabs share voice saves, with the same non-overlay input footer and labels',async()=>{
  assert.ok(dock);
  const js=ts.transpileModule(`return (${dock});`,{compilerOptions:{jsx:ts.JsxEmit.React}}).outputText;
  for(const screen of ['home','work','settings','taejang']){
   let saves=0,refreshes=0,feedback;
-  const styles={quickVoiceFooter:{position:'absolute'},workInputFooter:{flexShrink:0}};
-  const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',VoiceRecorderCard:'VoiceRecorderCard',CaptureImportButton:'CaptureImportButton',styles,insets:{bottom:20},screen,showQuickVoice:screen==='home'||screen==='work',androidTouchSmoke:false,FORCE_WHISPER_FALLBACK_QA_MODE:false,prepareQuickVoiceWhisperProvider:()=>{},QUICK_VOICE_SPEECH_RECOGNITION:{},quickVoiceNavigation:{current:false},session:{user:{id:'owner'}},client:{},organizeVoiceRecord:async()=> '테라리움 폴더에 저장했습니다.',refreshQuickVoiceBriefing:async()=>refreshes++,getFreshAccessToken:async()=> 'synthetic',reminderSessionEpoch:{capture:()=>()=>true},saveWorklog:async(token,text,options)=>{assert.equal(token,'synthetic');assert.equal(text,'Synthetic task');assert.equal(options.sourceType,'voice');saves++;return {dataCoreWorkRecordId:'saved',scheduleIds:[]};},synchronizeSavedScheduleReminders:async()=>[],savedReminderMessage:()=> 'Saved',setSavedReminder:value=>feedback=value};
+  const styles={quickVoiceFooter:{flexShrink:0}};
+  const scope={React:{createElement:(type,props,...children)=>({type,props:{...props,children}})},View:'View',ScrollView:'ScrollView',VoiceRecorderCard:'VoiceRecorderCard',CaptureImportButton:'CaptureImportButton',styles,insets:{bottom:20},screen,showQuickVoice:screen==='home'||screen==='work',androidTouchSmoke:false,FORCE_WHISPER_FALLBACK_QA_MODE:false,prepareQuickVoiceWhisperProvider:()=>{},QUICK_VOICE_SPEECH_RECOGNITION:{},quickVoiceNavigation:{current:false},session:{user:{id:'owner'}},client:{},organizeVoiceRecord:async()=> '테라리움 폴더에 저장했습니다.',refreshQuickVoiceBriefing:async()=>refreshes++,getFreshAccessToken:async()=> 'synthetic',reminderSessionEpoch:{capture:()=>()=>true},saveWorklog:async(token,text,options)=>{assert.equal(token,'synthetic');assert.equal(text,'Synthetic task');assert.equal(options.sourceType,'voice');saves++;return {dataCoreWorkRecordId:'saved',scheduleIds:[]};},synchronizeSavedScheduleReminders:async()=>[],savedReminderMessage:()=> 'Saved',setSavedReminder:value=>feedback=value};
   const tree=new Function('scope',`with(scope){${js}}`)(scope);
   if(screen==='settings'||screen==='taejang'){assert.equal(tree,null);continue;}
   const card=nativeNodes(tree).find(n=>n.type==='VoiceRecorderCard');assert.equal(card.props.mode,'quick');
-  assert.equal(tree.props.style,screen==='work'?styles.workInputFooter:styles.quickVoiceFooter);
-  assert.equal(card.props.embedded,screen==='work');
-  assert.equal(card.props.renderPhotoAction(false).props.label,screen==='work'?'사진 가져오기':undefined);
+  assert.equal(tree.props.style,styles.quickVoiceFooter);
+  assert.equal(card.props.embedded,true);
+  assert.equal(card.props.renderPhotoAction(false).props.label,'사진 가져오기');
   const result=await card.props.quickVoice.saveWorklog('Synthetic task',{});await card.props.quickVoice.refreshBriefing();
   assert.match(result.reminderMessage,/테라리움 폴더/);assert.equal(result.recordId,'saved');assert.equal(feedback.target.recordId,'saved');assert.equal(saves,1);assert.equal(refreshes,1);
  }
