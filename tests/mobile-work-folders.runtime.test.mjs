@@ -4,6 +4,7 @@ import { register } from 'node:module';
 import { nativeComponentHarness, nativeNodes, nativeWords } from './helpers/native-component-harness.mjs';
 register('./helpers/mobile-ts-loader.mjs',import.meta.url);
 const store=await import('../mobile/src/features/work/work-folders-store.ts');
+const { listWorkMemos } = await import('../mobile/src/features/work/work-documents-store.ts');
 const shared=await import('../mobile/src/ui/workspace-styles.ts');
 const rows=await import('../mobile/src/ui/record-row-styles.ts');
 const theme=await import('../mobile/src/ui/theme.ts');
@@ -20,7 +21,7 @@ function harness(overrides={}){
   '@/src/ui/record-complete-button':{RecordCompleteButton:props=>complete.render(props)},
   'expo-crypto':{randomUUID:()=> 'new-folder'},'@/src/ui/theme':theme,'../home/home-calendar-model':date,'./work-folders-store':boundaries,'./work-documents':{WorkDocuments:()=>null},
  });
- const props={client:{},userId:'owner',revision:0,busy:false,onComplete:async()=>{},onCompleteNote:async()=>{},onJournal:()=>{},onSearch:()=>{},onEdit:()=>{},onDelete:()=>{},onReminder:()=>{}};
+ const props={client:{},userId:'owner',revision:0,busy:false,onComplete:async()=>{},onJournal:()=>{},onSearch:()=>{},onEdit:()=>{},onDelete:()=>{},onReminder:()=>{}};
  const expand=node=>Array.isArray(node)?node.map(expand):node&&typeof node==='object'?typeof node.type==='function'?expand(node.type(node.props)):{...node,props:{...node.props,children:expand(node.props.children)}}:node;
  const render=()=>expand(h.render(props));
  const button=label=>nativeNodes(render()).find(n=>n.props?.accessibilityLabel===label);
@@ -42,6 +43,36 @@ test('overview adapter distinguishes all and unclassified and keeps server count
  await assert.rejects(store.loadWorkOverview({rpc:()=>({abortSignal:async()=>({error:{code:'PGRST202'}})})},'all','tasks'),/서버 준비 중/);
  await assert.rejects(store.loadWorkOverview({rpc:()=>({abortSignal:async()=>({data:null,error:null})})},'all','tasks'),/응답/);
 });
+test('memo loading continues beyond the first overview page and uses owned edit times', async () => {
+ const first = { ...record, id: 'loaded', recorded_at: '2026-10-01T00:00:00Z' };
+ const older = { ...record, id: 'older', recorded_at: '2026-09-01T00:00:00Z' };
+ const calls = [];
+ const client = {
+  rpc: (name, args) => ({ abortSignal: async () => {
+   calls.push([name, args]);
+   return { data: view([older], { total_count: 2 }), error: null };
+  } }),
+  from: name => {
+   assert.equal(name, 'work_records');
+   return { select: fields => {
+    assert.equal(fields, 'id,updated_at');
+    return { eq: (field, owner) => {
+     assert.deepEqual([field, owner], ['created_by_user_id', 'owner']);
+     return { in: (id, values) => {
+      assert.deepEqual([id, values], ['id', ['loaded', 'older']]);
+      return { abortSignal: async () => ({ data: [{ id: 'older', updated_at: '2026-12-01T00:00:00Z' }], error: null }) };
+     } };
+    } };
+   } };
+  },
+ };
+ const result = await listWorkMemos(client, 'owner', 'f', view([first], { total_count: 2 }), () => true);
+ assert.deepEqual(calls, [['get_my_work_overview', { p_all: false, p_folder: 'f', p_section: 'notes', p_offset: 1 }]]);
+ assert.deepEqual(result.map(row => [row.id, row.updated_at]), [
+  ['loaded', '2026-10-01T00:00:00Z'], ['older', '2026-12-01T00:00:00Z'],
+ ]);
+});
+
 test('default all, explicit unclassified and folder counts; filters directly precede rows; no duplicate input/today controls',async()=>{
  const calls=[];const h=harness({loadWorkOverview:async(_client,scope,section)=>{calls.push({scope,section});return view();}});
  try{
@@ -72,10 +103,10 @@ test('create/rename/move use modal, retain draft after failure and block double 
   h.button('업무 메뉴').props.onPress();h.button('폴더 이동').props.onPress();assert.ok(dialog());assert.ok(h.button('최상위로 이동'));assert.equal(h.button('Personal project'),undefined);
  }finally{h.close();}
 });
-test('completion is one canonical call, counts and list refresh; note completion stays in history',async()=>{
+test('completion is one canonical call, counts and list refresh; previously completed notes remain in history',async()=>{
  let done=false,calls=0,resolve;const pending=new Promise(r=>resolve=r);
- const h=harness({loadWorkOverview:async(_c,_f,section)=>view(section==='completed'?(done?[{...record,action_kind:'note',briefing_state:'acknowledged',acknowledged_at:'2026-11-17T16:00:00Z'}]:[]):done?[]:[{...record,action_kind:'note',briefing_state:'active'}],{all_tasks:done?0:1})});
- h.props.onCompleteNote=async note=>{calls++;assert.equal(note.pageId,'r');await pending;done=true;};
+ const h=harness({loadWorkOverview:async(_c,_f,section)=>view(section==='completed'?(done?[{...record,action_kind:'note',briefing_state:'acknowledged',acknowledged_at:'2026-11-17T16:00:00Z'}]:[]):done?[]:[record],{all_tasks:done?0:1})});
+ h.props.onComplete=async task=>{calls++;assert.equal(task.pageId,'r');await pending;done=true;};
  try{
   await h.flush();const press=h.button('Undated task 완료').props.onPress;press();press();assert.equal(calls,1);
   resolve();await tick();await h.flush();assert.doesNotMatch(nativeWords(h.render()),/Undated task/);assert.ok(h.button('전체 0개 할 일'));

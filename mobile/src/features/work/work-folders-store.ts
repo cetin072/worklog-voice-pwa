@@ -8,6 +8,7 @@ export type FolderRecord = {
   briefing_state?: string; acknowledged_at?: string | null;
   folder_id: string | null; selected_on: string | null; organization_version: number;
   next_attention_at: string | null;
+  recorded_at?: string;
 };
 export type WorkSection = 'tasks' | 'notes' | 'completed';
 export const PAGE_SIZE = 50;

@@ -2,6 +2,7 @@ import { QUICK_VOICE_LAYOUT } from '@/src/features/voice/quick-voice-layout';
 import { organizeVoiceRecord } from '@/src/features/work/voice-folder';
 import { workspaceStyles } from '@/src/ui/workspace-styles';
 import { WorkFolders } from '@/src/features/work/work-folders';
+import { organizeRecord } from '@/src/features/work/work-folders-store';
 import { TaejangDailyReport, useTaejangDailyReportAccess } from '@/src/features/daily-work-report/daily-work-report';
 import { HabitsScreen } from '@/src/features/habits/habits-screen';
 import { MyManagementScreen } from '@/src/features/management/my-management-screen';
@@ -1045,7 +1046,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       if (!editDirty.current.title) setEditTitle(details.title || fallbackTitle);
       if (!editDirty.current.date) setEditDate(details.dueDate);
       if (!editDirty.current.time) setEditTime(details.dueTime || '');
-      if (!editDirty.current.kind) setEditActionKind(details.actionKind);
+      if (!editDirty.current.kind || details.actionConversionAllowed !== true) setEditActionKind(details.actionKind);
       setEditOriginalActionKind(details.actionKind);
       setEditActionConversionAllowed(details.actionConversionAllowed === true);
       setEditReady(true);
@@ -1112,20 +1113,42 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
     await loadTaskEditorDetails(task.pageId, task.title || '', task.dueKey || '', task.dueTime);
   }
 
-  async function openNoteEditor(note: BriefingNote) {
+  async function openNoteEditor(note: BriefingNote, convertToTask = false) {
     if (!session || !note.pageId || editBusy || recordMutationInFlight.current) return;
-    editDirty.current = { title: false, date: false, time: false, kind: false };
+    editDirty.current = { title: false, date: false, time: false, kind: convertToTask };
     setEditTaskId(note.pageId);
     setEditTitle(note.title || '');
     setEditDate('');
     setEditTime('');
-    setEditActionKind('note');
+    setEditActionKind(convertToTask ? 'task' : 'note');
     setEditOriginalActionKind(undefined);
     setEditActionConversionAllowed(false);
     setEditReady(false);
     setEditStatus('');
     setEditStatusTone('neutral');
     await loadTaskEditorDetails(note.pageId, note.title || '', '');
+  }
+
+  async function addTaskFromDocument(document: { id: string; title: string; folder_id: string | null }) {
+    if (!session || !client) throw new Error('다시 로그인한 뒤 시도해주세요.');
+    const owner = session.user.id;
+    const current = reminderSessionEpoch.capture();
+    const token = await getFreshAccessToken(client);
+    if (!current()) throw new Error('계정이 변경되었습니다.');
+    const saved = await saveWorklog(token, document.title, {
+      clientRequestId: `mobile-document-task-${document.id}`, sourceType: 'direct', type: '할 일', status: '진행중',
+    });
+    const recordId = saved.dataCoreWorkRecordId;
+    if (!recordId) throw new Error('할 일 추가를 확인하지 못했습니다. 다시 시도해주세요.');
+    if (!current()) return;
+    if (document.folder_id) {
+      const { data, error } = await client.from('work_organization')
+        .select('work_record_id').eq('work_record_id', recordId).eq('user_id', owner).maybeSingle();
+      if (!current()) return;
+      if (error) throw new Error('할 일은 추가됐습니다. 폴더 연결을 다시 확인해주세요.');
+      if (!data) await organizeRecord(client, { id: recordId, organization_version: -1 }, { folder: document.folder_id }, owner);
+    }
+    if (current()) await refreshBriefing();
   }
 
   async function retryTaskEditor() {
@@ -1242,7 +1265,8 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
             : '✓ 업무를 수정했습니다.');
       setEditStatusTone(reminderWarning ? 'error' : result.unchanged && !result.actionKindChanged ? 'neutral' : 'success');
       // The editor closes quickly: keep device notification status visible on the home screen.
-      showMessage(`업무 수정 저장 · ${reminderFeedback}`, reminderWarning ? 'info' : 'success');
+      showMessage(result.actionKindChanged && result.actionKind === 'task' && !reminderWarning
+        ? '할 일로 전환했습니다.' : `업무 수정 저장 · ${reminderFeedback}`, reminderWarning ? 'info' : 'success');
       // Do not leave a committed edit pending behind a fixed delay: a
       // delayed close could dismiss another record's editor.
       setEditTaskId(null);
@@ -1346,7 +1370,7 @@ function HomeScreenApp({ androidTouchSmoke = false, initialScreen = 'home', init
       <Text accessibilityRole="header" style={workspaceStyles.title}>태장</Text>
       <TaejangDailyReport access={taejangAccess} />
     </View> : null}
-    {screen === 'work' && client ? <WorkFolders initialFolder={workDestination?.ownerId === session.user.id ? workDestination.folderId : undefined} initialSection={workDestination?.ownerId === session.user.id && workDestination.kind === 'note' ? 'notes' : workDestination?.ownerId === session.user.id && workDestination.kind === 'completed' ? 'completed' : 'tasks'} onViewChange={(scope, section) => setWorkDestination({ ownerId: session.user.id, folderId: scope === 'all' ? undefined : scope, kind: section === 'notes' ? 'note' : section === 'completed' ? 'completed' : 'task' })} userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onCompleteNote={acknowledgeNote} onJournal={openJournal} onSearch={() => { setSearchReturn('work'); setScreen('recordSearch'); }} onComplete={completeTaskInline} onEdit={record => record.action_kind === 'note' ? void openNoteEditor({ pageId: record.id, title: record.title }) : void openTaskEditor({ pageId: record.id, title: record.title, dueKey: record.due_at ? seoulDate(record.due_at) : undefined })} onDelete={record => confirmDeleteRecord(record.id, record.title, record.action_kind === 'note' ? 'note' : 'task')} onReminder={record => setReminderTarget({ recordId: record.id, title: record.title })}
+    {screen === 'work' && client ? <WorkFolders initialFolder={workDestination?.ownerId === session.user.id ? workDestination.folderId : undefined} initialSection={workDestination?.ownerId === session.user.id && workDestination.kind === 'note' ? 'notes' : workDestination?.ownerId === session.user.id && workDestination.kind === 'completed' ? 'completed' : 'tasks'} onViewChange={(scope, section) => setWorkDestination({ ownerId: session.user.id, folderId: scope === 'all' ? undefined : scope, kind: section === 'notes' ? 'note' : section === 'completed' ? 'completed' : 'task' })} userId={session.user.id} key={session.user.id} client={client} revision={homeCalendarRevision} busy={Boolean(taskBusyId) || Boolean(noteBusyId) || busy} onConvertNote={record => void openNoteEditor({ pageId: record.id, title: record.title }, true)} onAddDocumentTask={addTaskFromDocument} onJournal={openJournal} onSearch={() => { setSearchReturn('work'); setScreen('recordSearch'); }} onComplete={completeTaskInline} onEdit={record => record.action_kind === 'note' ? void openNoteEditor({ pageId: record.id, title: record.title }) : void openTaskEditor({ pageId: record.id, title: record.title, dueKey: record.due_at ? seoulDate(record.due_at) : undefined })} onDelete={record => confirmDeleteRecord(record.id, record.title, record.action_kind === 'note' ? 'note' : 'task')} onReminder={record => setReminderTarget({ recordId: record.id, title: record.title })}
       onReview={record => {
         const dueKey = record.due_at ? seoulDate(record.due_at) : undefined;
         const today = seoulTodayKey();
