@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import Constants from 'expo-constants';
+import { startActivityAsync } from 'expo-intent-launcher';
+import { openURL } from 'expo-linking';
 import {
   ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View,
@@ -16,6 +19,8 @@ import {
 } from './daily-work-report-api';
 
 const title = '태장 일일 업무일지';
+const staffPackage = 'com.cetin072.taejang.staff';
+const staffStoreUrl = 'https://play.google.com/store/apps/details?id=' + staffPackage;
 const fields = [
   ['work_done', '오늘의 업무 내용'],
   ['staff_notes', '근로자 특이사항'],
@@ -101,9 +106,51 @@ export function TaejangDailyReport({ access }: { access: ReturnType<typeof useTa
       <Text style={workspaceStyles.title}>{title}</Text>
       <Text style={workspaceStyles.link} accessibilityElementsHidden importantForAccessibility="no">›</Text>
     </Pressable>
+    {Platform.OS === 'android' ? <TaejangAttendanceShortcut grant={grant} disabled={checking || checkFailed} /> : null}
     {opened ? <ReportSheet key={String(grant.info.can_read_all)} grant={grant} checking={checking} checkFailed={checkFailed}
       retry={retry} onAccessLost={revoke} onClose={() => setOpened(false)} /> : null}
   </>;
+}
+
+function TaejangAttendanceShortcut({ grant, disabled }: { grant: Grant; disabled: boolean }) {
+  const launching = useRef(false);
+  const [busy, setBusy] = useState(false);
+  async function openAttendance() {
+    if (disabled || launching.current || !grant.current()) return;
+    launching.current = true;
+    setBusy(true);
+    const qa = Constants.expoConfig?.android?.package === 'com.cetin072.worklog.qa';
+    const packageName = qa ? staffPackage + '.qa' : staffPackage;
+    const scheme = qa ? 'taejangstaffqa' : 'taejangstaff';
+    try {
+      // Open the attendance home in the known app, not a chooser. Send no account or attendance data.
+      await startActivityAsync('android.intent.action.VIEW', {
+        packageName, className: packageName + '.MainActivity', data: scheme + ':///',
+      });
+    } catch {
+      if (!grant.current()) return;
+      if (qa) {
+        Alert.alert('태장 QA 출근앱을 열 수 없습니다', '같은 기기에 태장 QA 출근앱이 설치되어 있는지 확인해 주세요.');
+      } else {
+        Alert.alert('태장 출근앱을 열 수 없습니다', '설치되어 있지 않다면 Google Play에서 설치해 주세요.', [
+          { text: '닫기', style: 'cancel' },
+          { text: 'Google Play 열기', onPress: () => void openURL(staffStoreUrl).catch(() => {
+            Alert.alert('Google Play를 열 수 없습니다', 'Google Play에서 태장 출근앱을 찾아 주세요.');
+          }) },
+        ]);
+      }
+    } finally {
+      launching.current = false;
+      setBusy(false);
+    }
+  }
+  return <Pressable accessibilityRole="button" accessibilityLabel="태장 출퇴근 앱 열기"
+    accessibilityState={{ disabled: disabled || busy, busy }}
+    disabled={disabled || busy} style={[workspaceStyles.card, workspaceStyles.heading]}
+    onPress={() => void openAttendance()}>
+    <Text style={workspaceStyles.title}>출퇴근</Text>
+    <Text style={workspaceStyles.link} accessibilityElementsHidden importantForAccessibility="no">{busy ? '여는 중…' : '›'}</Text>
+  </Pressable>;
 }
 
 function ReportSheet({ grant, checking, checkFailed, retry, onAccessLost, onClose }: {

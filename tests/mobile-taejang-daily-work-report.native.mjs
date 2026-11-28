@@ -60,12 +60,15 @@ async function mount(transport, options = {}) {
     ['ActivityIndicator', 'KeyboardAvoidingView', 'Modal', 'Pressable', 'ScrollView', 'Text', 'TextInput', 'View'].map(tag => [tag, tag]),
   );
   native.StyleSheet = { create: value => value };
-  native.Platform = { OS: 'web' };
-  native.Alert = { alert() {} };
+  native.Platform = { OS: options.platform ?? 'web' };
+  native.Alert = { alert: options.alert ?? (() => {}) };
   native.AppState = { addEventListener: (_, listener) => { active = listener; return { remove() {} }; } };
   const imports = {
     react: React,
     'react-native': native,
+    'expo-constants': { __esModule: true, default: { expoConfig: { android: { package: options.worklogPackage } } } },
+    'expo-intent-launcher': { startActivityAsync: options.launch ?? (() => { throw new Error('Unexpected app launch'); }) },
+    'expo-linking': { openURL: options.openURL ?? (() => { throw new Error('Unexpected URL launch'); }) },
     '@react-native-community/datetimepicker': { default: 'DateTimePicker' },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     '@/src/ui/theme': { mobileTheme },
@@ -219,4 +222,52 @@ test('a non-Worklog environment never requests Taejang access', async () => {
     assert.equal(calls, 0);
     assert.equal(ui.buttons('태장 일일 업무일지').length, 0);
   } finally { await ui.close(); }
+});
+
+test('authorized Android staff open only the matching attendance app, with no data passed', async () => {
+  const transport = async () => Response.json({ author_name: '가상 팀장', can_read_all: false });
+  const calls = [];
+  const launch = async (...args) => { calls.push(args); };
+  const worklog = await mount(transport, { platform: 'android', launch });
+  try {
+    await worklog.press('태장 출퇴근 앱 열기');
+    assert.deepEqual(calls, [[
+      'android.intent.action.VIEW',
+      { packageName: 'com.cetin072.taejang.staff', className: 'com.cetin072.taejang.staff.MainActivity', data: 'taejangstaff:///' },
+    ]]);
+    await worklog.switchAccount();
+    assert.equal(worklog.buttons('태장 출퇴근 앱 열기').length, 0);
+  } finally { await worklog.close(); }
+  const qa = await mount(transport, { platform: 'android', launch, worklogPackage: 'com.cetin072.worklog.qa' });
+  try {
+    await qa.press('태장 출퇴근 앱 열기');
+    assert.deepEqual(calls.at(-1)[1], {
+      packageName: 'com.cetin072.taejang.staff.qa',
+      className: 'com.cetin072.taejang.staff.qa.MainActivity',
+      data: 'taejangstaffqa:///',
+    });
+  } finally { await qa.close(); }
+});
+
+test('the shortcut is absent without an authorized native context, and install fallback is opt-in', async () => {
+  const grant = async () => Response.json({ author_name: '가상 팀장', can_read_all: false });
+  const denied = await mount(async () => rpcError('DAILY_WORK_REPORT_FORBIDDEN'), { platform: 'android' });
+  const web = await mount(grant);
+  const alerts = [];
+  const urls = [];
+  const missing = await mount(grant, {
+    platform: 'android',
+    launch: async () => { throw new Error('Activity not found'); },
+    alert: (...args) => { alerts.push(args); },
+    openURL: async url => { urls.push(url); },
+  });
+  try {
+    assert.equal(denied.buttons('태장 출퇴근 앱 열기').length, 0);
+    assert.equal(web.buttons('태장 출퇴근 앱 열기').length, 0);
+    await missing.press('태장 출퇴근 앱 열기');
+    assert.equal(alerts[0][0], '태장 출근앱을 열 수 없습니다');
+    assert.deepEqual(urls, []);
+    alerts[0][2].find(action => action.text === 'Google Play 열기').onPress();
+    assert.deepEqual(urls, ['https://play.google.com/store/apps/details?id=com.cetin072.taejang.staff']);
+  } finally { await denied.close(); await web.close(); await missing.close(); }
 });
