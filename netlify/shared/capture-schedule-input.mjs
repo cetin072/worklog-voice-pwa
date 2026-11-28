@@ -12,6 +12,55 @@ const RESERVATION_HEADING = /^(?:\[)?([^\[\]:!?？]{2,100}예약\s*(?:안내|확
 const START_VALUE = /^(20\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일(?:\s*\(([월화수목금토일])(?:요일)?\))?\s+(.+)$/;
 const CLOCK = /\b(?:[01]?\d|2[0-3])\s*:\s*[0-5]\d\b/;
 
+// A booking confirmation card is not chat text: its weekday verifies the
+// compact date, and unrelated ads must not be used as dates or titles.
+const CONFIRMED_BOOKING = /^예약이?\s*확정(?:되었습니다|됐습니다)[.!]?$/;
+const COMPACT_BOOKING_START = /^(\d{1,2})\s*\.\s*(\d{1,2})\s*\.\s*\(([월화수목금토일])(?:요일)?\)\s*(오전|오후)\s*(\d{1,2})\s*:\s*([0-5]\d)$/;
+const BOOKING_CARD_END = /^(?:놓치면\s*아까운\s*혜택[!！]?|(?:광고|AD)|.*\s(?:광고|AD))$/i;
+
+function compactBookingCard(lines, now, review) {
+  const confirmations = lines.flatMap((line, index) => CONFIRMED_BOOKING.test(line) ? [index] : []);
+  if (!confirmations.length) return null;
+  if (confirmations.length !== 1) return review('changed_or_multiple_conversations');
+  const details = lines.slice(confirmations[0] + 1);
+  const end = details.findIndex(line => BOOKING_CARD_END.test(line));
+  const card = end < 0 ? details : details.slice(0, end);
+  if (CHANGE.test(lines.slice(0, confirmations[0]).concat(card).join(' '))) return review('changed_or_multiple_conversations');
+  const matches = [];
+  for (let i = 1; i < card.length; i++) {
+    const direct = COMPACT_BOOKING_START.exec(card[i]);
+    const match = direct || COMPACT_BOOKING_START.exec(card[i] + ' ' + (card[i + 1] || ''));
+    if (match) {
+      matches.push({ match, title: card[i - 1], index: i, length: direct ? 1 : 2 });
+      if (!direct) i++;
+    }
+  }
+  if (matches.length !== 1) return review('ambiguous_date_or_time');
+  const [{ match, title, index, length }] = matches;
+  const extras = card.filter((_, i) => i < index - 1 || i >= index + length).join(' ');
+  if (CLOCK.test(extras) || DATE.test(extras) || /\d{1,2}\s*\.\s*\d{1,2}\s*\.\s*\([월화수목금토일]/.test(extras)
+      || countKoreanDateSignals(normalized(extras), { policy: 'journal' }) || countKoreanTimeSignals(extras)
+      || !/^[^:!?？]{2,100}$/.test(title) || !/\p{L}/u.test(title) || /^(?:광고|AD|예약|내 예약|바로가기)$/i.test(title)) {
+    return review('ambiguous_date_or_time');
+  }
+  const [, month, day, weekday, period, hour, minute] = match;
+  if (+hour < 1 || +hour > 12 || !Number.isFinite(Date.parse(now))) return review('ambiguous_time');
+  const time = `${String(+hour % 12 + (period === '오후' ? 12 : 0)).padStart(2, '0')}:${minute}`;
+  const year = new Date(Date.parse(now) + 9 * 3600000).getUTCFullYear();
+  const times = [year, year + 1].flatMap(candidate => {
+    const date = `${candidate}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    const check = new Date(date);
+    if (!Number.isFinite(+check) || check.toISOString().slice(0, 10) !== date
+      || '일월화수목금토일'[check.getUTCDay()] !== weekday) return [];
+    const startsAt = `${date}T${time}:00+09:00`;
+    const delta = Date.parse(startsAt) - Date.parse(now);
+    return delta > 0 && delta <= 90 * 86400000 ? [{ date, startsAt }] : [];
+  });
+  if (times.length !== 1) return review('ambiguous_date_or_time');
+  return { kind: 'schedule', title, ...times[0], time, description: '', reason: 'labeled_event',
+    transcript: title, status: '진행중', followUp: '' };
+}
+
 function structuredEvent(lines, now, review) {
   const fields = [];
   const fieldLines = new Set();
@@ -92,7 +141,8 @@ export function captureScheduleInput(ocr, now = new Date().toISOString()) {
   const review = reason => ({ kind: 'review', title: description.slice(0, 140), date: '', time: '', description, reason,
     // Dates stay in a non-parsed existing followUp field, never in transcript.
     reviewContentTitle: true, transcript: '캡처 일정 확인 필요', status: '확인필요', followUp: description });
-  const structured = structuredEvent(lines.map(line => line.normalize('NFKC')), now, review);
+  const normalizedLines = lines.map(line => line.normalize('NFKC'));
+  const structured = compactBookingCard(normalizedLines, now, review) || structuredEvent(normalizedLines, now, review);
   if (structured) return structured;
   if (headers.length > 1 || CHANGE.test(text)) return review('changed_or_multiple_conversations');
   if (!EVENT.test(text)) return review('no_confirmed_event');

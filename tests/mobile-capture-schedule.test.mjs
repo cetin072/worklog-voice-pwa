@@ -43,6 +43,31 @@ test('an incomplete, conflicting, cancelled or past booking stays in review', ()
   assert.equal(captureScheduleInput(reservation, '2026-12-07T01:00:00Z').reason, 'past_event');
 });
 
+const cardNow = '2026-11-28T08:19:00Z';
+const bookingCard = '예시 바버숍\n예약이 확정되었습니다\n내 예약은 네이버마이에서 찾을 수 있어요. 바로가기\n예시 바버숍\n11. 29. (일) 오후 1:00\n실장 예시\n놓치면 아까운 혜택!\n광고 업체 AD\n상품 13,900원\n광고 가격 3,500원';
+test('compact confirmed booking uses the venue and weekday-checked Korean date, not the advert', () => {
+  for (const text of [bookingCard, bookingCard.replace('(일) 오후', '(일)\n오후')]) {
+    const result = captureScheduleInput(text, cardNow);
+    assert.equal(result.kind, 'schedule');
+    assert.equal(result.title, '예시 바버숍');
+    assert.equal(result.startsAt, '2026-11-29T13:00:00+09:00');
+    assert.equal(result.followUp, '');
+  }
+  const rollover = bookingCard.replace('11. 29. (일) 오후 1:00', '1. 2. (토) 오전 12:00');
+  assert.equal(captureScheduleInput(rollover, '2026-12-31T03:00:00Z').startsAt, '2027-01-02T00:00:00+09:00');
+});
+test('compact cards never auto-save an unconfirmed, mismatched, multiple, or past appointment', () => {
+  for (const text of [
+    bookingCard.replace('예약이 확정되었습니다', '예약을 확인하세요'),
+    bookingCard.replace('(일)', '(월)'),
+    bookingCard.replace('11. 29.', '11. 31.'),
+    bookingCard.replace('오후 1:00', '오후 13:00'),
+    bookingCard.replace('실장 예시', '예약이 취소되었습니다'),
+    bookingCard.replace('실장 예시', '예시 일정\n11. 29. (일) 오후 2:00'),
+  ]) assert.equal(captureScheduleInput(text, cardNow).kind, 'review', text);
+  assert.equal(captureScheduleInput(bookingCard, '2026-11-29T04:00:00Z').kind, 'review');
+});
+
 test('single explicit appointment becomes one canonical existing-core schedule', () => {
   const value = captureScheduleInput('2026년 11월 3일 오후 3시 김해 회사에서 회의합니다.\n오전 9:10', now);
   assert.equal(value.kind,'schedule');assert.equal(value.date,'2026-11-03');assert.equal(value.time,'15:00');
