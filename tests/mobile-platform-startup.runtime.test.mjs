@@ -11,6 +11,7 @@ const {startupFixture,scope,delay}=await import('./helpers/startup-reminder-fixt
 const A={user:{id:'A'}},B={user:{id:'B'}};
 async function harness(){
  const h=await startupFixture(reminders.createScheduleReminderService,{accountScope:scope()});
+ const calendarEvents=[];
  let listener,release,checks=0,meetingOwner;const client={auth:{
   getSession:async()=>({data:{session:A},error:null}),
   getUser:()=>++checks===1?new Promise(r=>release=r):Promise.resolve({data:{user:B.user},error:null}),
@@ -20,7 +21,7 @@ async function harness(){
  const ui=nativeComponentHarness('mobile/src/providers/platform-provider.tsx','PlatformProvider',{
   '@/src/platform/request-deadline':deadline,'@/src/platform/local-account-gate':gate,
   '@/src/features/voice/meeting-owner':{selectMeetingOwner:v=>meetingOwner=v},
-  '@/src/features/calendar/calendar-service':{selectCalendarOwner(){},resetCalendarConnection(){},verifyCalendarNativeCrypto:async()=>{}},
+  '@/src/features/calendar/calendar-service':{selectCalendarOwner:id=>calendarEvents.push(['verified',id]),suspendCalendarConnection:()=>calendarEvents.push(['pending']),resetCalendarConnection:()=>calendarEvents.push(['logout']),verifyCalendarNativeCrypto:async()=>{}},
   'expo-linking':{getInitialURL:async()=>null,addEventListener:()=>({remove(){}})},
   '@/src/features/schedule/local-notifications':h.service,'@/src/features/schedule/schedule-reminder-snapshot':epochs,
   '@/src/platform/auth-preferences':{loadRememberedLoginEmail:async()=>'',saveRememberedLoginEmail:async()=>{}},
@@ -30,13 +31,17 @@ async function harness(){
   '@/src/platform/supabase':{createPlatformSupabaseClient:()=>client},
  });
  ui.render({});await ui.effects();for(let n=0;n<20&&!release;n++)await delay(1);assert.ok(release);
- return{h,ui,event:(event,s)=>listener(event,s),finish:()=>release({data:{user:A.user},error:null}),owner:()=>meetingOwner,value:()=>ui.render({}).props.value};
+ return{h,ui,calendarEvents,event:(event,s)=>listener(event,s),finish:()=>release({data:{user:A.user},error:null}),owner:()=>meetingOwner,value:()=>ui.render({}).props.value};
 }
 test('actual provider subscribes during initial verification: B supersedes late A, logout clears before publication',async()=>{
  const t=await harness();try{
+  assert.deepEqual(t.calendarEvents,[['pending']]);
   assert.equal(t.value().session,null);t.event('SIGNED_IN',B);await delay(15);assert.equal(t.value().session,B);assert.equal(t.owner(),'B');assert.equal(t.h.os.size,0);
+  assert.deepEqual(t.calendarEvents,[['pending'],['pending'],['verified','B']]);
   t.finish();await delay(5);assert.equal(t.value().session,B);assert.equal(t.value().phase,'ready');
   await t.value().signOut();await delay(5);assert.equal(t.value().session,null);assert.equal(t.owner(),null);
+  assert.ok(t.calendarEvents.some(([stage])=>stage==='logout'));
+  assert.deepEqual(t.calendarEvents.at(-1),['verified',null]);
  }finally{t.ui.close()}
 });
 test('actual provider disposal blocks pending identity and preserves proved same-account custom alarms',async()=>{
