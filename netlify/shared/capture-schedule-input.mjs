@@ -18,6 +18,22 @@ const BOOKING_DATE = /^(?:(20\d{2})\s*[년.\/-]\s*)?(\d{1,2})\s*[월.\/-]\s*(\d{
 const BOOKING_CARD_END = /^(?:놓치면\s*아까운\s*혜택[!！]?|(?:광고|AD|스폰서|추천 상품)(?:\s|$).*|.*\s(?:광고|AD))$/i;
 const NON_APPOINTMENT_LABEL = /(?:예약|접수|결제|발급|주문)\s*(?:번호|코드|신청일|신청시간|완료일|완료시간)|결제\s*(?:일시|일자|시간)|(?:생성|발급|주문)\s*(?:일시|일자|시간)|금액|가격|전화번호|전화\s*:|등록\s*시간/;
 const BOOKING_TITLE = /^\s*(?:(?:장소|매장|업체|서비스|병원)\s*[:：]\s*)?([^:!?？]{2,100})\s*$/;
+const BOOKING_UI_ROW = /^(?:(?:예약|방문|진료|수강|상담)\s*(?:상세(?:\s*(?:보기|내역|정보))?|정보|내역|확인)|내\s*예약|바로\s*가기|내\s*예약(?:은|을)\s+.+\s+바로\s*가기|(?:예약\s*)?인원(?:수)?\s*[:：]?\s*\d+\s*(?:명|인)|(?:예약자|방문자|고객명)(?:\s*[:：]|\s+).+)$/i;
+const BOOKING_VENUE_LABEL = /^(?:장소|매장|업체|서비스|병원)\s*[:：]/;
+
+function bookingTitleCandidate(rows) {
+  const explicit = new Set();
+  const unmarked = new Set();
+  for (const row of rows) {
+    if (BOOKING_UI_ROW.test(row) || NON_APPOINTMENT_LABEL.test(row) || BOOKING_DATE.test(row) || parseCandidateClock(row)) continue;
+    const title = row.match(BOOKING_TITLE)?.[1]?.trim();
+    if (!title || !/\p{L}/u.test(title) || /^(?:광고|AD|예약)$/i.test(title)) continue;
+    (BOOKING_VENUE_LABEL.test(row) ? explicit : unmarked).add(title);
+  }
+  const choices = explicit.size ? explicit : unmarked;
+  return choices.size === 1 ? [...choices][0] : '';
+}
+
 function parseCandidateClock(clock = '') {
   const colon = clock.match(/^(?:(오전|오후)\s*)?(\d{1,2})\s*:\s*([0-5]\d)$/);
   if (colon) {
@@ -48,21 +64,20 @@ function confirmedBookingCard(lines, now, review) {
   const card = end < 0 ? details : details.slice(0, end);
   if (CHANGE.test(lines.slice(0, confirmations[0]).concat(card).join(' '))) return review('changed_or_multiple_conversations');
   const matches = [];
-  for (let i = 1; i < card.length; i++) {
+  for (let i = 0; i < card.length; i++) {
     const line = card[i].replace(/^(?:예약|방문|진료|수강|상담)\s*(?:일시|날짜|일시 안내)\s*:\s*/, '');
     const date = BOOKING_DATE.exec(line);
-    if (!date || NON_APPOINTMENT_LABEL.test(card[i - 1])) continue;
+    if (!date || NON_APPOINTMENT_LABEL.test(card[i - 1] ?? '')) continue;
     const fromNext = !date[5] && parseCandidateClock(card[i + 1]);
     if (fromNext) date[5] = card[i + 1];
-    matches.push({ date, title: card[i - 1].match(BOOKING_TITLE)?.[1].trim(), index: i, length: fromNext ? 2 : 1 });
+    matches.push({ date, title: bookingTitleCandidate(card.slice(0, i)), index: i, length: fromNext ? 2 : 1 });
     if (fromNext) i++;
   }
   if (matches.length !== 1) return review('ambiguous_date_or_time');
   const [{ date: [, year, month, day, weekday, clock], title, index, length }] = matches;
   const extras = card.filter((_, i) => i < index - 1 || i >= index + length).filter(line => !NON_APPOINTMENT_LABEL.test(line)).join(' ');
   if (CLOCK.test(extras) || DATE.test(extras) || /\d{1,2}\s*[월.\/-]\s*\d{1,2}\s*[일.]?\s*\([월화수목금토일]/.test(extras)
-      || countKoreanDateSignals(normalized(extras), { policy: 'journal' }) || countKoreanTimeSignals(extras)
-      || !title || !/\p{L}/u.test(title) || /^(?:광고|AD|예약|내 예약|바로가기)$/i.test(title)) {
+      || countKoreanDateSignals(normalized(extras), { policy: 'journal' }) || countKoreanTimeSignals(extras)) {
     return review('ambiguous_date_or_time');
   }
   const parsed = parseCandidateClock(clock);
@@ -84,6 +99,7 @@ function confirmedBookingCard(lines, now, review) {
   const [date] = dates;
   const startsAt = `${date}T${time}:00+09:00`;
   if (Date.parse(startsAt) <= reference) return review('past_event');
+  if (!title) return review('ambiguous_booking_title', { date, time });
   return { kind: 'schedule', title, date, startsAt, time, description: '', reason: 'labeled_event',
     transcript: title, status: '진행중', followUp: '' };
 }

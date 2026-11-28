@@ -201,3 +201,38 @@ test('legacy QA counter receipts remain readable while new installations use dis
  const aa=await a.restart(hash,'alice',row.requestId),bb=await b.restart(hash,'alice',row.requestId);
  assert.notEqual(aa.requestId,bb.requestId);assert.equal((await a.get(hash,'alice')).requestId,aa.requestId);
 });
+
+test('booking metadata between the venue and date cannot become the title', () => {
+  for (const metadata of [
+    '예약 상세', '인원 2명', '예약자 예시 사용자', '예약 상세 보기\n예약 인원: 2명',
+  ]) {
+    const result = captureScheduleInput(bookingCard.replace(
+      '11. 29. (일)', metadata + '\n11. 29. (일)'
+    ), cardNow);
+    assert.equal(result.kind, 'schedule', metadata);
+    assert.equal(result.title, '예시 바버숍', metadata);
+    assert.equal(result.startsAt, '2026-11-29T13:00:00+09:00');
+  }
+  const labeled = captureScheduleInput(
+    '예약이 확정되었습니다\n일반 안내\n매장: 예시 공방\n인원 2명\n11. 29. (일) 오후 1:00', cardNow
+  );
+  assert.equal(labeled.kind, 'schedule');
+  assert.equal(labeled.title, '예시 공방');
+});
+
+test('a booking without one credible title offers only a future date and time in review', () => {
+  for (const titleRows of ['', '예약 상세\n인원 2명\n', '예시 공방\n별관 공방\n',
+    '매장: 예시 공방\n장소: 별관 공방\n']) {
+    const text = '예약이 확정되었습니다\n' + titleRows + '11. 29. (일) 오후 1:00';
+    const result = captureScheduleInput(text, cardNow);
+    assert.equal(result.kind, 'review', titleRows);
+    assert.notEqual(result.title, '인원 2명');
+    assert.equal(result.date, '');
+    assert.equal(result.time, '');
+    assert.equal(result.startsAt, undefined);
+    assert.deepEqual(result.reviewHint, { date: '2026-11-29', time: '13:00' });
+    const past = captureScheduleInput(text, '2026-11-29T05:00:00Z');
+    assert.equal(past.reason, 'past_event');
+    assert.equal(past.reviewHint, undefined);
+  }
+});
