@@ -18,20 +18,27 @@ export async function verifyCalendarNativeCrypto() {
 }
 let active: ReturnType<typeof createCalendarConnection> | null = null;
 let owner = '';
-export function resetCalendarConnection() { active?.disconnect(); active = null; owner = ''; }
+let sessionTokenForActiveOwner: (() => Promise<string>) | null = null;
+export function suspendCalendarConnection() { sessionTokenForActiveOwner = null; active?.suspend(); }
+export function resetCalendarConnection() {
+  suspendCalendarConnection();
+  active?.disconnect(); active = null; owner = '';
+}
 export function selectCalendarOwner(userId: string | null) {
   if (owner !== (userId || '')) { resetCalendarConnection(); owner = userId || ''; }
+  if (active) { active.resume(); void active.restore(); }
 }
 export function calendarConnection(config: PublicPlatformConfig, userId: string, getSessionToken: () => Promise<string> = async () => '') {
   if (!active || owner !== userId) {
     resetCalendarConnection(); owner = userId;
-    const renew = createGoogleCalendarRenewer(userId, getSessionToken);
+    const renew = createGoogleCalendarRenewer(userId, () => owner === userId && sessionTokenForActiveOwner ? sessionTokenForActiveOwner() : Promise.resolve(''));
     const store = createCalendarCredentialStore(secureSessionStorage, config.supabaseUrl, userId, fetch, Date.now, renew);
     active = createCalendarConnection({
       authorize: () => authorizeGoogleCalendar(config, MOBILE_AUTH_CALLBACK_URL, WebBrowser.openAuthSessionAsync, nativePkce, fetch, store.save, renew),
       restore: store.restore, clear: store.clear,
     });
   }
+  sessionTokenForActiveOwner = getSessionToken;
   return active;
 }
 
