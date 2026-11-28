@@ -4,7 +4,7 @@ export function createLocalAccountGate<T extends { user: { id: string } }>(deps:
   clear(session?: T | null): Promise<unknown>; verify(id: string): Promise<boolean>;
   reject?(session: T): Promise<unknown>;
   confirm?(session: T, current: () => boolean): Promise<unknown>;
-  owner(id: string | null): void; publish(session: T | null): void; failed(): void;
+  owner(id: string | null): void; publish(session: T | null, pending: boolean): void; failed(): void;
 }) {
   let epoch = 0;
   let published: string | null = null;
@@ -13,7 +13,7 @@ export function createLocalAccountGate<T extends { user: { id: string } }>(deps:
       const ticket = ++epoch;
       published = null;
       deps.owner(null);
-      deps.publish(null);
+      deps.publish(null, true);
       // Auth listener must return before calling getUser or other auth methods.
       await new Promise<void>(resolve => setTimeout(resolve, 0));
       if (ticket !== epoch) return;
@@ -34,7 +34,7 @@ export function createLocalAccountGate<T extends { user: { id: string } }>(deps:
         if (ticket !== epoch) return;
         deps.owner(session?.user.id || null);
         published = session?.user.id || null;
-        deps.publish(session);
+        deps.publish(session, false);
       } catch {
         if (ticket === epoch) deps.failed();
       }

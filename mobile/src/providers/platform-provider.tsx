@@ -3,7 +3,7 @@ import { withRequestDeadline } from '@/src/platform/request-deadline';
 import { selectMeetingOwner } from '@/src/features/voice/meeting-owner';
 import { createLocalAccountGate } from '@/src/platform/local-account-gate';
 import type { Session } from '@supabase/supabase-js';
-import { resetCalendarConnection, selectCalendarOwner, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
+import { resetCalendarConnection, selectCalendarOwner, suspendCalendarConnection, verifyCalendarNativeCrypto } from '@/src/features/calendar/calendar-service';
 import * as Linking from 'expo-linking';
 import { AppState, Platform } from 'react-native';
 import { clearUnverifiedAccount, prepareAccount, confirmAccount, clearForAccountExit } from '@/src/features/schedule/local-notifications';
@@ -134,9 +134,6 @@ export function PlatformProvider({ children }: PropsWithChildren) {
   const [rememberedEmail, setRememberedEmail] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Calendar grants never survive an app account transition (including logout).
-  useEffect(() => { selectCalendarOwner(session?.user.id || null); }, [session?.user.id]);
-
   useEffect(() => {
     let alive = true;
     let activeClient: PlatformSupabaseClient | null = null;
@@ -197,7 +194,14 @@ export function PlatformProvider({ children }: PropsWithChildren) {
             return !verified.error && verified.data.user?.id === id;
           },
           owner: selectMeetingOwner,
-          publish: value => { if (alive) { setSession(value); if (value) setAuthError(''); } },
+          publish: (value, pending) => {
+            if (!alive) return;
+            // A temporarily hidden app session is not an explicit disconnect.
+            if (pending) suspendCalendarConnection();
+            else selectCalendarOwner(value?.user.id || null);
+            setSession(value);
+            if (value) setAuthError('');
+          },
           failed: () => { if (alive) setAuthError('계정 확인 또는 이전 기기 알림 정리가 남았습니다. 새로고침으로 다시 확인해주세요.'); },
         });
         const { data: authData } = nextClient.auth.onAuthStateChange((_event, nextSession) => {

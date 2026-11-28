@@ -45,3 +45,57 @@ test('storage failure reports failure instead of claiming a persistent connectio
   const service = createCalendarConnection({ authorize: async () => ({ ...credential, adapter: {}, persist: async () => { throw Error('storage unavailable'); } }), now: () => 0 });
   await assert.rejects(service.connect()); assert.equal(service.info(), null);
 });
+
+test('account revalidation suspends Calendar without deleting the same owner durable connection', async () => {
+  const { createLocalAccountGate } = await import('../mobile/src/platform/local-account-gate.ts');
+  const h = harness();
+  const active = h.service();
+  await active.connect();
+  let verifiedOwner = 'owner';
+  let confirm;
+  const gate = createLocalAccountGate({
+    clear: async () => {}, verify: () => new Promise(resolve => { confirm = resolve; }),
+    owner() {}, failed: () => assert.fail('unexpected account check failure'),
+    publish(session, pending) {
+      if (pending) active.suspend();
+      else if (session?.user.id !== verifiedOwner) active.disconnect();
+      else active.resume();
+      if (!pending) verifiedOwner = session?.user.id ?? null;
+    },
+  });
+  const same = gate.transition({ user: { id: 'owner' } });
+  assert.equal(active.info(), null);
+  assert.equal(h.data.size, 1, 'intermediate null is not a disconnect');
+  assert.equal(await active.connect(), false, 'unverified state cannot authorize');
+  await active.restore();
+  assert.equal(active.info(), null, 'unverified state cannot read encrypted grant');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  confirm(true); await same; await active.restore();
+  assert.equal(active.info().email, credential.email);
+  const other = gate.transition({ user: { id: 'other' } });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  confirm(true); await other;
+  assert.equal(active.info(), null);
+  assert.equal(h.data.size, 0, 'confirmed account switch still deletes the previous grant');
+});
+
+test('manual Calendar disconnect can reconnect, but suspension invalidates the old in-flight restore', async () => {
+  const h = harness();
+  const active = h.service();
+  await active.connect();
+  active.disconnect();
+  assert.equal(await active.connect(), true);
+  const releases = [];
+  const service = createCalendarConnection({
+    authorize: async () => null,
+    restore: () => new Promise(resolve => releases.push(resolve)),
+    now: () => 0,
+  });
+  const prior = service.restore();
+  service.suspend(); service.resume();
+  const next = service.restore();
+  releases[0]({ ...credential, adapter: {} }); await prior;
+  assert.equal(service.info(), null, 'the old restore must not republish');
+  releases[1]({ ...credential, adapter: {} }); await next;
+  assert.equal(service.info().email, credential.email);
+});

@@ -13,6 +13,7 @@ export function createCalendarConnection(deps: {
 }) {
   let connection: CalendarConnection | null = null;
   let epoch = 0;
+  let suspended = false;
   let connecting: Promise<boolean> | null = null;
   let exporter: ReturnType<typeof createCalendarExporter> | null = null;
   const listeners = new Set<() => void>();
@@ -22,12 +23,17 @@ export function createCalendarConnection(deps: {
   const notify = () => { for (const listener of listeners) listener(); };
   const now = deps.now || Date.now;
   const pending = new Map<string, Promise<CalendarExportResult>>();
-  const disconnect = () => {
+  const invalidate = () => {
     epoch++; connection = null; exporter = null; message = ''; reauthRequired = false;
+    restoring = null; connecting = null; pending.clear();
+  };
+  const disconnect = () => {
+    invalidate();
     void deps.clear?.().catch(() => { message = '연결 정보 삭제에 실패했습니다. 다시 연결 해제를 눌러주세요.'; notify(); });
     notify();
   };
   async function ensureReady(force = false) {
+    if (suspended) throw Error('CALENDAR_OWNER_CHANGED');
     if (connecting) throw Error('CALENDAR_CONNECTING');
     const active = connection;
     const captured = epoch;
@@ -60,30 +66,34 @@ export function createCalendarConnection(deps: {
   let restoring: Promise<void> | null = null;
   return {
     disconnect,
+    suspend() { suspended = true; invalidate(); notify(); },
+    resume() { suspended = false; },
     ensureReady,
     restore() {
+      if (suspended) return Promise.resolve();
       if (restoring) return restoring;
       if (connection || connecting || !deps.restore) return Promise.resolve();
       const captured = epoch;
-      restoring = deps.restore().then(next => {
+      const work = deps.restore().then(next => {
         if (captured !== epoch || connection || connecting) return;
         if (next) { connection = next; exporter = createCalendarExporter(next.adapter); }
       }).catch(() => {
         if (captured === epoch) message = '저장된 연결을 확인하지 못했습니다. 다시 시도해주세요.';
-      }).finally(() => { restoring = null; notify(); });
-      notify();
-      return restoring;
+      }).finally(() => { if (restoring === work) restoring = null; notify(); });
+      restoring = work; notify();
+      return work;
     },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     status() { return { generation: epoch, connecting: !!connecting || !!restoring || renewing?.epoch === epoch, message }; },
     info() { return connection ? { email: connection.email, target: { ...connection.target }, expiresAt: connection.expiresAt, renewalVerified: connection.renewalVerified, expired: reauthRequired || (!connection.renew && now() >= connection.expiresAt) } : null; },
     connect() {
+      if (suspended) return Promise.resolve(false);
       if (connecting) return connecting;
       // Invalidate in-flight work without deleting a usable saved grant.
       // Replace it only after authorization and persistence both succeed.
       epoch++; message = '';
       const captured = epoch;
-      connecting = deps.authorize().then(async next => {
+      const work = deps.authorize().then(async next => {
         if (captured !== epoch) return false;
         if (!next || next.expiresAt <= now()) { message = '연결을 취소했거나 연결 시간이 만료되었습니다.'; return false; }
         await next.persist?.();
@@ -98,9 +108,9 @@ export function createCalendarConnection(deps: {
           (error as Error).message === 'CALENDAR_AUTH_REFRESH_MISSING' ? '연결 유지 권한을 받지 못했습니다. 다시 동의해주세요.' :
           (error as Error).message === 'CALENDAR_AUTH_TOKEN_MISSING' ? '구글 캘린더 접근 정보를 받지 못했습니다. 권한 동의를 확인해주세요.' : '연결을 완료하지 못했습니다. 다시 연결해주세요.';
         throw error;
-      }).finally(() => { connecting = null; notify(); });
-      notify();
-      return connecting;
+      }).finally(() => { if (connecting === work) connecting = null; notify(); });
+      connecting = work; notify();
+      return work;
     },
     async readEvents(range: CalendarReadRange, callerCurrent = () => true) {
       const captured = epoch;
@@ -163,7 +173,7 @@ export function createCalendarConnection(deps: {
         if (result.state !== 'expired' || !connection?.renew || captured !== epoch || reauthRequired || !current()) return result;
         try { await ensureReady(true); } catch { return { state: 'blocked' as const, message: 'Google 연결을 갱신하지 못했습니다. 다시 시도해주세요.' }; }
         return run();
-      }).finally(() => pending.delete(key)); pending.set(key, work); return work;
+      }).finally(() => { if (pending.get(key) === work) pending.delete(key); }); pending.set(key, work); return work;
     },
   };
 }
