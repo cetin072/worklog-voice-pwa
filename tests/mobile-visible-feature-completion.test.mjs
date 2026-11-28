@@ -14,11 +14,11 @@ const editSheet = fs.readFileSync('mobile/src/features/work/work-record-edit-she
 
 test('Visible feature gate keeps Quick Voice fail-closed with a lightweight save acknowledgement', () => {
   assert.match(voice, /전사 재시도 필요/);
-  assert.match(voice, /음성은 보존했습니다/);
-  assert.match(voice, /다시 전사/);
+  assert.match(voice, /녹음은 보관됐습니다/);
+  assert.match(voice, /다시 인식/);
   assert.match(voice, /업무 직접 입력/);
-  assert.match(voice, /Peak/);
-  assert.match(voice, /RMS/);
+  assert.doesNotMatch(voice, / · Peak /);
+  assert.doesNotMatch(voice, / · RMS /);
   assert.match(voice, /업무 저장 완료/);
   assert.match(voice, /reminderMessage/);
 });

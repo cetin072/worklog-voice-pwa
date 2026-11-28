@@ -111,8 +111,8 @@ test('App shell reserves space for the voice dock, two bottom tabs and safe area
   assert.match(rootLayoutSource, /SafeAreaProvider/);
   assert.match(appShellSource, /useSafeAreaInsets/);
   assert.match(appShellSource, /paddingTop: insets\.top/);
-  assert.match(appShellSource, /quickVoiceFooter: \{ position: 'absolute'/);
-  assert.match(appShellSource, /paddingBottom: screen === 'home' \? QUICK_VOICE_LAYOUT\.dockReserveHeight \+ 32 : 16/);
+  assert.match(appShellSource, /quickVoiceFooter: \{ flexShrink: 0/);
+  assert.match(appShellSource, /paddingBottom: 16/);
   assert.doesNotMatch(appShellSource, /PrimaryNavigation/);
 });
 

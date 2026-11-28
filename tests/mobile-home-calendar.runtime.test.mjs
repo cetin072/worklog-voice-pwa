@@ -52,6 +52,11 @@ function calendarHarness(request, getConnection) {
  return {props,platform,render(){cursor=0;const tree=exp.HomeCalendar(props);const run=pending;pending=[];run.forEach(f=>f());return tree;},close(){effects.forEach(e=>e?.cleanup?.());}};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
+const eventButton = (h, title) => {
+ const item = nodes(h.render()).find(node => node.props?.accessibilityHint === '일정 상세 열기' && words(node).includes(title));
+ assert.ok(item, title);
+ return item;
+};
 const button=(h,label)=>{const n=nodes(h.render()).find(n=>n.type==='Pressable'&&(n.props.accessibilityLabel===label||words(n).trim()===label));assert.ok(n,'button '+label);return n;};
 test('actual Home calendar loads both months of a crossing week, selects dates, expands and rejects late owner results', async () => {
  const calls=[],waiting=[];const h=calendarHarness((access,name,body)=>new Promise(resolve=>{calls.push({access,name,body});waiting.push(resolve);}));
@@ -70,7 +75,7 @@ test('failed/limited month never claims complete emptiness; verified briefing re
  let fail=true;const h=calendarHarness(async()=>{if(fail)throw Error('offline');return {events:[],limited:true};});
  h.props.today='2026-11-09';h.props.fallback=[{scheduleId:'known',title:'known appointment',startsAt:'2026-11-09T10:00+09:00'}];
  h.render();await flush();assert.match(words(h.render()),/일정 조회 실패/);assert.match(words(h.render()),/known appointment/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);
- button(h,'known appointment 일정 상세').props.onPress();assert.match(words(h.render()),/known appointment/);
+ eventButton(h,'known appointment').props.onPress();assert.match(words(h.render()),/known appointment/);
  fail=false;button(h,'일정 다시 불러오기').props.onPress();h.render();await flush();assert.match(words(h.render()),/일부 일정을 표시할 수 없습니다/);assert.doesNotMatch(words(h.render()),/등록된 일정이 없습니다/);h.close();
 });
 test('actual Home shows schedule before actionable tasks and moves tools after them; task expansion preserves edit/delete/undo',()=>{
@@ -128,11 +133,11 @@ test('native calendar aligns dates with weekday columns and colors weekends in b
    const dates=all.filter(n=>n.type==='Pressable'&&/^2026-/.test(n.props.accessibilityLabel||''));
    assert.equal(dates.length,expanded?30:7);
    for(const date of dates){const text=nodes(date).find(n=>n.type==='Text');assert.equal(text.props.numberOfLines,1);}
-   for (const [weekend, color] of [[saturday, link], [sunday, danger]]) {
+   for (const weekend of [saturday, sunday]) {
      weekend.props.onPress();
      const selected = button(h, weekend.props.accessibilityLabel);
      assert.equal(selected.props.accessibilityState.selected, true);
-     assert.equal(textStyle(selected).backgroundColor, color);
+     assert.equal(textStyle(selected).backgroundColor, link);
      assert.equal(textStyle(selected).color, primaryText);
    }
  }
@@ -150,7 +155,7 @@ test('Google read hook feeds actual Home rows, day count and clean readonly deta
  h.props.onTodayCount=value=>count=value;
  h.render();await flush();h.render();h.render();
  assert.match(words(h.render()),/구글 원본 미팅/);assert.doesNotMatch(words(h.render()),/Google · 읽기 전용|Google 새로고침|기본 캘린더/);assert.equal(count,1);
- button(h,'구글 원본 미팅 일정 상세').props.onPress();assert.match(words(h.render()),/원본 메모/);
+ eventButton(h,'구글 원본 미팅').props.onPress();assert.match(words(h.render()),/원본 메모/);
  assert.doesNotMatch(words(h.render()),/내 캘린더에서 확인·수정/);
  button(h,'월 보기 ⌄').props.onPress();h.render();await flush();
  button(h,'다음 달').props.onPress();h.render();await flush();h.render();assert.equal(count,null,'another month cannot confirm today Google count');

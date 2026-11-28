@@ -25,6 +25,13 @@ export function CompactReminderLabel({ id, record = false, title, onPress, disab
     </View>
   </Pressable>;
 }
+export function ScheduleReminderWarning({ id }: { id: string }) {
+  const label = useReminderStatus(id);
+  if (!label.includes('권한') && !label.includes('예약 확인 필요')) return null;
+  const status = reminderPresentation(label);
+  return <Text style={{ fontSize: 13, color: status.color }}>{status.title}</Text>;
+}
+
 export function ScheduleReminderLabel({ schedule, onPress }: { schedule: BriefingSchedule; onPress(): void }) {
   return <CompactReminderLabel id={schedule.scheduleId} title={schedule.title || '일정'} onPress={onPress} />;
 }

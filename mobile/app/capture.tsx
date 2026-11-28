@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlatform } from '@/src/providers/platform-provider';
 import { getFreshAccessToken } from '@/src/platform/authenticated-access';
+import { mobileTheme } from '@/src/ui/theme';
 import { WorkRecordEditSheet } from '@/src/features/work/work-record-edit-sheet';
 import { captureInbox, processCapture, readWorklogDetails, editCapture, undoCapture, restartCapture } from '@/src/features/capture/capture-runtime';
 import type { CaptureEntry } from '@/src/features/capture/capture-inbox';
@@ -114,7 +115,9 @@ export default function CaptureScreen() {
     if (!manual && router.canGoBack()) router.back();
     else router.replace(manual ? '/capture-manual' : '/');
   }
-  const Button = ({ label, action }: { label: string; action(): void }) => <Pressable accessibilityRole="button" disabled={busy} onPress={action} style={styles.button}><Text style={styles.buttonText}>{label}</Text></Pressable>;
+  const savedDate = visible?.details ? visible.details.dueDate : visible?.decision?.date;
+  const savedTime = visible?.details ? visible.details.dueTime : visible?.decision?.time;
+  const Button = ({ label, action, primary = false }: { label: string; action(): void; primary?: boolean }) => <Pressable accessibilityRole="button" disabled={busy} onPress={action} style={[styles.button, primary && styles.primaryButton]}><Text style={[styles.buttonText, primary && styles.primaryButtonText]}>{label}</Text></Pressable>;
   return <View style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><ScrollView contentContainerStyle={styles.content}>
     <Text accessibilityRole="header" style={styles.heading}>캡처로 업무·일정 등록</Text>
     {busy ? <View style={styles.card}><ActivityIndicator /><Text>이미지 확인·저장 중…</Text></View> : null}
@@ -122,21 +125,22 @@ export default function CaptureScreen() {
     {visible?.saved ? <View style={styles.card}>
       <Text accessibilityLiveRegion="polite" style={styles.title}>{visible.undone ? '등록을 취소했습니다.' : confirmedSchedule ? '일정을 저장했습니다.' : '확인 필요 기록으로 저장했습니다.'}</Text>
       {visible.undone ? <><Text>{visible.details?.title || visible.decision?.title}</Text><Text>같은 캡처를 다시 등록할 수 있습니다.</Text><Button label="다시 등록" action={() => void registerAgain()} /></> : null}
-      {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{visible.details?.dueDate || visible.decision?.date || '날짜 확인 필요'} {visible.details?.dueTime || visible.decision?.time || ''}</Text>{visible.decision?.description && visible.decision.description !== (visible.details?.title || visible.decision.title) ? <Text>{visible.decision.description}</Text> : null}
-        {!confirmedSchedule ? <Text>{visible.details?.dueDate ? '업무의 날짜를 저장했습니다. 일정과 알림 상태는 홈에서 확인할 수 있습니다.' : '날짜·시간을 확정하지 못해 일정은 만들지 않았습니다. 홈의 ‘기한 없음’에서 확인하거나 여기서 날짜·시간을 수정해주세요.'}</Text> : null}
+      {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{savedDate || '날짜 확인 필요'} {savedTime || ''}</Text>{visible.decision?.description && visible.decision.description !== (visible.details?.title || visible.decision.title) ? <Text>{visible.decision.description}</Text> : null}
+        {!confirmedSchedule ? <Text>{savedDate ? '업무에 날짜를 저장했습니다. 홈에서 일정과 알림 상태를 확인할 수 있습니다.' : '업무로 보관했습니다. 날짜를 확인해 주세요.'}</Text> : null}
         {!confirmedSchedule && !visible.details?.dueDate && !visible.details?.dueTime && visible.decision?.reviewHint ? <Text>읽은 값: {[visible.decision.reviewHint.date, visible.decision.reviewHint.time].filter(Boolean).join(' ')}. 확인한 뒤 저장해주세요.</Text> : null}
-        <Button label="수정" action={() => void openEditor()} /><Button label="실행 취소" action={() => void undo()} /></> : null}
+        <Button primary label={savedDate ? "내용 수정" : "날짜 수정"} action={() => void openEditor()} /><Button label="실행 취소" action={() => void undo()} /></> : null}
       {visible.reminderWarning ? <Text accessibilityLiveRegion="polite">{visible.reminderWarning}</Text> : null}
     </View> : null}
-    {error ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{error}</Text><Button label="다시 시도" action={() => void receive()} /><Button label="직접 입력" action={() => void leave(true)} /></View> : null}
+    {error ? <View style={styles.card}><Text accessibilityLiveRegion="polite">{error}</Text><Button primary label="다시 시도" action={() => void receive()} /><Button label="직접 입력" action={() => void leave(true)} /></View> : null}
     <Button label="업무수첩으로" action={() => void leave()} />
   </ScrollView><WorkRecordEditSheet visible={editing && Boolean(visible?.saved)} title={title} date={date} time={time} loading={editLoading} saving={busy} ready={editReady}
     statusText={editError} statusTone={editError ? 'error' : 'neutral'} onTitle={value => { editDirty.current.title = true;setTitle(value); }} onDate={value => { editDirty.current.date = true;setDate(value); }} onTime={value => { editDirty.current.time = true;setTime(value); }}
     onSave={() => void saveEdit()} onCancel={() => { epoch.current++;setEditLoading(false);setEditReady(false);setEditing(false); }} onRetry={() => { if (id) void loadEditorDetails(id); }} /></View>;
 }
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#f2f5f8' },content: { padding: 20, gap: 16 },
-  heading: { fontSize: 25, fontWeight: '800', color: '#103244' },title: { fontSize: 18, fontWeight: '700' },
+  page: { flex: 1, backgroundColor: mobileTheme.colors.background },content: { padding: 20, gap: 16 },
+  heading: { fontSize: 25, fontWeight: '800', color: mobileTheme.colors.text },title: { fontSize: 18, fontWeight: '700' },
   card: { padding: 18, gap: 12, borderRadius: 18, backgroundColor: '#fff' },
-  button: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: '#dcebf3', justifyContent: 'center' },buttonText: { color: '#103244', fontSize: 17, fontWeight: '700' },
+  button: { minHeight: 48, padding: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },primaryButton: { backgroundColor: mobileTheme.colors.primary }, primaryButtonText: { color: mobileTheme.colors.primaryText },
+  buttonText: { color: mobileTheme.colors.link, fontSize: 16, fontWeight: '700' },
 });

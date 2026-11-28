@@ -9,5 +9,5 @@ export const recordRowStyles = {
   inlineDelete: { minHeight: 48, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff7f7', borderWidth: 1, borderColor: '#fecaca' },
   inlineDeleteText: { color: mobileTheme.colors.danger, fontSize: 12, fontWeight: '900' },
   taskTitle: { fontSize: 15, fontWeight: '700', color: '#30343b', lineHeight: 21 },
-  taskMeta: { fontSize: 13, color: '#737985', lineHeight: 18 },
+  taskMeta: { fontSize: 13, color: mobileTheme.colors.textMuted, lineHeight: 18 },
 } as const;
