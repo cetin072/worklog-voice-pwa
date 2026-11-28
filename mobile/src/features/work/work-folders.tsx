@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
-import type { BriefingNote, BriefingTask } from '@/src/platform/worklog-api';
+import type { BriefingTask } from '@/src/platform/worklog-api';
 import { mobileTheme } from '@/src/ui/theme';
 import { seoulDate } from '../home/home-calendar-model';
 import { canMoveFolder, folderPath, loadWorkOverview, organizeRecord, saveFolder, type FolderRecord, type WorkFolder, type WorkOverview, type WorkScope, type WorkSection } from './work-folders-store';
@@ -14,13 +14,15 @@ import { canMoveFolder, folderPath, loadWorkOverview, organizeRecord, saveFolder
 type Props = {
   initialFolder?: string | null; initialSection?: WorkSection; onViewChange?: (scope: WorkScope, section: WorkSection) => void; client: PlatformSupabaseClient;
   userId: string; revision: number; busy: boolean;
-  onComplete: (task: BriefingTask) => Promise<void>; onCompleteNote: (note: BriefingNote) => Promise<void>;
+  onComplete: (task: BriefingTask) => Promise<void>;
   onJournal: () => void; onSearch: () => void;
   onEdit: (record: FolderRecord) => void; onDelete: (record: FolderRecord) => void; onReminder: (record: FolderRecord) => void;
   onReview?: (record: FolderRecord) => void;
+  onConvertNote: (record: FolderRecord) => void;
+  onAddDocumentTask: (document: { id: string; title: string; folder_id: string | null }) => Promise<void>;
 };
 export function WorkFolders({ client, userId, revision, initialFolder, initialSection = 'tasks', busy: externalBusy,
-  onViewChange, onComplete, onCompleteNote, onJournal, onSearch, onEdit, onDelete, onReminder, onReview }: Props) {
+  onViewChange, onComplete, onJournal, onSearch, onEdit, onDelete, onReminder, onReview, onConvertNote, onAddDocumentTask }: Props) {
   // undefined means all; null explicitly means unclassified (including after conversion).
   const [scope, setScope] = useState<WorkScope>(initialFolder === undefined ? 'all' : initialFolder);
   const [section, setSection] = useState<WorkSection>(initialSection);
@@ -93,16 +95,17 @@ export function WorkFolders({ client, userId, revision, initialFolder, initialSe
     </View>
     <Text style={styles.scopeLabel}>{scope === 'all' ? '전체 업무' : scope === null ? '미분류' : folderPath(folders, scope)}{currentFolder && folders.some(item => item.parent_id === currentFolder.id) ? ' · 하위 폴더 포함' : ''}</Text>
     <View style={styles.tabs}>{([['tasks', '할 일'], ['notes', '메모·자료'], ['completed', '완료']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: section === value }} disabled={busy || externalBusy} style={[styles.tab, section === value && styles.active]} onPress={() => { setSection(value); setExpanded(null); }}><Text style={[styles.tabText, section === value && styles.selectedText]}>{label}</Text></Pressable>)}</View>
-    {section === 'notes' ? <>
-      <WorkDocuments client={client} owner={userId} scope={scope} folders={folders} revision={`${revision}:${refresh}`} />
-      <Text accessibilityRole="header" style={styles.notesHeading}>짧은 메모</Text>
-    </> : null}
+    {section === 'notes' ? <WorkDocuments key={scope ?? 'unclassified'}
+      client={client} owner={userId} scope={scope} folders={folders} revision={`${revision}:${refresh}`}
+      notes={sameScope ? snapshot : null} busy={busy || externalBusy}
+      onEditNote={onEdit} onDeleteNote={onDelete} onConvertNote={onConvertNote} onReminderNote={onReminder}
+      onMoveNote={record => setMoving(record)} onAddDocumentTask={onAddDocumentTask} /> : null}
     {section === 'completed' ? <Pressable accessibilityRole="button" accessibilityLabel="날짜별 업무일지" style={styles.refresh} onPress={onJournal}><Text style={styles.link}>날짜별 업무일지 ›</Text></Pressable> : null}
-    {loading ? <Text accessibilityLiveRegion="polite" style={styles.help}>{snapshot ? '갱신 중…' : '불러오는 중…'}</Text> : null}
+    {section !== 'notes' && loading ? <Text accessibilityLiveRegion="polite" style={styles.help}>{snapshot ? '갱신 중…' : '불러오는 중…'}</Text> : null}
     {busy ? <Text accessibilityLiveRegion="polite" style={styles.help}>저장 확인 중…</Text> : null}
     {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-    {sameScope && !loading && !error && !records.length ? <Text style={styles.empty}>{section === 'completed' ? '완료한 기록이 없습니다.' : section === 'notes' ? '짧은 메모가 없습니다.' : '남은 할 일이 없습니다.'}</Text> : null}
-    {records.map(record => <View key={record.id} style={styles.record}>
+    {section !== 'notes' && sameScope && !loading && !error && !records.length ? <Text style={styles.empty}>{section === 'completed' ? '완료한 기록이 없습니다.' : '남은 할 일이 없습니다.'}</Text> : null}
+    {section !== 'notes' && records.map(record => <View key={record.id} style={styles.record}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${record.title} 내용 보기`} accessibilityState={{ expanded: expanded === record.id }} style={styles.open} onPress={() => setExpanded(value => value === record.id ? null : record.id)}>
         <Text style={styles.text}>{section === 'completed' ? '✓ ' : ''}{record.title}</Text>
         {scope === 'all' || (currentFolder && record.folder_id !== currentFolder.id) ? <Text style={styles.help}>{folderPath(folders, record.folder_id)}</Text> : null}
@@ -112,10 +115,10 @@ export function WorkFolders({ client, userId, revision, initialFolder, initialSe
       <View style={styles.recordActions}>
         {section !== 'completed' ? button(`${record.title} 수정`, () => onEdit(record), disabled, '편집') : null}
         {button(`${record.title} 더 보기`, () => setMenu(record), disabled, '더보기')}
-        {section !== 'completed' ? <RecordCompleteButton label={`${record.title} 완료`} disabled={disabled} onPress={() => void mutate(() => record.action_kind === 'note' ? onCompleteNote({ pageId: record.id, title: record.title }) : onComplete({ pageId: record.id, title: record.title, status: record.status === 'waiting' ? '대기' : record.status === 'needs_review' ? '확인필요' : '진행중', nextAttentionAt: record.next_attention_at || undefined }))} /> : null}
+        {section !== 'completed' ? <RecordCompleteButton label={`${record.title} 완료`} disabled={disabled} onPress={() => void mutate(() => onComplete({ pageId: record.id, title: record.title, status: record.status === 'waiting' ? '대기' : record.status === 'needs_review' ? '확인필요' : '진행중', nextAttentionAt: record.next_attention_at || undefined }))} /> : null}
       </View>
     </View>)}
-    {sameScope && snapshot && nextOffset < snapshot.total_count ? button('더 불러오기', () => void loadMore()) : null}
+    {section !== 'notes' && sameScope && snapshot && nextOffset < snapshot.total_count ? button('더 불러오기', () => void loadMore()) : null}
     {editor || moving || menu ? <Modal transparent animationType="fade" onShow={() => editor && folderNameInput.current?.focus()} onRequestClose={closeDialog}>
       <KeyboardAvoidingView style={styles.editorOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.editorScroll} contentContainerStyle={styles.editorContent} keyboardShouldPersistTaps="handled">
@@ -171,7 +174,6 @@ const styles = StyleSheet.create({
   editorDialog: { width: '100%', maxWidth: 460, alignSelf: 'center', padding: 20, gap: 12, borderRadius: 16, backgroundColor: mobileTheme.colors.surface },
   input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: mobileTheme.colors.border, borderRadius: 12, color: mobileTheme.colors.text },
   record: { gap: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: mobileTheme.colors.borderSubtle },
-  notesHeading: { ...recordRowStyles.taskTitle, marginTop: 8 },
   recordActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   open: { minHeight: 48, gap: 4, justifyContent: 'center' },
   error: { color: mobileTheme.colors.danger, lineHeight: 22 },

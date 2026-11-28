@@ -1,6 +1,6 @@
 import { withRequestDeadline } from '@/src/platform/request-deadline';
 import type { PlatformSupabaseClient } from '@/src/platform/supabase';
-import type { WorkScope } from './work-folders-store';
+import { loadWorkOverview, PAGE_SIZE, type FolderRecord, type WorkOverview, type WorkScope } from './work-folders-store';
 
 export const DOCUMENT_MAX_BYTES = 1024 * 1024;
 export const DOCUMENT_PAGE_SIZE = 25;
@@ -60,4 +60,29 @@ export async function setDocumentDeleted(
   check(error, '다른 곳에서 문서가 변경됐습니다. 문서를 닫은 뒤 목록에서 다시 확인해주세요.');
   if (data !== document.version + 1) throw new Error('문서 변경을 확인하지 못했습니다. 다시 시도해주세요.');
   return data;
+}
+
+export type MemoSummary = FolderRecord & { updated_at: string };
+
+export async function listWorkMemos(
+  client: PlatformSupabaseClient, owner: string, scope: WorkScope, first: WorkOverview, current: () => boolean,
+): Promise<MemoSummary[]> {
+  const records = [...first.records];
+  for (let offset = first.records.length; current() && offset < first.total_count;) {
+    const next = await loadWorkOverview(client, scope, 'notes', offset);
+    if (!next.records.length) break;
+    records.push(...next.records);
+    offset += next.records.length;
+  }
+  const unique = [...new Map(records.map(row => [row.id, row])).values()];
+  const result: MemoSummary[] = [];
+  for (let offset = 0; current() && offset < unique.length; offset += PAGE_SIZE) {
+    const batch = unique.slice(offset, offset + PAGE_SIZE);
+    const { data, error } = await withRequestDeadline(async signal => await client.from('work_records')
+      .select('id,updated_at').eq('created_by_user_id', owner).in('id', batch.map(row => row.id)).abortSignal(signal));
+    check(error);
+    const timestamps = new Map((data ?? []).map(row => [String(row.id), String(row.updated_at)]));
+    result.push(...batch.map(row => ({ ...row, updated_at: timestamps.get(row.id) || row.recorded_at || '' })));
+  }
+  return result;
 }
