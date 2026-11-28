@@ -63,8 +63,10 @@ export default function CaptureScreen() {
       const details = await readWorklogDetails(await getFreshAccessToken(client), recordId);
       if (current !== epoch.current) return;
       if (!editDirty.current.title) setTitle(details.title);
-      if (!editDirty.current.date) setDate(details.dueDate);
-      if (!editDirty.current.time) setTime(details.dueTime);
+      // Hints are local suggestions only and must never replace saved fields.
+      const hint = !details.dueDate && !details.dueTime && details.title === visible?.decision?.title ? visible.decision.reviewHint : null;
+      if (!editDirty.current.date) setDate(details.dueDate || hint?.date || '');
+      if (!editDirty.current.time) setTime(details.dueTime || hint?.time || '');
       setEditReady(true);
     } catch { if (current === epoch.current) setEditError('저장된 최신 정보를 읽지 못했습니다. 다시 불러와주세요.'); }
     finally { if (current === epoch.current) setEditLoading(false); }
@@ -122,6 +124,7 @@ export default function CaptureScreen() {
       {visible.undone ? <><Text>{visible.details?.title || visible.decision?.title}</Text><Text>같은 캡처를 다시 등록할 수 있습니다.</Text><Button label="다시 등록" action={() => void registerAgain()} /></> : null}
       {!visible.undone ? <><Text style={styles.title}>{visible.details?.title || visible.decision?.title}</Text><Text>{visible.details?.dueDate || visible.decision?.date || '날짜 확인 필요'} {visible.details?.dueTime || visible.decision?.time || ''}</Text>{visible.decision?.description && visible.decision.description !== (visible.details?.title || visible.decision.title) ? <Text>{visible.decision.description}</Text> : null}
         {!confirmedSchedule ? <Text>{visible.details?.dueDate ? '업무의 날짜를 저장했습니다. 일정과 알림 상태는 홈에서 확인할 수 있습니다.' : '날짜·시간을 확정하지 못해 일정은 만들지 않았습니다. 홈의 ‘기한 없음’에서 확인하거나 여기서 날짜·시간을 수정해주세요.'}</Text> : null}
+        {!confirmedSchedule && !visible.details?.dueDate && !visible.details?.dueTime && visible.decision?.reviewHint ? <Text>읽은 값: {[visible.decision.reviewHint.date, visible.decision.reviewHint.time].filter(Boolean).join(' ')}. 확인한 뒤 저장해주세요.</Text> : null}
         <Button label="수정" action={() => void openEditor()} /><Button label="실행 취소" action={() => void undo()} /></> : null}
       {visible.reminderWarning ? <Text accessibilityLiveRegion="polite">{visible.reminderWarning}</Text> : null}
     </View> : null}
